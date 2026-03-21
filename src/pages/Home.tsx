@@ -1,0 +1,67 @@
+import AnnouncementBar from '@/components/layout/AnnouncementBar';
+import Navbar from '@/components/layout/Navbar';
+import CategoryNavbar from '@/components/layout/CategoryNavbar';
+import HeroCarousel from '@/components/hero/HeroCarousel';
+import CollectionSection from '@/components/sections/CollectionSection';
+import ExclusiveBooks from '@/components/sections/ExclusiveBooks';
+import ExclusiveShop from '@/components/sections/ExclusiveShop';
+import BrajYatra from '@/components/sections/BrajYatra';
+import Testimonials from '@/components/sections/Testimonials';
+import Footer from '@/components/layout/Footer';
+import { latestProducts, bestSellingProducts, newArrivals } from '@/data/mockData';
+
+const Home = () => (
+  <div className="min-h-screen bg-background">
+    <AnnouncementBar />
+    <Navbar />
+    <CategoryNavbar />
+    <HeroCarousel />
+
+    <CollectionSection
+      tag="BRAJMART COLLECTION"
+      title="✨ Latest Products"
+      subtitle="Fresh arrivals from the divine lands of Braj"
+      products={latestProducts}
+    />
+
+    <CollectionSection
+      tag="JUST IN"
+      title="🆕 New Arrivals"
+      subtitle="Discover what's new at BrajMart"
+      products={newArrivals}
+      bgClass="bg-pearl"
+    />
+
+    <CollectionSection
+      tag="MOST LOVED"
+      title="🔥 Best Selling Products"
+      subtitle="Top picks from our devotee community"
+      products={bestSellingProducts}
+    />
+
+    <ExclusiveBooks />
+
+    <CollectionSection
+      tag="BRAJMART COLLECTION"
+      title="🪔 Top Devotional Accessories"
+      subtitle="Malas, Rudraksha, Bracelets & More"
+      products={latestProducts.slice(0, 6)}
+      bgClass="bg-pearl"
+    />
+
+    <ExclusiveShop />
+
+    <CollectionSection
+      tag="SACRED OFFERINGS"
+      title="🍮 Sacred Prasadam Collection"
+      subtitle="Taste the Blessings of Vrindavan's Sacred Temples"
+      products={bestSellingProducts.slice(0, 5)}
+    />
+
+    <BrajYatra />
+    <Testimonials />
+    <Footer />
+  </div>
+);
+
+export default Home;
