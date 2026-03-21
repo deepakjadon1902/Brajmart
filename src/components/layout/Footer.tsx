@@ -1,0 +1,77 @@
+import { ScrollReveal } from '../ui/ScrollReveal';
+
+const footerLinks = {
+  'Get to Know Us': ['About Us', 'Blog', 'Contact Us'],
+  'Customer Service': ['Compare', 'Help Center', 'Customer Service'],
+  'Orders & Returns': ['Track Order', 'Shipping & Delivery', 'Return Policy'],
+  'Quick Links': ['Privacy Policy', 'Payment Method', 'Terms & Conditions'],
+};
+
+const Footer = () => (
+  <footer className="bg-maroon-dark text-primary-foreground">
+    {/* Newsletter */}
+    <ScrollReveal>
+      <div className="border-b border-primary-foreground/10">
+        <div className="container mx-auto px-4 py-10 text-center">
+          <h3 className="font-cinzel text-xl font-bold mb-2">Join Our Devotee Community</h3>
+          <p className="text-primary-foreground/70 text-sm mb-4">Get exclusive offers, new arrivals & spiritual content</p>
+          <div className="flex max-w-md mx-auto">
+            <input
+              type="email"
+              placeholder="Your email address"
+              className="flex-1 px-4 py-2.5 rounded-l-full bg-transparent border border-primary-foreground/20 text-sm outline-none placeholder:text-primary-foreground/40 focus:border-gold"
+            />
+            <button className="px-6 py-2.5 rounded-r-full bg-gold-gradient text-maroon-dark font-bold text-sm shimmer">
+              Subscribe
+            </button>
+          </div>
+        </div>
+      </div>
+    </ScrollReveal>
+
+    {/* Main grid */}
+    <div className="container mx-auto px-4 py-12">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
+        {/* Brand col */}
+        <div className="col-span-2 md:col-span-1">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-2xl">🪷</span>
+            <span className="font-cinzel text-lg font-bold text-gold">BrajMart</span>
+          </div>
+          <p className="text-primary-foreground/60 text-xs leading-relaxed mb-4">
+            Connecting devotees worldwide to the divine culture of Vrindavan. Authentic products, blessed by tradition.
+          </p>
+          <div className="flex gap-3 text-primary-foreground/50">
+            {['Instagram', 'Facebook', 'YouTube', 'WhatsApp'].map((s) => (
+              <a key={s} href="#" className="hover:text-gold transition-colors text-xs">{s.slice(0, 2)}</a>
+            ))}
+          </div>
+        </div>
+
+        {Object.entries(footerLinks).map(([title, links]) => (
+          <div key={title}>
+            <h4 className="font-semibold text-sm text-gold mb-3">{title}</h4>
+            <ul className="space-y-2">
+              {links.map((link) => (
+                <li key={link}>
+                  <a href="#" className="text-primary-foreground/60 text-xs hover:text-primary-foreground transition-colors">{link}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Bottom bar */}
+    <div className="border-t border-primary-foreground/10">
+      <div className="container mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-2 text-xs text-primary-foreground/50">
+        <span>© 2025 BrajMart. Made with 🙏 in Vrindavan, India</span>
+        <span className="font-devanagari text-primary-foreground/40">हरे कृष्ण 🌸 Hare Krishna</span>
+        <span>UPI • Visa • Mastercard • COD</span>
+      </div>
+    </div>
+  </footer>
+);
+
+export default Footer;
