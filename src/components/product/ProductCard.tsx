@@ -1,8 +1,12 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Heart, ShoppingCart, Star, Eye } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Product } from '@/types/product';
 import { formatPrice, calculateDiscount } from '@/utils/formatPrice';
+import { useCartStore } from '@/store/cartStore';
+import { useWishlistStore } from '@/store/wishlistStore';
+import { toast } from 'sonner';
 
 interface ProductCardProps {
   product: Product;
@@ -26,6 +30,23 @@ const badgeLabels: Record<string, string> = {
 const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
+  const addToCart = useCartStore(s => s.addItem);
+  const { toggleItem, isInWishlist } = useWishlistStore();
+  const inWishlist = isInWishlist(product.id);
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    addToCart(product);
+    toast.success(`${product.name} added to cart!`);
+  };
+
+  const handleToggleWishlist = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleItem(product);
+    toast.success(inWishlist ? 'Removed from wishlist' : 'Added to wishlist ❤️');
+  };
 
   return (
     <motion.div
@@ -37,74 +58,48 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Image */}
-      <div className="relative aspect-square overflow-hidden bg-pearl">
-        <img
-          src={product.image}
-          alt={product.name}
-          loading="lazy"
-          className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
-        />
-
-        {/* Badge */}
+      <Link to={`/product/${product.slug}`} className="relative aspect-square overflow-hidden bg-pearl">
+        <img src={product.image} alt={product.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]" />
         {product.badge && (
           <span className={`absolute top-3 left-3 px-2.5 py-1 text-[0.65rem] font-semibold rounded-full tracking-wide ${badgeStyles[product.badge]}`}>
             {badgeLabels[product.badge]}
           </span>
         )}
-
-        {/* Wishlist + Quick View on hover */}
         <div className={`absolute top-3 right-3 flex flex-col gap-2 transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
-          <button className="w-8 h-8 rounded-full bg-card/90 shadow flex items-center justify-center hover:bg-saffron hover:text-primary-foreground transition-colors" aria-label="Add to wishlist">
-            <Heart size={15} />
+          <button onClick={handleToggleWishlist} className={`w-8 h-8 rounded-full shadow flex items-center justify-center transition-colors ${inWishlist ? 'bg-saffron text-primary-foreground' : 'bg-card/90 hover:bg-saffron hover:text-primary-foreground'}`} aria-label="Wishlist">
+            <Heart size={15} className={inWishlist ? 'fill-current' : ''} />
           </button>
-          <button className="w-8 h-8 rounded-full bg-card/90 shadow flex items-center justify-center hover:bg-saffron hover:text-primary-foreground transition-colors" aria-label="Quick view">
+          <Link to={`/product/${product.slug}`} className="w-8 h-8 rounded-full bg-card/90 shadow flex items-center justify-center hover:bg-saffron hover:text-primary-foreground transition-colors" aria-label="Quick view">
             <Eye size={15} />
-          </button>
+          </Link>
         </div>
-
-        {/* Discount badge */}
         {discount > 0 && (
-          <span className="absolute bottom-3 left-3 px-2 py-0.5 text-[0.65rem] font-bold rounded bg-tulsi text-primary-foreground">
-            {discount}% OFF
-          </span>
+          <span className="absolute bottom-3 left-3 px-2 py-0.5 text-[0.65rem] font-bold rounded bg-tulsi text-primary-foreground">{discount}% OFF</span>
         )}
-      </div>
+      </Link>
 
       {/* Details */}
       <div className="flex flex-col gap-1.5 p-4 flex-1">
-        <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">
-          {product.category}
-        </span>
-        <h3 className="font-playfair text-sm font-semibold text-foreground line-clamp-2 leading-snug">
-          {product.name}
-        </h3>
-
-        {/* Rating */}
+        <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">{product.category}</span>
+        <Link to={`/product/${product.slug}`}>
+          <h3 className="font-playfair text-sm font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors">{product.name}</h3>
+        </Link>
         <div className="flex items-center gap-1">
           {Array.from({ length: 5 }).map((_, i) => (
             <Star key={i} size={12} className={i < Math.floor(product.rating) ? 'fill-gold text-gold' : 'text-border'} />
           ))}
           <span className="text-[0.65rem] text-muted-foreground ml-1">({product.reviewCount})</span>
         </div>
-
-        {/* Price */}
         <div className="flex items-center gap-2 mt-auto pt-1">
           <span className="text-saffron font-bold text-base">{formatPrice(product.price)}</span>
-          {product.originalPrice && (
-            <span className="text-muted-foreground line-through text-xs">{formatPrice(product.originalPrice)}</span>
-          )}
+          {product.originalPrice && <span className="text-muted-foreground line-through text-xs">{formatPrice(product.originalPrice)}</span>}
         </div>
-
-        {product.soldCount && (
-          <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>
-        )}
+        {product.soldCount && <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>}
       </div>
 
-      {/* Add to cart button */}
       <div className="px-4 pb-4">
-        <button className="w-full py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer active:scale-[0.97] transition-transform">
-          <ShoppingCart size={14} className="inline mr-1.5 -mt-0.5" />
-          Add to Cart
+        <button onClick={handleAddToCart} className="w-full py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer active:scale-[0.97] transition-transform">
+          <ShoppingCart size={14} className="inline mr-1.5 -mt-0.5" /> Add to Cart
         </button>
       </div>
     </motion.div>
