@@ -1,10 +1,27 @@
+import { Link } from 'react-router-dom';
 import { ScrollReveal } from '../ui/ScrollReveal';
 
 const footerLinks = {
-  'Get to Know Us': ['About Us', 'Blog', 'Contact Us'],
-  'Customer Service': ['Compare', 'Help Center', 'Customer Service'],
-  'Orders & Returns': ['Track Order', 'Shipping & Delivery', 'Return Policy'],
-  'Quick Links': ['Privacy Policy', 'Payment Method', 'Terms & Conditions'],
+  'Get to Know Us': [
+    { label: 'About Us', to: '/about' },
+    { label: 'Blog', to: '/blog' },
+    { label: 'Contact Us', to: '/contact' },
+  ],
+  'Customer Service': [
+    { label: 'Compare', to: '/compare' },
+    { label: 'Help Center', to: '/help-center' },
+    { label: 'Customer Service', to: '/customer-service' },
+  ],
+  'Orders & Returns': [
+    { label: 'Track Order', to: '/track-order' },
+    { label: 'Shipping & Delivery', to: '/shipping-delivery' },
+    { label: 'Return Policy', to: '/return-policy' },
+  ],
+  'Quick Links': [
+    { label: 'Privacy Policy', to: '/privacy-policy' },
+    { label: 'Payment Method', to: '/payment-method' },
+    { label: 'Terms & Conditions', to: '/terms' },
+  ],
 };
 
 const Footer = () => (
@@ -34,10 +51,10 @@ const Footer = () => (
       <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
         {/* Brand col */}
         <div className="col-span-2 md:col-span-1">
-          <div className="flex items-center gap-2 mb-3">
+          <Link to="/" className="flex items-center gap-2 mb-3">
             <span className="text-2xl">🪷</span>
             <span className="font-cinzel text-lg font-bold text-gold">BrajMart</span>
-          </div>
+          </Link>
           <p className="text-primary-foreground/60 text-xs leading-relaxed mb-4">
             Connecting devotees worldwide to the divine culture of Vrindavan. Authentic products, blessed by tradition.
           </p>
@@ -53,8 +70,8 @@ const Footer = () => (
             <h4 className="font-semibold text-sm text-gold mb-3">{title}</h4>
             <ul className="space-y-2">
               {links.map((link) => (
-                <li key={link}>
-                  <a href="#" className="text-primary-foreground/60 text-xs hover:text-primary-foreground transition-colors">{link}</a>
+                <li key={link.label}>
+                  <Link to={link.to} className="text-primary-foreground/60 text-xs hover:text-primary-foreground transition-colors">{link.label}</Link>
                 </li>
               ))}
             </ul>
