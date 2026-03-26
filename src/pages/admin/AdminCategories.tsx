@@ -1,0 +1,100 @@
+import { useState } from 'react';
+import { categories as mockCategories } from '@/data/mockData';
+import { getAllProducts } from '@/data/productCatalog';
+import { Plus, Edit2, Trash2, X } from 'lucide-react';
+
+interface CategoryItem {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  productCount: number;
+}
+
+const AdminCategories = () => {
+  const products = getAllProducts();
+  const [cats, setCats] = useState<CategoryItem[]>(
+    mockCategories.map((c) => ({ ...c, productCount: products.filter((p) => p.category === c.name).length }))
+  );
+  const [editing, setEditing] = useState<CategoryItem | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+
+  const handleDelete = (id: string) => {
+    if (confirm('Delete this category?')) setCats((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const handleSave = (cat: CategoryItem) => {
+    if (isCreating) {
+      setCats((prev) => [...prev, { ...cat, id: `cat-${Date.now()}` }]);
+    } else {
+      setCats((prev) => prev.map((c) => (c.id === cat.id ? cat : c)));
+    }
+    setEditing(null);
+    setIsCreating(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">Categories</h1>
+        <button onClick={() => { setIsCreating(true); setEditing({ id: '', name: '', icon: '📦', color: '#f59e0b', productCount: 0 }); }} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">
+          <Plus size={16} /> Add Category
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {cats.map((cat) => (
+          <div key={cat.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition">
+            <div className="flex items-start justify-between mb-3">
+              <div className="text-3xl">{cat.icon}</div>
+              <div className="flex gap-1.5">
+                <button onClick={() => { setIsCreating(false); setEditing(cat); }} className="text-blue-400 hover:text-blue-300 p-1"><Edit2 size={14} /></button>
+                <button onClick={() => handleDelete(cat.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 size={14} /></button>
+              </div>
+            </div>
+            <h3 className="text-white font-semibold text-lg">{cat.name}</h3>
+            <p className="text-slate-400 text-sm mt-1">{cat.productCount} products</p>
+          </div>
+        ))}
+      </div>
+
+      {editing && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => { setEditing(null); setIsCreating(false); }}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-800">
+              <h2 className="text-lg font-semibold text-white">{isCreating ? 'Add Category' : 'Edit Category'}</h2>
+              <button onClick={() => { setEditing(null); setIsCreating(false); }} className="text-slate-400 hover:text-white"><X size={20} /></button>
+            </div>
+            <CategoryForm cat={editing} onSave={handleSave} onClose={() => { setEditing(null); setIsCreating(false); }} isCreating={isCreating} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: CategoryItem; onSave: (c: CategoryItem) => void; onClose: () => void; isCreating: boolean }) => {
+  const [form, setForm] = useState(cat);
+  return (
+    <div className="p-5 space-y-4">
+      <div>
+        <label className="block text-sm text-slate-300 mb-1">Name</label>
+        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+      </div>
+      <div>
+        <label className="block text-sm text-slate-300 mb-1">Icon (emoji)</label>
+        <input value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none" />
+      </div>
+      <div>
+        <label className="block text-sm text-slate-300 mb-1">Color</label>
+        <input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} className="w-16 h-10 rounded-lg border border-slate-700 bg-slate-800 cursor-pointer" />
+      </div>
+      <div className="flex gap-3 pt-2">
+        <button onClick={onClose} className="flex-1 py-2.5 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-800 transition">Cancel</button>
+        <button onClick={() => onSave(form)} className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">{isCreating ? 'Create' : 'Save'}</button>
+      </div>
+    </div>
+  );
+};
+
+export default AdminCategories;

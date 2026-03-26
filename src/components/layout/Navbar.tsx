@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Heart, ShoppingCart, Menu, X, User, LogOut, Package } from 'lucide-react';
+import { Search, Heart, ShoppingCart, Menu, X, User, LogOut, Package, MapPin } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useAuthStore } from '@/store/authStore';
@@ -64,6 +64,9 @@ const Navbar = () => {
         </form>
 
         <div className="flex items-center gap-1 sm:gap-2 ml-auto md:ml-0">
+          <Link to="/track-orders" className="relative p-2 rounded-full hover:bg-muted transition-colors" aria-label="Track Orders">
+            <MapPin size={20} className="text-foreground" />
+          </Link>
           <Link to="/wishlist" className="relative p-2 rounded-full hover:bg-muted transition-colors" aria-label="Wishlist">
             <Heart size={20} className="text-foreground" />
             {wishlistCount > 0 && (
