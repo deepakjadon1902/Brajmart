@@ -64,6 +64,9 @@ const Navbar = () => {
         </form>
 
         <div className="flex items-center gap-1 sm:gap-2 ml-auto md:ml-0">
+          <Link to="/track-orders" className="relative p-2 rounded-full hover:bg-muted transition-colors" aria-label="Track Orders">
+            <MapPin size={20} className="text-foreground" />
+          </Link>
           <Link to="/wishlist" className="relative p-2 rounded-full hover:bg-muted transition-colors" aria-label="Wishlist">
             <Heart size={20} className="text-foreground" />
             {wishlistCount > 0 && (
