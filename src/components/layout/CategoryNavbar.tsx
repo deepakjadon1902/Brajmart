@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
 import { ScrollReveal } from '../ui/ScrollReveal';
-import { categories, categoryToSlug } from '@/data/productCatalog';
+import { useProductStore, categoryToSlug } from '@/store/productStore';
 
-const CategoryNavbar = () => (
+const CategoryNavbar = () => {
+  const categories = useProductStore((s) => s.categories);
+  return (
   <ScrollReveal>
     <section className="py-6 bg-card border-b border-border">
       <div className="container mx-auto px-4">
@@ -25,6 +27,7 @@ const CategoryNavbar = () => (
       </div>
     </section>
   </ScrollReveal>
-);
+  );
+};
 
 export default CategoryNavbar;
