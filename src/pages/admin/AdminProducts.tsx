@@ -1,17 +1,16 @@
 import { useState } from 'react';
-import { getAllProducts } from '@/data/productCatalog';
+import { useProductStore } from '@/store/productStore';
 import { Product } from '@/types/product';
 import { Search, Plus, Edit2, Trash2, X } from 'lucide-react';
 
 const AdminProducts = () => {
-  const allProducts = getAllProducts();
-  const [products, setProducts] = useState<Product[]>(allProducts);
+  const { products, categories, addProduct, updateProduct, deleteProduct } = useProductStore();
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('all');
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  const categories = [...new Set(allProducts.map((p) => p.category))];
+  const categoryNames = categories.map((c) => c.name);
 
   const filtered = products.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -20,16 +19,14 @@ const AdminProducts = () => {
   });
 
   const handleDelete = (id: string) => {
-    if (confirm('Delete this product?')) {
-      setProducts((prev) => prev.filter((p) => p.id !== id));
-    }
+    if (confirm('Delete this product?')) deleteProduct(id);
   };
 
   const handleSave = (product: Product) => {
     if (isCreating) {
-      setProducts((prev) => [{ ...product, id: `prod-${Date.now()}` }, ...prev]);
+      addProduct({ ...product, id: `prod-${Date.now()}` });
     } else {
-      setProducts((prev) => prev.map((p) => (p.id === product.id ? product : p)));
+      updateProduct(product.id, product);
     }
     setEditProduct(null);
     setIsCreating(false);
@@ -39,7 +36,7 @@ const AdminProducts = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Products</h1>
-        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', category: categories[0], rating: 4.5, reviewCount: 0, inStock: true }); }} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">
+        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true }); }} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">
           <Plus size={16} /> Add Product
         </button>
       </div>
@@ -51,7 +48,7 @@ const AdminProducts = () => {
         </div>
         <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none">
           <option value="all">All Categories</option>
-          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          {categoryNames.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
@@ -92,9 +89,8 @@ const AdminProducts = () => {
         </div>
       </div>
 
-      {/* Edit/Create Modal */}
       {editProduct && (
-        <ProductModal product={editProduct} categories={categories} isCreating={isCreating} onClose={() => { setEditProduct(null); setIsCreating(false); }} onSave={handleSave} />
+        <ProductModal product={editProduct} categories={categoryNames} isCreating={isCreating} onClose={() => { setEditProduct(null); setIsCreating(false); }} onSave={handleSave} />
       )}
     </div>
   );
@@ -134,6 +130,16 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
             <button onClick={() => update('inStock', !form.inStock)} className={`w-10 h-5 rounded-full transition ${form.inStock ? 'bg-emerald-500' : 'bg-slate-600'}`}>
               <div className={`w-4 h-4 rounded-full bg-white transition-transform ${form.inStock ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
+          </div>
+          <div>
+            <label className="block text-sm text-slate-300 mb-1">Badge</label>
+            <select value={form.badge || ''} onChange={(e) => update('badge', e.target.value || undefined)} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none">
+              <option value="">None</option>
+              <option value="new">New</option>
+              <option value="bestseller">Bestseller</option>
+              <option value="combo">Combo</option>
+              <option value="exclusive">Exclusive</option>
+            </select>
           </div>
           <div className="flex gap-3 pt-2">
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-800 transition">Cancel</button>

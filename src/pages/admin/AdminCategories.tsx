@@ -1,33 +1,24 @@
 import { useState } from 'react';
-import { categories as mockCategories } from '@/data/mockData';
-import { getAllProducts } from '@/data/productCatalog';
+import { useProductStore } from '@/store/productStore';
+import { Category } from '@/types/product';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 
-interface CategoryItem {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  productCount: number;
-}
-
 const AdminCategories = () => {
-  const products = getAllProducts();
-  const [cats, setCats] = useState<CategoryItem[]>(
-    mockCategories.map((c) => ({ ...c, productCount: products.filter((p) => p.category === c.name).length }))
-  );
-  const [editing, setEditing] = useState<CategoryItem | null>(null);
+  const { categories, products, addCategory, updateCategory, deleteCategory } = useProductStore();
+  const [editing, setEditing] = useState<Category | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
+  const getCatCount = (name: string) => products.filter((p) => p.category === name).length;
+
   const handleDelete = (id: string) => {
-    if (confirm('Delete this category?')) setCats((prev) => prev.filter((c) => c.id !== id));
+    if (confirm('Delete this category?')) deleteCategory(id);
   };
 
-  const handleSave = (cat: CategoryItem) => {
+  const handleSave = (cat: Category) => {
     if (isCreating) {
-      setCats((prev) => [...prev, { ...cat, id: `cat-${Date.now()}` }]);
+      addCategory({ ...cat, id: `cat-${Date.now()}` });
     } else {
-      setCats((prev) => prev.map((c) => (c.id === cat.id ? cat : c)));
+      updateCategory(cat.id, cat);
     }
     setEditing(null);
     setIsCreating(false);
@@ -43,7 +34,7 @@ const AdminCategories = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cats.map((cat) => (
+        {categories.map((cat) => (
           <div key={cat.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition">
             <div className="flex items-start justify-between mb-3">
               <div className="text-3xl">{cat.icon}</div>
@@ -53,7 +44,7 @@ const AdminCategories = () => {
               </div>
             </div>
             <h3 className="text-white font-semibold text-lg">{cat.name}</h3>
-            <p className="text-slate-400 text-sm mt-1">{cat.productCount} products</p>
+            <p className="text-slate-400 text-sm mt-1">{getCatCount(cat.name)} products</p>
           </div>
         ))}
       </div>
@@ -73,7 +64,7 @@ const AdminCategories = () => {
   );
 };
 
-const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: CategoryItem; onSave: (c: CategoryItem) => void; onClose: () => void; isCreating: boolean }) => {
+const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onSave: (c: Category) => void; onClose: () => void; isCreating: boolean }) => {
   const [form, setForm] = useState(cat);
   return (
     <div className="p-5 space-y-4">
