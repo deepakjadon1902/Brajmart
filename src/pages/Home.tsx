@@ -8,60 +8,67 @@ import ExclusiveShop from '@/components/sections/ExclusiveShop';
 import BrajYatra from '@/components/sections/BrajYatra';
 import Testimonials from '@/components/sections/Testimonials';
 import Footer from '@/components/layout/Footer';
-import { latestProducts, bestSellingProducts, newArrivals } from '@/data/mockData';
+import { useProductStore } from '@/store/productStore';
 
-const Home = () => (
-  <div className="min-h-screen bg-background">
-    <AnnouncementBar />
-    <Navbar />
-    <CategoryNavbar />
-    <HeroCarousel />
+const Home = () => {
+  const { products, getLatestProducts, getBestSellers } = useProductStore();
+  const latestProducts = getLatestProducts();
+  const bestSellingProducts = getBestSellers();
+  const newArrivals = latestProducts.slice(0, 6);
 
-    <CollectionSection
-      tag="BRAJMART COLLECTION"
-      title="✨ Latest Products"
-      subtitle="Fresh arrivals from the divine lands of Braj"
-      products={latestProducts}
-    />
+  return (
+    <div className="min-h-screen bg-background">
+      <AnnouncementBar />
+      <Navbar />
+      <CategoryNavbar />
+      <HeroCarousel />
 
-    <CollectionSection
-      tag="JUST IN"
-      title="🆕 New Arrivals"
-      subtitle="Discover what's new at BrajMart"
-      products={newArrivals}
-      bgClass="bg-pearl"
-    />
+      <CollectionSection
+        tag="BRAJMART COLLECTION"
+        title="✨ Latest Products"
+        subtitle="Fresh arrivals from the divine lands of Braj"
+        products={latestProducts}
+      />
 
-    <CollectionSection
-      tag="MOST LOVED"
-      title="🔥 Best Selling Products"
-      subtitle="Top picks from our devotee community"
-      products={bestSellingProducts}
-    />
+      <CollectionSection
+        tag="JUST IN"
+        title="🆕 New Arrivals"
+        subtitle="Discover what's new at BrajMart"
+        products={newArrivals}
+        bgClass="bg-pearl"
+      />
 
-    <ExclusiveBooks />
+      <CollectionSection
+        tag="MOST LOVED"
+        title="🔥 Best Selling Products"
+        subtitle="Top picks from our devotee community"
+        products={bestSellingProducts}
+      />
 
-    <CollectionSection
-      tag="BRAJMART COLLECTION"
-      title="🪔 Top Devotional Accessories"
-      subtitle="Malas, Rudraksha, Bracelets & More"
-      products={latestProducts.slice(0, 6)}
-      bgClass="bg-pearl"
-    />
+      <ExclusiveBooks />
 
-    <ExclusiveShop />
+      <CollectionSection
+        tag="BRAJMART COLLECTION"
+        title="🪔 Top Devotional Accessories"
+        subtitle="Malas, Rudraksha, Bracelets & More"
+        products={products.filter(p => p.category === 'Accessories').slice(0, 6)}
+        bgClass="bg-pearl"
+      />
 
-    <CollectionSection
-      tag="SACRED OFFERINGS"
-      title="🍮 Sacred Prasadam Collection"
-      subtitle="Taste the Blessings of Vrindavan's Sacred Temples"
-      products={bestSellingProducts.slice(0, 5)}
-    />
+      <ExclusiveShop />
 
-    <BrajYatra />
-    <Testimonials />
-    <Footer />
-  </div>
-);
+      <CollectionSection
+        tag="SACRED OFFERINGS"
+        title="🍮 Sacred Prasadam Collection"
+        subtitle="Taste the Blessings of Vrindavan's Sacred Temples"
+        products={products.filter(p => p.category === 'Prasadam').slice(0, 5)}
+      />
+
+      <BrajYatra />
+      <Testimonials />
+      <Footer />
+    </div>
+  );
+};
 
 export default Home;
