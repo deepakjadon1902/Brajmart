@@ -1,0 +1,193 @@
+export interface BrajDestination {
+  id: string;
+  name: string;
+  slug: string;
+  emoji: string;
+  image: string;
+  heroImage: string;
+  shortDesc: string;
+  fullDesc: string;
+  famousTemples: string[];
+  bestTimeToVisit: string;
+  howToReach: string;
+  nearbyPlaces: string[];
+  highlights: string[];
+  distance: string; // from Mathura
+}
+
+export const brajDestinations: BrajDestination[] = [
+  {
+    id: 'vrindavan',
+    name: 'Vrindavan',
+    slug: 'vrindavan',
+    emoji: '🛕',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Prem_Mandir_-_Vrindavan_2.jpg/1280px-Prem_Mandir_-_Vrindavan_2.jpg',
+    heroImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Prem_Mandir_-_Vrindavan_2.jpg/1920px-Prem_Mandir_-_Vrindavan_2.jpg',
+    shortDesc: 'The eternal playground of Lord Krishna — the holiest city of Braj Bhumi with over 5,500 temples.',
+    fullDesc: 'Vrindavan, the land where Lord Krishna spent His childhood, is a sacred city of over 5,500 temples on the banks of the Yamuna River. Every street, every ghat, and every corner resonates with the divine pastimes (leelas) of Radha and Krishna. From the ancient Banke Bihari Temple to the magnificent Prem Mandir, Vrindavan is the spiritual heart of Braj. Millions of devotees visit each year to experience the bliss of Krishna Bhakti, especially during Holi, Janmashtami, and Kartik month.',
+    famousTemples: [
+      'Banke Bihari Temple — The most visited temple, where the curtain (jhaki) darshan is iconic',
+      'Prem Mandir — Stunning white marble temple by Jagadguru Kripalu Maharaj with light & sound show',
+      'ISKCON Vrindavan (Krishna-Balaram Mandir) — Founded by Srila Prabhupada, international hub of Krishna consciousness',
+      'Radha Raman Temple — 500-year-old temple with a self-manifested deity of Lord Krishna',
+      'Radha Damodar Temple — Where Srila Prabhupada lived and wrote before going to the West',
+      'Nidhivan — Mysterious sacred grove where Radha-Krishna are believed to perform Raas Leela every night',
+      'Madan Mohan Temple — One of the oldest temples of Vrindavan by the Yamuna',
+    ],
+    bestTimeToVisit: 'October to March (pleasant weather). Holi (Feb-March) and Janmashtami (Aug-Sep) are the most celebrated festivals.',
+    howToReach: 'Nearest railway station: Mathura Junction (12 km). Nearest airport: Agra (70 km) or Delhi IGI (150 km). Well-connected by road via NH-44.',
+    nearbyPlaces: ['Mathura (12 km)', 'Govardhan (25 km)', 'Barsana (50 km)', 'Nandgaon (45 km)', 'Gokul (20 km)'],
+    highlights: [
+      'Yamuna Aarti at Kesi Ghat every evening',
+      'Parikrama of the town (circumambulation)',
+      'Widows of Vrindavan Holi celebration',
+      'Night stay to experience Nidhivan mystery',
+      'Shopping for deity dresses and Tulsi malas in Loi Bazaar',
+    ],
+    distance: '12 km from Mathura',
+  },
+  {
+    id: 'mathura',
+    name: 'Mathura',
+    slug: 'mathura',
+    emoji: '🏛️',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Krishna_Janmabhoomi_Temple.jpg/1280px-Krishna_Janmabhoomi_Temple.jpg',
+    heroImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Krishna_Janmabhoomi_Temple.jpg/1920px-Krishna_Janmabhoomi_Temple.jpg',
+    shortDesc: 'The birthplace of Lord Krishna — one of the seven sacred cities (Sapta Puri) of Hinduism.',
+    fullDesc: 'Mathura, the Janmabhoomi (birthplace) of Lord Sri Krishna, is one of the holiest cities in India and among the Sapta Puri — the seven sacred pilgrimage cities of Hinduism. Located on the western bank of the Yamuna River, Mathura has been a center of Krishna worship for over 5,000 years. The city is famous for its ghats, temples, and the grand Janmashtami celebrations that attract millions of devotees. The iconic Krishna Janmabhoomi Temple stands at the exact spot where Lord Krishna was born in the prison cell of King Kamsa.',
+    famousTemples: [
+      'Shri Krishna Janmabhoomi — The exact birthplace of Lord Krishna with the prison cell',
+      'Dwarkadhish Temple — 19th-century marvel with intricate paintings and carvings',
+      'Vishram Ghat — Where Lord Krishna rested after slaying Kamsa',
+      'Govind Dev Temple — Built by Raja Man Singh, once seven stories tall',
+      'Birla Mandir (Gita Mandir) — Beautiful modern temple with Gita inscriptions',
+      'Kusum Sarovar — Ancient reservoir with stunning Mughal-era cenotaphs',
+    ],
+    bestTimeToVisit: 'October to March. Janmashtami (Aug-Sep) is the grandest celebration in Mathura.',
+    howToReach: 'Mathura Junction is a major railway station on Delhi-Mumbai and Delhi-Agra routes. NH-44 connects it to Delhi (150 km) and Agra (58 km).',
+    nearbyPlaces: ['Vrindavan (12 km)', 'Govardhan (22 km)', 'Gokul (15 km)', 'Barsana (50 km)', 'Nandgaon (46 km)'],
+    highlights: [
+      'Janmashtami midnight celebrations at Janmabhoomi',
+      'Evening aarti at Vishram Ghat on the Yamuna',
+      'Local pedas and sweets from Mathura\'s iconic sweet shops',
+      'Visit to the archaeological museum with Kushan-era artifacts',
+      'Holi celebrations with colors and flowers',
+    ],
+    distance: 'City center of Braj Bhumi',
+  },
+  {
+    id: 'govardhan',
+    name: 'Govardhan',
+    slug: 'govardhan',
+    emoji: '⛰️',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Govardhan_Hill_View.jpg/1280px-Govardhan_Hill_View.jpg',
+    heroImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Govardhan_Hill_View.jpg/1920px-Govardhan_Hill_View.jpg',
+    shortDesc: 'The sacred hill lifted by Lord Krishna on His little finger to protect the people of Braj from Indra\'s wrath.',
+    fullDesc: 'Govardhan, also known as Giriraj, is the most sacred hill in Braj Bhumi. According to Srimad Bhagavatam, young Lord Krishna lifted this entire hill on His little finger for seven days to protect the residents of Vraja from the devastating rains sent by Lord Indra. The 21-km Govardhan Parikrama (circumambulation) is one of the most important pilgrimages in Braj. Devotees walk barefoot around the hill, offering prayers at sacred kundas (ponds) and temples along the way. Govardhan Puja, celebrated the day after Diwali, is a major festival here.',
+    famousTemples: [
+      'Daan Ghati Temple — Where Krishna collected toll from the Gopis',
+      'Mansi Ganga — Sacred lake believed to be created by Krishna\'s mind',
+      'Mukharavind Temple — Where the face of Govardhan Hill is worshipped',
+      'Radha Kund & Shyam Kund — The most sacred bathing ponds in all of Braj',
+      'Kusum Sarovar — Beautiful ancient water reservoir with Mughal cenotaphs',
+      'Jatipura Temple — Ancient temple at the base of Govardhan Hill',
+    ],
+    bestTimeToVisit: 'October to March. Govardhan Puja (day after Diwali) and Kartik month are especially sacred.',
+    howToReach: '22 km from Mathura, 25 km from Vrindavan. Accessible by road. Nearest railway station: Mathura Junction.',
+    nearbyPlaces: ['Mathura (22 km)', 'Vrindavan (25 km)', 'Radha Kund (5 km)', 'Kusum Sarovar (3 km)'],
+    highlights: [
+      '21-km Govardhan Parikrama (walk or dandvat)',
+      'Bathing at Radha Kund and Shyam Kund',
+      'Govardhan Puja celebrations',
+      'Touching the sacred Govardhan Shilas',
+      'Evening prayers at Mansi Ganga',
+    ],
+    distance: '22 km from Mathura',
+  },
+  {
+    id: 'nandgaon',
+    name: 'Nandgaon',
+    slug: 'nandgaon',
+    emoji: '🌄',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/Nand_Bhawan_Temple_Nandgaon.jpg/1280px-Nand_Bhawan_Temple_Nandgaon.jpg',
+    heroImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/Nand_Bhawan_Temple_Nandgaon.jpg/1920px-Nand_Bhawan_Temple_Nandgaon.jpg',
+    shortDesc: 'The village of Nanda Maharaj where Lord Krishna was raised with love and butter.',
+    fullDesc: 'Nandgaon is the village of Nanda Maharaj, the foster father of Lord Krishna. It was here that Krishna grew up as a cowherd boy, stealing butter, playing with His friends, and charming everyone with His divine leelas. The hilltop Nand Bhawan Temple marks the grand palace of Nanda Maharaj, offering panoramic views of the Braj countryside. Nandgaon is world-famous for its Lathmar Holi — celebrated a day before Barsana — where men from Nandgaon visit Barsana and women playfully beat them with sticks, reenacting the divine love play of Radha and Krishna.',
+    famousTemples: [
+      'Nand Bhawan Temple — Hilltop temple marking the palace of Nanda Maharaj',
+      'Nand Rai Temple — Beautiful temple with ancient Krishna murals',
+      'Pavan Sarovar — Sacred lake where Krishna and Balaram played',
+      'Charan Pahari — Hill with Krishna\'s footprints on the rock',
+      'Ter Kadamba — Ancient Kadamba tree under which Krishna played His flute',
+    ],
+    bestTimeToVisit: 'February-March for Lathmar Holi. October to March for pleasant weather.',
+    howToReach: '46 km from Mathura, 50 km from Vrindavan. Accessible by road from Mathura via Kosi-Kalan.',
+    nearbyPlaces: ['Barsana (8 km)', 'Govardhan (30 km)', 'Mathura (46 km)', 'Vrindavan (50 km)'],
+    highlights: [
+      'Lathmar Holi — World-famous stick-beating Holi celebration',
+      'Climbing Nand Bhawan hill for panoramic Braj views',
+      'Bathing at Pavan Sarovar',
+      'Witnessing evening aarti at Nand Bhawan',
+      'Exploring rural Braj village life and culture',
+    ],
+    distance: '46 km from Mathura',
+  },
+  {
+    id: 'barsana',
+    name: 'Barsana',
+    slug: 'barsana',
+    emoji: '🌸',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Radha_Rani_Temple_Barsana.jpg/1280px-Radha_Rani_Temple_Barsana.jpg',
+    heroImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Radha_Rani_Temple_Barsana.jpg/1920px-Radha_Rani_Temple_Barsana.jpg',
+    shortDesc: 'The birthplace of Goddess Radha Rani — the land where divine love blossomed.',
+    fullDesc: 'Barsana is the sacred village of Goddess Radha Rani, the eternal consort of Lord Krishna. Perched on the Bhanugarh Hill, the magnificent Shri Radha Rani Temple (Ladli Ji Temple) is the only temple in India primarily dedicated to Radha Rani. Built in red sandstone in the Rajput architectural style, the temple offers breathtaking views of the Braj plains. Barsana is world-famous for its Lathmar Holi, where women of Barsana beat men from Nandgaon with wooden sticks — a colorful reenactment of Radha-Krishna\'s divine love play that attracts visitors from across the globe.',
+    famousTemples: [
+      'Shri Radha Rani Temple (Ladli Ji Mandir) — The only temple dedicated primarily to Radha Rani',
+      'Maan Mandir — Where Radha would sit in a sulky mood (maan) waiting for Krishna',
+      'Mor Kutir — Where Krishna danced like a peacock for Radha',
+      'Daan Bihari Temple — Where Krishna demanded a toll from the Gopis',
+      'Rangeeli Mahal — Where Radha and Krishna played with colors',
+      'Pili Pokhar — Sacred golden pond associated with Radha Rani',
+    ],
+    bestTimeToVisit: 'February-March for Lathmar Holi. October to March for pleasant weather. Radha Ashtami (Sep) is a grand celebration.',
+    howToReach: '50 km from Mathura, 42 km from Vrindavan. Accessible via Kosi-Kalan road from Mathura or Vrindavan.',
+    nearbyPlaces: ['Nandgaon (8 km)', 'Govardhan (28 km)', 'Mathura (50 km)', 'Vrindavan (42 km)'],
+    highlights: [
+      'Lathmar Holi — The most famous Holi celebration in the world',
+      'Climbing 200+ steps to Radha Rani Temple for stunning views',
+      'Radha Ashtami festival celebrations',
+      'Exploring the four sacred hills of Barsana',
+      'Tasting local Braj cuisine — makhan, lassi, and pedas',
+    ],
+    distance: '50 km from Mathura',
+  },
+  {
+    id: 'gokul',
+    name: 'Gokul',
+    slug: 'gokul',
+    emoji: '🏘️',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Gokul_Temple.jpg/1280px-Gokul_Temple.jpg',
+    heroImage: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Gokul_Temple.jpg/1920px-Gokul_Temple.jpg',
+    shortDesc: 'Where baby Krishna was secretly brought after birth — the village of His earliest leelas.',
+    fullDesc: 'Gokul is the village where newborn Lord Krishna was secretly carried by His father Vasudev across the flooding Yamuna River on the night of Janmashtami. It was here that baby Krishna was raised by Nanda Maharaj and Yashoda Maiya, and where He performed His earliest divine pastimes — including killing the demoness Putana, breaking the mortar (Ukhalmandan), and crawling through the village. The ancient Raman Reti area, with its soft sacred sand, is believed to be where baby Krishna and Balaram played. Gokul holds deep spiritual significance as the first home of Lord Krishna outside Mathura.',
+    famousTemples: [
+      'Gokul Nath Temple — Main temple dedicated to Lord Krishna\'s Gokul pastimes',
+      'Raman Reti — Sacred sandy area where Krishna and Balaram played as babies',
+      'Brahmand Ghat — Where Yashoda saw the entire universe in Krishna\'s mouth',
+      'Chaurasi Khamba Temple — Ancient 84-pillar temple with stunning architecture',
+      'Thakurani Ghat — Where Vasudev crossed the Yamuna with baby Krishna',
+      'Yashoda Bhawan — The home of Mother Yashoda',
+    ],
+    bestTimeToVisit: 'October to March. Janmashtami (Aug-Sep) celebrations are deeply moving here.',
+    howToReach: '15 km from Mathura, 20 km from Vrindavan. Accessible by road. Cross the Yamuna bridge from Mathura.',
+    nearbyPlaces: ['Mathura (15 km)', 'Vrindavan (20 km)', 'Mahavan (3 km)', 'Govardhan (35 km)'],
+    highlights: [
+      'Walking on the sacred sand of Raman Reti',
+      'Darshan at Brahmand Ghat',
+      'Exploring the 84-pillar Chaurasi Khamba temple',
+      'Janmashtami celebrations along the Yamuna',
+      'Visiting nearby Mahavan — Nanda Maharaj\'s earlier home',
+    ],
+    distance: '15 km from Mathura',
+  },
+];
