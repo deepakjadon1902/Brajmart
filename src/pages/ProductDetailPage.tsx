@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getProductBySlug, getAllProducts } from '@/data/productCatalog';
+import { useProductStore } from '@/store/productStore';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { formatPrice, calculateDiscount } from '@/utils/formatPrice';
@@ -15,6 +15,7 @@ import Footer from '@/components/layout/Footer';
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
+  const { getProductBySlug, products } = useProductStore();
   const product = getProductBySlug(slug || '');
   const [quantity, setQuantity] = useState(1);
   const addToCart = useCartStore(s => s.addItem);
@@ -35,7 +36,7 @@ const ProductDetailPage = () => {
 
   const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
   const inWishlist = isInWishlist(product.id);
-  const relatedProducts = getAllProducts().filter(p => p.category === product.category && p.id !== product.id).slice(0, 6);
+  const relatedProducts = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 6);
 
   const handleAddToCart = () => {
     for (let i = 0; i < quantity; i++) addToCart(product);

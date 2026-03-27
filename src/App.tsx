@@ -26,6 +26,7 @@ import PaymentMethodPage from "./pages/PaymentMethodPage";
 import TermsPage from "./pages/TermsPage";
 import ComparePage from "./pages/ComparePage";
 import NotFound from "./pages/NotFound";
+import BrajDarshanPage from "./pages/BrajDarshanPage";
 import UserOrderTracking from "./pages/UserOrderTracking";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminLayout from "./pages/admin/AdminLayout";
@@ -72,6 +73,7 @@ const App = () => (
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/payment-method" element={<PaymentMethodPage />} />
           <Route path="/terms" element={<TermsPage />} />
+          <Route path="/braj-darshan/:slug" element={<BrajDarshanPage />} />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminLogin />} />

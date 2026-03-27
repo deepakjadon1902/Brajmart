@@ -1,10 +1,10 @@
 import { useOrderStore } from '@/store/orderStore';
-import { getAllProducts } from '@/data/productCatalog';
+import { useProductStore } from '@/store/productStore';
 import { DollarSign, ShoppingBag, Users, Package, TrendingUp, ArrowUpRight } from 'lucide-react';
 
 const AdminDashboard = () => {
   const orders = useOrderStore((s) => s.orders);
-  const products = getAllProducts();
+  const products = useProductStore((s) => s.products);
 
   const totalRevenue = orders.reduce((s, o) => s + o.total, 0);
   const totalOrders = orders.length;

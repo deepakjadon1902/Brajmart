@@ -1,8 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Filter } from 'lucide-react';
-import { getProductsByCategory, categorySlugMap, categories } from '@/data/productCatalog';
-import { categoryToSlug } from '@/data/productCatalog';
+import { useProductStore, categorySlugMap, categoryToSlug } from '@/store/productStore';
 import ProductCard from '@/components/product/ProductCard';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
@@ -11,6 +10,7 @@ import Footer from '@/components/layout/Footer';
 
 const CategoryPage = () => {
   const { slug } = useParams();
+  const { getProductsByCategory, categories } = useProductStore();
   const categoryName = slug ? categorySlugMap[slug] || slug : '';
   const products = getProductsByCategory(categoryName);
   const catMeta = categories.find(c => categoryToSlug(c.name) === slug);

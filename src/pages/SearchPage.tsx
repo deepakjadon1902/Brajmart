@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { searchProducts, getAllProducts } from '@/data/productCatalog';
+import { useProductStore } from '@/store/productStore';
 import { Search as SearchIcon, ArrowLeft } from 'lucide-react';
 import ProductCard from '@/components/product/ProductCard';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
@@ -10,8 +10,9 @@ import Footer from '@/components/layout/Footer';
 
 const SearchPage = () => {
   const [query, setQuery] = useState('');
+  const { searchProducts, products } = useProductStore();
   const results = query.length >= 2 ? searchProducts(query) : [];
-  const trendingProducts = getAllProducts().slice(0, 8);
+  const trendingProducts = products.slice(0, 8);
 
   return (
     <div className="min-h-screen bg-background">
