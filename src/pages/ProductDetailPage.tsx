@@ -36,7 +36,7 @@ const ProductDetailPage = () => {
 
   const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
   const inWishlist = isInWishlist(product.id);
-  const relatedProducts = getAllProducts().filter(p => p.category === product.category && p.id !== product.id).slice(0, 6);
+  const relatedProducts = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 6);
 
   const handleAddToCart = () => {
     for (let i = 0; i < quantity; i++) addToCart(product);
