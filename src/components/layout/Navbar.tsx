@@ -4,6 +4,7 @@ import { Search, Heart, ShoppingCart, Menu, X, User, LogOut, Package, MapPin } f
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
