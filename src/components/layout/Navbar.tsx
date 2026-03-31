@@ -16,6 +16,7 @@ const Navbar = () => {
   const cartCount = useCartStore(s => s.totalItems());
   const wishlistCount = useWishlistStore(s => s.items.length);
   const { user, isAuthenticated, logout } = useAuthStore();
+  const { settings } = useSettingsStore();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 80);
