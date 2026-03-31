@@ -93,7 +93,7 @@ const AdminOrders = () => {
                 <h3 className="text-sm font-medium text-slate-400 mb-2">Shipping Address</h3>
                 <div className="bg-slate-800/50 rounded-xl p-3 text-sm text-slate-300">
                   <p className="font-medium text-white">{detail.shippingAddress.fullName}</p>
-                  <p>{detail.shippingAddress.address}, {detail.shippingAddress.city}</p>
+                  <p>{detail.shippingAddress.street}, {detail.shippingAddress.city}</p>
                   <p>{detail.shippingAddress.state} — {detail.shippingAddress.pincode}</p>
                   <p>📞 {detail.shippingAddress.mobile}</p>
                 </div>

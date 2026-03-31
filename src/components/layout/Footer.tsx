@@ -13,7 +13,7 @@ const footerLinks = {
     { label: 'Customer Service', to: '/customer-service' },
   ],
   'Orders & Returns': [
-    { label: 'Track Order', to: '/track-order' },
+    { label: 'Track Order', to: '/track-orders' },
     { label: 'Shipping & Delivery', to: '/shipping-delivery' },
     { label: 'Return Policy', to: '/return-policy' },
   ],
