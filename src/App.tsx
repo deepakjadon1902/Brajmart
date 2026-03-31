@@ -67,7 +67,7 @@ const App = () => (
           <Route path="/help-center" element={<HelpCenterPage />} />
           <Route path="/customer-service" element={<CustomerServicePage />} />
           <Route path="/compare" element={<ComparePage />} />
-          <Route path="/track-order" element={<TrackOrderPage />} />
+          <Route path="/track-order" element={<UserOrderTracking />} />
           <Route path="/shipping-delivery" element={<ShippingDeliveryPage />} />
           <Route path="/return-policy" element={<ReturnPolicyPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
