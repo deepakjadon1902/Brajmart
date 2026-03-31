@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Product } from '@/types/product';
-import { Search, Plus, Edit2, Trash2, X } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
+
+const MAX_IMAGE_SIZE = 1 * 1024 * 1024; // 1MB
 
 const AdminProducts = () => {
   const { products, categories, addProduct, updateProduct, deleteProduct } = useProductStore();
@@ -69,7 +71,7 @@ const AdminProducts = () => {
                 <tr key={p.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover" />
+                      <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover bg-slate-800" />
                       <span className="text-white text-sm max-w-[200px] truncate">{p.name}</span>
                     </div>
                   </td>
@@ -98,7 +100,31 @@ const AdminProducts = () => {
 
 const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { product: Product; categories: string[]; isCreating: boolean; onClose: () => void; onSave: (p: Product) => void }) => {
   const [form, setForm] = useState(product);
+  const [imageError, setImageError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const update = (field: string, value: any) => setForm((prev) => ({ ...prev, [field]: value }));
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageError('');
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      setImageError('Image must be less than 1 MB');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setImageError('Please select a valid image file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      update('image', ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -120,7 +146,39 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
               {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <Field label="Image URL" value={form.image} onChange={(v) => update('image', v)} />
+
+          {/* Image Upload */}
+          <div>
+            <label className="block text-sm text-slate-300 mb-1">Product Image</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+            <div className="flex gap-3 items-start">
+              {form.image ? (
+                <img src={form.image} alt="Preview" className="w-20 h-20 rounded-xl object-cover border border-slate-700" />
+              ) : (
+                <div className="w-20 h-20 rounded-xl border border-dashed border-slate-600 flex items-center justify-center">
+                  <ImageIcon size={24} className="text-slate-500" />
+                </div>
+              )}
+              <div className="flex-1 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white hover:bg-slate-700 transition"
+                >
+                  <Upload size={14} /> Upload from Device
+                </button>
+                <p className="text-xs text-slate-500">Max size: 1 MB · JPG, PNG, WebP</p>
+                {imageError && <p className="text-xs text-red-400">{imageError}</p>}
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <Field label="Rating" value={String(form.rating)} onChange={(v) => update('rating', Number(v))} type="number" />
             <Field label="Review Count" value={String(form.reviewCount)} onChange={(v) => update('reviewCount', Number(v))} type="number" />
