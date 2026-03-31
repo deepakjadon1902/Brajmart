@@ -45,8 +45,8 @@ const Navbar = () => {
         <Link to="/" className="flex items-center gap-2 shrink-0">
           <span className="text-2xl">🪷</span>
           <div className="leading-none">
-            <span className="font-cinzel text-xl font-bold text-maroon-gold-gradient">BrajMart</span>
-            <span className="block text-[0.55rem] text-muted-foreground tracking-wider">From Braj, With Love 🙏</span>
+            <span className="font-cinzel text-xl font-bold text-maroon-gold-gradient">{settings.storeName}</span>
+            <span className="block text-[0.55rem] text-muted-foreground tracking-wider">{settings.tagline}</span>
           </div>
         </Link>
 
