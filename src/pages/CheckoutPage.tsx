@@ -224,7 +224,7 @@ const CheckoutPage = () => {
                       {[
                         { value: 'cod', label: 'Cash on Delivery', sub: 'Pay when delivered', icon: '📦' },
                         { value: 'upi', label: 'UPI Payment', sub: 'GPay, PhonePe, Paytm', icon: '📱' },
-                        { value: 'card', label: 'Credit/Debit Card', sub: 'Visa, Mastercard', RuPay', icon: '💳' },
+                        { value: 'card', label: 'Credit/Debit Card', sub: 'Visa, Mastercard, RuPay', icon: '💳' },
                       ].map((m) => (
                         <label key={m.value} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${paymentMethod === m.value ? 'border-gold bg-gold/5' : 'border-border hover:border-gold/40'}`}>
                           <input type="radio" name="payment" value={m.value} checked={paymentMethod === m.value} onChange={() => setPaymentMethod(m.value)} className="sr-only" />
