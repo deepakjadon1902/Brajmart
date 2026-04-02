@@ -170,7 +170,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
                 >
                   <Upload size={14} /> Upload from Device
                 </button>
-                <p className="text-xs text-slate-500">Max size: 1 MB · JPG, PNG, WebP</p>
+                <p className="text-xs text-slate-500">JPG, PNG, WebP — any size</p>
                 {imageError && <p className="text-xs text-red-400">{imageError}</p>}
               </div>
             </div>
