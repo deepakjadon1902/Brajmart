@@ -57,7 +57,7 @@ export const useOrderStore = create<OrderStore>()(
       orders: [],
       addOrder: (orderData) => {
         const id = getNextOrderId(get().orders);
-        const id = generate6DigitId(existingIds);
+        
         const now = new Date().toISOString();
         const estimatedDelivery = new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0];
         const order: Order = {
