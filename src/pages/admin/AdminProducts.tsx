@@ -109,10 +109,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
     if (!file) return;
     setImageError('');
 
-    if (file.size > MAX_IMAGE_SIZE) {
-      setImageError('Image must be less than 1 MB');
-      return;
-    }
+    // No size limit
 
     if (!file.type.startsWith('image/')) {
       setImageError('Please select a valid image file');
