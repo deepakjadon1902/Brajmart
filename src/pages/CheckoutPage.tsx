@@ -34,7 +34,8 @@ const CheckoutPage = () => {
   const navigate = useNavigate();
 
   const shipping = totalPrice() >= settings.freeShippingThreshold ? 0 : settings.shippingFee;
-  const grandTotal = totalPrice() + shipping;
+  const taxAmount = settings.taxRate > 0 ? Math.round(totalPrice() * settings.taxRate / 100) : 0;
+  const grandTotal = totalPrice() + shipping + taxAmount;
 
   const [billingAddress, setBillingAddress] = useState<Address>({
     fullName: user?.fullName || '',
