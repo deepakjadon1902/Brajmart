@@ -35,13 +35,11 @@ export interface Order {
   statusHistory: { status: OrderStatus; date: string; note?: string }[];
 }
 
-// Generate a unique 6-digit numeric order ID
-const generate6DigitId = (existingIds: Set<string>): string => {
-  let id: string;
-  do {
-    id = String(Math.floor(100000 + Math.random() * 900000));
-  } while (existingIds.has(id));
-  return id;
+// Generate sequential order ID starting from 10000
+const getNextOrderId = (orders: Order[]): string => {
+  if (orders.length === 0) return '10000';
+  const maxId = Math.max(...orders.map((o) => parseInt(o.id, 10) || 0), 9999);
+  return String(maxId + 1);
 };
 
 interface OrderStore {
