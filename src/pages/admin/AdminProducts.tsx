@@ -3,7 +3,7 @@ import { useProductStore } from '@/store/productStore';
 import { Product } from '@/types/product';
 import { Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
 
-const MAX_IMAGE_SIZE = 1 * 1024 * 1024; // 1MB
+// No image size limit
 
 const AdminProducts = () => {
   const { products, categories, addProduct, updateProduct, deleteProduct } = useProductStore();
@@ -109,10 +109,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
     if (!file) return;
     setImageError('');
 
-    if (file.size > MAX_IMAGE_SIZE) {
-      setImageError('Image must be less than 1 MB');
-      return;
-    }
+    // No size limit
 
     if (!file.type.startsWith('image/')) {
       setImageError('Please select a valid image file');
@@ -173,7 +170,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
                 >
                   <Upload size={14} /> Upload from Device
                 </button>
-                <p className="text-xs text-slate-500">Max size: 1 MB · JPG, PNG, WebP</p>
+                <p className="text-xs text-slate-500">JPG, PNG, WebP — any size</p>
                 {imageError && <p className="text-xs text-red-400">{imageError}</p>}
               </div>
             </div>

@@ -1,84 +1,257 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAdminStore } from '@/store/adminStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { Save, Store, Bell, Shield, Truck, CheckCircle } from 'lucide-react';
+import { Save, Store, Bell, Shield, Truck, CheckCircle, Globe, Megaphone, CreditCard, Image, Search, Settings2, Plus, X, Upload } from 'lucide-react';
 
 const AdminSettings = () => {
   const { adminEmail } = useAdminStore();
-  const { settings, updateSettings, updateNotifications } = useSettingsStore();
+  const { settings, updateSettings, updateNotifications, updateSocialLinks, updateAnnouncementMessages } = useSettingsStore();
   const [saved, setSaved] = useState(false);
+  const [activeTab, setActiveTab] = useState('store');
+  const logoRef = useRef<HTMLInputElement>(null);
 
   const [storeName, setStoreName] = useState(settings.storeName);
   const [tagline, setTagline] = useState(settings.tagline);
   const [currency, setCurrency] = useState(settings.currency);
+  const [storeEmail, setStoreEmail] = useState(settings.storeEmail);
+  const [storePhone, setStorePhone] = useState(settings.storePhone);
+  const [storeAddress, setStoreAddress] = useState(settings.storeAddress);
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(settings.freeShippingThreshold);
   const [shippingFee, setShippingFee] = useState(settings.shippingFee);
+  const [taxRate, setTaxRate] = useState(settings.taxRate);
+  const [minOrderAmount, setMinOrderAmount] = useState(settings.minOrderAmount);
+  const [maxOrderQuantity, setMaxOrderQuantity] = useState(settings.maxOrderQuantity);
+  const [codEnabled, setCodEnabled] = useState(settings.codEnabled);
+  const [upiEnabled, setUpiEnabled] = useState(settings.upiEnabled);
+  const [cardEnabled, setCardEnabled] = useState(settings.cardEnabled);
+  const [maintenanceMode, setMaintenanceMode] = useState(settings.maintenanceMode);
+  const [metaTitle, setMetaTitle] = useState(settings.metaTitle);
+  const [metaDescription, setMetaDescription] = useState(settings.metaDescription);
+  const [storeLogo, setStoreLogo] = useState(settings.storeLogo);
+  const [announcementEnabled, setAnnouncementEnabled] = useState(settings.announcementBar.enabled);
+  const [announcementMessages, setAnnouncementMsgs] = useState<string[]>(settings.announcementBar.messages);
+  const [newAnnouncement, setNewAnnouncement] = useState('');
+
+  const [socialLinks, setSocialLinks] = useState(settings.socialLinks);
 
   const handleSave = () => {
-    updateSettings({ storeName, tagline, currency, freeShippingThreshold, shippingFee });
+    updateSettings({
+      storeName, tagline, currency, storeEmail, storePhone, storeAddress,
+      freeShippingThreshold, shippingFee, taxRate, minOrderAmount, maxOrderQuantity,
+      codEnabled, upiEnabled, cardEnabled, maintenanceMode,
+      metaTitle, metaDescription, storeLogo,
+      announcementBar: { enabled: announcementEnabled, messages: announcementMessages },
+      socialLinks,
+    });
+    updateAnnouncementMessages(announcementMessages);
+    Object.entries(socialLinks).forEach(([k, v]) => updateSocialLinks(k, v));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setStoreLogo(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const addAnnouncement = () => {
+    if (newAnnouncement.trim()) {
+      setAnnouncementMsgs([...announcementMessages, newAnnouncement.trim()]);
+      setNewAnnouncement('');
+    }
+  };
+
+  const removeAnnouncement = (i: number) => {
+    setAnnouncementMsgs(announcementMessages.filter((_, idx) => idx !== i));
+  };
+
+  const tabs = [
+    { id: 'store', label: 'Store', icon: Store },
+    { id: 'shipping', label: 'Shipping & Orders', icon: Truck },
+    { id: 'payments', label: 'Payments', icon: CreditCard },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'announcements', label: 'Announcements', icon: Megaphone },
+    { id: 'social', label: 'Social Links', icon: Globe },
+    { id: 'seo', label: 'SEO & Branding', icon: Search },
+    { id: 'advanced', label: 'Advanced', icon: Settings2 },
+    { id: 'admin', label: 'Admin Account', icon: Shield },
+  ];
+
+  const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) => (
+    <button onClick={() => onChange(!value)} className={`w-10 h-5 rounded-full transition ${value ? 'bg-amber-500' : 'bg-slate-600'}`}>
+      <div className={`w-4 h-4 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : 'translate-x-0.5'}`} />
+    </button>
+  );
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-4xl">
       <h1 className="text-2xl font-bold text-white">Settings</h1>
+      <p className="text-sm text-slate-400">All changes here reflect instantly across the main application.</p>
 
-      {/* Store Settings */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-        <div className="flex items-center gap-2 text-white mb-2"><Store size={18} /><h2 className="text-lg font-semibold">Store Settings</h2></div>
-        <p className="text-xs text-slate-400">Changes here will reflect in the user-facing application instantly.</p>
-        <div>
-          <label className="block text-sm text-slate-300 mb-1">Store Name</label>
-          <input value={storeName} onChange={(e) => setStoreName(e.target.value)} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-300 mb-1">Tagline</label>
-          <input value={tagline} onChange={(e) => setTagline(e.target.value)} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
-        </div>
-        <div>
-          <label className="block text-sm text-slate-300 mb-1">Currency</label>
-          <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none">
-            <option value="INR">₹ INR</option>
-            <option value="USD">$ USD</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Shipping Settings */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-        <div className="flex items-center gap-2 text-white mb-2"><Truck size={18} /><h2 className="text-lg font-semibold">Shipping Settings</h2></div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-slate-300 mb-1">Free Shipping Above (₹)</label>
-            <input type="number" value={freeShippingThreshold} onChange={(e) => setFreeShippingThreshold(Number(e.target.value))} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-300 mb-1">Shipping Fee (₹)</label>
-            <input type="number" value={shippingFee} onChange={(e) => setShippingFee(Number(e.target.value))} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
-          </div>
-        </div>
-      </div>
-
-      {/* Notifications */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-        <div className="flex items-center gap-2 text-white mb-2"><Bell size={18} /><h2 className="text-lg font-semibold">Notifications</h2></div>
-        {Object.entries(settings.notifications).map(([key, val]) => (
-          <div key={key} className="flex items-center justify-between">
-            <span className="text-sm text-slate-300 capitalize">{key} alerts</span>
-            <button onClick={() => updateNotifications(key, !val)} className={`w-10 h-5 rounded-full transition ${val ? 'bg-amber-500' : 'bg-slate-600'}`}>
-              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${val ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-2">
+        {tabs.map((t) => (
+          <button key={t.id} onClick={() => setActiveTab(t.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === t.id ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+            <t.icon size={14} /> {t.label}
+          </button>
         ))}
       </div>
 
-      {/* Admin Info */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-        <div className="flex items-center gap-2 text-white mb-2"><Shield size={18} /><h2 className="text-lg font-semibold">Admin Account</h2></div>
-        <div className="flex justify-between text-sm"><span className="text-slate-400">Email</span><span className="text-white">{adminEmail}</span></div>
-        <div className="flex justify-between text-sm"><span className="text-slate-400">Role</span><span className="text-amber-400 font-medium">Super Admin</span></div>
-      </div>
+      {/* Store Settings */}
+      {activeTab === 'store' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Store size={18} /> Store Information</h2>
+          <p className="text-xs text-slate-400">Store name and tagline appear in navbar, footer, and page titles.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputField label="Store Name" value={storeName} onChange={setStoreName} />
+            <InputField label="Tagline" value={tagline} onChange={setTagline} />
+            <InputField label="Store Email" value={storeEmail} onChange={setStoreEmail} type="email" />
+            <InputField label="Store Phone" value={storePhone} onChange={setStorePhone} />
+          </div>
+          <InputField label="Store Address" value={storeAddress} onChange={setStoreAddress} />
+          <div>
+            <label className="block text-sm text-slate-300 mb-1">Currency</label>
+            <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none">
+              <option value="INR">₹ INR</option>
+              <option value="USD">$ USD</option>
+            </select>
+          </div>
+          {/* Logo Upload */}
+          <div>
+            <label className="block text-sm text-slate-300 mb-1">Store Logo</label>
+            <input ref={logoRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+            <div className="flex items-center gap-3">
+              {storeLogo ? (
+                <img src={storeLogo} alt="Logo" className="w-16 h-16 rounded-xl object-contain border border-slate-700 bg-slate-800 p-1" />
+              ) : (
+                <div className="w-16 h-16 rounded-xl border border-dashed border-slate-600 flex items-center justify-center"><Image size={20} className="text-slate-500" /></div>
+              )}
+              <button onClick={() => logoRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white hover:bg-slate-700 transition">
+                <Upload size={14} /> Upload Logo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shipping & Orders */}
+      {activeTab === 'shipping' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Truck size={18} /> Shipping & Order Settings</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <InputField label="Free Shipping Above (₹)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
+            <InputField label="Shipping Fee (₹)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
+            <InputField label="Tax Rate (%)" value={String(taxRate)} onChange={(v) => setTaxRate(Number(v))} type="number" />
+            <InputField label="Min Order Amount (₹)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
+            <InputField label="Max Quantity Per Item" value={String(maxOrderQuantity)} onChange={(v) => setMaxOrderQuantity(Number(v))} type="number" />
+          </div>
+        </div>
+      )}
+
+      {/* Payments */}
+      {activeTab === 'payments' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2"><CreditCard size={18} /> Payment Methods</h2>
+          <p className="text-xs text-slate-400">Enable or disable payment methods shown at checkout.</p>
+          {[
+            { label: 'Cash on Delivery (COD)', value: codEnabled, onChange: setCodEnabled },
+            { label: 'UPI Payment', value: upiEnabled, onChange: setUpiEnabled },
+            { label: 'Credit/Debit Card', value: cardEnabled, onChange: setCardEnabled },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center justify-between">
+              <span className="text-sm text-slate-300">{item.label}</span>
+              <Toggle value={item.value} onChange={item.onChange} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Notifications */}
+      {activeTab === 'notifications' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Bell size={18} /> Notifications</h2>
+          {Object.entries(settings.notifications).map(([key, val]) => (
+            <div key={key} className="flex items-center justify-between">
+              <span className="text-sm text-slate-300 capitalize">{key} alerts</span>
+              <Toggle value={val} onChange={(v) => updateNotifications(key, v)} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Announcements */}
+      {activeTab === 'announcements' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Megaphone size={18} /> Announcement Bar</h2>
+          <p className="text-xs text-slate-400">These messages rotate in the top banner of the main site.</p>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-300">Enable Announcement Bar</span>
+            <Toggle value={announcementEnabled} onChange={setAnnouncementEnabled} />
+          </div>
+          <div className="space-y-2">
+            {announcementMessages.map((msg, i) => (
+              <div key={i} className="flex items-center gap-2 bg-slate-800 rounded-xl px-4 py-2">
+                <span className="flex-1 text-sm text-white">{msg}</span>
+                <button onClick={() => removeAnnouncement(i)} className="text-red-400 hover:text-red-300"><X size={14} /></button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} placeholder="Add new announcement..." className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" onKeyDown={(e) => e.key === 'Enter' && addAnnouncement()} />
+            <button onClick={addAnnouncement} className="px-4 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition"><Plus size={14} /></button>
+          </div>
+        </div>
+      )}
+
+      {/* Social Links */}
+      {activeTab === 'social' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Globe size={18} /> Social Links</h2>
+          <p className="text-xs text-slate-400">These appear in the footer of the main site.</p>
+          {Object.entries(socialLinks).map(([key, val]) => (
+            <InputField key={key} label={key.charAt(0).toUpperCase() + key.slice(1)} value={val} onChange={(v) => setSocialLinks({ ...socialLinks, [key]: v })} placeholder={`https://${key}.com/yourpage`} />
+          ))}
+        </div>
+      )}
+
+      {/* SEO */}
+      {activeTab === 'seo' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Search size={18} /> SEO & Branding</h2>
+          <InputField label="Meta Title" value={metaTitle} onChange={setMetaTitle} />
+          <div>
+            <label className="block text-sm text-slate-300 mb-1">Meta Description</label>
+            <textarea value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} rows={3} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none" />
+          </div>
+        </div>
+      )}
+
+      {/* Advanced */}
+      {activeTab === 'advanced' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Settings2 size={18} /> Advanced</h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-sm text-slate-300">Maintenance Mode</span>
+              <p className="text-xs text-slate-500">When enabled, users see a maintenance page instead of the store.</p>
+            </div>
+            <Toggle value={maintenanceMode} onChange={setMaintenanceMode} />
+          </div>
+        </div>
+      )}
+
+      {/* Admin */}
+      {activeTab === 'admin' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Shield size={18} /> Admin Account</h2>
+          <div className="flex justify-between text-sm"><span className="text-slate-400">Email</span><span className="text-white">{adminEmail}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-slate-400">Role</span><span className="text-amber-400 font-medium">Super Admin</span></div>
+        </div>
+      )}
 
       <button onClick={handleSave} className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 transition">
         {saved ? <><CheckCircle size={16} /> Saved ✓</> : <><Save size={16} /> Save Settings</>}
@@ -86,5 +259,12 @@ const AdminSettings = () => {
     </div>
   );
 };
+
+const InputField = ({ label, value, onChange, type = 'text', placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) => (
+  <div>
+    <label className="block text-sm text-slate-300 mb-1">{label}</label>
+    <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+  </div>
+);
 
 export default AdminSettings;

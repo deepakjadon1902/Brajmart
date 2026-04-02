@@ -75,10 +75,7 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
   const handleIconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 1024 * 1024) {
-      alert('Icon image must be less than 1 MB');
-      return;
-    }
+    // No size limit
     const reader = new FileReader();
     reader.onload = () => {
       setForm({ ...form, icon: reader.result as string });
@@ -108,7 +105,7 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
           )}
           <div className="flex-1">
             <p className="text-sm text-slate-300">{form.icon && form.icon.startsWith('data:') ? 'Change icon image' : 'Upload icon image'}</p>
-            <p className="text-xs text-slate-500">PNG, JPG — max 1 MB</p>
+            <p className="text-xs text-slate-500">PNG, JPG, WebP — any size</p>
           </div>
           <Upload size={16} className="text-slate-400" />
         </div>

@@ -1,27 +1,24 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const messages = [
-  '🎉 Grand Opening Sale — Up to 60% Off!',
-  '🚚 Free Shipping on orders above ₹499',
-  '🙏 Authentic Products Direct from Vrindavan Temples',
-  '✨ New Arrivals Every Week',
-  '📦 COD Available Across India',
-];
+import { useSettingsStore } from '@/store/settingsStore';
 
 const AnnouncementBar = () => {
+  const { settings } = useSettingsStore();
   const [visible, setVisible] = useState(true);
   const [currentMsg, setCurrentMsg] = useState(0);
 
+  const messages = settings.announcementBar.messages;
+
   useEffect(() => {
+    if (messages.length <= 1) return;
     const interval = setInterval(() => {
       setCurrentMsg((prev) => (prev + 1) % messages.length);
     }, 3500);
     return () => clearInterval(interval);
-  }, []);
+  }, [messages.length]);
 
-  if (!visible) return null;
+  if (!visible || !settings.announcementBar.enabled || messages.length === 0) return null;
 
   return (
     <div className="relative bg-saffron h-9 flex items-center justify-center overflow-hidden z-50">
