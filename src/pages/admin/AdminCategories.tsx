@@ -75,10 +75,7 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
   const handleIconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 1024 * 1024) {
-      alert('Icon image must be less than 1 MB');
-      return;
-    }
+    // No size limit
     const reader = new FileReader();
     reader.onload = () => {
       setForm({ ...form, icon: reader.result as string });
