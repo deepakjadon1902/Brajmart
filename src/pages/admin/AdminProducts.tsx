@@ -3,7 +3,7 @@ import { useProductStore } from '@/store/productStore';
 import { Product } from '@/types/product';
 import { Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
 
-const MAX_IMAGE_SIZE = 1 * 1024 * 1024; // 1MB
+// No image size limit
 
 const AdminProducts = () => {
   const { products, categories, addProduct, updateProduct, deleteProduct } = useProductStore();
