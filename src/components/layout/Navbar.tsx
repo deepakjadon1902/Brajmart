@@ -43,7 +43,11 @@ const Navbar = () => {
         </button>
 
         <Link to="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-2xl">🪷</span>
+          {settings.storeLogo ? (
+            <img src={settings.storeLogo} alt={settings.storeName} className="w-8 h-8 rounded object-contain" />
+          ) : (
+            <span className="text-2xl">🪷</span>
+          )}
           <div className="leading-none">
             <span className="font-cinzel text-xl font-bold text-maroon-gold-gradient">{settings.storeName}</span>
             <span className="block text-[0.55rem] text-muted-foreground tracking-wider">{settings.tagline}</span>
