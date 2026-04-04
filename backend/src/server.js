@@ -12,6 +12,7 @@ const paymentRoutes = require('./routes/payments');
 const settingsRoutes = require('./routes/settings');
 const uploadRoutes = require('./routes/upload');
 const userRoutes = require('./routes/users');
+const razorpayRoutes = require('./routes/razorpay');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
