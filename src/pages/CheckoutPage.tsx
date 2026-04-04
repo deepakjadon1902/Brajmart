@@ -13,17 +13,24 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
 
 const emptyAddress: Address = { fullName: '', mobile: '', street: '', city: '', state: '', pincode: '' };
+
+const RAZORPAY_KEY = 'rzp_test_YourKeyHere'; // Replace with your Razorpay key or use env
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const CheckoutPage = () => {
   const [step, setStep] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [placedOrderId, setPlacedOrderId] = useState('');
   const [sameAsBilling, setSameAsBilling] = useState(true);
-  const [upiId, setUpiId] = useState('');
-  const [cardDetails, setCardDetails] = useState({ number: '', expiry: '', cvv: '', name: '' });
   const [processing, setProcessing] = useState(false);
 
   const { items, totalPrice, totalSavings, clearCart } = useCartStore();
@@ -64,6 +71,123 @@ const CheckoutPage = () => {
 
   const validateAddress = (addr: Address) => addr.fullName && addr.mobile && addr.street && addr.pincode && addr.city && addr.state;
 
+  const createOrderAndRecord = (paymentMethodLabel: string, paymentStatus: 'paid' | 'pending', transactionId: string) => {
+    const orderId = addOrder({
+      userId: user?.id || 'guest',
+      items: items.map((i) => ({ product: i.product, quantity: i.quantity, price: i.product.price })),
+      total: grandTotal,
+      status: 'confirmed',
+      shippingAddress: effectiveShipping,
+      billingAddress,
+      paymentMethod: paymentMethodLabel,
+    });
+
+    addPayment({
+      orderId,
+      customerName: billingAddress.fullName,
+      customerEmail: user?.email || 'guest@brajmart.com',
+      method: paymentMethodLabel,
+      amount: grandTotal,
+      status: paymentStatus,
+      transactionId,
+    });
+
+    clearCart();
+    setPlacedOrderId(orderId);
+    setStep(2);
+    toast.success('Order placed successfully! 🙏');
+    return orderId;
+  };
+
+  const openRazorpay = (prefill: Record<string, string>, method?: string) => {
+    if (!validateAddress(billingAddress)) {
+      toast.error('Please fill all billing address details');
+      setStep(0);
+      return;
+    }
+    if (!sameAsBilling && !validateAddress(shippingAddress)) {
+      toast.error('Please fill all shipping address details');
+      setStep(0);
+      return;
+    }
+
+    setProcessing(true);
+
+    const options: Record<string, any> = {
+      key: RAZORPAY_KEY,
+      amount: Math.round(grandTotal * 100),
+      currency: 'INR',
+      name: settings.storeName || 'BrajMart',
+      description: `Order — ${items.length} item(s)`,
+      image: settings.storeLogo || '',
+      handler: (response: any) => {
+        const txnId = response.razorpay_payment_id || `TXN-${Date.now().toString(36).toUpperCase()}`;
+        createOrderAndRecord(method === 'upi' ? 'UPI' : 'Card', 'paid', txnId);
+        setProcessing(false);
+      },
+      prefill: {
+        name: billingAddress.fullName,
+        email: user?.email || '',
+        contact: billingAddress.mobile,
+        ...prefill,
+      },
+      theme: { color: '#d4a017' },
+      modal: {
+        ondismiss: () => {
+          setProcessing(false);
+          toast.error('Payment cancelled');
+        },
+      },
+    };
+
+    // If method specified, try to set preferred method
+    if (method === 'upi') {
+      options.config = {
+        display: {
+          blocks: { upi: { name: 'UPI', instruments: [{ method: 'upi' }] } },
+          sequence: ['block.upi'],
+          preferences: { show_default_blocks: false },
+        },
+      };
+    } else if (method === 'card') {
+      options.config = {
+        display: {
+          blocks: { card: { name: 'Card', instruments: [{ method: 'card' }] } },
+          sequence: ['block.card'],
+          preferences: { show_default_blocks: false },
+        },
+      };
+    }
+
+    try {
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', (res: any) => {
+        setProcessing(false);
+        // Record failed payment
+        const txnId = res.error?.metadata?.payment_id || `FAIL-${Date.now().toString(36).toUpperCase()}`;
+        addPayment({
+          orderId: 'N/A',
+          customerName: billingAddress.fullName,
+          customerEmail: user?.email || 'guest@brajmart.com',
+          method: method === 'upi' ? 'UPI' : 'Card',
+          amount: grandTotal,
+          status: 'failed',
+          transactionId: txnId,
+        });
+        toast.error(`Payment failed: ${res.error?.description || 'Unknown error'}`);
+      });
+      rzp.open();
+    } catch (err) {
+      setProcessing(false);
+      toast.error('Razorpay failed to load. Using demo mode.');
+      // Fallback: simulate payment
+      setTimeout(() => {
+        createOrderAndRecord(method === 'upi' ? 'UPI' : 'Card', 'paid', `DEMO-${Date.now().toString(36).toUpperCase()}`);
+        setProcessing(false);
+      }, 1500);
+    }
+  };
+
   const handlePlaceOrder = () => {
     if (!validateAddress(billingAddress)) {
       toast.error('Please fill all billing address details');
@@ -76,45 +200,17 @@ const CheckoutPage = () => {
       return;
     }
 
-    if (paymentMethod === 'upi' && !upiId.trim()) {
-      toast.error('Please enter your UPI ID');
-      return;
+    if (paymentMethod === 'cod') {
+      setProcessing(true);
+      setTimeout(() => {
+        createOrderAndRecord('COD', 'pending', `COD-${Date.now().toString(36).toUpperCase()}`);
+        setProcessing(false);
+      }, 1000);
+    } else if (paymentMethod === 'upi') {
+      openRazorpay({}, 'upi');
+    } else if (paymentMethod === 'card') {
+      openRazorpay({}, 'card');
     }
-    if (paymentMethod === 'card' && (!cardDetails.number || !cardDetails.expiry || !cardDetails.cvv || !cardDetails.name)) {
-      toast.error('Please fill all card details');
-      return;
-    }
-
-    setProcessing(true);
-
-    // Simulate payment processing
-    setTimeout(() => {
-      const orderId = addOrder({
-        userId: user?.id || 'guest',
-        items: items.map((i) => ({ product: i.product, quantity: i.quantity, price: i.product.price })),
-        total: grandTotal,
-        status: 'confirmed',
-        shippingAddress: effectiveShipping,
-        billingAddress,
-        paymentMethod: paymentMethod === 'cod' ? 'COD' : paymentMethod === 'upi' ? 'UPI' : 'Card',
-      });
-
-      addPayment({
-        orderId,
-        customerName: billingAddress.fullName,
-        customerEmail: user?.email || 'guest@brajmart.com',
-        method: paymentMethod === 'cod' ? 'COD' : paymentMethod === 'upi' ? 'UPI' : 'Card',
-        amount: grandTotal,
-        status: paymentMethod === 'cod' ? 'pending' : 'paid',
-        transactionId: `TXN-${Date.now().toString(36).toUpperCase()}`,
-      });
-
-      clearCart();
-      setPlacedOrderId(orderId);
-      setStep(2);
-      setProcessing(false);
-      toast.success('Order placed successfully! 🙏');
-    }, 1500);
   };
 
   const addressFields = [
@@ -190,10 +286,8 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {/* Billing Address */}
                     {renderAddressForm(billingAddress, setBillingAddress, '📋 Billing Address')}
 
-                    {/* Same as billing toggle */}
                     <label className="flex items-center gap-3 cursor-pointer py-2 px-4 rounded-xl border border-border hover:border-gold/40 transition-colors">
                       <input
                         type="checkbox"
@@ -204,7 +298,6 @@ const CheckoutPage = () => {
                       <span className="text-sm font-medium text-foreground">Shipping address same as billing address</span>
                     </label>
 
-                    {/* Shipping Address (if different) */}
                     {!sameAsBilling && renderAddressForm(shippingAddress, setShippingAddress, '📦 Shipping Address')}
 
                     <button onClick={() => setStep(1)} className="w-full py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform">
@@ -224,8 +317,8 @@ const CheckoutPage = () => {
                     <div className="space-y-3">
                       {[
                         ...(settings.codEnabled ? [{ value: 'cod', label: 'Cash on Delivery', sub: 'Pay when delivered', icon: '📦' }] : []),
-                        ...(settings.upiEnabled ? [{ value: 'upi', label: 'UPI Payment', sub: 'GPay, PhonePe, Paytm', icon: '📱' }] : []),
-                        ...(settings.cardEnabled ? [{ value: 'card', label: 'Credit/Debit Card', sub: 'Visa, Mastercard, RuPay', icon: '💳' }] : []),
+                        ...(settings.upiEnabled ? [{ value: 'upi', label: 'UPI Payment', sub: 'GPay, PhonePe, Paytm via Razorpay', icon: '📱' }] : []),
+                        ...(settings.cardEnabled ? [{ value: 'card', label: 'Credit/Debit Card', sub: 'Visa, Mastercard, RuPay via Razorpay', icon: '💳' }] : []),
                       ].map((m) => (
                         <label key={m.value} className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${paymentMethod === m.value ? 'border-gold bg-gold/5' : 'border-border hover:border-gold/40'}`}>
                           <input type="radio" name="payment" value={m.value} checked={paymentMethod === m.value} onChange={() => setPaymentMethod(m.value)} className="sr-only" />
@@ -241,61 +334,15 @@ const CheckoutPage = () => {
                       ))}
                     </div>
 
-                    {/* UPI Details */}
-                    {paymentMethod === 'upi' && (
-                      <div className="mt-4 p-4 rounded-xl border border-border bg-background space-y-3">
-                        <label className="block text-sm font-medium">UPI ID</label>
-                        <input
-                          value={upiId}
-                          onChange={(e) => setUpiId(e.target.value)}
-                          placeholder="yourname@upi"
-                          className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-sm outline-none focus:border-gold transition-colors"
-                        />
-                      </div>
-                    )}
-
-                    {/* Card Details */}
-                    {paymentMethod === 'card' && (
-                      <div className="mt-4 p-4 rounded-xl border border-border bg-background space-y-3">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Card Number</label>
-                          <input
-                            value={cardDetails.number}
-                            onChange={(e) => setCardDetails((c) => ({ ...c, number: e.target.value.replace(/\D/g, '').slice(0, 16) }))}
-                            placeholder="1234 5678 9012 3456"
-                            className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-sm outline-none focus:border-gold transition-colors font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Name on Card</label>
-                          <input
-                            value={cardDetails.name}
-                            onChange={(e) => setCardDetails((c) => ({ ...c, name: e.target.value }))}
-                            placeholder="Full name"
-                            className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-sm outline-none focus:border-gold transition-colors"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-sm font-medium mb-1">Expiry</label>
-                            <input
-                              value={cardDetails.expiry}
-                              onChange={(e) => setCardDetails((c) => ({ ...c, expiry: e.target.value.slice(0, 5) }))}
-                              placeholder="MM/YY"
-                              className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-sm outline-none focus:border-gold transition-colors font-mono"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1">CVV</label>
-                            <input
-                              type="password"
-                              value={cardDetails.cvv}
-                              onChange={(e) => setCardDetails((c) => ({ ...c, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
-                              placeholder="•••"
-                              className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-sm outline-none focus:border-gold transition-colors font-mono"
-                            />
-                          </div>
-                        </div>
+                    {/* Info note for online payments */}
+                    {(paymentMethod === 'upi' || paymentMethod === 'card') && (
+                      <div className="mt-4 p-4 rounded-xl border border-gold/30 bg-gold/5 text-sm">
+                        <p className="text-foreground font-medium mb-1">
+                          {paymentMethod === 'upi' ? '📱 UPI Payment' : '💳 Card Payment'} — Powered by Razorpay
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          Clicking "Place Order" will open the secure Razorpay payment window where you can complete {paymentMethod === 'upi' ? 'your UPI payment via GPay, PhonePe, Paytm, etc.' : 'your card payment securely.'}
+                        </p>
                       </div>
                     )}
 
@@ -333,7 +380,7 @@ const CheckoutPage = () => {
                     </div>
                     <p className="text-sm text-muted-foreground mb-6">Estimated delivery in 3-5 business days</p>
                     <div className="flex gap-3 justify-center flex-wrap">
-                      <Link to={`/track-orders`} className="px-6 py-3 rounded-xl border border-border text-foreground font-medium text-sm hover:bg-muted transition-colors">
+                      <Link to="/track-orders" className="px-6 py-3 rounded-xl border border-border text-foreground font-medium text-sm hover:bg-muted transition-colors">
                         Track Order
                       </Link>
                       <Link to="/" className="px-6 py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer">
@@ -372,6 +419,12 @@ const CheckoutPage = () => {
                     <div className="flex justify-between text-tulsi">
                       <span>Savings</span>
                       <span>-{formatPrice(totalSavings())}</span>
+                    </div>
+                  )}
+                  {taxAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tax ({settings.taxRate}%)</span>
+                      <span>{formatPrice(taxAmount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between">

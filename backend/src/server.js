@@ -12,6 +12,7 @@ const paymentRoutes = require('./routes/payments');
 const settingsRoutes = require('./routes/settings');
 const uploadRoutes = require('./routes/upload');
 const userRoutes = require('./routes/users');
+const razorpayRoutes = require('./routes/razorpay');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,6 +32,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/razorpay', razorpayRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
