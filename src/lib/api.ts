@@ -48,10 +48,10 @@ const getJson = async <T>(path: string, options: RequestOptions = {}): Promise<T
 };
 
 export const fetchPublicSettings = () =>
-  getJson('/settings');
+  getJson<Record<string, any>>('/settings');
 
 export const updatePublicSettings = (payload: Record<string, unknown>) =>
-  getJson('/settings', { method: 'PUT', body: payload });
+  getJson<Record<string, any>>('/settings', { method: 'PUT', body: payload });
 
 // Auth
 export const registerUser = (payload: { name: string; email: string; password: string }) =>
