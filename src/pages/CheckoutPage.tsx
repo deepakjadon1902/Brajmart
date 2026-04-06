@@ -1,6 +1,7 @@
+import * as React from "react";
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Truck } from 'lucide-react';
+import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Truck, QrCode, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
@@ -8,27 +9,22 @@ import { useOrderStore, Address } from '@/store/orderStore';
 import { usePaymentStore } from '@/store/paymentStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { formatPrice } from '@/utils/formatPrice';
+import * as QRCode from 'qrcode';
 import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { createRazorpayOrder, fetchPublicSettings, verifyRazorpayPayment, getApiBase, createOrder, createPayment } from '@/lib/api';
-
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
+import { fetchPublicSettings, createOrder, createPayment, createPayuOrder } from '@/lib/api';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
 
 const emptyAddress: Address = { fullName: '', mobile: '', street: '', city: '', state: '', pincode: '' };
 
-const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY || '';
-
 const CheckoutPage = () => {
   const [step, setStep] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('cod');
+  const [upiMode, setUpiMode] = useState<'payu' | 'qr'>('payu');
+  const [upiQr, setUpiQr] = useState('');
   const [placedOrderId, setPlacedOrderId] = useState('');
   const [sameAsBilling, setSameAsBilling] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -43,6 +39,29 @@ const CheckoutPage = () => {
   const shipping = totalPrice() >= settings.freeShippingThreshold ? 0 : settings.shippingFee;
   const taxAmount = settings.taxRate > 0 ? Math.round(totalPrice() * settings.taxRate / 100) : 0;
   const grandTotal = totalPrice() + shipping + taxAmount;
+  const upiId = (settings.upiId || '').trim();
+  const upiPayeeName = (settings.upiPayeeName || settings.storeName || 'BrajMart').trim();
+
+  useEffect(() => {
+    let active = true;
+    const makeQr = async () => {
+      if (!upiId || !Number.isFinite(grandTotal) || grandTotal <= 0) {
+        if (active) setUpiQr('');
+        return;
+      }
+      const amount = grandTotal.toFixed(2);
+      const note = `${settings.storeName || 'BrajMart'} order via ${upiMode === 'payu' ? 'PayU' : 'UPI QR'}`;
+      const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiPayeeName)}&am=${encodeURIComponent(amount)}&cu=INR&tn=${encodeURIComponent(note)}&tr=${encodeURIComponent(`BM-${Date.now()}`)}`;
+      try {
+        const dataUrl = await QRCode.toDataURL(upiUrl, { width: 220, margin: 1 });
+        if (active) setUpiQr(dataUrl);
+      } catch {
+        if (active) setUpiQr('');
+      }
+    };
+    makeQr();
+    return () => { active = false; };
+  }, [upiId, upiPayeeName, grandTotal, settings.storeName, upiMode]);
 
   const [billingAddress, setBillingAddress] = useState<Address>({
     fullName: user?.fullName || '',
@@ -63,6 +82,8 @@ const CheckoutPage = () => {
   });
 
   const effectiveShipping = sameAsBilling ? billingAddress : shippingAddress;
+
+  // Payment status is now handled on the dedicated Payment Status page.
 
   useEffect(() => {
     let active = true;
@@ -89,6 +110,8 @@ const CheckoutPage = () => {
           metaTitle: data.metaTitle,
           metaDescription: data.metaDescription,
           storeLogo: data.storeLogo,
+          upiId: data.upiId,
+          upiPayeeName: data.upiPayeeName,
           socialLinks: data.socialLinks,
           announcementBar: data.announcementBar,
           notifications: data.notifications,
@@ -167,17 +190,22 @@ const CheckoutPage = () => {
     return localOrderId;
   };
 
-  const loadRazorpay = () =>
-    new Promise<boolean>((resolve) => {
-      if (window.Razorpay) return resolve(true);
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
+  const submitPayuForm = (actionUrl: string, fields: Record<string, string>) => {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = actionUrl;
+    Object.entries(fields).forEach(([key, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = value;
+      form.appendChild(input);
     });
+    document.body.appendChild(form);
+    form.submit();
+  };
 
-  const openRazorpay = async (method?: string) => {
+  const startPayuPayment = async (method: 'upi' | 'card') => {
     if (!validateAddress(billingAddress)) {
       toast.error('Please fill all billing address details');
       setStep(0);
@@ -188,119 +216,38 @@ const CheckoutPage = () => {
       setStep(0);
       return;
     }
-
     setProcessing(true);
-
-    let orderData: { orderId: string; amount: number; currency: string; key: string; demo?: boolean };
     try {
-      orderData = await createRazorpayOrder({
-        amount: grandTotal,
-        currency: 'INR',
-        receipt: `BM-${Date.now()}`,
-        notes: { method: method || 'card' },
-      });
-    } catch (err: any) {
-      setProcessing(false);
-      if (err?.message === 'Failed to fetch') {
-        toast.error(`Backend not reachable at ${getApiBase()}. Please start the backend server.`);
-      } else {
-        toast.error(err?.message || 'Unable to start payment. Please try again.');
-      }
-      return;
-    }
-
-    if (orderData.demo) {
-      await createOrderAndRecord(method === 'upi' ? 'UPI' : 'Card', 'paid', `DEMO-${Date.now().toString(36).toUpperCase()}`);
-      toast.success('Demo payment successful');
-      setProcessing(false);
-      setStep(2);
-      return;
-    }
-
-    const razorpayReady = await loadRazorpay();
-    if (!razorpayReady) {
-      setProcessing(false);
-      toast.error('Unable to load Razorpay. Please try again.');
-      return;
-    }
-
-    const key = orderData.key || RAZORPAY_KEY;
-    if (!key) {
-      setProcessing(false);
-      toast.error('Razorpay key not configured. Please add it in the backend or .env.');
-      return;
-    }
-
-    const options: Record<string, any> = {
-      key,
-      order_id: orderData.orderId,
-      amount: orderData.amount,
-      currency: orderData.currency,
-      name: settings.storeName || 'BrajMart',
-      description: `Order - ${items.length} item(s)`,
-      image: settings.storeLogo || '',
-      handler: async (response: any) => {
-        try {
-          const verification = await verifyRazorpayPayment({
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature: response.razorpay_signature,
-          });
-          if (!verification?.verified) {
-            throw new Error('Payment verification failed');
-          }
-          const txnId = response.razorpay_payment_id || `TXN-${Date.now().toString(36).toUpperCase()}`;
-          await createOrderAndRecord(method === 'upi' ? 'UPI' : 'Card', 'paid', txnId);
-        } catch (verifyErr: any) {
-          toast.error(verifyErr?.message || 'Payment verification failed.');
-          addPayment({
-            orderId: 'N/A',
-            customerName: billingAddress.fullName,
-            customerEmail: user?.email || 'guest@brajmart.com',
-            method: method === 'upi' ? 'UPI' : 'Card',
-            amount: grandTotal,
-            status: 'failed',
-            transactionId: `FAIL-${Date.now().toString(36).toUpperCase()}`,
-          });
-        } finally {
-          setProcessing(false);
-        }
-      },
-      prefill: {
-        name: billingAddress.fullName,
-        email: user?.email || '',
-        contact: billingAddress.mobile,
-      },
-      theme: { color: '#c58f1f' },
-      modal: {
-        ondismiss: () => {
-          setProcessing(false);
-          toast.error('Payment cancelled');
-        },
-      },
-    };
-
-    // Use Razorpay's native UI for a marketplace-style checkout experience.
-
-    const rzp = new window.Razorpay(options);
-    rzp.on('payment.failed', (res: any) => {
-      setProcessing(false);
-      const txnId = res.error?.metadata?.payment_id || `FAIL-${Date.now().toString(36).toUpperCase()}`;
-      addPayment({
-        orderId: 'N/A',
+      const orderPayload = {
+        userId: user?.id || undefined,
+        items: items.map((i) => ({
+          name: i.product.name,
+          image: i.product.image,
+          quantity: i.quantity,
+          price: i.product.price,
+        })),
+        total: grandTotal,
+        status: 'confirmed',
         customerName: billingAddress.fullName,
         customerEmail: user?.email || 'guest@brajmart.com',
-        method: method === 'upi' ? 'UPI' : 'Card',
+        shippingAddress: effectiveShipping,
+        billingAddress,
+        paymentMethod: method === 'upi' ? 'PayU UPI' : 'PayU Card',
+      };
+      const result = await createPayuOrder({
         amount: grandTotal,
-        status: 'failed',
-        transactionId: txnId,
+        method,
+        order: orderPayload,
+        customer: { name: billingAddress.fullName, email: user?.email || 'guest@brajmart.com', phone: billingAddress.mobile },
       });
-      toast.error(`Payment failed: ${res.error?.description || 'Unknown error'}`);
-    });
-    rzp.open();
+      submitPayuForm(result.actionUrl, result.fields);
+    } catch (err: any) {
+      toast.error(err?.message || 'Unable to start PayU payment. Please try again.');
+      setProcessing(false);
+    }
   };
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (!isAuthenticated) {
       toast.error('Please sign in to place your order');
       navigate('/login');
@@ -329,9 +276,25 @@ const CheckoutPage = () => {
         setProcessing(false);
       }, 1000);
     } else if (paymentMethod === 'upi') {
-      openRazorpay('upi');
+      if (upiMode === 'payu') {
+        startPayuPayment('upi');
+        return;
+      }
+      if (!upiId) {
+        toast.error('UPI ID not configured. Please contact support.');
+        return;
+      }
+      const txnId = `UPI-${Date.now().toString(36).toUpperCase()}`;
+      setProcessing(true);
+      try {
+        await createOrderAndRecord('UPI QR', 'pending', txnId);
+        toast.success('Payment marked as pending. We will confirm once verified.');
+        navigate(`/payment-status/${txnId}`);
+      } finally {
+        setProcessing(false);
+      }
     } else if (paymentMethod === 'card') {
-      openRazorpay('card');
+      startPayuPayment('card');
     }
   };
 
@@ -358,8 +321,8 @@ const CheckoutPage = () => {
       title: 'Credit or Debit Card',
       subtitle: 'Visa, Mastercard, RuPay, Amex',
       icon: CreditCard,
-      pills: ['Visa', 'Mastercard', 'RuPay', 'Amex'],
-      badge: 'Secure',
+      pills: ['Visa', 'Mastercard', 'RuPay', 'Amex', 'Maestro'],
+      badge: 'Bank Offers',
     }] : []),
     ...(settings.codEnabled ? [{
       value: 'cod',
@@ -380,6 +343,8 @@ const CheckoutPage = () => {
       setPaymentMethod(available[0]);
     }
   }, [settings.codEnabled, settings.upiEnabled, settings.cardEnabled, paymentMethod]);
+
+  const paymentGatewayLabel = 'PayU';
 
   const renderAddressForm = (
     addr: Address,
@@ -524,6 +489,131 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
+                    {paymentMethod === 'upi' && (
+                      <div className="mt-5 grid lg:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                            <Zap size={16} className="text-gold" />
+                            Choose UPI Mode
+                          </div>
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setUpiMode('payu')}
+                              className={`text-left p-4 rounded-xl border-2 transition-colors ${
+                                upiMode === 'payu' ? 'border-emerald-400 bg-emerald-500/10' : 'border-border hover:border-emerald-400/60'
+                              }`}
+                            >
+                              <div className="text-sm font-bold text-emerald-500">PayU Online</div>
+                              <div className="text-xs text-muted-foreground mt-1">Instant confirmation • Secure</div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setUpiMode('qr')}
+                              className={`text-left p-4 rounded-xl border-2 transition-colors ${
+                                upiMode === 'qr' ? 'border-blue-400 bg-blue-500/10' : 'border-border hover:border-blue-400/60'
+                              }`}
+                            >
+                              <div className="text-sm font-bold text-blue-500">UPI QR</div>
+                              <div className="text-xs text-muted-foreground mt-1">Scan & pay with any UPI app</div>
+                            </button>
+                          </div>
+                          <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                            Works with GPay, PhonePe, Paytm, BHIM and all UPI apps.
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-border bg-background p-4">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
+                            <QrCode size={16} className="text-gold" />
+                            Scan & Pay
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-4 items-start">
+                            <div className="w-40 h-40 rounded-xl border border-dashed border-border flex items-center justify-center bg-muted/30">
+                              {upiQr && upiMode === 'qr' ? (
+                                <img src={upiQr} alt="UPI QR" className="w-36 h-36 object-contain" />
+                              ) : (
+                                <span className="text-xs text-muted-foreground text-center px-3">
+                                  {upiMode === 'qr'
+                                    ? (upiId ? 'Generating QR...' : 'Add UPI ID in Admin Settings')
+                                    : 'Use PayU Online for instant confirmation'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex-1 space-y-2">
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">UPI ID</div>
+                                <div className="text-sm font-mono text-foreground">{upiId || 'Not configured'}</div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!upiId) return;
+                                    navigator.clipboard.writeText(upiId);
+                                    toast.success('UPI ID copied');
+                                  }}
+                                  className="text-xs text-saffron hover:underline mt-1"
+                                >
+                                  Copy UPI ID
+                                </button>
+                              </div>
+                              <div>
+                                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Amount</div>
+                                <div className="text-sm font-semibold text-foreground">{formatPrice(grandTotal)}</div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(grandTotal.toFixed(2));
+                                    toast.success('Amount copied');
+                                  }}
+                                  className="text-xs text-saffron hover:underline mt-1"
+                                >
+                                  Copy Amount
+                                </button>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Payee: <span className="text-foreground">{upiPayeeName || settings.storeName}</span>
+                              </div>
+                              {upiMode === 'qr' && (
+                                <div className="text-[11px] text-muted-foreground mt-2">
+                                  After paying via QR, click “Confirm UPI Payment” to place your order. We will verify the payment shortly.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentMethod === 'card' && (
+                      <div className="mt-5 rounded-2xl border border-border bg-gradient-to-br from-[#0b1220] via-[#121a2b] to-[#1a1f3d] p-5 text-white shadow-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs uppercase tracking-widest text-white/60">PayU Secure</p>
+                            <h3 className="text-lg font-semibold">Card Payment</h3>
+                            <p className="text-xs text-white/70 mt-1">Cards • NetBanking • Wallets • EMI</p>
+                          </div>
+                          <div className="flex gap-2">
+                            {['VISA', 'MC', 'RUPAY', 'AMEX'].map((b) => (
+                              <span key={b} className="px-2 py-1 rounded-lg bg-white/10 text-[10px] font-bold tracking-wide">
+                                {b}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="mt-4 grid sm:grid-cols-3 gap-3">
+                          {['Instant Bank Offers', 'Zero-Cost EMI', '100% Secure'].map((t) => (
+                            <div key={t} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs">
+                              {t}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 text-xs text-white/70">
+                          You will be redirected to PayU’s hosted checkout to complete payment securely.
+                        </div>
+                      </div>
+                    )}
+
+
                     {paymentMethod === 'cod' && (
                       <div className="mt-4 p-4 rounded-xl border border-border bg-muted/30 text-xs text-muted-foreground">
                         Pay by cash or UPI at the time of delivery. Please keep the exact amount ready.
@@ -533,10 +623,10 @@ const CheckoutPage = () => {
                     <div className="mt-5 p-4 rounded-xl border border-gold/30 bg-gold/5 text-sm">
                       <div className="flex items-center gap-2 text-foreground font-medium">
                         <ShieldCheck size={16} className="text-gold" />
-                        Secure payments by Razorpay
+                        Secure payments by {paymentGatewayLabel}
                       </div>
                       <p className="text-muted-foreground text-xs mt-1">
-                        Your payment details are encrypted and processed on Razorpay's PCI DSS compliant infrastructure.
+                        Your payment details are encrypted and processed on {paymentGatewayLabel}'s secure infrastructure.
                       </p>
                     </div>
 
@@ -549,7 +639,9 @@ const CheckoutPage = () => {
                         ? 'Processing Payment...'
                         : paymentMethod === 'cod'
                           ? `Place Order - ${formatPrice(grandTotal)}`
-                          : `Pay Securely - ${formatPrice(grandTotal)}`}
+                          : paymentMethod === 'upi' && upiMode === 'qr'
+                            ? `Confirm UPI Payment - ${formatPrice(grandTotal)}`
+                            : `Pay with PayU - ${formatPrice(grandTotal)}`}
                     </button>
                   </div>
                 </motion.div>
@@ -645,7 +737,6 @@ const CheckoutPage = () => {
 };
 
 export default CheckoutPage;
-
 
 
 

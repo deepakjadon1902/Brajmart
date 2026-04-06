@@ -63,6 +63,26 @@ export type MemoryPayment = {
   updatedAt: string;
 };
 
+export type PayuDraft = {
+  txnid: string;
+  createdAt: string;
+  amount: number;
+  method: 'upi' | 'card';
+  customer: { name: string; email: string; phone?: string };
+  order: any;
+};
+
+export type MemoryPaymentStatus = {
+  token: string;
+  status: 'paid' | 'pending' | 'failed';
+  orderId?: number;
+  amount?: number;
+  method?: string;
+  paymentId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type MemoryUser = {
   _id: Id;
   name: string;
@@ -117,6 +137,8 @@ const store = {
   categories: [...defaultCategories] as MemoryCategory[],
   orders: [] as MemoryOrder[],
   payments: [] as MemoryPayment[],
+  payuDrafts: {} as Record<string, PayuDraft>,
+  paymentStatus: {} as Record<string, MemoryPaymentStatus>,
   users: [] as MemoryUser[],
   carts: [] as MemoryCart[],
   settings: {
@@ -141,6 +163,8 @@ const store = {
     metaDescription: '',
     storeLogo: '',
     favicon: '',
+    upiId: '',
+    upiPayeeName: 'BrajMart',
     socialLinks: { instagram: '', facebook: '', youtube: '', whatsapp: '' },
     announcementBar: { enabled: true, messages: [] },
     notifications: { orders: true, users: true, payments: true, stock: false },
@@ -260,6 +284,34 @@ export const memory = {
     if (existing) existing.items = [];
     return existing;
   },
+
+  createPayuDraft: (draft: PayuDraft) => {
+    store.payuDrafts[draft.txnid] = draft;
+    return draft;
+  },
+  getPayuDraft: (txnid: string) => store.payuDrafts[txnid],
+  removePayuDraft: (txnid: string) => {
+    const existing = store.payuDrafts[txnid];
+    delete store.payuDrafts[txnid];
+    return existing;
+  },
+
+  upsertPaymentStatus: (token: string, data: Partial<MemoryPaymentStatus>) => {
+    const existing = store.paymentStatus[token];
+    const updated: MemoryPaymentStatus = {
+      token,
+      status: (data.status as any) || existing?.status || 'pending',
+      orderId: data.orderId ?? existing?.orderId,
+      amount: data.amount ?? existing?.amount,
+      method: data.method ?? existing?.method,
+      paymentId: data.paymentId ?? existing?.paymentId,
+      createdAt: existing?.createdAt || now(),
+      updatedAt: now(),
+    };
+    store.paymentStatus[token] = updated;
+    return updated;
+  },
+  getPaymentStatus: (token: string) => store.paymentStatus[token],
 
   getSettings: () => store.settings,
   updateSettings: (data: MemorySettings) => {

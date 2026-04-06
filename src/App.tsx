@@ -31,6 +31,7 @@ import ComparePage from "./pages/ComparePage";
 import NotFound from "./pages/NotFound";
 import BrajDarshanPage from "./pages/BrajDarshanPage";
 import UserOrderTracking from "./pages/UserOrderTracking";
+import PaymentStatusPage from "./pages/PaymentStatusPage";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -85,6 +86,8 @@ const App = () => {
           metaDescription: data.metaDescription,
           storeLogo: data.storeLogo,
           favicon: data.favicon,
+          upiId: data.upiId,
+          upiPayeeName: data.upiPayeeName,
           socialLinks: data.socialLinks,
           announcementBar: data.announcementBar,
           notifications: data.notifications,
@@ -155,12 +158,13 @@ const App = () => {
           <Route path="/return-policy" element={<ReturnPolicyPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/payment-method" element={<PaymentMethodPage />} />
+          <Route path="/payment-status/:token" element={<PaymentStatusPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/braj-darshan/:slug" element={<BrajDarshanPage />} />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminLogin />} />
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/admin/*" element={<AdminLayout />}>
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="products" element={<AdminProducts />} />

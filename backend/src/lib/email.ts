@@ -80,6 +80,21 @@ export const sendPaymentFailed = async (to: string, payload: { orderId: string; 
   await sendEmail(to, 'BrajMart Payment Failed', html);
 };
 
+export const sendAdminPaymentNotice = async (payload: { status: 'paid' | 'failed'; orderId: string; amount: number; paymentId?: string; method: string; customerEmail?: string }) => {
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER;
+  if (!adminEmail) return;
+  const html = brandWrapper(
+    payload.status === 'paid' ? 'Payment Received' : 'Payment Failed',
+    `<p><strong>Status:</strong> ${payload.status.toUpperCase()}</p>
+     <p><strong>Order ID:</strong> ${payload.orderId}</p>
+     <p><strong>Amount:</strong> &#8377;${payload.amount}</p>
+     <p><strong>Method:</strong> ${payload.method}</p>
+     ${payload.paymentId ? `<p><strong>Payment ID:</strong> ${payload.paymentId}</p>` : ''}
+     ${payload.customerEmail ? `<p><strong>Customer:</strong> ${payload.customerEmail}</p>` : ''}`
+  );
+  await sendEmail(adminEmail, `Payment ${payload.status === 'paid' ? 'Success' : 'Failed'} - ${payload.orderId}`, html);
+};
+
 export const sendShippingUpdate = async (to: string, payload: { orderId: string; status: string; trackingId?: string; eta?: string }) => {
   const html = brandWrapper(
     'Shipping Update',

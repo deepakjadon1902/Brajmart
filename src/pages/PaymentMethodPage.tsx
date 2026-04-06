@@ -50,7 +50,7 @@ const PaymentMethodPage = () => (
             <Shield size={32} className="text-gold mx-auto mb-4" />
             <h2 className="font-cinzel text-xl font-bold text-foreground mb-3">100% Secure Payments</h2>
             <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">
-              All payments are processed through Razorpay — India's most trusted payment gateway. Your financial data is encrypted with 256-bit SSL and we never store your card details on our servers. PCI DSS Level 1 compliant.
+              All payments are processed through PayU — India's most trusted payment gateway. Your financial data is encrypted with 256-bit SSL and we never store your card details on our servers. PCI DSS Level 1 compliant.
             </p>
           </div>
         </ScrollReveal>
@@ -62,3 +62,4 @@ const PaymentMethodPage = () => (
 );
 
 export default PaymentMethodPage;
+

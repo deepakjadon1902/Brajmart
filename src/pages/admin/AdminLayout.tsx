@@ -1,11 +1,10 @@
-import { useEffect } from 'react';
 import { Outlet, useNavigate, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAdminStore } from '@/store/adminStore';
 import {
   LayoutDashboard, Users, ShoppingBag, Package, Truck, CreditCard,
   Tags, BarChart3, LogOut, Settings, ChevronRight, Menu, X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },

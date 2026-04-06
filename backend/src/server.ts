@@ -10,7 +10,8 @@ import orderRoutes from './routes/orders';
 import paymentRoutes from './routes/payments';
 import settingsRoutes from './routes/settings';
 import uploadRoutes from './routes/upload';
-import razorpayRoutes from './routes/razorpay';
+import payuRoutes from './routes/payu';
+import upiRoutes from './routes/upi';
 import cartRoutes from './routes/cart';
 
 const app = express();
@@ -31,7 +32,8 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/razorpay', razorpayRoutes);
+app.use('/api/payu', payuRoutes);
+app.use('/api/upi', upiRoutes);
 app.use('/api/cart', cartRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));

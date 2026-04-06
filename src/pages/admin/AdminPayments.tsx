@@ -28,7 +28,14 @@ const AdminPayments = () => {
     return acc;
   }, {});
 
-  const icons: Record<string, any> = { UPI: Wallet, COD: Banknote, Card: CreditCard };
+  const icons: Record<string, any> = {
+    UPI: Wallet,
+    COD: Banknote,
+    Card: CreditCard,
+    'PayU UPI': Wallet,
+    'PayU Card': CreditCard,
+    'UPI QR': Wallet,
+  };
 
   return (
     <div className="space-y-6">

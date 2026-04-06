@@ -65,29 +65,19 @@ export const googleLogin = (payload: { email: string; name: string; googleId: st
 export const verifyEmail = (token: string) =>
   getJson(`/auth/verify?token=${encodeURIComponent(token)}`);
 
-export const createRazorpayOrder = (payload: {
+export const createPayuOrder = (payload: {
   amount: number;
-  currency?: string;
-  receipt?: string;
-  notes?: Record<string, string>;
+  method: 'upi' | 'card';
+  order: Record<string, unknown>;
+  customer: { name: string; email: string; phone?: string };
 }) =>
   getJson<{
-    orderId: string;
-    amount: number;
-    currency: string;
-    key: string;
-    demo?: boolean;
-  }>('/razorpay/create-order', { method: 'POST', body: payload });
+    actionUrl: string;
+    fields: Record<string, string>;
+  }>('/payu/create-order', { method: 'POST', body: payload });
 
-export const verifyRazorpayPayment = (payload: {
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
-}) =>
-  getJson<{ verified: boolean; paymentId: string }>('/razorpay/verify', {
-    method: 'POST',
-    body: payload,
-  });
+export const fetchPaymentStatus = (token: string) =>
+  getJson(`/payments/status/${token}`);
 
 export const getApiBase = () => API_BASE;
 export const setAuthToken = (token: string) => {

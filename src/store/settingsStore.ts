@@ -37,6 +37,8 @@ interface StoreSettings {
   cardEnabled: boolean;
   storeLogo: string;
   favicon: string;
+  upiId: string;
+  upiPayeeName: string;
   metaTitle: string;
   metaDescription: string;
 }
@@ -82,6 +84,8 @@ export const useSettingsStore = create<SettingsStore>()(
         cardEnabled: true,
         storeLogo: '',
         favicon: '',
+        upiId: '',
+        upiPayeeName: 'BrajMart',
         metaTitle: 'BrajMart - Authentic Vrindavan Products',
         metaDescription: 'Shop authentic devotional products, prasadam, books, and more from the sacred land of Vrindavan.',
       },

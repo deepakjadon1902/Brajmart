@@ -1,3 +1,4 @@
+import * as React from "react";
 ﻿import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Category } from '@/types/product';

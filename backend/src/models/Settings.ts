@@ -22,6 +22,8 @@ export interface ISettings extends Document {
   metaDescription: string;
   storeLogo: string;
   favicon?: string;
+  upiId?: string;
+  upiPayeeName?: string;
   socialLinks: {
     instagram: string;
     facebook: string;
@@ -62,6 +64,8 @@ const settingsSchema = new Schema<ISettings>({
   metaDescription: { type: String, default: '' },
   storeLogo: { type: String, default: '' },
   favicon: { type: String, default: '' },
+  upiId: { type: String, default: '' },
+  upiPayeeName: { type: String, default: 'BrajMart' },
   socialLinks: {
     instagram: { type: String, default: '' },
     facebook: { type: String, default: '' },

@@ -1,3 +1,4 @@
+import * as React from "react";
 ﻿import { useEffect, useRef, useState } from 'react';
 import { useAdminStore } from '@/store/adminStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -33,6 +34,8 @@ const AdminSettings = () => {
   const [metaTitle, setMetaTitle] = useState(settings.metaTitle);
   const [metaDescription, setMetaDescription] = useState(settings.metaDescription);
   const [storeLogo, setStoreLogo] = useState(settings.storeLogo);
+  const [upiId, setUpiId] = useState(settings.upiId);
+  const [upiPayeeName, setUpiPayeeName] = useState(settings.upiPayeeName || settings.storeName);
   const [announcementEnabled, setAnnouncementEnabled] = useState(settings.announcementBar.enabled);
   const [announcementMessages, setAnnouncementMsgs] = useState<string[]>(settings.announcementBar.messages);
   const [newAnnouncement, setNewAnnouncement] = useState('');
@@ -67,6 +70,8 @@ const AdminSettings = () => {
         setMetaTitle(data.metaTitle);
         setMetaDescription(data.metaDescription);
         setStoreLogo(data.storeLogo);
+        setUpiId(data.upiId || '');
+        setUpiPayeeName(data.upiPayeeName || data.storeName || settings.storeName);
         setAnnouncementEnabled(data.announcementBar?.enabled ?? announcementEnabled);
         setAnnouncementMsgs(data.announcementBar?.messages ?? announcementMessages);
         setSocialLinks(data.socialLinks || socialLinks);
@@ -88,7 +93,7 @@ const AdminSettings = () => {
         freeShippingThreshold, shippingFee, taxRate, minOrderAmount, maxOrderQuantity,
         deliveryEtaMinDays, deliveryEtaMaxDays,
         codEnabled, upiEnabled, cardEnabled, maintenanceMode,
-        metaTitle, metaDescription, storeLogo,
+        metaTitle, metaDescription, storeLogo, upiId, upiPayeeName,
         announcementBar: { enabled: announcementEnabled, messages: announcementMessages },
         socialLinks,
         notifications: settings.notifications,
@@ -227,6 +232,11 @@ const AdminSettings = () => {
               <Toggle value={item.value} onChange={item.onChange} />
             </div>
           ))}
+          <div className="pt-4 border-t border-slate-800 space-y-3">
+            <InputField label="UPI ID" value={upiId} onChange={setUpiId} placeholder="yourname@upi" />
+            <InputField label="UPI Payee Name" value={upiPayeeName} onChange={setUpiPayeeName} placeholder="BrajMart" />
+            <p className="text-xs text-slate-500">Used to generate QR codes for UPI payments at checkout.</p>
+          </div>
         </div>
       )}
 
