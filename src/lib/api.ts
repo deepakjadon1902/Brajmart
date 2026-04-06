@@ -48,10 +48,10 @@ const getJson = async <T>(path: string, options: RequestOptions = {}): Promise<T
 };
 
 export const fetchPublicSettings = () =>
-  getJson('/settings');
+  getJson<Record<string, any>>('/settings');
 
 export const updatePublicSettings = (payload: Record<string, unknown>) =>
-  getJson('/settings', { method: 'PUT', body: payload });
+  getJson<Record<string, any>>('/settings', { method: 'PUT', body: payload });
 
 // Auth
 export const registerUser = (payload: { name: string; email: string; password: string }) =>
@@ -111,10 +111,10 @@ export const deleteCategory = (id: string) =>
   getJson(`/categories/${id}`, { method: 'DELETE' });
 
 // Orders
-export const fetchOrders = () => getJson('/orders');
-export const fetchMyOrders = () => getJson('/orders/my');
+export const fetchOrders = () => getJson<any[]>('/orders');
+export const fetchMyOrders = () => getJson<any[]>('/orders/my');
 export const updateOrderStatus = (id: string, payload: { status: string; note?: string }) =>
-  getJson(`/orders/${id}/status`, { method: 'PUT', body: payload });
+  getJson<Record<string, any>>(`/orders/${id}/status`, { method: 'PUT', body: payload });
 export const createOrder = (payload: Record<string, unknown>) =>
   getJson('/orders', { method: 'POST', body: payload });
 
