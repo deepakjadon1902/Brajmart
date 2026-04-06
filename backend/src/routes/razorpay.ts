@@ -1,14 +1,16 @@
-const express = require('express');
-const crypto = require('crypto');
-const { auth } = require('../middleware/auth');
+import { Router } from 'express';
+import crypto from 'crypto';
+import Razorpay from 'razorpay';
+import { auth } from '../middleware/auth';
 
-const router = express.Router();
+const router = Router();
 
-// Lazy-init Razorpay instance
-let razorpayInstance = null;
+let razorpayInstance: Razorpay | null = null;
 const getRazorpay = () => {
   if (!razorpayInstance) {
-    const Razorpay = require('razorpay');
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      throw new Error('Razorpay keys are not configured');
+    }
     razorpayInstance = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID,
       key_secret: process.env.RAZORPAY_KEY_SECRET,
@@ -17,15 +19,24 @@ const getRazorpay = () => {
   return razorpayInstance;
 };
 
-// Create Razorpay order
-router.post('/create-order', auth, async (req, res) => {
+router.post('/create-order', async (req, res) => {
   try {
     const { amount, currency = 'INR', receipt, notes } = req.body;
     if (!amount || amount <= 0) return res.status(400).json({ message: 'Invalid amount' });
 
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      return res.json({
+        orderId: `order_demo_${Date.now()}`,
+        amount: Math.round(amount * 100),
+        currency,
+        key: 'rzp_test_demo',
+        demo: true,
+      });
+    }
+
     const razorpay = getRazorpay();
     const order = await razorpay.orders.create({
-      amount: Math.round(amount * 100), // paise
+      amount: Math.round(amount * 100),
       currency,
       receipt: receipt || `rcpt_${Date.now()}`,
       notes: notes || {},
@@ -37,16 +48,17 @@ router.post('/create-order', auth, async (req, res) => {
       currency: order.currency,
       key: process.env.RAZORPAY_KEY_ID,
     });
-  } catch (err) {
-    console.error('Razorpay order error:', err);
+  } catch (err: any) {
     res.status(500).json({ message: err.message || 'Failed to create payment order' });
   }
 });
 
-// Verify payment signature
 router.post('/verify', auth, async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    if (!process.env.RAZORPAY_KEY_SECRET) {
+      return res.status(500).json({ message: 'Razorpay keys are not configured' });
+    }
 
     const generated = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
@@ -58,9 +70,9 @@ router.post('/verify', auth, async (req, res) => {
     }
 
     res.json({ verified: true, paymentId: razorpay_payment_id });
-  } catch (err) {
+  } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
 });
 
-module.exports = router;
+export default router;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -26,21 +26,25 @@ const LoginPage = () => {
     e.preventDefault();
     if (!email || !password) { toast.error('Please fill all fields'); return; }
     setLoading(true);
-    const success = await login(email, password);
+    const result = await login(email, password);
     setLoading(false);
-    if (success) {
-      toast.success('Welcome back! 🙏 Hare Krishna');
+    if (result.ok) {
+      toast.success('Welcome back!');
       navigate('/');
+    } else {
+      toast.error(result.message || 'Login failed');
     }
   };
 
   const handleGoogle = async () => {
     setLoading(true);
-    const success = await loginWithGoogle();
+    const result = await loginWithGoogle();
     setLoading(false);
-    if (success) {
-      toast.success('Signed in with Google! 🙏');
+    if (result.ok) {
+      toast.success('Signed in with Google');
       navigate('/');
+    } else {
+      toast.error(result.message || 'Google login failed');
     }
   };
 
@@ -54,7 +58,7 @@ const LoginPage = () => {
       >
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-4">
-            <span className="text-3xl">🪷</span>
+            <span className="text-3xl">🙏</span>
             <span className="font-cinzel text-2xl font-bold text-maroon-gold-gradient">BrajMart</span>
           </Link>
           <h1 className="font-cinzel text-2xl font-bold text-foreground">Welcome Back</h1>
@@ -62,7 +66,6 @@ const LoginPage = () => {
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-8 shadow-sm">
-          {/* Google Sign In */}
           <button
             onClick={handleGoogle}
             disabled={loading}
@@ -114,7 +117,7 @@ const LoginPage = () => {
               disabled={loading}
               className="w-full py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform disabled:opacity-50"
             >
-              {loading ? 'Signing in...' : 'Sign In 🙏'}
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 

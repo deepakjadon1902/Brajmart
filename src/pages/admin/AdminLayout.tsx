@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAdminStore } from '@/store/adminStore';
 import {
   LayoutDashboard, Users, ShoppingBag, Package, Truck, CreditCard,
@@ -30,7 +30,7 @@ const AdminLayout = () => {
     if (!isAdminAuthenticated) navigate('/admin');
   }, [isAdminAuthenticated, navigate]);
 
-  if (!isAdminAuthenticated) return null;
+  if (!isAdminAuthenticated) return <Navigate to="/admin" replace />;
 
   const handleLogout = () => {
     adminLogout();

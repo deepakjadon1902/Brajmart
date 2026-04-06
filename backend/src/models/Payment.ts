@@ -1,6 +1,16 @@
-const mongoose = require('mongoose');
+import mongoose, { Document, Schema } from 'mongoose';
 
-const paymentSchema = new mongoose.Schema({
+export interface IPayment extends Document {
+  orderId: number;
+  customerName: string;
+  customerEmail: string;
+  method: string;
+  amount: number;
+  status: 'paid' | 'pending' | 'failed' | 'refunded';
+  transactionId: string;
+}
+
+const paymentSchema = new Schema<IPayment>({
   orderId: { type: Number, required: true },
   customerName: { type: String, required: true },
   customerEmail: { type: String, required: true },
@@ -10,4 +20,4 @@ const paymentSchema = new mongoose.Schema({
   transactionId: { type: String, required: true },
 }, { timestamps: true });
 
-module.exports = mongoose.model('Payment', paymentSchema);
+export default mongoose.model<IPayment>('Payment', paymentSchema);

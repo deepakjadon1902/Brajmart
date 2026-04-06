@@ -1,9 +1,27 @@
-import { useOrderStore } from '@/store/orderStore';
+import { useEffect, useState } from 'react';
 import { StatusBadge } from './AdminDashboard';
 import { Truck, MapPin } from 'lucide-react';
+import { fetchOrders } from '@/lib/api';
+import { toast } from 'sonner';
 
 const AdminShipments = () => {
-  const orders = useOrderStore((s) => s.orders);
+  const [orders, setOrders] = useState<any[]>([]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await fetchOrders();
+        const mapped = (Array.isArray(data) ? data : []).map((o: any) => ({
+          ...o,
+          id: o.orderId ? String(o.orderId) : o._id,
+          shippingAddress: o.shippingAddress || {},
+        }));
+        setOrders(mapped);
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to load shipments');
+      }
+    };
+    load();
+  }, []);
   const shipments = orders.filter((o) => o.status !== 'cancelled');
 
   return (

@@ -9,6 +9,7 @@ export interface Product {
   rating: number;
   reviewCount: number;
   badge?: 'new' | 'bestseller' | 'combo' | 'exclusive';
+  tags?: string[];
   inStock: boolean;
   soldCount?: number;
 }

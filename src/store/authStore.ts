@@ -1,5 +1,6 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { googleLogin, loginUser, registerUser, setAuthToken } from '@/lib/api';
 
 export interface User {
   id: string;
@@ -17,9 +18,10 @@ export interface User {
 interface AuthStore {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  register: (data: { fullName: string; email: string; password: string; mobile?: string }) => Promise<boolean>;
-  loginWithGoogle: () => Promise<boolean>;
+  token: string | null;
+  login: (email: string, password: string) => Promise<{ ok: boolean; message?: string }>;
+  register: (data: { fullName: string; email: string; password: string; mobile?: string }) => Promise<{ ok: boolean; message?: string }>;
+  loginWithGoogle: () => Promise<{ ok: boolean; message?: string }>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => void;
 }
@@ -29,44 +31,88 @@ export const useAuthStore = create<AuthStore>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
+      token: null,
       login: async (email, _password) => {
-        const user: User = {
-          id: crypto.randomUUID(),
-          fullName: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-          email,
-          authProvider: 'email',
-        };
-        set({ user, isAuthenticated: true });
-        return true;
+        try {
+          const res: any = await loginUser({ email, password: _password });
+          setAuthToken(res.token);
+          const user: User = {
+            id: res.user.id,
+            fullName: res.user.name,
+            email: res.user.email,
+            authProvider: 'email',
+          };
+          set({ user, isAuthenticated: true, token: res.token });
+          return { ok: true };
+        } catch (err: any) {
+          return { ok: false, message: err?.message || 'Login failed' };
+        }
       },
       register: async (data) => {
-        const user: User = {
-          id: crypto.randomUUID(),
-          fullName: data.fullName,
-          email: data.email,
-          mobile: data.mobile,
-          authProvider: 'email',
-        };
-        set({ user, isAuthenticated: true });
-        return true;
+        try {
+          const res: any = await registerUser({ name: data.fullName, email: data.email, password: data.password });
+          if (res?.token) {
+            setAuthToken(res.token);
+            const user: User = {
+              id: res.user.id,
+              fullName: res.user.name,
+              email: res.user.email,
+              mobile: data.mobile,
+              authProvider: 'email',
+            };
+            set({ user, isAuthenticated: true, token: res.token });
+            return { ok: true };
+          }
+          return { ok: true, message: res?.message || 'Verification email sent' };
+        } catch (err: any) {
+          return { ok: false, message: err?.message || 'Registration failed' };
+        }
       },
       loginWithGoogle: async () => {
-        // Mock Google OAuth — will connect to real provider when DB is connected
-        const mockGoogleUser: User = {
-          id: crypto.randomUUID(),
-          fullName: 'Krishna Devotee',
-          email: 'devotee@gmail.com',
-          avatar: 'https://ui-avatars.com/api/?name=Krishna+Devotee&background=f59e0b&color=fff',
-          authProvider: 'google',
-        };
-        set({ user: mockGoogleUser, isAuthenticated: true });
-        return true;
+        try {
+          const mockGooglePayload = {
+            name: 'Krishna Devotee',
+            email: 'devotee@gmail.com',
+            googleId: crypto.randomUUID(),
+            avatar: 'https://ui-avatars.com/api/?name=Krishna+Devotee&background=f59e0b&color=fff',
+          };
+          const res: any = await googleLogin(mockGooglePayload);
+          setAuthToken(res.token);
+          const user: User = {
+            id: res.user.id,
+            fullName: res.user.name,
+            email: res.user.email,
+            avatar: mockGooglePayload.avatar,
+            authProvider: 'google',
+          };
+          set({ user, isAuthenticated: true, token: res.token });
+          return { ok: true };
+        } catch (err: any) {
+          return { ok: false, message: err?.message || 'Google login failed' };
+        }
       },
-      logout: () => set({ user: null, isAuthenticated: false }),
+      logout: () => {
+        setAuthToken('');
+        set({ user: null, isAuthenticated: false, token: null });
+      },
       updateProfile: (data) => set((state) => ({
         user: state.user ? { ...state.user, ...data } : null,
       })),
     }),
-    { name: 'brajmart-auth' }
+    {
+      name: 'brajmart-auth',
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        if (state.token) {
+          setAuthToken(state.token);
+          return;
+        }
+        if (state.isAuthenticated) {
+          state.isAuthenticated = false;
+          state.user = null;
+          state.token = null;
+        }
+      },
+    }
   )
 );

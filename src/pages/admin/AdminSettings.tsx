@@ -1,7 +1,9 @@
-import { useState, useRef } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useAdminStore } from '@/store/adminStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { Save, Store, Bell, Shield, Truck, CheckCircle, Globe, Megaphone, CreditCard, Image, Search, Settings2, Plus, X, Upload } from 'lucide-react';
+import { fetchPublicSettings, updatePublicSettings } from '@/lib/api';
+import { toast } from 'sonner';
 
 const AdminSettings = () => {
   const { adminEmail } = useAdminStore();
@@ -9,6 +11,7 @@ const AdminSettings = () => {
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState('store');
   const logoRef = useRef<HTMLInputElement>(null);
+  const [loading, setLoading] = useState(false);
 
   const [storeName, setStoreName] = useState(settings.storeName);
   const [tagline, setTagline] = useState(settings.tagline);
@@ -21,6 +24,8 @@ const AdminSettings = () => {
   const [taxRate, setTaxRate] = useState(settings.taxRate);
   const [minOrderAmount, setMinOrderAmount] = useState(settings.minOrderAmount);
   const [maxOrderQuantity, setMaxOrderQuantity] = useState(settings.maxOrderQuantity);
+  const [deliveryEtaMinDays, setDeliveryEtaMinDays] = useState(settings.deliveryEtaMinDays);
+  const [deliveryEtaMaxDays, setDeliveryEtaMaxDays] = useState(settings.deliveryEtaMaxDays);
   const [codEnabled, setCodEnabled] = useState(settings.codEnabled);
   const [upiEnabled, setUpiEnabled] = useState(settings.upiEnabled);
   const [cardEnabled, setCardEnabled] = useState(settings.cardEnabled);
@@ -34,19 +39,72 @@ const AdminSettings = () => {
 
   const [socialLinks, setSocialLinks] = useState(settings.socialLinks);
 
-  const handleSave = () => {
-    updateSettings({
-      storeName, tagline, currency, storeEmail, storePhone, storeAddress,
-      freeShippingThreshold, shippingFee, taxRate, minOrderAmount, maxOrderQuantity,
-      codEnabled, upiEnabled, cardEnabled, maintenanceMode,
-      metaTitle, metaDescription, storeLogo,
-      announcementBar: { enabled: announcementEnabled, messages: announcementMessages },
-      socialLinks,
-    });
-    updateAnnouncementMessages(announcementMessages);
-    Object.entries(socialLinks).forEach(([k, v]) => updateSocialLinks(k, v));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const data = await fetchPublicSettings();
+        if (!active || !data) return;
+        updateSettings(data);
+        setStoreName(data.storeName);
+        setTagline(data.tagline);
+        setCurrency(data.currency);
+        setStoreEmail(data.storeEmail);
+        setStorePhone(data.storePhone);
+        setStoreAddress(data.storeAddress);
+        setFreeShippingThreshold(data.freeShippingThreshold);
+        setShippingFee(data.shippingFee);
+        setTaxRate(data.taxRate);
+        setMinOrderAmount(data.minOrderAmount);
+        setMaxOrderQuantity(data.maxOrderQuantity);
+        setDeliveryEtaMinDays(data.deliveryEtaMinDays ?? settings.deliveryEtaMinDays);
+        setDeliveryEtaMaxDays(data.deliveryEtaMaxDays ?? settings.deliveryEtaMaxDays);
+        setCodEnabled(data.codEnabled);
+        setUpiEnabled(data.upiEnabled);
+        setCardEnabled(data.cardEnabled);
+        setMaintenanceMode(data.maintenanceMode);
+        setMetaTitle(data.metaTitle);
+        setMetaDescription(data.metaDescription);
+        setStoreLogo(data.storeLogo);
+        setAnnouncementEnabled(data.announcementBar?.enabled ?? announcementEnabled);
+        setAnnouncementMsgs(data.announcementBar?.messages ?? announcementMessages);
+        setSocialLinks(data.socialLinks || socialLinks);
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to load settings');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    load();
+    return () => { active = false; };
+  }, []);
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      const payload = {
+        storeName, tagline, currency, storeEmail, storePhone, storeAddress,
+        freeShippingThreshold, shippingFee, taxRate, minOrderAmount, maxOrderQuantity,
+        deliveryEtaMinDays, deliveryEtaMaxDays,
+        codEnabled, upiEnabled, cardEnabled, maintenanceMode,
+        metaTitle, metaDescription, storeLogo,
+        announcementBar: { enabled: announcementEnabled, messages: announcementMessages },
+        socialLinks,
+        notifications: settings.notifications,
+      };
+      const updated = await updatePublicSettings(payload);
+      updateSettings(updated);
+      updateAnnouncementMessages(updated.announcementBar?.messages || announcementMessages);
+      Object.entries(updated.socialLinks || socialLinks).forEach(([k, v]) => updateSocialLinks(k, v as string));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      toast.success('Settings updated');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update settings');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,7 +174,7 @@ const AdminSettings = () => {
           <div>
             <label className="block text-sm text-slate-300 mb-1">Currency</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none">
-              <option value="INR">₹ INR</option>
+              <option value="INR">â‚¹ INR</option>
               <option value="USD">$ USD</option>
             </select>
           </div>
@@ -143,11 +201,13 @@ const AdminSettings = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Truck size={18} /> Shipping & Order Settings</h2>
           <div className="grid grid-cols-2 gap-4">
-            <InputField label="Free Shipping Above (₹)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
-            <InputField label="Shipping Fee (₹)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
+            <InputField label="Free Shipping Above (â‚¹)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
+            <InputField label="Shipping Fee (â‚¹)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
             <InputField label="Tax Rate (%)" value={String(taxRate)} onChange={(v) => setTaxRate(Number(v))} type="number" />
-            <InputField label="Min Order Amount (₹)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
+            <InputField label="Min Order Amount (â‚¹)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
             <InputField label="Max Quantity Per Item" value={String(maxOrderQuantity)} onChange={(v) => setMaxOrderQuantity(Number(v))} type="number" />
+            <InputField label="Delivery ETA Min Days" value={String(deliveryEtaMinDays)} onChange={(v) => setDeliveryEtaMinDays(Number(v))} type="number" />
+            <InputField label="Delivery ETA Max Days" value={String(deliveryEtaMaxDays)} onChange={(v) => setDeliveryEtaMaxDays(Number(v))} type="number" />
           </div>
         </div>
       )}
@@ -253,8 +313,8 @@ const AdminSettings = () => {
         </div>
       )}
 
-      <button onClick={handleSave} className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 transition">
-        {saved ? <><CheckCircle size={16} /> Saved ✓</> : <><Save size={16} /> Save Settings</>}
+      <button onClick={handleSave} disabled={loading} className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 transition disabled:opacity-60">
+        {saved ? <><CheckCircle size={16} /> Saved</> : <><Save size={16} /> {loading ? 'Saving...' : 'Save Settings'}</>}
       </button>
     </div>
   );
@@ -268,3 +328,10 @@ const InputField = ({ label, value, onChange, type = 'text', placeholder }: { la
 );
 
 export default AdminSettings;
+
+
+
+
+
+
+

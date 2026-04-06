@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, Phone } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -29,21 +29,29 @@ const RegisterPage = () => {
     if (form.password !== form.confirmPassword) { toast.error('Passwords do not match'); return; }
     if (form.password.length < 8) { toast.error('Password must be at least 8 characters'); return; }
     setLoading(true);
-    const success = await register(form);
+    const result = await register(form);
     setLoading(false);
-    if (success) {
-      toast.success('Account created! Welcome to BrajMart 🙏');
-      navigate('/');
+    if (result.ok) {
+      toast.success(result.message || 'Account created. You can sign in now.');
+      if (!result.message) {
+        navigate('/');
+      } else {
+        navigate('/login');
+      }
+    } else {
+      toast.error(result.message || 'Registration failed');
     }
   };
 
   const handleGoogle = async () => {
     setLoading(true);
-    const success = await loginWithGoogle();
+    const result = await loginWithGoogle();
     setLoading(false);
-    if (success) {
-      toast.success('Signed up with Google! 🙏');
+    if (result.ok) {
+      toast.success('Signed up with Google');
       navigate('/');
+    } else {
+      toast.error(result.message || 'Google sign up failed');
     }
   };
 
@@ -63,7 +71,7 @@ const RegisterPage = () => {
       >
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-4">
-            <span className="text-3xl">🪷</span>
+            <span className="text-3xl">🙏</span>
             <span className="font-cinzel text-2xl font-bold text-maroon-gold-gradient">BrajMart</span>
           </Link>
           <h1 className="font-cinzel text-2xl font-bold text-foreground">Create Account</h1>
@@ -71,7 +79,6 @@ const RegisterPage = () => {
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-8 shadow-sm">
-          {/* Google Sign Up */}
           <button
             onClick={handleGoogle}
             disabled={loading}
@@ -139,7 +146,7 @@ const RegisterPage = () => {
               disabled={loading}
               className="w-full py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform disabled:opacity-50"
             >
-              {loading ? 'Creating Account...' : 'Create Account 🙏'}
+              {loading ? 'Creating Account...' : 'Create Account'}
             </button>
           </form>
 

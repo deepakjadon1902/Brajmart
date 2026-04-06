@@ -1,15 +1,41 @@
-import { useState } from 'react';
-import { useOrderStore, OrderStatus } from '@/store/orderStore';
+import { useEffect, useState } from 'react';
+import { OrderStatus } from '@/store/orderStore';
 import { StatusBadge } from './AdminDashboard';
 import { Search, Eye, X, ChevronDown } from 'lucide-react';
+import { fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
+import { toast } from 'sonner';
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
 
 const AdminOrders = () => {
-  const { orders, updateOrderStatus } = useOrderStore();
+  const [orders, setOrders] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await fetchOrders();
+        const mapped = (Array.isArray(data) ? data : []).map((o: any) => ({
+          ...o,
+          id: o.orderId ? String(o.orderId) : o._id,
+          _id: o._id,
+          items: (o.items || []).map((i: any) => ({
+            ...i,
+            product: {
+              name: i.name || i.product?.name || 'Item',
+              image: i.image || i.product?.image || '',
+            },
+          })),
+        }));
+        setOrders(mapped);
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to load orders');
+      }
+    };
+    load();
+  }, []);
 
   const filtered = orders.filter((o) => {
     const matchSearch = o.id.toLowerCase().includes(search.toLowerCase()) || o.shippingAddress.fullName.toLowerCase().includes(search.toLowerCase());
@@ -18,6 +44,15 @@ const AdminOrders = () => {
   });
 
   const detail = selectedOrder ? orders.find((o) => o.id === selectedOrder) : null;
+  const handleStatusUpdate = async (orderId: string, status: OrderStatus) => {
+    try {
+      const updated = await updateOrderStatusApi(orderId, { status, note: `Status updated to ${status}` });
+      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...updated } : o)));
+      toast.success('Order updated');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update order');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -106,7 +141,7 @@ const AdminOrders = () => {
                   {statusOptions.map((s) => (
                     <button
                       key={s}
-                      onClick={() => updateOrderStatus(detail.id, s, `Status updated to ${s}`)}
+                      onClick={() => handleStatusUpdate(detail._id, s)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${detail.status === s ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
                     >
                       {s.replace(/_/g, ' ')}

@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, MoreVertical, Ban, CheckCircle } from 'lucide-react';
+import { fetchUsers, updateUserStatus } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface MockUser {
   id: string;
@@ -11,24 +13,44 @@ interface MockUser {
   status: 'active' | 'blocked';
 }
 
-const mockUsers: MockUser[] = [
-  { id: 'u1', name: 'Deepak Jadon', email: 'deepakjadon1907@gmail.com', joined: '2026-01-15', orders: 12, spent: 8450, status: 'active' },
-  { id: 'u2', name: 'Radha Sharma', email: 'radha.sharma@gmail.com', joined: '2026-02-20', orders: 5, spent: 3200, status: 'active' },
-  { id: 'u3', name: 'Krishna Das', email: 'krishna.das@gmail.com', joined: '2026-03-01', orders: 3, spent: 1890, status: 'active' },
-  { id: 'u4', name: 'Meera Patel', email: 'meera.patel@gmail.com', joined: '2026-02-10', orders: 8, spent: 5670, status: 'active' },
-  { id: 'u5', name: 'Govind Singh', email: 'govind.singh@gmail.com', joined: '2026-01-28', orders: 2, spent: 980, status: 'blocked' },
-  { id: 'u6', name: 'Yamuna Devi', email: 'yamuna.devi@gmail.com', joined: '2026-03-12', orders: 1, spent: 449, status: 'active' },
-  { id: 'u7', name: 'Balram Yadav', email: 'balram.yadav@gmail.com', joined: '2026-02-05', orders: 7, spent: 4320, status: 'active' },
-];
-
 const AdminUsers = () => {
-  const [users, setUsers] = useState(mockUsers);
+  const [users, setUsers] = useState<MockUser[]>([]);
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await fetchUsers();
+        const mapped = (Array.isArray(data) ? data : []).map((u: any) => ({
+          id: u._id || u.id,
+          name: u.name || u.fullName || 'User',
+          email: u.email || '',
+          joined: u.createdAt || new Date().toISOString(),
+          orders: 0,
+          spent: 0,
+          status: u.status || 'active',
+        }));
+        setUsers(mapped);
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to load users');
+      }
+    };
+    load();
+  }, []);
 
   const filtered = users.filter((u) => u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()));
 
-  const toggleStatus = (id: string) => {
-    setUsers((prev) => prev.map((u) => u.id === id ? { ...u, status: u.status === 'active' ? 'blocked' : 'active' } as MockUser : u));
+  const toggleStatus = async (id: string) => {
+    const current = users.find((u) => u.id === id);
+    if (!current) return;
+    const nextStatus = current.status === 'active' ? 'blocked' : 'active';
+    try {
+      await updateUserStatus(id, nextStatus);
+      setUsers((prev) => prev.map((u) => u.id === id ? { ...u, status: nextStatus } : u));
+      toast.success('User updated');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update user');
+    }
   };
 
   return (

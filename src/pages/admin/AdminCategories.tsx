@@ -1,27 +1,48 @@
-import { useState, useRef } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Category } from '@/types/product';
 import { Plus, Edit2, Trash2, X, Upload, Image } from 'lucide-react';
+import { createCategory, deleteCategory as deleteCategoryApi, updateCategory as updateCategoryApi, uploadImage } from '@/lib/api';
+import { toast } from 'sonner';
 
 const AdminCategories = () => {
-  const { categories, products, addCategory, updateCategory, deleteCategory } = useProductStore();
+  const { categories, products, addCategory, updateCategory, deleteCategory, loadFromApi } = useProductStore();
   const [editing, setEditing] = useState<Category | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   const getCatCount = (name: string) => products.filter((p) => p.category === name).length;
 
-  const handleDelete = (id: string) => {
-    if (confirm('Delete this category?')) deleteCategory(id);
+  useEffect(() => {
+    loadFromApi();
+  }, [loadFromApi]);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this category?')) return;
+    try {
+      await deleteCategoryApi(id);
+      deleteCategory(id);
+      toast.success('Category deleted');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete category');
+    }
   };
 
-  const handleSave = (cat: Category) => {
-    if (isCreating) {
-      addCategory({ ...cat, id: `cat-${Date.now()}` });
-    } else {
-      updateCategory(cat.id, cat);
+  const handleSave = async (cat: Category) => {
+    try {
+      if (isCreating) {
+        const created: any = await createCategory(cat as any);
+        addCategory({ ...created, id: created.id || created._id });
+        toast.success('Category created');
+      } else {
+        const updated: any = await updateCategoryApi(cat.id, cat as any);
+        updateCategory(cat.id, updated);
+        toast.success('Category updated');
+      }
+      setEditing(null);
+      setIsCreating(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save category');
     }
-    setEditing(null);
-    setIsCreating(false);
   };
 
   return (
@@ -37,7 +58,7 @@ const AdminCategories = () => {
         {categories.map((cat) => (
           <div key={cat.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition">
             <div className="flex items-start justify-between mb-3">
-              {cat.icon.startsWith('data:') ? (
+              {cat.icon && (cat.icon.startsWith('data:') || cat.icon.startsWith('http') || cat.icon.startsWith('/uploads')) ? (
                 <img src={cat.icon} alt={cat.name} className="w-10 h-10 rounded-lg object-cover" />
               ) : (
                 <div className="text-3xl">{cat.icon}</div>
@@ -70,17 +91,19 @@ const AdminCategories = () => {
 
 const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onSave: (c: Category) => void; onClose: () => void; isCreating: boolean }) => {
   const [form, setForm] = useState(cat);
+  const [imageError, setImageError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleIconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // No size limit
-    const reader = new FileReader();
-    reader.onload = () => {
-      setForm({ ...form, icon: reader.result as string });
-    };
-    reader.readAsDataURL(file);
+    try {
+      const { url } = await uploadImage(file);
+      setImageError('');
+      setForm({ ...form, icon: url });
+    } catch (err: any) {
+      setImageError(err?.message || 'Upload failed');
+    }
   };
 
   return (
@@ -96,7 +119,7 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
           onClick={() => fileRef.current?.click()}
           className="w-full flex items-center gap-3 px-4 py-3 bg-slate-800 border border-slate-700 border-dashed rounded-xl cursor-pointer hover:border-amber-500/50 transition"
         >
-          {form.icon && form.icon.startsWith('data:') ? (
+          {form.icon && (form.icon.startsWith('data:') || form.icon.startsWith('http') || form.icon.startsWith('/uploads')) ? (
             <img src={form.icon} alt="icon" className="w-10 h-10 rounded-lg object-cover" />
           ) : (
             <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center">
@@ -104,11 +127,12 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
             </div>
           )}
           <div className="flex-1">
-            <p className="text-sm text-slate-300">{form.icon && form.icon.startsWith('data:') ? 'Change icon image' : 'Upload icon image'}</p>
-            <p className="text-xs text-slate-500">PNG, JPG, WebP — any size</p>
+            <p className="text-sm text-slate-300">{form.icon ? 'Change icon image' : 'Upload icon image'}</p>
+            <p className="text-xs text-slate-500">PNG, JPG, WebP â€” any size</p>
           </div>
           <Upload size={16} className="text-slate-400" />
         </div>
+        {imageError && <p className="text-xs text-red-400 mt-2">{imageError}</p>}
       </div>
       <div>
         <label className="block text-sm text-slate-300 mb-1">Color</label>
@@ -123,3 +147,5 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
 };
 
 export default AdminCategories;
+
+

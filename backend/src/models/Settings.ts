@@ -1,8 +1,48 @@
-const mongoose = require('mongoose');
+import mongoose, { Document, Schema } from 'mongoose';
 
-const settingsSchema = new mongoose.Schema({
+export interface ISettings extends Document {
+  storeName: string;
+  tagline: string;
+  currency: string;
+  freeShippingThreshold: number;
+  shippingFee: number;
+  storeEmail: string;
+  storePhone: string;
+  storeAddress: string;
+  taxRate: number;
+  minOrderAmount: number;
+  maxOrderQuantity: number;
+  deliveryEtaMinDays: number;
+  deliveryEtaMaxDays: number;
+  codEnabled: boolean;
+  upiEnabled: boolean;
+  cardEnabled: boolean;
+  maintenanceMode: boolean;
+  metaTitle: string;
+  metaDescription: string;
+  storeLogo: string;
+  favicon?: string;
+  socialLinks: {
+    instagram: string;
+    facebook: string;
+    youtube: string;
+    whatsapp: string;
+  };
+  announcementBar: {
+    enabled: boolean;
+    messages: string[];
+  };
+  notifications: {
+    orders: boolean;
+    users: boolean;
+    payments: boolean;
+    stock: boolean;
+  };
+}
+
+const settingsSchema = new Schema<ISettings>({
   storeName: { type: String, default: 'BrajMart' },
-  tagline: { type: String, default: 'From Braj, With Love 🙏' },
+  tagline: { type: String, default: 'From Braj, With Love' },
   currency: { type: String, default: 'INR' },
   freeShippingThreshold: { type: Number, default: 499 },
   shippingFee: { type: Number, default: 49 },
@@ -12,13 +52,16 @@ const settingsSchema = new mongoose.Schema({
   taxRate: { type: Number, default: 0 },
   minOrderAmount: { type: Number, default: 0 },
   maxOrderQuantity: { type: Number, default: 10 },
+  deliveryEtaMinDays: { type: Number, default: 3 },
+  deliveryEtaMaxDays: { type: Number, default: 7 },
   codEnabled: { type: Boolean, default: true },
   upiEnabled: { type: Boolean, default: true },
   cardEnabled: { type: Boolean, default: true },
   maintenanceMode: { type: Boolean, default: false },
-  metaTitle: { type: String, default: 'BrajMart — Authentic Vrindavan Products' },
+  metaTitle: { type: String, default: 'BrajMart - Authentic Vrindavan Products' },
   metaDescription: { type: String, default: '' },
   storeLogo: { type: String, default: '' },
+  favicon: { type: String, default: '' },
   socialLinks: {
     instagram: { type: String, default: '' },
     facebook: { type: String, default: '' },
@@ -37,4 +80,4 @@ const settingsSchema = new mongoose.Schema({
   },
 }, { timestamps: true });
 
-module.exports = mongoose.model('Settings', settingsSchema);
+export default mongoose.model<ISettings>('Settings', settingsSchema);

@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "./pages/Home";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 import CartPage from "./pages/CartPage";
 import WishlistPage from "./pages/WishlistPage";
 import CategoryPage from "./pages/CategoryPage";
@@ -39,19 +41,79 @@ import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminShipments from "./pages/admin/AdminShipments";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminSettings from "./pages/admin/AdminSettings";
+import { fetchPublicSettings } from "./lib/api";
+import { useSettingsStore } from "./store/settingsStore";
+import { useProductStore } from "./store/productStore";
+import { useCartStore } from "./store/cartStore";
+import { useAuthStore } from "./store/authStore";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
+const App = () => {
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const loadProducts = useProductStore((s) => s.loadFromApi);
+  const loadCart = useCartStore((s) => s.loadFromApi);
+  const authToken = useAuthStore((s) => s.token);
+
+  useEffect(() => {
+    let active = true;
+    const loadSettings = async () => {
+      try {
+        const data = await fetchPublicSettings();
+        if (!active || !data) return;
+        updateSettings({
+          storeName: data.storeName,
+          tagline: data.tagline,
+          currency: data.currency,
+          freeShippingThreshold: data.freeShippingThreshold,
+          shippingFee: data.shippingFee,
+          storeEmail: data.storeEmail,
+          storePhone: data.storePhone,
+          storeAddress: data.storeAddress,
+          taxRate: data.taxRate,
+          minOrderAmount: data.minOrderAmount,
+          maxOrderQuantity: data.maxOrderQuantity,
+          deliveryEtaMinDays: data.deliveryEtaMinDays ?? 3,
+          deliveryEtaMaxDays: data.deliveryEtaMaxDays ?? 7,
+          codEnabled: data.codEnabled,
+          upiEnabled: data.upiEnabled,
+          cardEnabled: data.cardEnabled,
+          maintenanceMode: data.maintenanceMode,
+          metaTitle: data.metaTitle,
+          metaDescription: data.metaDescription,
+          storeLogo: data.storeLogo,
+          favicon: data.favicon,
+          socialLinks: data.socialLinks,
+          announcementBar: data.announcementBar,
+          notifications: data.notifications,
+        });
+      } catch {
+        // Keep locally persisted defaults
+      }
+    };
+    loadSettings();
+    return () => { active = false; };
+  }, [updateSettings]);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  useEffect(() => {
+    if (authToken) loadCart();
+  }, [authToken, loadCart]);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
@@ -90,10 +152,11 @@ const App = () => (
           </Route>
 
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

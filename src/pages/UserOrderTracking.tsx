@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useOrderStore, OrderStatus } from '@/store/orderStore';
 import { useAuthStore } from '@/store/authStore';
@@ -19,9 +19,15 @@ const statusSteps: { status: OrderStatus; label: string; icon: any }[] = [
 
 const UserOrderTracking = () => {
   const [searchId, setSearchId] = useState('');
-  const { user } = useAuthStore();
-  const { getOrdersByUser, getOrderById, orders } = useOrderStore();
+  const { user, token } = useAuthStore();
+  const { getOrdersByUser, getOrderById, orders, loadMyOrders } = useOrderStore();
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (token) {
+      loadMyOrders();
+    }
+  }, [token, loadMyOrders]);
 
   const userOrders = user ? getOrdersByUser(user.id) : [];
   const selectedOrder = selectedOrderId ? getOrderById(selectedOrderId) : null;

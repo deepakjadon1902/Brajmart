@@ -16,13 +16,13 @@ const CategoryNavbar = () => {
               className="flex flex-col items-center gap-2 min-w-[72px] group"
             >
               <div className="w-14 h-14 md:w-16 md:h-16 rounded-full border-2 border-gold/30 bg-pearl flex items-center justify-center text-2xl transition-all duration-300 group-hover:border-gold group-hover:shadow-[0_0_16px_rgba(212,175,55,0.25)] group-hover:scale-110 overflow-hidden">
-                {cat.icon.startsWith('data:') ? (
+                {cat.icon && (cat.icon.startsWith('data:') || cat.icon.startsWith('http') || cat.icon.startsWith('/uploads')) ? (
                   <img src={cat.icon} alt={cat.name} className="w-full h-full object-cover" />
                 ) : (
                   cat.icon
                 )}
               </div>
-              <span className="text-[0.7rem] font-semibold text-foreground group-hover:text-saffron transition-colors text-center whitespace-nowrap">
+              <span className="text-[0.7rem] font-semibold font-cinzel text-foreground group-hover:text-saffron transition-colors text-center whitespace-nowrap">
                 {cat.name}
               </span>
             </Link>

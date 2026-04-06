@@ -1,10 +1,22 @@
-import { usePaymentStore } from '@/store/paymentStore';
-import { useOrderStore } from '@/store/orderStore';
+import { useEffect, useState } from 'react';
 import { CreditCard, Wallet, Banknote, DollarSign, AlertCircle } from 'lucide-react';
+import { fetchPayments } from '@/lib/api';
+import { toast } from 'sonner';
 
 const AdminPayments = () => {
-  const payments = usePaymentStore((s) => s.payments);
-  const orders = useOrderStore((s) => s.orders);
+  const [payments, setPayments] = useState<any[]>([]);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await fetchPayments();
+        const mapped = (Array.isArray(data) ? data : []).map((p: any) => ({ ...p, id: p.id || p._id }));
+        setPayments(mapped);
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to load payments');
+      }
+    };
+    load();
+  }, []);
   const totalRevenue = payments.reduce((s, p) => s + p.amount, 0);
   const paidRevenue = payments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
   const pendingRevenue = payments.filter((p) => p.status === 'pending').reduce((s, p) => s + p.amount, 0);

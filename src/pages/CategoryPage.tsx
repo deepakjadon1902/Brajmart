@@ -31,7 +31,11 @@ const CategoryPage = () => {
               <span className="text-foreground">{categoryName || 'Category'}</span>
             </div>
             <div className="flex items-center gap-3">
-              {catMeta && <span className="text-4xl">{catMeta.icon}</span>}
+              {catMeta && (catMeta.icon?.startsWith('data:') || catMeta.icon?.startsWith('http') || catMeta.icon?.startsWith('/uploads')) ? (
+                <img src={catMeta.icon} alt={catMeta.name} className="w-12 h-12 rounded-full object-cover border border-border" />
+              ) : (
+                catMeta && <span className="text-4xl">{catMeta.icon}</span>
+              )}
               <div>
                 <h1 className="font-cinzel text-2xl md:text-3xl font-bold text-maroon">{categoryName || 'All Products'}</h1>
                 <p className="text-muted-foreground text-sm">{products.length} products available</p>

@@ -1,5 +1,5 @@
-import { useParams, Link } from 'react-router-dom';
 import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useProductStore } from '@/store/productStore';
@@ -20,6 +20,7 @@ const ProductDetailPage = () => {
   const [quantity, setQuantity] = useState(1);
   const addToCart = useCartStore(s => s.addItem);
   const { toggleItem, isInWishlist } = useWishlistStore();
+  const navigate = useNavigate();
 
   if (!product) {
     return (
@@ -134,7 +135,7 @@ const ProductDetailPage = () => {
             {/* Trust badges */}
             <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
               {[
-                { icon: Truck, label: 'Free Delivery', sub: 'On orders above ₹499' },
+                { icon: Truck, label: 'Delivery', sub: 'Arrives in 3-7 days' },
                 { icon: Shield, label: 'Authentic', sub: 'Temple verified' },
                 { icon: RotateCcw, label: 'Easy Returns', sub: '7 day policy' },
               ].map(b => (
@@ -162,3 +163,5 @@ const ProductDetailPage = () => {
 };
 
 export default ProductDetailPage;
+
+

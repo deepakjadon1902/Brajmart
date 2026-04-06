@@ -1,10 +1,29 @@
-import { useOrderStore } from '@/store/orderStore';
-import { getAllProducts } from '@/data/productCatalog';
+import { useEffect, useState } from 'react';
+import { useProductStore } from '@/store/productStore';
 import { TrendingUp, BarChart3, PieChart, Activity } from 'lucide-react';
+import { fetchOrders } from '@/lib/api';
+import { toast } from 'sonner';
 
 const AdminAnalytics = () => {
-  const orders = useOrderStore((s) => s.orders);
-  const products = getAllProducts();
+  const [orders, setOrders] = useState<any[]>([]);
+  const products = useProductStore((s) => s.products);
+  const loadProducts = useProductStore((s) => s.loadFromApi);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await fetchOrders();
+        setOrders(Array.isArray(data) ? data : []);
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to load orders');
+      }
+    };
+    load();
+  }, []);
   const totalRevenue = orders.reduce((s, o) => s + o.total, 0);
 
   const catBreakdown = products.reduce<Record<string, number>>((acc, p) => {

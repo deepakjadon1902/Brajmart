@@ -1,10 +1,34 @@
-import { useOrderStore } from '@/store/orderStore';
+import { useEffect, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { DollarSign, ShoppingBag, Users, Package, TrendingUp, ArrowUpRight } from 'lucide-react';
+import { fetchOrders } from '@/lib/api';
+import { toast } from 'sonner';
 
 const AdminDashboard = () => {
-  const orders = useOrderStore((s) => s.orders);
+  const [orders, setOrders] = useState<any[]>([]);
   const products = useProductStore((s) => s.products);
+  const loadProducts = useProductStore((s) => s.loadFromApi);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await fetchOrders();
+        const mapped = (Array.isArray(data) ? data : []).map((o: any) => ({
+          ...o,
+          id: o.orderId ? String(o.orderId) : o._id,
+          shippingAddress: o.shippingAddress || {},
+        }));
+        setOrders(mapped);
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to load orders');
+      }
+    };
+    load();
+  }, []);
 
   const totalRevenue = orders.reduce((s, o) => s + o.total, 0);
   const totalOrders = orders.length;

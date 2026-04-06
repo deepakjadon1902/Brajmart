@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAdminStore } from '@/store/adminStore';
 import { Shield, Eye, EyeOff } from 'lucide-react';
 
@@ -12,14 +12,13 @@ const AdminLogin = () => {
   const navigate = useNavigate();
 
   if (isAdminAuthenticated) {
-    navigate('/admin/dashboard');
-    return null;
+    return <Navigate to="/admin/dashboard" replace />;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const success = adminLogin(email, password);
+    const success = await adminLogin(email, password);
     if (success) {
       navigate('/admin/dashboard');
     } else {

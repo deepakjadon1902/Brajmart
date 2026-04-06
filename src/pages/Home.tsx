@@ -1,4 +1,4 @@
-import AnnouncementBar from '@/components/layout/AnnouncementBar';
+﻿import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import CategoryNavbar from '@/components/layout/CategoryNavbar';
 import HeroCarousel from '@/components/hero/HeroCarousel';
@@ -11,10 +11,12 @@ import Footer from '@/components/layout/Footer';
 import { useProductStore } from '@/store/productStore';
 
 const Home = () => {
-  const { products, getLatestProducts, getBestSellers } = useProductStore();
+  const { products, getLatestProducts, getBestSellers, getNewArrivals, getByTag } = useProductStore();
   const latestProducts = getLatestProducts();
+  const newArrivals = getNewArrivals();
   const bestSellingProducts = getBestSellers();
-  const newArrivals = latestProducts.slice(0, 6);
+  const devotionalAccessories = getByTag('accessories');
+  const sacredPrasadam = getByTag('prasadam');
 
   return (
     <div className="min-h-screen bg-background">
@@ -51,7 +53,7 @@ const Home = () => {
         tag="BRAJMART COLLECTION"
         title="🪔 Top Devotional Accessories"
         subtitle="Malas, Rudraksha, Bracelets & More"
-        products={products.filter(p => p.category === 'Accessories').slice(0, 6)}
+        products={(devotionalAccessories.length ? devotionalAccessories : products.filter(p => p.category === 'Accessories')).slice(0, 6)}
         bgClass="bg-pearl"
       />
 
@@ -61,7 +63,7 @@ const Home = () => {
         tag="SACRED OFFERINGS"
         title="🍮 Sacred Prasadam Collection"
         subtitle="Taste the Blessings of Vrindavan's Sacred Temples"
-        products={products.filter(p => p.category === 'Prasadam').slice(0, 5)}
+        products={(sacredPrasadam.length ? sacredPrasadam : products.filter(p => p.category === 'Prasadam')).slice(0, 5)}
       />
 
       <BrajYatra />

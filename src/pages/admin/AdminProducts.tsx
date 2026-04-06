@@ -1,12 +1,14 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Product } from '@/types/product';
 import { Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
+import { createProduct, deleteProduct as deleteProductApi, updateProduct as updateProductApi, uploadImage } from '@/lib/api';
+import { toast } from 'sonner';
 
 // No image size limit
 
 const AdminProducts = () => {
-  const { products, categories, addProduct, updateProduct, deleteProduct } = useProductStore();
+  const { products, categories, addProduct, updateProduct, deleteProduct, loadFromApi } = useProductStore();
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('all');
   const [editProduct, setEditProduct] = useState<Product | null>(null);
@@ -14,31 +16,54 @@ const AdminProducts = () => {
 
   const categoryNames = categories.map((c) => c.name);
 
+  useEffect(() => {
+    loadFromApi();
+  }, [loadFromApi]);
+
   const filtered = products.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
     const matchCat = filterCat === 'all' || p.category === filterCat;
     return matchSearch && matchCat;
   });
 
-  const handleDelete = (id: string) => {
-    if (confirm('Delete this product?')) deleteProduct(id);
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this product?')) return;
+    try {
+      await deleteProductApi(id);
+      deleteProduct(id);
+      toast.success('Product deleted');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete product');
+    }
   };
 
-  const handleSave = (product: Product) => {
-    if (isCreating) {
-      addProduct({ ...product, id: `prod-${Date.now()}` });
-    } else {
-      updateProduct(product.id, product);
+  const handleSave = async (product: Product) => {
+    try {
+      const normalized = {
+        ...product,
+        tags: Array.isArray(product.tags) ? product.tags : (product.badge ? [product.badge] : []),
+      };
+      if (isCreating) {
+        const created: any = await createProduct(normalized as any);
+        addProduct({ ...created, id: created.id || created._id, tags: normalized.tags });
+        toast.success('Product created');
+      } else {
+        const updated: any = await updateProductApi(product.id, normalized as any);
+        updateProduct(product.id, { ...updated, tags: normalized.tags });
+        toast.success('Product updated');
+      }
+      setEditProduct(null);
+      setIsCreating(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save product');
     }
-    setEditProduct(null);
-    setIsCreating(false);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Products</h1>
-        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true }); }} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">
+        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true, tags: [] }); }} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">
           <Plus size={16} /> Add Product
         </button>
       </div>
@@ -81,7 +106,7 @@ const AdminProducts = () => {
                   <td className="px-5 py-3 text-amber-400">⭐ {p.rating}</td>
                   <td className="px-5 py-3"><span className={`text-xs font-medium ${p.inStock ? 'text-emerald-400' : 'text-red-400'}`}>{p.inStock ? 'In Stock' : 'Out'}</span></td>
                   <td className="px-5 py-3 flex gap-2">
-                    <button onClick={() => { setIsCreating(false); setEditProduct(p); }} className="text-blue-400 hover:text-blue-300"><Edit2 size={15} /></button>
+                    <button onClick={() => { setIsCreating(false); setEditProduct({ ...p, tags: Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []) }); }} className="text-blue-400 hover:text-blue-300"><Edit2 size={15} /></button>
                     <button onClick={() => handleDelete(p.id)} className="text-red-400 hover:text-red-300"><Trash2 size={15} /></button>
                   </td>
                 </tr>
@@ -104,7 +129,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
   const fileInputRef = useRef<HTMLInputElement>(null);
   const update = (field: string, value: any) => setForm((prev) => ({ ...prev, [field]: value }));
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setImageError('');
@@ -116,11 +141,12 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      update('image', ev.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const { url } = await uploadImage(file);
+      update('image', url);
+    } catch (err: any) {
+      setImageError(err?.message || 'Upload failed');
+    }
   };
 
   return (
@@ -180,22 +206,44 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
             <Field label="Rating" value={String(form.rating)} onChange={(v) => update('rating', Number(v))} type="number" />
             <Field label="Review Count" value={String(form.reviewCount)} onChange={(v) => update('reviewCount', Number(v))} type="number" />
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-slate-300">In Stock</label>
-            <button onClick={() => update('inStock', !form.inStock)} className={`w-10 h-5 rounded-full transition ${form.inStock ? 'bg-emerald-500' : 'bg-slate-600'}`}>
-              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${form.inStock ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-          <div>
-            <label className="block text-sm text-slate-300 mb-1">Badge</label>
-            <select value={form.badge || ''} onChange={(e) => update('badge', e.target.value || undefined)} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none">
-              <option value="">None</option>
-              <option value="new">New</option>
-              <option value="bestseller">Bestseller</option>
-              <option value="combo">Combo</option>
-              <option value="exclusive">Exclusive</option>
-            </select>
-          </div>
+      <div className="flex items-center gap-3">
+        <label className="text-sm text-slate-300">In Stock</label>
+        <button onClick={() => update('inStock', !form.inStock)} className={`w-10 h-5 rounded-full transition ${form.inStock ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+          <div className={`w-4 h-4 rounded-full bg-white transition-transform ${form.inStock ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        </button>
+      </div>
+      <div>
+        <label className="block text-sm text-slate-300 mb-2">Placement Tags</label>
+        <div className="grid grid-cols-2 gap-2">
+          {['latest', 'new', 'bestseller', 'accessories', 'prasadam', 'combo', 'exclusive'].map((tag) => {
+            const selected = Array.isArray(form.tags) && form.tags.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => {
+                  const current = Array.isArray(form.tags) ? form.tags : [];
+                  const next = selected ? current.filter((t) => t !== tag) : [...current, tag];
+                  update('tags', next);
+                  const priority = ['bestseller', 'new', 'combo', 'exclusive'];
+                  const nextBadge = priority.find((t) => next.includes(t));
+                  update('badge', nextBadge);
+                }}
+                className={`px-3 py-2 rounded-lg text-xs font-medium border transition ${selected ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
+              >
+                {tag === 'latest' && 'Latest Products'}
+                {tag === 'new' && 'New Arrivals'}
+                {tag === 'bestseller' && 'Best Selling'}
+                {tag === 'accessories' && 'Top Accessories'}
+                {tag === 'prasadam' && 'Sacred Prasadam'}
+                {tag === 'combo' && 'Combo'}
+                {tag === 'exclusive' && 'Exclusive'}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-slate-500 mt-2">Select one or more placements. Products will appear in all selected sections.</p>
+      </div>
           <div className="flex gap-3 pt-2">
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-800 transition">Cancel</button>
             <button onClick={() => onSave({ ...form, slug: form.slug || form.name.toLowerCase().replace(/\s+/g, '-') })} className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">

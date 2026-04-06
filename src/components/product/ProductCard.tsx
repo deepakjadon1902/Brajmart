@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Heart, ShoppingCart, Star, Eye } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Product } from '@/types/product';
@@ -30,9 +30,19 @@ const badgeLabels: Record<string, string> = {
 const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
+  const badge = product.tags?.includes('bestseller')
+    ? 'bestseller'
+    : product.tags?.includes('new')
+    ? 'new'
+    : product.tags?.includes('combo')
+    ? 'combo'
+    : product.tags?.includes('exclusive')
+    ? 'exclusive'
+    : product.badge;
   const addToCart = useCartStore(s => s.addItem);
   const { toggleItem, isInWishlist } = useWishlistStore();
   const inWishlist = isInWishlist(product.id);
+  const navigate = useNavigate();
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -45,7 +55,14 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
     e.preventDefault();
     e.stopPropagation();
     toggleItem(product);
-    toast.success(inWishlist ? 'Removed from wishlist' : 'Added to wishlist ❤️');
+    toast.success(inWishlist ? 'Removed from wishlist' : 'Added to wishlist');
+  };
+
+  const handleBuyNow = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    addToCart(product);
+    navigate('/checkout');
   };
 
   return (
@@ -60,9 +77,9 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
       {/* Image */}
       <Link to={`/product/${product.slug}`} className="relative aspect-square overflow-hidden bg-pearl">
         <img src={product.image} alt={product.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]" />
-        {product.badge && (
-          <span className={`absolute top-3 left-3 px-2.5 py-1 text-[0.65rem] font-semibold rounded-full tracking-wide ${badgeStyles[product.badge]}`}>
-            {badgeLabels[product.badge]}
+        {badge && (
+          <span className={`absolute top-3 left-3 px-2.5 py-1 text-[0.65rem] font-semibold rounded-full tracking-wide ${badgeStyles[badge]}`}>
+            {badgeLabels[badge]}
           </span>
         )}
         <div className={`absolute top-3 right-3 flex flex-col gap-2 transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
@@ -98,12 +115,29 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
       </div>
 
       <div className="px-4 pb-4">
-        <button onClick={handleAddToCart} className="w-full py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer active:scale-[0.97] transition-transform">
-          <ShoppingCart size={14} className="inline mr-1.5 -mt-0.5" /> Add to Cart
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={handleAddToCart} className="w-full py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer active:scale-[0.97] transition-transform">
+            <ShoppingCart size={14} className="inline mr-1.5 -mt-0.5" /> Add to Cart
+          </button>
+          <button onClick={handleBuyNow} className="w-full py-2.5 rounded-xl border border-gold/40 text-gold text-sm font-bold hover:bg-gold/10 transition-colors">
+            Buy Now
+          </button>
+        </div>
       </div>
     </motion.div>
   );
 };
 
 export default ProductCard;
+
+
+
+
+
+
+
+
+
+
+
+
