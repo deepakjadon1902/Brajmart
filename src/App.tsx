@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -51,6 +52,7 @@ const queryClient = new QueryClient();
 
 const App = () => {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const settings = useSettingsStore((s) => s.settings);
   const loadProducts = useProductStore((s) => s.loadFromApi);
   const loadCart = useCartStore((s) => s.loadFromApi);
   const authToken = useAuthStore((s) => s.token);
@@ -106,6 +108,25 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <Helmet>
+          <title>{settings.metaTitle || settings.storeName}</title>
+          <meta name="description" content={settings.metaDescription} />
+          <meta name="author" content={settings.storeName} />
+          <meta property="og:type" content="website" />
+          <meta property="og:site_name" content={settings.storeName} />
+          <meta property="og:title" content={settings.metaTitle || settings.storeName} />
+          <meta property="og:description" content={settings.metaDescription} />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content={settings.metaTitle || settings.storeName} />
+          <meta name="twitter:description" content={settings.metaDescription} />
+          {settings.storeLogo || settings.favicon ? (
+            <>
+              <meta property="og:image" content={settings.storeLogo || settings.favicon} />
+              <meta name="twitter:image" content={settings.storeLogo || settings.favicon} />
+              <link rel="icon" href={settings.favicon || settings.storeLogo} />
+            </>
+          ) : null}
+        </Helmet>
         <Toaster />
         <Sonner />
         <BrowserRouter>

@@ -1,3 +1,3 @@
-# Welcome to your Lovable project
+# BrajMart
 
 TODO: Document your project here

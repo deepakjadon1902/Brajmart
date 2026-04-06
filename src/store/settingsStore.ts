@@ -82,7 +82,7 @@ export const useSettingsStore = create<SettingsStore>()(
         cardEnabled: true,
         storeLogo: '',
         favicon: '',
-        metaTitle: 'BrajMart — Authentic Vrindavan Products',
+        metaTitle: 'BrajMart - Authentic Vrindavan Products',
         metaDescription: 'Shop authentic devotional products, prasadam, books, and more from the sacred land of Vrindavan.',
       },
       updateSettings: (partial) =>
@@ -112,3 +112,4 @@ export const useSettingsStore = create<SettingsStore>()(
     { name: 'brajmart-settings' }
   )
 );
+
