@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "dev": "nodemon --watch src --ext ts --exec \"node -r ts-node/register src/index.ts\""
+    "dev": "nodemon --watch src --ext ts --exec \"node -r ts-node/register src/index.ts\"",
+    "seed:admin": "node -r ts-node/register scripts/seedAdmin.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
