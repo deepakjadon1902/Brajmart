@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { memory } from '../lib/memoryStore';
 import { auth, adminOnly } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 
@@ -34,6 +33,7 @@ const mapSettingsRow = (row: any) => ({
   socialLinks: parseJson(row.social_links, { instagram: '', facebook: '', youtube: '', whatsapp: '' }),
   announcementBar: parseJson(row.announcement_bar, { enabled: true, messages: [] }),
   notifications: parseJson(row.notifications, { orders: true, users: true, payments: true, stock: false }),
+  heroBadges: parseJson(row.hero_badges, ['🏛️ Temple Authenticated', '🌿 100% Organic', '🚚 Pan-India Delivery', '📦 COD Available']),
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
 });
@@ -73,6 +73,7 @@ const buildUpdate = (data: any) => {
   if (data.socialLinks !== undefined) set('social_links', JSON.stringify(data.socialLinks || {}));
   if (data.announcementBar !== undefined) set('announcement_bar', JSON.stringify(data.announcementBar || {}));
   if (data.notifications !== undefined) set('notifications', JSON.stringify(data.notifications || {}));
+  if (data.heroBadges !== undefined) set('hero_badges', JSON.stringify(data.heroBadges || []));
 
   if (!fields.length) return null;
   fields.push('updated_at = NOW()');
@@ -81,7 +82,7 @@ const buildUpdate = (data: any) => {
 
 router.get('/', async (_req, res) => {
   try {
-    if (!isDbConnected()) return res.json(memory.getSettings());
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     let rows = await dbQuery<any>('SELECT * FROM settings LIMIT 1');
     if (!rows[0]) {
       await dbExecute('INSERT INTO settings () VALUES ()');
@@ -95,10 +96,7 @@ router.get('/', async (_req, res) => {
 
 router.put('/', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const updated = memory.updateSettings(req.body);
-      return res.json(updated);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     let rows = await dbQuery<any>('SELECT * FROM settings LIMIT 1');
     if (!rows[0]) {
       await dbExecute('INSERT INTO settings () VALUES ()');

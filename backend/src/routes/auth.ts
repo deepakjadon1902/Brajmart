@@ -2,7 +2,6 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { auth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { memory } from '../lib/memoryStore';
 import bcrypt from 'bcryptjs';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 
@@ -33,24 +32,7 @@ router.post('/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password) return res.status(400).json({ message: 'Missing fields' });
-    if (!isDbConnected()) {
-      const exists = memory.findUserByEmail(email);
-      if (exists) return res.status(400).json({ message: 'Email already registered' });
-      const hash = await bcrypt.hash(password, 12);
-      const user = memory.createUser({
-        name,
-        email,
-        passwordHash: hash,
-        role: 'user',
-        isVerified: true,
-        verificationToken: null,
-        verificationTokenExpires: null,
-      });
-      return res.status(201).json({
-        token: signToken({ id: user._id, email, role: user.role }),
-        user: { id: user._id, name, email, role: user.role },
-      });
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const existing = await dbQuery<any>('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
     if (existing.length) return res.status(400).json({ message: 'Email already registered' });
@@ -74,13 +56,7 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!isDbConnected()) {
-      const user = memory.findUserByEmail(email);
-      if (!user || !user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
-        return res.status(401).json({ message: 'Invalid email or password' });
-      }
-      return res.json({ token: signToken({ id: user._id, email, role: user.role }), user: { id: user._id, name: user.name, email, role: user.role } });
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const rows = await dbQuery<any>('SELECT * FROM users WHERE email = ? LIMIT 1', [email]);
     const row = rows[0];
@@ -127,22 +103,7 @@ router.post('/google', async (req, res) => {
   try {
     const { email, name, googleId, avatar } = req.body;
     if (!email || !name || !googleId) return res.status(400).json({ message: 'Missing fields' });
-    if (!isDbConnected()) {
-      let user = memory.findUserByEmail(email);
-      if (!user) {
-        user = memory.createUser({
-          name,
-          email,
-          passwordHash: await bcrypt.hash(googleId + (process.env.JWT_SECRET || 'secret'), 12),
-          googleId,
-          avatar,
-          isVerified: true,
-        } as any);
-      } else if (!user.isVerified) {
-        memory.updateUser(user._id, { isVerified: true, verificationToken: null, verificationTokenExpires: null });
-      }
-      return res.json({ token: signToken({ id: user._id, email, role: user.role }), user: { id: user._id, name: user.name, email, role: user.role } });
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const rows = await dbQuery<any>('SELECT * FROM users WHERE email = ? LIMIT 1', [email]);
     let row = rows[0];
@@ -167,15 +128,7 @@ router.get('/verify', async (req, res) => {
   try {
     const token = String(req.query.token || '');
     if (!token) return res.status(400).json({ message: 'Verification token missing' });
-    if (!isDbConnected()) {
-      const user = memory.findUserByVerificationToken(token);
-      if (!user || !user.verificationTokenExpires) return res.status(400).json({ message: 'Invalid or expired token' });
-      if (new Date(user.verificationTokenExpires).getTime() < Date.now()) {
-        return res.status(400).json({ message: 'Invalid or expired token' });
-      }
-      memory.updateUser(user._id, { isVerified: true, verificationToken: null, verificationTokenExpires: null });
-      return res.json({ message: 'Email verified successfully' });
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const rows = await dbQuery<any>(
       'SELECT id FROM users WHERE verification_token = ? AND verification_token_expires > NOW() LIMIT 1',
@@ -193,10 +146,7 @@ router.get('/verify', async (req, res) => {
 
 router.get('/me', auth, async (req: AuthRequest, res) => {
   try {
-    if (!isDbConnected()) {
-      const user = memory.listUsers().find((u) => u._id === req.user?.id);
-      return res.json(user || null);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.user?.id]);
     const row = rows[0];
     if (!row) return res.json(null);

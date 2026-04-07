@@ -20,7 +20,6 @@ interface StoreSettings {
   freeShippingThreshold: number;
   shippingFee: number;
   notifications: { orders: boolean; users: boolean; payments: boolean; stock: boolean };
-  // New fields
   storeEmail: string;
   storePhone: string;
   storeAddress: string;
@@ -41,6 +40,7 @@ interface StoreSettings {
   upiPayeeName: string;
   metaTitle: string;
   metaDescription: string;
+  heroBadges: string[];
 }
 
 interface SettingsStore {
@@ -55,39 +55,33 @@ export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
       settings: {
-        storeName: 'BrajMart',
-        tagline: 'From Braj, With Love 🙏',
+        storeName: '',
+        tagline: '',
         currency: 'INR',
-        freeShippingThreshold: 499,
-        shippingFee: 49,
+        freeShippingThreshold: 0,
+        shippingFee: 0,
         notifications: { orders: true, users: true, payments: true, stock: false },
-        storeEmail: 'support@brajmart.com',
-        storePhone: '+91 9876543210',
-        storeAddress: 'Vrindavan, Mathura, Uttar Pradesh 281121, India',
+        storeEmail: '',
+        storePhone: '',
+        storeAddress: '',
         socialLinks: { instagram: '', facebook: '', youtube: '', whatsapp: '' },
-        announcementBar: {
-          enabled: true,
-          messages: [
-            '🎉 Grand Opening Sale — Up to 60% Off!',
-            '🚚 Free Shipping on orders above ₹499',
-            '🙏 Authentic Products Direct from Vrindavan Temples',
-          ],
-        },
+        announcementBar: { enabled: false, messages: [] },
         maintenanceMode: false,
         taxRate: 0,
         minOrderAmount: 0,
-        maxOrderQuantity: 10,
-        deliveryEtaMinDays: 3,
-        deliveryEtaMaxDays: 7,
+        maxOrderQuantity: 0,
+        deliveryEtaMinDays: 0,
+        deliveryEtaMaxDays: 0,
         codEnabled: true,
         upiEnabled: true,
         cardEnabled: true,
         storeLogo: '',
         favicon: '',
         upiId: '',
-        upiPayeeName: 'BrajMart',
-        metaTitle: 'BrajMart - Authentic Vrindavan Products',
-        metaDescription: 'Shop authentic devotional products, prasadam, books, and more from the sacred land of Vrindavan.',
+        upiPayeeName: '',
+        metaTitle: '',
+        metaDescription: '',
+        heroBadges: ['??? Temple Authenticated', '?? 100% Organic', '?? Pan-India Delivery', '?? COD Available'],
       },
       updateSettings: (partial) =>
         set((s) => ({ settings: { ...s.settings, ...partial } })),
@@ -116,4 +110,3 @@ export const useSettingsStore = create<SettingsStore>()(
     { name: 'brajmart-settings' }
   )
 );
-

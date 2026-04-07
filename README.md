@@ -94,4 +94,4 @@ npm run dev
 
 - Payments (PayU) will only work if PayU credentials are correct.
 - Email notifications will only work if SMTP credentials are correct.
-- If DB is not connected, the backend falls back to in-memory mode (not for production).
+- DB is required. Backend will not run without a valid database connection.

@@ -9,7 +9,9 @@ const stats = [
   { label: 'Products', value: '100+' },
 ];
 
-const Testimonials = () => (
+const Testimonials = () => {
+  if (!testimonials || testimonials.length === 0) return null;
+  return (
   <section className="py-14 md:py-20 bg-card">
     <div className="container mx-auto px-4">
       <ScrollReveal>
@@ -64,6 +66,7 @@ const Testimonials = () => (
       </div>
     </div>
   </section>
-);
+  );
+};
 
 export default Testimonials;

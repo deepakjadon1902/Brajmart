@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { memory } from '../lib/memoryStore';
 import { sendPaymentReceipt, sendPaymentFailed, sendAdminPaymentNotice } from '../lib/email';
 import { getEtaConfig, getEtaText } from '../lib/eta';
 
@@ -21,38 +20,7 @@ router.post('/webhook', async (req, res) => {
     const { min, max } = await getEtaConfig();
     const etaText = getEtaText(min, max);
 
-    if (!isDbConnected()) {
-      const payment = memory.listPayments().find((p) => p.transactionId === token);
-      if (payment) {
-        payment.status = normalized;
-        if (paymentId) payment.transactionId = paymentId;
-        memory.upsertPaymentStatus(token, {
-          status: normalized as any,
-          orderId: typeof payment.orderId === 'number' ? payment.orderId : undefined,
-          amount: payment.amount,
-          method: payment.method,
-          paymentId: payment.transactionId,
-        });
-        if (payment.customerEmail) {
-          if (normalized === 'paid') {
-            sendPaymentReceipt(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText }).catch(() => {});
-          } else if (normalized === 'failed') {
-            sendPaymentFailed(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText }).catch(() => {});
-          }
-        }
-        if (normalized === 'paid' || normalized === 'failed') {
-          sendAdminPaymentNotice({
-            status: normalized as any,
-            orderId: String(payment.orderId),
-            amount: payment.amount,
-            paymentId: payment.transactionId,
-            method: payment.method,
-            customerEmail: payment.customerEmail,
-          }).catch(() => {});
-        }
-      }
-      return res.json({ ok: true });
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const rows = await dbQuery<any>('SELECT * FROM payments WHERE transaction_id = ? LIMIT 1', [token]);
     const payment = rows[0];

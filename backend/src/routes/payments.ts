@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { memory } from '../lib/memoryStore';
 import { auth, adminOnly } from '../middleware/auth';
 import { sendPaymentReceipt, sendPaymentFailed, sendAdminPaymentNotice } from '../lib/email';
 import { getEtaConfig, getEtaText } from '../lib/eta';
@@ -34,7 +33,7 @@ const mapPaymentStatusRow = (row: any) => ({
 
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
-    if (!isDbConnected()) return res.json(memory.listPayments());
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM payments ORDER BY created_at DESC');
     res.json(rows.map(mapPaymentRow));
   } catch (err: any) {
@@ -45,11 +44,7 @@ router.get('/', auth, adminOnly, async (_req, res) => {
 router.get('/status/:token', async (req, res) => {
   try {
     const token = req.params.token;
-    if (!isDbConnected()) {
-      const status = memory.getPaymentStatus(token);
-      if (!status) return res.status(404).json({ message: 'Payment not found' });
-      return res.json(status);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
     if (!rows[0]) return res.status(404).json({ message: 'Payment not found' });
     res.json(mapPaymentStatusRow(rows[0]));
@@ -62,34 +57,7 @@ router.post('/', auth, async (req, res) => {
   try {
     const { min, max } = await getEtaConfig();
     const etaText = getEtaText(min, max);
-    if (!isDbConnected()) {
-      const created = memory.createPayment(req.body);
-      if (created.customerEmail) {
-        if (created.status === 'paid') {
-          sendPaymentReceipt(created.customerEmail, { orderId: String(created.orderId), amount: created.amount, paymentId: created.transactionId, eta: etaText }).catch(() => {});
-        } else if (created.status === 'failed') {
-          sendPaymentFailed(created.customerEmail, { orderId: String(created.orderId), amount: created.amount, paymentId: created.transactionId, eta: etaText }).catch(() => {});
-        }
-      }
-      memory.upsertPaymentStatus(created.transactionId, {
-        status: created.status as any,
-        orderId: typeof created.orderId === 'number' ? created.orderId : undefined,
-        amount: created.amount,
-        method: created.method,
-        paymentId: created.transactionId,
-      });
-      if (created.status === 'paid' || created.status === 'failed') {
-        sendAdminPaymentNotice({
-          status: created.status,
-          orderId: String(created.orderId),
-          amount: created.amount,
-          paymentId: created.transactionId,
-          method: created.method,
-          customerEmail: created.customerEmail,
-        }).catch(() => {});
-      }
-      return res.status(201).json(created);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const data = req.body || {};
     const result: any = await dbExecute(
@@ -132,28 +100,7 @@ router.post('/', auth, async (req, res) => {
 
 router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const updated = memory.updatePayment(req.params.id, req.body.status);
-      if (!updated) return res.status(404).json({ message: 'Payment not found' });
-      memory.upsertPaymentStatus(updated.transactionId, {
-        status: updated.status as any,
-        orderId: typeof updated.orderId === 'number' ? updated.orderId : undefined,
-        amount: updated.amount,
-        method: updated.method,
-        paymentId: updated.transactionId,
-      });
-      if (updated.status === 'paid' || updated.status === 'failed') {
-        sendAdminPaymentNotice({
-          status: updated.status,
-          orderId: String(updated.orderId),
-          amount: updated.amount,
-          paymentId: updated.transactionId,
-          method: updated.method,
-          customerEmail: updated.customerEmail,
-        }).catch(() => {});
-      }
-      return res.json(updated);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     await dbExecute('UPDATE payments SET status = ?, updated_at = NOW() WHERE id = ?', [req.body.status, req.params.id]);
     const rows = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [req.params.id]);

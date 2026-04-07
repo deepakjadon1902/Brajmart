@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { memory } from '../lib/memoryStore';
 import { auth, adminOnly } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 
@@ -55,7 +54,7 @@ const buildUpdate = (data: any) => {
 
 router.get('/', async (_req, res) => {
   try {
-    if (!isDbConnected()) return res.json(memory.listProducts());
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM products ORDER BY created_at DESC');
     res.json(rows.map(mapProductRow));
   } catch (err: any) {
@@ -65,11 +64,7 @@ router.get('/', async (_req, res) => {
 
 router.get('/:slug', async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const found = memory.listProducts().find((p) => p.slug === req.params.slug);
-      if (!found) return res.status(404).json({ message: 'Product not found' });
-      return res.json(found);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM products WHERE slug = ? LIMIT 1', [req.params.slug]);
     const row = rows[0];
     if (!row) return res.status(404).json({ message: 'Product not found' });
@@ -81,10 +76,7 @@ router.get('/:slug', async (req, res) => {
 
 router.post('/', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const created = memory.createProduct(req.body);
-      return res.status(201).json(created);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const data = req.body || {};
     const result: any = await dbExecute(
@@ -115,11 +107,7 @@ router.post('/', auth, adminOnly, async (req, res) => {
 
 router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const updated = memory.updateProduct(req.params.id, req.body);
-      if (!updated) return res.status(404).json({ message: 'Product not found' });
-      return res.json(updated);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const update = buildUpdate(req.body || {});
     if (!update) return res.status(400).json({ message: 'No fields to update' });
@@ -135,10 +123,7 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
 
 router.delete('/:id', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      memory.deleteProduct(req.params.id);
-      return res.json({ message: 'Product deleted' });
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await dbExecute('DELETE FROM products WHERE id = ?', [req.params.id]);
     res.json({ message: 'Product deleted' });
   } catch (err: any) {

@@ -1,16 +1,7 @@
 import { dbQuery, isDbConnected } from './db';
-import { memory } from './memoryStore';
 
 export const getEtaConfig = async () => {
-  if (!isDbConnected()) {
-    const settings = memory.getSettings();
-    let min = Number(settings.deliveryEtaMinDays ?? 3);
-    let max = Number(settings.deliveryEtaMaxDays ?? 7);
-    if (Number.isNaN(min)) min = 3;
-    if (Number.isNaN(max)) max = 7;
-    if (min > max) [min, max] = [max, min];
-    return { min, max };
-  }
+  if (!isDbConnected()) throw new Error('Database unavailable');
   const rows = await dbQuery<any>('SELECT delivery_eta_min_days, delivery_eta_max_days FROM settings LIMIT 1');
   const row = rows[0];
   let min = Number(row?.delivery_eta_min_days ?? 3);

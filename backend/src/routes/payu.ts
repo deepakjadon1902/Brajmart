@@ -2,10 +2,29 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { auth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { memory } from '../lib/memoryStore';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { sendOrderConfirmation, sendPaymentFailed, sendPaymentReceipt, sendAdminPaymentNotice } from '../lib/email';
 import { parseJson } from '../lib/dbHelpers';
+
+type PayuDraft = {
+  txnid: string;
+  createdAt: string;
+  amount: number;
+  method: 'upi' | 'card';
+  customer: { name: string; email: string; phone?: string };
+  order: any;
+};
+
+const payuDrafts = new Map<string, PayuDraft>();
+const createDraft = (draft: PayuDraft) => {
+  payuDrafts.set(draft.txnid, draft);
+  return draft;
+};
+const removeDraft = (txnid: string) => {
+  const draft = payuDrafts.get(txnid);
+  payuDrafts.delete(txnid);
+  return draft || null;
+};
 
 const router = Router();
 
@@ -115,6 +134,7 @@ const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
 
 router.post('/create-order', auth, async (req: AuthRequest, res) => {
   try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const { key, salt, actionUrl } = getPayuConfig();
     if (!key || !salt) return res.status(500).json({ message: 'PayU credentials are not configured' });
 
@@ -126,7 +146,7 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
     const productinfo = `BrajMart Order (${Array.isArray(order.items) ? order.items.length : 0} items)`;
     const formattedAmount = Number(amount).toFixed(2);
 
-    memory.createPayuDraft({
+    createDraft({
       txnid,
       createdAt: new Date().toISOString(),
       amount: Number(amount),
@@ -134,18 +154,10 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
       customer: { name: customer.name, email: customer.email, phone: customer.phone },
       order,
     });
-    memory.upsertPaymentStatus(txnid, {
-      status: 'pending',
-      amount: Number(amount),
-      method: method === 'card' ? 'PayU Card' : 'PayU UPI',
-    });
-
-    if (isDbConnected()) {
-      await dbExecute(
-        'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
-        [txnid, 'pending', null, Number(amount), method === 'card' ? 'PayU Card' : 'PayU UPI', null]
-      );
-    }
+    await dbExecute(
+      'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
+      [txnid, 'pending', null, Number(amount), method === 'card' ? 'PayU Card' : 'PayU UPI', null]
+    );
 
     const surl = `${getBackendUrl()}/api/payu/success`;
     const furl = `${getBackendUrl()}/api/payu/failure`;
@@ -184,6 +196,7 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
 const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success' | 'failure') => {
   const { key, salt } = getPayuConfig();
   if (!key || !salt) return res.status(500).send('PayU not configured');
+  if (!isDbConnected()) return res.status(503).send('Database unavailable');
 
   const status = statusOverride || req.body.status;
   const txnid = req.body.txnid;
@@ -221,7 +234,7 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
     return res.redirect(`${frontendUrl}/payment-status/${txnid}`);
   }
 
-  const draft = memory.removePayuDraft(txnid);
+  const draft = removeDraft(txnid);
   if (!draft) {
     return res.redirect(`${frontendUrl}/payment-status/${txnid}`);
   }
@@ -232,41 +245,6 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
   const methodLabel = draft.method === 'card' ? 'PayU Card' : 'PayU UPI';
 
   if (status === 'success') {
-    if (!isDbConnected()) {
-      const createdOrder = memory.createOrder({ ...draft.order, estimatedDelivery: estimatedDelivery.toISOString() });
-      const createdPayment = memory.createPayment({
-        orderId: createdOrder.orderId,
-        customerName: draft.customer.name,
-        customerEmail: draft.customer.email,
-        method: methodLabel,
-        amount: Number(amount),
-        status: 'paid',
-        transactionId: String(paymentId),
-      });
-      if (createdOrder.customerEmail) {
-        sendOrderConfirmation(createdOrder.customerEmail, { orderId: String(createdOrder.orderId), total: createdOrder.total, itemsCount: createdOrder.items?.length || 0, eta: etaText }).catch(() => {});
-      }
-      if (createdPayment.customerEmail) {
-        sendPaymentReceipt(createdPayment.customerEmail, { orderId: String(createdOrder.orderId), amount: createdPayment.amount, paymentId: createdPayment.transactionId, eta: etaText }).catch(() => {});
-      }
-      sendAdminPaymentNotice({
-        status: 'paid',
-        orderId: String(createdOrder.orderId),
-        amount: createdPayment.amount,
-        paymentId: createdPayment.transactionId,
-        method: createdPayment.method,
-        customerEmail: createdPayment.customerEmail,
-      }).catch(() => {});
-      memory.upsertPaymentStatus(txnid, {
-        status: 'paid',
-        orderId: createdOrder.orderId,
-        amount: createdPayment.amount,
-        method: createdPayment.method,
-        paymentId: createdPayment.transactionId,
-      });
-      return res.redirect(`${frontendUrl}/payment-status/${txnid}`);
-    }
-
     const orderRow = await insertOrder({ ...draft.order, estimatedDelivery }, estimatedDelivery);
     const orderId = orderRow.id;
 
@@ -313,24 +291,14 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
     transactionId: String(paymentId),
   };
 
-  if (!isDbConnected()) {
-    memory.createPayment(failedPayment);
-    memory.upsertPaymentStatus(txnid, {
-      status: 'failed',
-      amount: Number(amount),
-      method: methodLabel,
-      paymentId: String(paymentId),
-    });
-  } else {
-    await dbExecute(
-      'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [null, failedPayment.customerName, failedPayment.customerEmail, failedPayment.method, failedPayment.amount, 'failed', failedPayment.transactionId]
-    );
-    await dbExecute(
-      'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
-      [txnid, 'failed', null, Number(amount), methodLabel, String(paymentId)]
-    );
-  }
+  await dbExecute(
+    'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [null, failedPayment.customerName, failedPayment.customerEmail, failedPayment.method, failedPayment.amount, 'failed', failedPayment.transactionId]
+  );
+  await dbExecute(
+    'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
+    [txnid, 'failed', null, Number(amount), methodLabel, String(paymentId)]
+  );
 
   if (draft.customer.email) {
     sendPaymentFailed(draft.customer.email, { orderId: 'N/A', amount: Number(amount), paymentId: String(paymentId), eta: etaText }).catch(() => {});

@@ -117,6 +117,8 @@ export const updateOrderStatus = (id: string, payload: { status: string; note?: 
   getJson<Record<string, any>>(`/orders/${id}/status`, { method: 'PUT', body: payload });
 export const createOrder = (payload: Record<string, unknown>) =>
   getJson('/orders', { method: 'POST', body: payload });
+export const trackOrder = (orderId: string | number) =>
+  getJson(`/orders/track/${orderId}`);
 
 // Payments
 export const fetchPayments = () => getJson('/payments');
@@ -133,6 +135,16 @@ export const updateUserStatus = (id: string, status: string) =>
   getJson(`/users/${id}/status`, { method: 'PUT', body: { status } });
 export const deleteUser = (id: string) =>
   getJson(`/users/${id}`, { method: 'DELETE' });
+
+export const updateMyProfile = (payload: {
+  fullName: string;
+  email: string;
+  mobile?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+}) => getJson('/users/me', { method: 'PUT', body: payload });
 
 // Cart
 export const fetchCart = () => getJson('/cart');
@@ -158,3 +170,12 @@ export const uploadImage = async (file: File) => {
   }
   return data as { url: string };
 };
+
+// Hero slides
+export const fetchHeroSlides = () => getJson('/hero-slides');
+export const createHeroSlide = (payload: Record<string, unknown>) =>
+  getJson('/hero-slides', { method: 'POST', body: payload });
+export const updateHeroSlide = (id: string, payload: Record<string, unknown>) =>
+  getJson(`/hero-slides/${id}`, { method: 'PUT', body: payload });
+export const deleteHeroSlide = (id: string) =>
+  getJson(`/hero-slides/${id}`, { method: 'DELETE' });

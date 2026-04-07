@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { memory } from '../lib/memoryStore';
 import { sendOrderConfirmation, sendShippingUpdate } from '../lib/email';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { auth, adminOnly, AuthRequest } from '../middleware/auth';
@@ -29,7 +28,7 @@ const mapOrderRow = (row: any) => ({
 
 router.get('/my', auth, async (req: AuthRequest, res) => {
   try {
-    if (!isDbConnected()) return res.json(memory.listOrders().filter((o) => o.userId === req.user?.id));
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC', [req.user?.id]);
     res.json(rows.map(mapOrderRow));
   } catch (err: any) {
@@ -39,7 +38,7 @@ router.get('/my', auth, async (req: AuthRequest, res) => {
 
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
-    if (!isDbConnected()) return res.json(memory.listOrders());
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM orders ORDER BY created_at DESC');
     res.json(rows.map(mapOrderRow));
   } catch (err: any) {
@@ -49,11 +48,7 @@ router.get('/', auth, adminOnly, async (_req, res) => {
 
 router.get('/track/:orderId', async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const found = memory.findOrderByOrderId(parseInt(req.params.orderId, 10));
-      if (!found) return res.status(404).json({ message: 'Order not found' });
-      return res.json(found);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const orderId = parseInt(req.params.orderId, 10);
     const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
     if (!rows[0]) return res.status(404).json({ message: 'Order not found' });
@@ -69,14 +64,7 @@ router.post('/', auth, async (req: AuthRequest, res) => {
     const etaText = getEtaText(min, max);
     const estimatedDelivery = getEstimatedDeliveryDate(max);
 
-    if (!isDbConnected()) {
-      const created = memory.createOrder({ ...req.body, userId: req.body.userId || req.user?.id, estimatedDelivery: estimatedDelivery.toISOString() });
-      if (created.customerEmail) {
-        sendOrderConfirmation(created.customerEmail, { orderId: String(created.orderId), total: created.total, itemsCount: created.items?.length || 0, eta: etaText })
-          .catch(() => {});
-      }
-      return res.status(201).json(created);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const data = req.body || {};
     const status = data.status || 'confirmed';
@@ -122,21 +110,7 @@ router.post('/', auth, async (req: AuthRequest, res) => {
 router.put('/:id/status', auth, adminOnly, async (req, res) => {
   try {
     const { status, note } = req.body;
-    if (!isDbConnected()) {
-      const updated = memory.updateOrderStatus(req.params.id, status, note);
-      if (!updated) return res.status(404).json({ message: 'Order not found' });
-      if (updated.customerEmail) {
-        const { min, max } = await getEtaConfig();
-        const etaText = getEtaText(min, max);
-        sendShippingUpdate(updated.customerEmail, {
-          orderId: String(updated.orderId),
-          status,
-          trackingId: updated.trackingId,
-          eta: etaText,
-        }).catch(() => {});
-      }
-      return res.json(updated);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
     const row = rows[0];

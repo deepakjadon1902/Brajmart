@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { auth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { memory } from '../lib/memoryStore';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
 
 const router = Router();
@@ -18,10 +17,7 @@ router.get('/', auth, async (req: AuthRequest, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
-    if (!isDbConnected()) {
-      const cart = memory.getCartByUser(userId);
-      return res.json(cart || { userId, items: [] });
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM carts WHERE user_id = ? LIMIT 1', [userId]);
     const row = rows[0];
     res.json(row ? mapCartRow(row) : { userId, items: [] });
@@ -35,10 +31,7 @@ router.put('/', auth, async (req: AuthRequest, res) => {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     const items = req.body.items || [];
-    if (!isDbConnected()) {
-      const cart = memory.upsertCart(userId, items);
-      return res.json(cart);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     await dbExecute(
       'INSERT INTO carts (user_id, items) VALUES (?, ?) ON DUPLICATE KEY UPDATE items = VALUES(items), updated_at = NOW()',
@@ -55,10 +48,7 @@ router.delete('/', auth, async (req: AuthRequest, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
-    if (!isDbConnected()) {
-      const cart = memory.clearCart(userId);
-      return res.json(cart || { userId, items: [] });
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await dbExecute('UPDATE carts SET items = ?, updated_at = NOW() WHERE user_id = ?', [JSON.stringify([]), userId]);
     const rows = await dbQuery<any>('SELECT * FROM carts WHERE user_id = ? LIMIT 1', [userId]);
     res.json(rows[0] ? mapCartRow(rows[0]) : { userId, items: [] });

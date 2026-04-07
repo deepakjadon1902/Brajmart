@@ -28,6 +28,8 @@ import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import PaymentMethodPage from "./pages/PaymentMethodPage";
 import TermsPage from "./pages/TermsPage";
 import ComparePage from "./pages/ComparePage";
+import ProductsPage from "./pages/ProductsPage";
+import CategoriesPage from "./pages/CategoriesPage";
 import NotFound from "./pages/NotFound";
 import BrajDarshanPage from "./pages/BrajDarshanPage";
 import UserOrderTracking from "./pages/UserOrderTracking";
@@ -45,6 +47,7 @@ import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminShipments from "./pages/admin/AdminShipments";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminSettings from "./pages/admin/AdminSettings";
+import AdminHero from "./pages/admin/AdminHero";
 import { fetchPublicSettings } from "./lib/api";
 import { useSettingsStore } from "./store/settingsStore";
 import { useProductStore } from "./store/productStore";
@@ -66,7 +69,7 @@ const App = () => {
       try {
         const data = await fetchPublicSettings();
         if (!active || !data) return;
-        updateSettings({
+          updateSettings({
           storeName: data.storeName,
           tagline: data.tagline,
           currency: data.currency,
@@ -93,6 +96,7 @@ const App = () => {
           socialLinks: data.socialLinks,
           announcementBar: data.announcementBar,
           notifications: data.notifications,
+          heroBadges: data.heroBadges,
         });
       } catch {
         // Keep locally persisted defaults
@@ -150,7 +154,9 @@ const App = () => {
           <Route path="/track-orders" element={<UserOrderTracking />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/category/:slug" element={<CategoryPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/product/:slug" element={<ProductDetailPage />} />
+          <Route path="/products" element={<ProductsPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/contact" element={<ContactPage />} />
@@ -179,6 +185,7 @@ const App = () => {
             <Route path="shipments" element={<AdminShipments />} />
             <Route path="payments" element={<AdminPayments />} />
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="hero" element={<AdminHero />} />
           </Route>
 
           <Route path="*" element={<NotFound />} />

@@ -1,4 +1,5 @@
 import { ScrollReveal } from './ScrollReveal';
+import { Link } from 'react-router-dom';
 
 interface SectionHeaderProps {
   tag?: string;
@@ -13,7 +14,7 @@ const SectionHeader = ({ tag, title, subtitle, viewAllLink, light = false }: Sec
     {/* Lotus ornament */}
     <div className="flex items-center justify-center gap-3 mb-4">
       <span className="h-px w-12 bg-gold/40" />
-      <span className="text-gold text-2xl">✾</span>
+      <span className="text-gold text-2xl">?</span>
       <span className="h-px w-12 bg-gold/40" />
     </div>
 
@@ -34,9 +35,9 @@ const SectionHeader = ({ tag, title, subtitle, viewAllLink, light = false }: Sec
     )}
 
     {viewAllLink && (
-      <a href={viewAllLink} className="inline-flex items-center mt-4 text-saffron font-semibold text-sm hover:underline">
-        View All →
-      </a>
+      <Link to={viewAllLink} className="inline-flex items-center mt-4 text-saffron font-semibold text-sm hover:underline">
+        View All ?
+      </Link>
     )}
   </ScrollReveal>
 );

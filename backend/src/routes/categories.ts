@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { memory } from '../lib/memoryStore';
 import { auth, adminOnly } from '../middleware/auth';
 import { toIsoString } from '../lib/dbHelpers';
 
@@ -37,7 +36,7 @@ const buildUpdate = (data: any) => {
 
 router.get('/', async (_req, res) => {
   try {
-    if (!isDbConnected()) return res.json(memory.listCategories());
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM categories ORDER BY created_at DESC');
     res.json(rows.map(mapCategoryRow));
   } catch (err: any) {
@@ -47,10 +46,7 @@ router.get('/', async (_req, res) => {
 
 router.post('/', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const created = memory.createCategory(req.body);
-      return res.status(201).json(created);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const data = req.body || {};
     const result: any = await dbExecute(
       'INSERT INTO categories (name, icon, color, product_count) VALUES (?, ?, ?, ?)',
@@ -65,11 +61,7 @@ router.post('/', auth, adminOnly, async (req, res) => {
 
 router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const updated = memory.updateCategory(req.params.id, req.body);
-      if (!updated) return res.status(404).json({ message: 'Category not found' });
-      return res.json(updated);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const update = buildUpdate(req.body || {});
     if (!update) return res.status(400).json({ message: 'No fields to update' });
@@ -85,10 +77,7 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
 
 router.delete('/:id', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      memory.deleteCategory(req.params.id);
-      return res.json({ message: 'Category deleted' });
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await dbExecute('DELETE FROM categories WHERE id = ?', [req.params.id]);
     res.json({ message: 'Category deleted' });
   } catch (err: any) {

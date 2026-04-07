@@ -1,6 +1,6 @@
 ﻿import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { googleLogin, loginUser, registerUser, setAuthToken } from '@/lib/api';
+import { googleLogin, loginUser, registerUser, setAuthToken, updateMyProfile } from '@/lib/api';
 
 export interface User {
   id: string;
@@ -23,7 +23,7 @@ interface AuthStore {
   register: (data: { fullName: string; email: string; password: string; mobile?: string }) => Promise<{ ok: boolean; message?: string }>;
   loginWithGoogle: () => Promise<{ ok: boolean; message?: string }>;
   logout: () => void;
-  updateProfile: (data: Partial<User>) => void;
+  updateProfile: (data: Partial<User>) => Promise<{ ok: boolean; message?: string }>;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -95,9 +95,34 @@ export const useAuthStore = create<AuthStore>()(
         setAuthToken('');
         set({ user: null, isAuthenticated: false, token: null });
       },
-      updateProfile: (data) => set((state) => ({
-        user: state.user ? { ...state.user, ...data } : null,
-      })),
+      updateProfile: async (data) => {
+        try {
+          const res: any = await updateMyProfile({
+            fullName: data.fullName || '',
+            email: data.email || '',
+            mobile: data.mobile || '',
+            address: data.address || '',
+            city: data.city || '',
+            state: data.state || '',
+            pincode: data.pincode || '',
+          });
+          const user: User = {
+            id: res._id || res.id,
+            fullName: res.name || data.fullName || '',
+            email: res.email || data.email || '',
+            mobile: res.phone || data.mobile || '',
+            address: data.address || '',
+            city: data.city || '',
+            state: data.state || '',
+            pincode: data.pincode || '',
+            authProvider: 'email',
+          };
+          set({ user });
+          return { ok: true };
+        } catch (err: any) {
+          return { ok: false, message: err?.message || 'Profile update failed' };
+        }
+      },
     }),
     {
       name: 'brajmart-auth',

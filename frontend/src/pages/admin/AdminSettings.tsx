@@ -3,7 +3,7 @@ import * as React from "react";
 import { useAdminStore } from '@/store/adminStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { Save, Store, Bell, Shield, Truck, CheckCircle, Globe, Megaphone, CreditCard, Image, Search, Settings2, Plus, X, Upload } from 'lucide-react';
-import { fetchPublicSettings, updatePublicSettings } from '@/lib/api';
+import { fetchPublicSettings, updatePublicSettings, uploadImage } from '@/lib/api';
 import { toast } from 'sonner';
 
 const AdminSettings = () => {
@@ -39,6 +39,8 @@ const AdminSettings = () => {
   const [announcementEnabled, setAnnouncementEnabled] = useState(settings.announcementBar.enabled);
   const [announcementMessages, setAnnouncementMsgs] = useState<string[]>(settings.announcementBar.messages);
   const [newAnnouncement, setNewAnnouncement] = useState('');
+  const [heroBadges, setHeroBadges] = useState<string[]>(settings.heroBadges || []);
+  const [newHeroBadge, setNewHeroBadge] = useState('');
 
   const [socialLinks, setSocialLinks] = useState(settings.socialLinks);
 
@@ -75,6 +77,7 @@ const AdminSettings = () => {
         setAnnouncementEnabled(data.announcementBar?.enabled ?? announcementEnabled);
         setAnnouncementMsgs(data.announcementBar?.messages ?? announcementMessages);
         setSocialLinks(data.socialLinks || socialLinks);
+        setHeroBadges(data.heroBadges || heroBadges);
       } catch (err: any) {
         toast.error(err?.message || 'Failed to load settings');
       } finally {
@@ -97,6 +100,7 @@ const AdminSettings = () => {
         announcementBar: { enabled: announcementEnabled, messages: announcementMessages },
         socialLinks,
         notifications: settings.notifications,
+        heroBadges,
       };
       const updated = await updatePublicSettings(payload);
       updateSettings(updated);
@@ -112,12 +116,19 @@ const AdminSettings = () => {
     }
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setStoreLogo(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    setLoading(true);
+    try {
+      const uploaded = await uploadImage(file);
+      setStoreLogo(uploaded.url);
+      toast.success('Logo uploaded');
+    } catch (err: any) {
+      toast.error(err?.message || 'Logo upload failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const addAnnouncement = () => {
@@ -131,6 +142,17 @@ const AdminSettings = () => {
     setAnnouncementMsgs(announcementMessages.filter((_, idx) => idx !== i));
   };
 
+  const addHeroBadge = () => {
+    if (newHeroBadge.trim()) {
+      setHeroBadges([...heroBadges, newHeroBadge.trim()]);
+      setNewHeroBadge('');
+    }
+  };
+
+  const removeHeroBadge = (i: number) => {
+    setHeroBadges(heroBadges.filter((_, idx) => idx !== i));
+  };
+
   const tabs = [
     { id: 'store', label: 'Store', icon: Store },
     { id: 'shipping', label: 'Shipping & Orders', icon: Truck },
@@ -139,6 +161,7 @@ const AdminSettings = () => {
     { id: 'announcements', label: 'Announcements', icon: Megaphone },
     { id: 'social', label: 'Social Links', icon: Globe },
     { id: 'seo', label: 'SEO & Branding', icon: Search },
+    { id: 'hero', label: 'Hero Badges', icon: Image },
     { id: 'advanced', label: 'Advanced', icon: Settings2 },
     { id: 'admin', label: 'Admin Account', icon: Shield },
   ];
@@ -300,6 +323,33 @@ const AdminSettings = () => {
         </div>
       )}
 
+      {/* Hero Badges */}
+      {activeTab === 'hero' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Image size={18} /> Hero Badges</h2>
+          <p className="text-xs text-slate-400">These appear below the hero section (e.g., Temple Authenticated, 100% Organic).</p>
+          <div className="flex gap-2">
+            <input
+              value={newHeroBadge}
+              onChange={(e) => setNewHeroBadge(e.target.value)}
+              placeholder="🏛️ Temple Authenticated"
+              className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+            />
+            <button onClick={addHeroBadge} className="px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold">
+              Add
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {heroBadges.map((b, i) => (
+              <div key={`${b}-${i}`} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-sm text-slate-200">
+                <span>{b}</span>
+                <button onClick={() => removeHeroBadge(i)} className="text-red-300 hover:text-red-200"><X size={14} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Advanced */}
       {activeTab === 'advanced' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
@@ -338,9 +388,6 @@ const InputField = ({ label, value, onChange, type = 'text', placeholder }: { la
 );
 
 export default AdminSettings;
-
-
-
 
 
 

@@ -3,12 +3,12 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { Plus, X, ArrowRight } from 'lucide-react';
-import { getAllProducts } from '@/data/productCatalog';
+import { useProductStore } from '@/store/productStore';
 import { formatPrice } from '@/utils/formatPrice';
 import { Link } from 'react-router-dom';
 
 const ComparePage = () => {
-  const allProducts = getAllProducts();
+  const allProducts = useProductStore((s) => s.products);
   const [selected, setSelected] = useState<string[]>([]);
   const [showPicker, setShowPicker] = useState(false);
 

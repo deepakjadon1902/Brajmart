@@ -13,6 +13,7 @@ import uploadRoutes from './routes/upload';
 import payuRoutes from './routes/payu';
 import upiRoutes from './routes/upi';
 import cartRoutes from './routes/cart';
+import heroSlidesRoutes from './routes/heroSlides';
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/payu', payuRoutes);
 app.use('/api/upi', upiRoutes);
 app.use('/api/cart', cartRoutes);
+app.use('/api/hero-slides', heroSlidesRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

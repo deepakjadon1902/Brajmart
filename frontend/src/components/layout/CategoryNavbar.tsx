@@ -6,8 +6,12 @@ const CategoryNavbar = () => {
   const categories = useProductStore((s) => s.categories);
   return (
   <ScrollReveal>
-    <section className="py-6 bg-card border-b border-border">
+    <section className="py-3 bg-card border-b border-border">
       <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-semibold text-maroon">Categories</span>
+          <Link to="/categories" className="text-xs font-semibold text-saffron hover:underline">View All →</Link>
+        </div>
         <div className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide pb-2 justify-start md:justify-center">
           {categories.map((cat) => (
             <Link
@@ -22,7 +26,7 @@ const CategoryNavbar = () => {
                   cat.icon
                 )}
               </div>
-              <span className="text-[0.7rem] font-semibold font-cinzel text-foreground group-hover:text-saffron transition-colors text-center whitespace-nowrap">
+              <span className="text-xs font-semibold font-cinzel text-foreground group-hover:text-saffron transition-colors text-center whitespace-nowrap">
                 {cat.name}
               </span>
             </Link>

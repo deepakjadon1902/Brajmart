@@ -28,10 +28,14 @@ const ProfilePage = () => {
     return null;
   }
 
-  const handleSave = () => {
-    updateProfile(form);
-    setEditing(false);
-    toast.success('Profile updated!');
+  const handleSave = async () => {
+    const result = await updateProfile(form);
+    if (result.ok) {
+      setEditing(false);
+      toast.success('Profile updated!');
+    } else {
+      toast.error(result.message || 'Profile update failed');
+    }
   };
 
   return (

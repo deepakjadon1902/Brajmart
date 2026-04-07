@@ -15,6 +15,7 @@ const navItems = [
   { label: 'Categories', icon: Tags, path: '/admin/categories' },
   { label: 'Shipments', icon: Truck, path: '/admin/shipments' },
   { label: 'Payments', icon: CreditCard, path: '/admin/payments' },
+  { label: 'Hero Slides', icon: LayoutDashboard, path: '/admin/hero' },
   { label: 'Settings', icon: Settings, path: '/admin/settings' },
 ];
 

@@ -15,9 +15,8 @@ const getConfig = () => {
 export const connectDb = async () => {
   const { host, user, database, password, port } = getConfig();
   if (!host || !user || !database) {
-    console.warn('DB_HOST/DB_USER/DB_NAME is not set. Running in in-memory mode.');
     connected = false;
-    return;
+    throw new Error('DB_HOST/DB_USER/DB_NAME is not set.');
   }
   try {
     pool = mysql.createPool({
@@ -36,7 +35,7 @@ export const connectDb = async () => {
     console.log('MySQL connected');
   } catch (err) {
     connected = false;
-    console.warn('MySQL connection failed. Running in in-memory mode.', err);
+    throw err;
   }
 };
 

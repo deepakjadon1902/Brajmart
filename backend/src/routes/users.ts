@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { memory } from '../lib/memoryStore';
-import { auth, adminOnly } from '../middleware/auth';
+import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 
 const router = Router();
@@ -25,7 +24,7 @@ const mapUserRow = (row: any) => ({
 
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
-    if (!isDbConnected()) return res.json(memory.listUsers());
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM users ORDER BY created_at DESC');
     res.json(rows.map(mapUserRow));
   } catch (err: any) {
@@ -33,13 +32,50 @@ router.get('/', auth, adminOnly, async (_req, res) => {
   }
 });
 
+router.put('/me', auth, async (req: AuthRequest, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const {
+      fullName,
+      email,
+      mobile,
+      address,
+      city,
+      state,
+      pincode,
+    } = req.body || {};
+
+    const addresses = [
+      {
+        fullName: fullName || '',
+        mobile: mobile || '',
+        street: address || '',
+        city: city || '',
+        state: state || '',
+        pincode: pincode || '',
+        isDefault: true,
+      },
+    ];
+
+    await dbExecute(
+      'UPDATE users SET name = ?, email = ?, phone = ?, addresses = ?, updated_at = NOW() WHERE id = ?',
+      [fullName || '', email || '', mobile || '', JSON.stringify(addresses), userId]
+    );
+
+    const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [userId]);
+    if (!rows[0]) return res.status(404).json({ message: 'User not found' });
+    res.json(mapUserRow(rows[0]));
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.get('/:id', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const user = memory.listUsers().find((u) => u._id === req.params.id);
-      if (!user) return res.status(404).json({ message: 'User not found' });
-      return res.json(user);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ message: 'User not found' });
     res.json(mapUserRow(rows[0]));
@@ -50,12 +86,7 @@ router.get('/:id', auth, adminOnly, async (req, res) => {
 
 router.put('/:id/role', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const user = memory.listUsers().find((u) => u._id === req.params.id);
-      if (!user) return res.status(404).json({ message: 'User not found' });
-      user.role = req.body.role;
-      return res.json(user);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await dbExecute('UPDATE users SET role = ?, updated_at = NOW() WHERE id = ?', [req.body.role, req.params.id]);
     const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
     res.json(rows[0] ? mapUserRow(rows[0]) : null);
@@ -66,11 +97,7 @@ router.put('/:id/role', auth, adminOnly, async (req, res) => {
 
 router.put('/:id/status', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      const updated = memory.updateUserStatus(req.params.id, req.body.status);
-      if (!updated) return res.status(404).json({ message: 'User not found' });
-      return res.json(updated);
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await dbExecute('UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?', [req.body.status, req.params.id]);
     const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
     res.json(rows[0] ? mapUserRow(rows[0]) : null);
@@ -81,9 +108,7 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
 
 router.delete('/:id', auth, adminOnly, async (req, res) => {
   try {
-    if (!isDbConnected()) {
-      return res.json({ message: 'User deleted' });
-    }
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await dbExecute('DELETE FROM users WHERE id = ?', [req.params.id]);
     res.json({ message: 'User deleted' });
   } catch (err: any) {
