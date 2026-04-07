@@ -46,8 +46,8 @@ const AdminOrders = () => {
   const detail = selectedOrder ? orders.find((o) => o.id === selectedOrder) : null;
   const handleStatusUpdate = async (orderId: string, status: OrderStatus) => {
     try {
-      const updated = await updateOrderStatusApi(orderId, { status, note: `Status updated to ${status}` });
-      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...updated } : o)));
+const updated: any = await updateOrderStatusApi(orderId, { status, note: `Status updated to ${status}` });
+      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...(updated as object) } : o)));
       toast.success('Order updated');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update order');
