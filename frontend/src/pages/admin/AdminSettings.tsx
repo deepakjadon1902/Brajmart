@@ -228,10 +228,10 @@ const AdminSettings = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Truck size={18} /> Shipping & Order Settings</h2>
           <div className="grid grid-cols-2 gap-4">
-            <InputField label="Free Shipping Above (?)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
-            <InputField label="Shipping Fee (?)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
+            <InputField label="Free Shipping Above (₹)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
+            <InputField label="Shipping Fee (₹)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
             <InputField label="Tax Rate (%)" value={String(taxRate)} onChange={(v) => setTaxRate(Number(v))} type="number" />
-            <InputField label="Min Order Amount (?)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
+            <InputField label="Min Order Amount (₹)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
             <InputField label="Max Quantity Per Item" value={String(maxOrderQuantity)} onChange={(v) => setMaxOrderQuantity(Number(v))} type="number" />
             <InputField label="Delivery ETA Min Days" value={String(deliveryEtaMinDays)} onChange={(v) => setDeliveryEtaMinDays(Number(v))} type="number" />
             <InputField label="Delivery ETA Max Days" value={String(deliveryEtaMaxDays)} onChange={(v) => setDeliveryEtaMaxDays(Number(v))} type="number" />
