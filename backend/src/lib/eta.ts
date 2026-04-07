@@ -1,5 +1,4 @@
-﻿import Settings from '../models/Settings';
-import { isDbConnected } from './db';
+import { dbQuery, isDbConnected } from './db';
 import { memory } from './memoryStore';
 
 export const getEtaConfig = async () => {
@@ -12,9 +11,10 @@ export const getEtaConfig = async () => {
     if (min > max) [min, max] = [max, min];
     return { min, max };
   }
-  const settings = await Settings.findOne();
-  let min = Number(settings?.deliveryEtaMinDays ?? 3);
-  let max = Number(settings?.deliveryEtaMaxDays ?? 7);
+  const rows = await dbQuery<any>('SELECT delivery_eta_min_days, delivery_eta_max_days FROM settings LIMIT 1');
+  const row = rows[0];
+  let min = Number(row?.delivery_eta_min_days ?? 3);
+  let max = Number(row?.delivery_eta_max_days ?? 7);
   if (Number.isNaN(min)) min = 3;
   if (Number.isNaN(max)) max = 7;
   if (min > max) [min, max] = [max, min];

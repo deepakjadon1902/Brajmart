@@ -1,16 +1,33 @@
 import { Router } from 'express';
-import User from '../models/User';
-import { isDbConnected } from '../lib/db';
+import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { memory } from '../lib/memoryStore';
 import { auth, adminOnly } from '../middleware/auth';
+import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 
 const router = Router();
+
+const mapUserRow = (row: any) => ({
+  _id: String(row.id),
+  name: row.name,
+  email: row.email,
+  phone: row.phone || '',
+  role: row.role,
+  status: row.status,
+  googleId: row.google_id ?? null,
+  avatar: row.avatar || '',
+  isVerified: boolFromDb(row.is_verified),
+  verificationToken: row.verification_token ?? null,
+  verificationTokenExpires: toIsoString(row.verification_token_expires),
+  addresses: parseJson(row.addresses, []),
+  createdAt: toIsoString(row.created_at),
+  updatedAt: toIsoString(row.updated_at),
+});
 
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.json(memory.listUsers());
-    const users = await User.find().select('-password').sort({ createdAt: -1 });
-    res.json(users);
+    const rows = await dbQuery<any>('SELECT * FROM users ORDER BY created_at DESC');
+    res.json(rows.map(mapUserRow));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -23,9 +40,9 @@ router.get('/:id', auth, adminOnly, async (req, res) => {
       if (!user) return res.status(404).json({ message: 'User not found' });
       return res.json(user);
     }
-    const user = await User.findById(req.params.id).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user);
+    const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ message: 'User not found' });
+    res.json(mapUserRow(rows[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -39,8 +56,9 @@ router.put('/:id/role', auth, adminOnly, async (req, res) => {
       user.role = req.body.role;
       return res.json(user);
     }
-    const user = await User.findByIdAndUpdate(req.params.id, { role: req.body.role }, { new: true }).select('-password');
-    res.json(user);
+    await dbExecute('UPDATE users SET role = ?, updated_at = NOW() WHERE id = ?', [req.body.role, req.params.id]);
+    const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    res.json(rows[0] ? mapUserRow(rows[0]) : null);
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -53,8 +71,9 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
       if (!updated) return res.status(404).json({ message: 'User not found' });
       return res.json(updated);
     }
-    const user = await User.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true }).select('-password');
-    res.json(user);
+    await dbExecute('UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?', [req.body.status, req.params.id]);
+    const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    res.json(rows[0] ? mapUserRow(rows[0]) : null);
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -65,7 +84,7 @@ router.delete('/:id', auth, adminOnly, async (req, res) => {
     if (!isDbConnected()) {
       return res.json({ message: 'User deleted' });
     }
-    await User.findByIdAndDelete(req.params.id);
+    await dbExecute('DELETE FROM users WHERE id = ?', [req.params.id]);
     res.json({ message: 'User deleted' });
   } catch (err: any) {
     res.status(500).json({ message: err.message });

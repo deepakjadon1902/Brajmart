@@ -1,17 +1,55 @@
-import mongoose from 'mongoose';
+import mysql, { Pool } from 'mysql2/promise';
+
+let pool: Pool | null = null;
+let connected = false;
+
+const getConfig = () => {
+  const host = process.env.DB_HOST;
+  const user = process.env.DB_USER;
+  const database = process.env.DB_NAME;
+  const password = process.env.DB_PASSWORD || '';
+  const port = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
+  return { host, user, database, password, port };
+};
 
 export const connectDb = async () => {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    console.warn('MONGODB_URI is not set. Running in in-memory mode.');
+  const { host, user, database, password, port } = getConfig();
+  if (!host || !user || !database) {
+    console.warn('DB_HOST/DB_USER/DB_NAME is not set. Running in in-memory mode.');
+    connected = false;
     return;
   }
   try {
-    await mongoose.connect(uri);
-    console.log('MongoDB connected');
+    pool = mysql.createPool({
+      host,
+      user,
+      database,
+      password,
+      port,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      timezone: 'Z',
+    });
+    await pool.query('SELECT 1');
+    connected = true;
+    console.log('MySQL connected');
   } catch (err) {
-    console.warn('MongoDB connection failed. Running in in-memory mode.', err);
+    connected = false;
+    console.warn('MySQL connection failed. Running in in-memory mode.', err);
   }
 };
 
-export const isDbConnected = () => mongoose.connection.readyState === 1;
+export const isDbConnected = () => connected && !!pool;
+
+export const dbQuery = async <T = any>(sql: string, params: any[] = []): Promise<T[]> => {
+  if (!pool) throw new Error('Database not initialized');
+  const [rows] = await pool.query(sql, params);
+  return rows as T[];
+};
+
+export const dbExecute = async (sql: string, params: any[] = []) => {
+  if (!pool) throw new Error('Database not initialized');
+  const [result] = await pool.execute(sql, params);
+  return result as any;
+};

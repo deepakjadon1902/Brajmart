@@ -26,14 +26,14 @@ const AdminLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    if (!isAdminAuthenticated) navigate('/admin');
+    if (!isAdminAuthenticated) navigate('/admin/login');
   }, [isAdminAuthenticated, navigate]);
 
-  if (!isAdminAuthenticated) return <Navigate to="/admin" replace />;
+  if (!isAdminAuthenticated) return <Navigate to="/admin/login" replace />;
 
   const handleLogout = () => {
     adminLogout();
-    navigate('/admin');
+    navigate('/admin/login');
   };
 
   return (

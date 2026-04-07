@@ -1,7 +1,7 @@
 {
   "name": "brajmart-backend",
   "version": "1.0.0",
-  "description": "BrajMart Backend API — Node.js + Express + MongoDB",
+  "description": "BrajMart Backend API - Node.js + Express + MySQL",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -14,8 +14,8 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.6.0",
     "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.11.0",
     "nodemailer": "^6.10.1"
   },
   "devDependencies": {

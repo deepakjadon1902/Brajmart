@@ -1,13 +1,11 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import Order from '../models/Order';
-import Payment from '../models/Payment';
-import PaymentStatus from '../models/PaymentStatus';
 import { auth, AuthRequest } from '../middleware/auth';
-import { isDbConnected } from '../lib/db';
+import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { memory } from '../lib/memoryStore';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { sendOrderConfirmation, sendPaymentFailed, sendPaymentReceipt, sendAdminPaymentNotice } from '../lib/email';
+import { parseJson } from '../lib/dbHelpers';
 
 const router = Router();
 
@@ -84,6 +82,37 @@ const buildResponseHash = (params: {
   return sha512(hashString);
 };
 
+const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
+  const status = orderData.status || 'confirmed';
+  const statusHistory = Array.isArray(orderData.statusHistory) && orderData.statusHistory.length
+    ? orderData.statusHistory
+    : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
+
+  const result: any = await dbExecute(
+    'INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      orderData.userId || null,
+      JSON.stringify(orderData.items || []),
+      orderData.total,
+      status,
+      orderData.customerName || null,
+      orderData.customerEmail || null,
+      JSON.stringify(orderData.shippingAddress || {}),
+      JSON.stringify(orderData.billingAddress || {}),
+      orderData.paymentMethod,
+      null,
+      estimatedDelivery,
+      JSON.stringify(statusHistory),
+    ]
+  );
+
+  const orderId = result.insertId;
+  const trackingId = `BM${orderId}`;
+  await dbExecute('UPDATE orders SET tracking_id = ? WHERE id = ?', [trackingId, orderId]);
+  const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
+  return rows[0];
+};
+
 router.post('/create-order', auth, async (req: AuthRequest, res) => {
   try {
     const { key, salt, actionUrl } = getPayuConfig();
@@ -112,15 +141,9 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
     });
 
     if (isDbConnected()) {
-      await PaymentStatus.findOneAndUpdate(
-        { token: txnid },
-        {
-          token: txnid,
-          status: 'pending',
-          amount: Number(amount),
-          method: method === 'card' ? 'PayU Card' : 'PayU UPI',
-        },
-        { upsert: true, new: true }
+      await dbExecute(
+        'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
+        [txnid, 'pending', null, Number(amount), method === 'card' ? 'PayU Card' : 'PayU UPI', null]
       );
     }
 
@@ -244,43 +267,39 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
       return res.redirect(`${frontendUrl}/payment-status/${txnid}`);
     }
 
-    const order = new Order({ ...draft.order, estimatedDelivery });
-    await order.save();
-    if (order.customerEmail) {
-      sendOrderConfirmation(order.customerEmail, { orderId: String(order.orderId), total: order.total, itemsCount: order.items?.length || 0, eta: etaText }).catch(() => {});
+    const orderRow = await insertOrder({ ...draft.order, estimatedDelivery }, estimatedDelivery);
+    const orderId = orderRow.id;
+
+    if (orderRow.customer_email) {
+      const itemsCount = parseJson(orderRow.items, []).length || 0;
+      sendOrderConfirmation(orderRow.customer_email, { orderId: String(orderId), total: orderRow.total, itemsCount, eta: etaText }).catch(() => {});
     }
-    const payment = await Payment.create({
-      orderId: order.orderId,
-      customerName: draft.customer.name,
-      customerEmail: draft.customer.email,
-      method: methodLabel,
-      amount: Number(amount),
-      status: 'paid',
-      transactionId: String(paymentId),
-    });
-    if (payment.customerEmail) {
-      sendPaymentReceipt(payment.customerEmail, { orderId: String(order.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText }).catch(() => {});
+
+    const paymentResult: any = await dbExecute(
+      'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [orderId, draft.customer.name, draft.customer.email, methodLabel, Number(amount), 'paid', String(paymentId)]
+    );
+
+    const paymentRows = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [paymentResult.insertId]);
+    const payment = paymentRows[0];
+
+    if (payment?.customer_email) {
+      sendPaymentReceipt(payment.customer_email, { orderId: String(orderId), amount: payment.amount, paymentId: payment.transaction_id, eta: etaText }).catch(() => {});
     }
     sendAdminPaymentNotice({
       status: 'paid',
-      orderId: String(order.orderId),
+      orderId: String(orderId),
       amount: payment.amount,
-      paymentId: payment.transactionId,
+      paymentId: payment.transaction_id,
       method: payment.method,
-      customerEmail: payment.customerEmail,
+      customerEmail: payment.customer_email,
     }).catch(() => {});
-    await PaymentStatus.findOneAndUpdate(
-      { token: txnid },
-      {
-        token: txnid,
-        status: 'paid',
-        orderId: order.orderId,
-        amount: payment.amount,
-        method: payment.method,
-        paymentId: payment.transactionId,
-      },
-      { upsert: true, new: true }
+
+    await dbExecute(
+      'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
+      [txnid, 'paid', orderId, payment.amount, payment.method, payment.transaction_id]
     );
+
     return res.redirect(`${frontendUrl}/payment-status/${txnid}`);
   }
 
@@ -303,17 +322,13 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
       paymentId: String(paymentId),
     });
   } else {
-    await Payment.create(failedPayment);
-    await PaymentStatus.findOneAndUpdate(
-      { token: txnid },
-      {
-        token: txnid,
-        status: 'failed',
-        amount: Number(amount),
-        method: methodLabel,
-        paymentId: String(paymentId),
-      },
-      { upsert: true, new: true }
+    await dbExecute(
+      'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [null, failedPayment.customerName, failedPayment.customerEmail, failedPayment.method, failedPayment.amount, 'failed', failedPayment.transactionId]
+    );
+    await dbExecute(
+      'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
+      [txnid, 'failed', null, Number(amount), methodLabel, String(paymentId)]
     );
   }
 

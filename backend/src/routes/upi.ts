@@ -1,7 +1,5 @@
 import { Router } from 'express';
-import Payment from '../models/Payment';
-import PaymentStatus from '../models/PaymentStatus';
-import { isDbConnected } from '../lib/db';
+import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { memory } from '../lib/memoryStore';
 import { sendPaymentReceipt, sendPaymentFailed, sendAdminPaymentNotice } from '../lib/email';
 import { getEtaConfig, getEtaText } from '../lib/eta';
@@ -56,40 +54,33 @@ router.post('/webhook', async (req, res) => {
       return res.json({ ok: true });
     }
 
-    const payment = await Payment.findOne({ transactionId: token });
+    const rows = await dbQuery<any>('SELECT * FROM payments WHERE transaction_id = ? LIMIT 1', [token]);
+    const payment = rows[0];
     if (!payment) return res.status(404).json({ message: 'Payment not found' });
-    payment.status = normalized as any;
-    if (paymentId) payment.transactionId = paymentId;
-    await payment.save();
 
-    await PaymentStatus.findOneAndUpdate(
-      { token },
-      {
-        token,
-        status: normalized,
-        orderId: payment.orderId,
-        amount: payment.amount,
-        method: payment.method,
-        paymentId: payment.transactionId,
-      },
-      { upsert: true, new: true }
+    const newTxnId = paymentId || payment.transaction_id;
+    await dbExecute('UPDATE payments SET status = ?, transaction_id = ?, updated_at = NOW() WHERE id = ?', [normalized, newTxnId, payment.id]);
+
+    await dbExecute(
+      'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
+      [token, normalized, payment.order_id, payment.amount, payment.method, newTxnId]
     );
 
-    if (payment.customerEmail) {
+    if (payment.customer_email) {
       if (normalized === 'paid') {
-        sendPaymentReceipt(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText }).catch(() => {});
+        sendPaymentReceipt(payment.customer_email, { orderId: String(payment.order_id), amount: payment.amount, paymentId: newTxnId, eta: etaText }).catch(() => {});
       } else if (normalized === 'failed') {
-        sendPaymentFailed(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText }).catch(() => {});
+        sendPaymentFailed(payment.customer_email, { orderId: String(payment.order_id), amount: payment.amount, paymentId: newTxnId, eta: etaText }).catch(() => {});
       }
     }
     if (normalized === 'paid' || normalized === 'failed') {
       sendAdminPaymentNotice({
         status: normalized as any,
-        orderId: String(payment.orderId),
+        orderId: String(payment.order_id),
         amount: payment.amount,
-        paymentId: payment.transactionId,
+        paymentId: newTxnId,
         method: payment.method,
-        customerEmail: payment.customerEmail,
+        customerEmail: payment.customer_email,
       }).catch(() => {});
     }
 

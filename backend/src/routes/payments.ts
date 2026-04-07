@@ -1,19 +1,42 @@
 import { Router } from 'express';
-import Payment from '../models/Payment';
-import PaymentStatus from '../models/PaymentStatus';
-import { isDbConnected } from '../lib/db';
+import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { memory } from '../lib/memoryStore';
 import { auth, adminOnly } from '../middleware/auth';
 import { sendPaymentReceipt, sendPaymentFailed, sendAdminPaymentNotice } from '../lib/email';
 import { getEtaConfig, getEtaText } from '../lib/eta';
+import { toIsoString } from '../lib/dbHelpers';
 
 const router = Router();
+
+const mapPaymentRow = (row: any) => ({
+  _id: String(row.id),
+  orderId: row.order_id,
+  customerName: row.customer_name,
+  customerEmail: row.customer_email,
+  method: row.method,
+  amount: Number(row.amount),
+  status: row.status,
+  transactionId: row.transaction_id,
+  createdAt: toIsoString(row.created_at),
+  updatedAt: toIsoString(row.updated_at),
+});
+
+const mapPaymentStatusRow = (row: any) => ({
+  token: row.token,
+  status: row.status,
+  orderId: row.order_id ?? undefined,
+  amount: row.amount ?? undefined,
+  method: row.method ?? undefined,
+  paymentId: row.payment_id ?? undefined,
+  createdAt: toIsoString(row.created_at),
+  updatedAt: toIsoString(row.updated_at),
+});
 
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.json(memory.listPayments());
-    const payments = await Payment.find().sort({ createdAt: -1 });
-    res.json(payments);
+    const rows = await dbQuery<any>('SELECT * FROM payments ORDER BY created_at DESC');
+    res.json(rows.map(mapPaymentRow));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -27,9 +50,9 @@ router.get('/status/:token', async (req, res) => {
       if (!status) return res.status(404).json({ message: 'Payment not found' });
       return res.json(status);
     }
-    const status = await PaymentStatus.findOne({ token });
-    if (!status) return res.status(404).json({ message: 'Payment not found' });
-    res.json(status);
+    const rows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
+    if (!rows[0]) return res.status(404).json({ message: 'Payment not found' });
+    res.json(mapPaymentStatusRow(rows[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -67,7 +90,16 @@ router.post('/', auth, async (req, res) => {
       }
       return res.status(201).json(created);
     }
-    const payment = await Payment.create(req.body);
+
+    const data = req.body || {};
+    const result: any = await dbExecute(
+      'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [data.orderId, data.customerName, data.customerEmail, data.method, data.amount, data.status || 'pending', data.transactionId]
+    );
+
+    const rows = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [result.insertId]);
+    const payment = mapPaymentRow(rows[0]);
+
     if (payment.customerEmail) {
       if (payment.status === 'paid') {
         sendPaymentReceipt(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText }).catch(() => {});
@@ -75,18 +107,12 @@ router.post('/', auth, async (req, res) => {
         sendPaymentFailed(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText }).catch(() => {});
       }
     }
-    await PaymentStatus.findOneAndUpdate(
-      { token: payment.transactionId },
-      {
-        token: payment.transactionId,
-        status: payment.status,
-        orderId: payment.orderId,
-        amount: payment.amount,
-        method: payment.method,
-        paymentId: payment.transactionId,
-      },
-      { upsert: true, new: true }
+
+    await dbExecute(
+      'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
+      [payment.transactionId, payment.status, payment.orderId, payment.amount, payment.method, payment.transactionId]
     );
+
     if (payment.status === 'paid' || payment.status === 'failed') {
       sendAdminPaymentNotice({
         status: payment.status,
@@ -97,6 +123,7 @@ router.post('/', auth, async (req, res) => {
         customerEmail: payment.customerEmail,
       }).catch(() => {});
     }
+
     res.status(201).json(payment);
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -127,21 +154,18 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
       }
       return res.json(updated);
     }
-    const payment = await Payment.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
+
+    await dbExecute('UPDATE payments SET status = ?, updated_at = NOW() WHERE id = ?', [req.body.status, req.params.id]);
+    const rows = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [req.params.id]);
+    const payment = rows[0] ? mapPaymentRow(rows[0]) : null;
+
     if (payment) {
-      await PaymentStatus.findOneAndUpdate(
-        { token: payment.transactionId },
-        {
-          token: payment.transactionId,
-          status: payment.status,
-          orderId: payment.orderId,
-          amount: payment.amount,
-          method: payment.method,
-          paymentId: payment.transactionId,
-        },
-        { upsert: true, new: true }
+      await dbExecute(
+        'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
+        [payment.transactionId, payment.status, payment.orderId, payment.amount, payment.method, payment.transactionId]
       );
     }
+
     if (payment && (payment.status === 'paid' || payment.status === 'failed')) {
       sendAdminPaymentNotice({
         status: payment.status as 'paid' | 'failed',

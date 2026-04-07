@@ -1,10 +1,10 @@
 # BrajMart Backend
 
-Node.js + Express + MongoDB backend for BrajMart e-commerce platform.
+Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and add your MongoDB URI and JWT secret
+1. Copy `.env.example` to `.env` and add your MySQL credentials and JWT secret
 2. Run `npm install`
 3. Create `uploads/` directory: `mkdir uploads`
 4. Run `npm run dev` (development) or `npm start` (production)
