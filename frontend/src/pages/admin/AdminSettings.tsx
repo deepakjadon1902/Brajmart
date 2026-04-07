@@ -1,5 +1,4 @@
-import * as React from "react";
-﻿import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAdminStore } from '@/store/adminStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { Save, Store, Bell, Shield, Truck, CheckCircle, Globe, Megaphone, CreditCard, Image, Search, Settings2, Plus, X, Upload } from 'lucide-react';
@@ -202,7 +201,7 @@ const AdminSettings = () => {
           <div>
             <label className="block text-sm text-slate-300 mb-1">Currency</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none">
-              <option value="INR">â‚¹ INR</option>
+              <option value="INR">₹ INR</option>
               <option value="USD">$ USD</option>
             </select>
           </div>
@@ -229,10 +228,10 @@ const AdminSettings = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Truck size={18} /> Shipping & Order Settings</h2>
           <div className="grid grid-cols-2 gap-4">
-            <InputField label="Free Shipping Above (â‚¹)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
-            <InputField label="Shipping Fee (â‚¹)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
+            <InputField label="Free Shipping Above (?)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
+            <InputField label="Shipping Fee (?)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
             <InputField label="Tax Rate (%)" value={String(taxRate)} onChange={(v) => setTaxRate(Number(v))} type="number" />
-            <InputField label="Min Order Amount (â‚¹)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
+            <InputField label="Min Order Amount (?)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
             <InputField label="Max Quantity Per Item" value={String(maxOrderQuantity)} onChange={(v) => setMaxOrderQuantity(Number(v))} type="number" />
             <InputField label="Delivery ETA Min Days" value={String(deliveryEtaMinDays)} onChange={(v) => setDeliveryEtaMinDays(Number(v))} type="number" />
             <InputField label="Delivery ETA Max Days" value={String(deliveryEtaMaxDays)} onChange={(v) => setDeliveryEtaMaxDays(Number(v))} type="number" />
@@ -244,21 +243,30 @@ const AdminSettings = () => {
       {activeTab === 'payments' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><CreditCard size={18} /> Payment Methods</h2>
-          <p className="text-xs text-slate-400">Enable or disable payment methods shown at checkout.</p>
-          {[
-            { label: 'Cash on Delivery (COD)', value: codEnabled, onChange: setCodEnabled },
-            { label: 'UPI Payment', value: upiEnabled, onChange: setUpiEnabled },
-            { label: 'Credit/Debit Card', value: cardEnabled, onChange: setCardEnabled },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center justify-between">
-              <span className="text-sm text-slate-300">{item.label}</span>
-              <Toggle value={item.value} onChange={item.onChange} />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">Cash on Delivery</p>
+              <p className="text-xs text-slate-400">Enable COD payments for customers</p>
             </div>
-          ))}
-          <div className="pt-4 border-t border-slate-800 space-y-3">
-            <InputField label="UPI ID" value={upiId} onChange={setUpiId} placeholder="yourname@upi" />
-            <InputField label="UPI Payee Name" value={upiPayeeName} onChange={setUpiPayeeName} placeholder="BrajMart" />
-            <p className="text-xs text-slate-500">Used to generate QR codes for UPI payments at checkout.</p>
+            <Toggle value={codEnabled} onChange={setCodEnabled} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">UPI Payments</p>
+              <p className="text-xs text-slate-400">Enable UPI payments in checkout</p>
+            </div>
+            <Toggle value={upiEnabled} onChange={setUpiEnabled} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">Card Payments (PayU)</p>
+              <p className="text-xs text-slate-400">Enable card payments via PayU gateway</p>
+            </div>
+            <Toggle value={cardEnabled} onChange={setCardEnabled} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputField label="UPI ID" value={upiId} onChange={setUpiId} />
+            <InputField label="UPI Payee Name" value={upiPayeeName} onChange={setUpiPayeeName} />
           </div>
         </div>
       )}
@@ -267,12 +275,14 @@ const AdminSettings = () => {
       {activeTab === 'notifications' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Bell size={18} /> Notifications</h2>
-          {Object.entries(settings.notifications).map(([key, val]) => (
-            <div key={key} className="flex items-center justify-between">
-              <span className="text-sm text-slate-300 capitalize">{key} alerts</span>
-              <Toggle value={val} onChange={(v) => updateNotifications(key, v)} />
-            </div>
-          ))}
+          <div className="grid grid-cols-2 gap-4">
+            {Object.entries(settings.notifications).map(([key, value]) => (
+              <div key={key} className="flex items-center justify-between bg-slate-800 rounded-xl p-3">
+                <span className="text-sm text-white capitalize">{key}</span>
+                <Toggle value={value} onChange={(v) => updateNotifications(key, v)} />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -282,20 +292,29 @@ const AdminSettings = () => {
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Megaphone size={18} /> Announcement Bar</h2>
           <p className="text-xs text-slate-400">These messages rotate in the top banner of the main site.</p>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-300">Enable Announcement Bar</span>
+            <div>
+              <p className="text-sm font-medium text-white">Enable Announcement Bar</p>
+            </div>
             <Toggle value={announcementEnabled} onChange={setAnnouncementEnabled} />
           </div>
           <div className="space-y-2">
             {announcementMessages.map((msg, i) => (
-              <div key={i} className="flex items-center gap-2 bg-slate-800 rounded-xl px-4 py-2">
-                <span className="flex-1 text-sm text-white">{msg}</span>
-                <button onClick={() => removeAnnouncement(i)} className="text-red-400 hover:text-red-300"><X size={14} /></button>
+              <div key={`${msg}-${i}`} className="flex items-center justify-between bg-slate-800 rounded-xl px-4 py-2">
+                <span className="text-sm text-white">{msg}</span>
+                <button onClick={() => removeAnnouncement(i)} className="text-red-300 hover:text-red-200"><X size={14} /></button>
               </div>
             ))}
           </div>
           <div className="flex gap-2">
-            <input value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} placeholder="Add new announcement..." className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" onKeyDown={(e) => e.key === 'Enter' && addAnnouncement()} />
-            <button onClick={addAnnouncement} className="px-4 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition"><Plus size={14} /></button>
+            <input
+              value={newAnnouncement}
+              onChange={(e) => setNewAnnouncement(e.target.value)}
+              placeholder="Add new announcement..."
+              className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+            />
+            <button onClick={addAnnouncement} className="px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold">
+              Add
+            </button>
           </div>
         </div>
       )}
@@ -304,10 +323,12 @@ const AdminSettings = () => {
       {activeTab === 'social' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Globe size={18} /> Social Links</h2>
-          <p className="text-xs text-slate-400">These appear in the footer of the main site.</p>
-          {Object.entries(socialLinks).map(([key, val]) => (
-            <InputField key={key} label={key.charAt(0).toUpperCase() + key.slice(1)} value={val} onChange={(v) => setSocialLinks({ ...socialLinks, [key]: v })} placeholder={`https://${key}.com/yourpage`} />
-          ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputField label="Instagram" value={socialLinks.instagram} onChange={(v) => setSocialLinks({ ...socialLinks, instagram: v })} />
+            <InputField label="Facebook" value={socialLinks.facebook} onChange={(v) => setSocialLinks({ ...socialLinks, facebook: v })} />
+            <InputField label="YouTube" value={socialLinks.youtube} onChange={(v) => setSocialLinks({ ...socialLinks, youtube: v })} />
+            <InputField label="WhatsApp" value={socialLinks.whatsapp} onChange={(v) => setSocialLinks({ ...socialLinks, whatsapp: v })} />
+          </div>
         </div>
       )}
 
@@ -316,10 +337,8 @@ const AdminSettings = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Search size={18} /> SEO & Branding</h2>
           <InputField label="Meta Title" value={metaTitle} onChange={setMetaTitle} />
-          <div>
-            <label className="block text-sm text-slate-300 mb-1">Meta Description</label>
-            <textarea value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} rows={3} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none" />
-          </div>
+          <InputField label="Meta Description" value={metaDescription} onChange={setMetaDescription} />
+          <InputField label="Favicon URL" value={settings.favicon} onChange={() => {}} />
         </div>
       )}
 
@@ -332,7 +351,7 @@ const AdminSettings = () => {
             <input
               value={newHeroBadge}
               onChange={(e) => setNewHeroBadge(e.target.value)}
-              placeholder="🏛️ Temple Authenticated"
+              placeholder="??? Temple Authenticated"
               className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
             />
             <button onClick={addHeroBadge} className="px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold">
@@ -356,8 +375,8 @@ const AdminSettings = () => {
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Settings2 size={18} /> Advanced</h2>
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-sm text-slate-300">Maintenance Mode</span>
-              <p className="text-xs text-slate-500">When enabled, users see a maintenance page instead of the store.</p>
+              <p className="text-sm font-medium text-white">Maintenance Mode</p>
+              <p className="text-xs text-slate-400">Temporarily disable the storefront</p>
             </div>
             <Toggle value={maintenanceMode} onChange={setMaintenanceMode} />
           </div>
@@ -366,29 +385,33 @@ const AdminSettings = () => {
 
       {/* Admin */}
       {activeTab === 'admin' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Shield size={18} /> Admin Account</h2>
           <div className="flex justify-between text-sm"><span className="text-slate-400">Email</span><span className="text-white">{adminEmail}</span></div>
           <div className="flex justify-between text-sm"><span className="text-slate-400">Role</span><span className="text-amber-400 font-medium">Super Admin</span></div>
         </div>
       )}
 
-      <button onClick={handleSave} disabled={loading} className="flex items-center gap-2 px-6 py-3 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600 transition disabled:opacity-60">
-        {saved ? <><CheckCircle size={16} /> Saved</> : <><Save size={16} /> {loading ? 'Saving...' : 'Save Settings'}</>}
-      </button>
+      <div className="flex items-center gap-4">
+        <button onClick={handleSave} disabled={loading} className="px-5 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold flex items-center gap-2">
+          <Save size={16} /> Save Settings
+        </button>
+        {saved && <span className="text-emerald-400 text-sm">Saved</span>}
+      </div>
     </div>
   );
 };
 
-const InputField = ({ label, value, onChange, type = 'text', placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) => (
+const InputField = ({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) => (
   <div>
     <label className="block text-sm text-slate-300 mb-1">{label}</label>
-    <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+    />
   </div>
 );
 
 export default AdminSettings;
-
-
-
-
