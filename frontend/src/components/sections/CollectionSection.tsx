@@ -8,13 +8,34 @@ interface CollectionSectionProps {
   subtitle?: string;
   products: Product[];
   viewAllLink?: string;
+  titleIconUrl?: string;
+  viewAllIconUrl?: string;
+  ornamentIconUrl?: string;
   bgClass?: string;
 }
 
-const CollectionSection = ({ tag, title, subtitle, products, viewAllLink = '#', bgClass = '' }: CollectionSectionProps) => (
+const CollectionSection = ({
+  tag,
+  title,
+  subtitle,
+  products,
+  viewAllLink = '#',
+  titleIconUrl,
+  viewAllIconUrl,
+  ornamentIconUrl,
+  bgClass = '',
+}: CollectionSectionProps) => (
   <section className={`py-14 md:py-20 ${bgClass}`}>
     <div className="container mx-auto px-4">
-      <SectionHeader tag={tag} title={title} subtitle={subtitle} viewAllLink={viewAllLink} />
+      <SectionHeader
+        tag={tag}
+        title={title}
+        subtitle={subtitle}
+        viewAllLink={viewAllLink}
+        titleIconUrl={titleIconUrl}
+        viewAllIconUrl={viewAllIconUrl}
+        ornamentIconUrl={ornamentIconUrl}
+      />
       <ProductCarousel products={products} />
     </div>
   </section>
