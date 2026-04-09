@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAdminStore } from '@/store/adminStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { Save, Store, Bell, Shield, Truck, CheckCircle, Globe, Megaphone, CreditCard, Image, Search, Settings2, Plus, X, Upload } from 'lucide-react';
-import { fetchPublicSettings, updatePublicSettings, uploadImage } from '@/lib/api';
+import { fetchPublicSettings, updatePublicSettings, uploadImage, sendTestEmail } from '@/lib/api';
 import { toast } from 'sonner';
 
 const AdminSettings = () => {
@@ -40,6 +40,7 @@ const AdminSettings = () => {
   const [newAnnouncement, setNewAnnouncement] = useState('');
   const [heroBadges, setHeroBadges] = useState<string[]>(settings.heroBadges || []);
   const [newHeroBadge, setNewHeroBadge] = useState('');
+  const [testEmail, setTestEmail] = useState('');
 
   const [socialLinks, setSocialLinks] = useState(settings.socialLinks);
 
@@ -125,6 +126,22 @@ const AdminSettings = () => {
       toast.success('Logo uploaded');
     } catch (err: any) {
       toast.error(err?.message || 'Logo upload failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    if (!testEmail.trim()) {
+      toast.error('Enter a test email address');
+      return;
+    }
+    setLoading(true);
+    try {
+      await sendTestEmail(testEmail.trim());
+      toast.success('Test email sent');
+    } catch (err: any) {
+      toast.error(err?.message || 'Test email failed');
     } finally {
       setLoading(false);
     }
@@ -217,6 +234,24 @@ const AdminSettings = () => {
               )}
               <button onClick={() => logoRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white hover:bg-slate-700 transition">
                 <Upload size={14} /> Upload Logo
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-800">
+            <h3 className="text-sm font-semibold text-slate-200 mb-2">SMTP Test Email</h3>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                value={testEmail}
+                onChange={(e) => setTestEmail(e.target.value)}
+                placeholder="Enter email to test SMTP"
+                className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+              />
+              <button
+                onClick={handleTestEmail}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold"
+              >
+                Send Test
               </button>
             </div>
           </div>

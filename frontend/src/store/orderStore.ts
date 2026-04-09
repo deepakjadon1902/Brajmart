@@ -64,7 +64,7 @@ export const useOrderStore = create<OrderStore>()(
           const data: any = await fetchMyOrders();
           const mapped = (Array.isArray(data) ? data : []).map((o: any) => ({
             id: o.orderId ? String(o.orderId) : o._id,
-            userId: o.userId || 'user',
+            userId: o.userId !== undefined && o.userId !== null ? String(o.userId) : 'user',
             items: (o.items || []).map((i: any) => ({
               product: {
                 id: i.productId || i.product?.id || i.product?._id || '',
@@ -115,7 +115,8 @@ export const useOrderStore = create<OrderStore>()(
         set((s) => ({ orders: [order, ...s.orders] }));
         return id;
       },
-      getOrdersByUser: (userId) => get().orders.filter((o) => o.userId === userId),
+      getOrdersByUser: (userId) =>
+        get().orders.filter((o) => String(o.userId || '') === String(userId || '')),
       getOrderById: (id) => get().orders.find((o) => o.id === id),
       updateOrderStatus: (id, status, note) =>
         set((s) => ({

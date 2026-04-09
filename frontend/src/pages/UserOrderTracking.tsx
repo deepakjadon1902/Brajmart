@@ -30,7 +30,7 @@ const UserOrderTracking = () => {
     }
   }, [token, loadMyOrders]);
 
-  const userOrders = user ? getOrdersByUser(user.id) : [];
+  const userOrders = orders.length ? orders : (user ? getOrdersByUser(user.id) : []);
   const selectedOrder = selectedOrderId ? getOrderById(selectedOrderId) : null;
 
   const handleSearch = (e: React.FormEvent) => {

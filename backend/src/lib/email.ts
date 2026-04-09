@@ -1,4 +1,8 @@
-﻿import nodemailer from 'nodemailer';
+import nodemailer from 'nodemailer';
+
+
+let cachedTransporter: nodemailer.Transporter | null = null;
+let verifiedOnce = false;
 
 const getTransporter = () => {
   const host = process.env.SMTP_HOST;
@@ -8,22 +12,40 @@ const getTransporter = () => {
 
   if (!host || !user || !pass) return null;
 
-  return nodemailer.createTransport({
+  if (cachedTransporter) return cachedTransporter;
+
+  cachedTransporter = nodemailer.createTransport({
     host,
     port,
     secure: port === 465,
     auth: { user, pass },
+    tls: {
+      servername: host,
+      rejectUnauthorized: false,
+    },
   });
+  return cachedTransporter;
 };
 
 export const sendEmail = async (to: string, subject: string, html: string) => {
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@brajmart.com';
+  const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@brajmart.com';
+  const from = `BrajMart <${fromAddress}>`;
   const transporter = getTransporter();
   if (!transporter) {
     console.warn('SMTP not configured. Skipping email send.');
     return;
   }
-  await transporter.sendMail({ from, to, subject, html });
+  try {
+    if (!verifiedOnce) {
+      await transporter.verify();
+      verifiedOnce = true;
+    }
+    await transporter.sendMail({ from, to, subject, html });
+    console.log('Email sent', { to, subject });
+  } catch (err) {
+    console.error('Email send failed', err);
+    throw err;
+  }
 };
 
 const brandWrapper = (title: string, body: string) => `

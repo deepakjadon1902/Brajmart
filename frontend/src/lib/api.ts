@@ -52,6 +52,8 @@ export const fetchPublicSettings = () =>
 
 export const updatePublicSettings = (payload: Record<string, unknown>) =>
   getJson<Record<string, any>>('/settings', { method: 'PUT', body: payload });
+export const sendTestEmail = (to: string) =>
+  getJson<Record<string, any>>('/settings/test-email', { method: 'POST', body: { to } });
 
 // Auth
 export const registerUser = (payload: { name: string; email: string; password: string }) =>

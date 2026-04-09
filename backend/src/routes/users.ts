@@ -60,9 +60,21 @@ router.put('/me', auth, async (req: AuthRequest, res) => {
       },
     ];
 
+    const currentRows = await dbQuery<any>('SELECT email FROM users WHERE id = ? LIMIT 1', [userId]);
+    if (!currentRows[0]) return res.status(404).json({ message: 'User not found' });
+    const currentEmailRaw = String(currentRows[0].email || '');
+    const currentEmail = currentEmailRaw.trim().toLowerCase();
+    const nextEmailRaw = String(email || '').trim();
+    const nextEmail = nextEmailRaw.toLowerCase();
+
+    if (nextEmail && nextEmail !== currentEmail) {
+      const exists = await dbQuery<any>('SELECT id FROM users WHERE LOWER(email) = ? AND id <> ? LIMIT 1', [nextEmail, userId]);
+      if (exists.length) return res.status(400).json({ message: 'Email already in use' });
+    }
+
     await dbExecute(
       'UPDATE users SET name = ?, email = ?, phone = ?, addresses = ?, updated_at = NOW() WHERE id = ?',
-      [fullName || '', email || '', mobile || '', JSON.stringify(addresses), userId]
+      [fullName || '', nextEmailRaw || currentEmailRaw, mobile || '', JSON.stringify(addresses), userId]
     );
 
     const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [userId]);

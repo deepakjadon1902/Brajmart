@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { auth, adminOnly } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
+import { sendEmail } from '../lib/email';
 
 const router = Router();
 
@@ -110,6 +111,21 @@ router.put('/', auth, adminOnly, async (req, res) => {
     res.json(mapSettingsRow(refreshed[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/test-email', auth, adminOnly, async (req, res) => {
+  try {
+    const to = String(req.body?.to || '').trim();
+    if (!to) return res.status(400).json({ message: 'Recipient email is required' });
+    await sendEmail(
+      to,
+      'BrajMart SMTP Test',
+      '<p>This is a test email from BrajMart. If you received this, SMTP is working.</p>'
+    );
+    res.json({ message: 'Test email sent' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Failed to send test email' });
   }
 });
 
