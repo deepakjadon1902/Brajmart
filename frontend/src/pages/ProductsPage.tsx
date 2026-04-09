@@ -11,6 +11,7 @@ const tagLabels: Record<string, string> = {
   bestseller: 'Best Selling Products',
   accessories: 'Top Devotional Accessories',
   prasadam: 'Sacred Prasadam',
+  exclusive: 'BrajMart Exclusive',
 };
 
 const ProductsPage = () => {
@@ -23,8 +24,8 @@ const ProductsPage = () => {
   const { products, categories, getByTag } = useProductStore();
 
   let filtered = products;
-  if (tag) filtered = getByTag(tag);
-  if (category) filtered = products.filter((p) => p.category.toLowerCase() === category.toLowerCase());
+  if (tag) filtered = filtered.filter((p) => p.tags?.includes(tag));
+  if (category) filtered = filtered.filter((p) => p.category.toLowerCase() === category.toLowerCase());
   if (minPrice) filtered = filtered.filter((p) => Number(p.price) >= minPrice);
   if (maxPrice) filtered = filtered.filter((p) => Number(p.price) <= maxPrice);
   if (minRating) filtered = filtered.filter((p) => Number(p.rating || 0) >= minRating);
@@ -61,6 +62,7 @@ const ProductsPage = () => {
             <option value="bestseller">Best Seller</option>
             <option value="accessories">Accessories</option>
             <option value="prasadam">Prasadam</option>
+            <option value="exclusive">Exclusive</option>
           </select>
 
           <select

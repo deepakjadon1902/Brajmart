@@ -43,15 +43,15 @@ const Navbar = () => {
           {mobileOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
 
-        <Link to="/" className="flex items-center gap-2 shrink-0">
+        <Link to="/" className="flex items-center gap-3 shrink-0">
           {settings.storeLogo ? (
-            <img src={settings.storeLogo} alt={settings.storeName} className="w-8 h-8 rounded object-contain" />
+            <img src={settings.storeLogo} alt={settings.storeName} className="w-10 h-10 md:w-11 md:h-11 rounded object-contain" />
           ) : (
-            <span className="text-2xl">🪷</span>
+            <span className="text-3xl">🪷</span>
           )}
           <div className="leading-none">
-            <span className="font-cinzel text-xl font-bold text-maroon-gold-gradient">{settings.storeName}</span>
-            <span className="block text-[0.55rem] text-muted-foreground tracking-wider">{settings.tagline}</span>
+            <span className="font-cinzel text-2xl md:text-[1.6rem] font-bold text-maroon-gold-gradient">{settings.storeName}</span>
+            <span className="block text-[0.65rem] md:text-xs text-foreground/80 tracking-[0.2em] font-playfair">{settings.tagline}</span>
           </div>
         </Link>
 

@@ -58,7 +58,16 @@ export const useProductStore = create<ProductStore>()(
       })),
       deleteCategory: (id) => set((s) => ({ categories: s.categories.filter((c) => c.id !== id) })),
 
-      getProductsByCategory: (category) => get().products.filter((p) => p.category.toLowerCase() === category.toLowerCase()),
+      getProductsByCategory: (category) => {
+        const normalize = (value: string) =>
+          value
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)+/g, '');
+        const target = normalize(category || '');
+        return get().products.filter((p) => normalize(p.category || '') === target);
+      },
       getProductBySlug: (slug) => {
         const normalize = (value: string) =>
           value
@@ -105,6 +114,7 @@ export const categorySlugMap: Record<string, string> = {
   'spiritual-books': 'Spiritual Books',
   'idols-shringar': 'Idols & Shringar',
   'incense-pooja': 'Incense & Pooja',
+  'incense-pooja-items': 'Incense/Pooja Items',
   'accessories': 'Accessories',
   'clothing': 'Clothing',
   'groceries': 'Groceries',
@@ -112,5 +122,9 @@ export const categorySlugMap: Record<string, string> = {
 };
 
 export const categoryToSlug = (name: string): string => {
-  return name.toLowerCase().replace(/[&\s]+/g, '-').replace(/--+/g, '-');
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
 };
