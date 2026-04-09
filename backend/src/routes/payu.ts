@@ -35,7 +35,8 @@ const getPayuConfig = () => {
   const key = process.env.PAYU_KEY;
   const salt = process.env.PAYU_SALT;
   const env = (process.env.PAYU_ENV || 'test').toLowerCase();
-  const actionUrl = env === 'live' ? 'https://secure.payu.in/_payment' : 'https://test.payu.in/_payment';
+  const isLive = env === 'live' || env === 'prod' || env === 'production';
+  const actionUrl = isLive ? 'https://secure.payu.in/_payment' : 'https://test.payu.in/_payment';
   return { key, salt, env, actionUrl };
 };
 
