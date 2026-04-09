@@ -59,7 +59,20 @@ export const useProductStore = create<ProductStore>()(
       deleteCategory: (id) => set((s) => ({ categories: s.categories.filter((c) => c.id !== id) })),
 
       getProductsByCategory: (category) => get().products.filter((p) => p.category.toLowerCase() === category.toLowerCase()),
-      getProductBySlug: (slug) => get().products.find((p) => p.slug === slug),
+      getProductBySlug: (slug) => {
+        const normalize = (value: string) =>
+          value
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)+/g, '');
+        const target = normalize(slug || '');
+        return get().products.find((p) => {
+          const bySlug = p.slug ? normalize(p.slug) : '';
+          const byName = p.name ? normalize(p.name) : '';
+          return bySlug === target || byName === target;
+        });
+      },
       getProductById: (id) => get().products.find((p) => p.id === id),
       searchProducts: (query) => {
         const q = query.toLowerCase();

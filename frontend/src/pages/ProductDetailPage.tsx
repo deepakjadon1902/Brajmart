@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -18,9 +18,20 @@ const ProductDetailPage = () => {
   const { getProductBySlug, products } = useProductStore();
   const product = getProductBySlug(slug || '');
   const [quantity, setQuantity] = useState(1);
+  const galleryImages = product?.images && product.images.length
+    ? product.images
+    : (product?.image ? [product.image] : []);
+  const [activeImage, setActiveImage] = useState(galleryImages[0] || product?.image || '');
+  const [zoomOpen, setZoomOpen] = useState(false);
   const addToCart = useCartStore(s => s.addItem);
   const { toggleItem, isInWishlist } = useWishlistStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (galleryImages[0]) {
+      setActiveImage(galleryImages[0]);
+    }
+  }, [product?.id]);
 
   if (!product) {
     return (
@@ -44,6 +55,49 @@ const ProductDetailPage = () => {
     toast.success(`${product.name} added to cart!`);
   };
 
+  const renderInline = (text: string) => {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+    return parts.map((part, idx) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={`b-${idx}`}>{part.slice(2, -2)}</strong>;
+      }
+      return <span key={`t-${idx}`}>{part}</span>;
+    });
+  };
+
+  const renderDescription = (text: string) => {
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    const blocks: JSX.Element[] = [];
+    let buffer: string[] = [];
+    const flushList = () => {
+      if (!buffer.length) return;
+      blocks.push(
+        <ul key={`list-${blocks.length}`} className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
+          {buffer.map((item, idx) => (
+            <li key={`li-${idx}`}>{renderInline(item)}</li>
+          ))}
+        </ul>
+      );
+      buffer = [];
+    };
+
+    lines.forEach((line) => {
+      const isBullet = /^[-*•]\s+/.test(line);
+      if (isBullet) {
+        buffer.push(line.replace(/^[-*•]\s+/, ''));
+      } else {
+        flushList();
+        blocks.push(
+          <p key={`p-${blocks.length}`} className="text-sm text-muted-foreground leading-relaxed">
+            {renderInline(line)}
+          </p>
+        );
+      }
+    });
+    flushList();
+    return blocks;
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <AnnouncementBar /><Navbar />
@@ -61,8 +115,12 @@ const ProductDetailPage = () => {
         <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
           {/* Image */}
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
-            <div className="relative rounded-2xl overflow-hidden border border-border bg-pearl aspect-square">
-              <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => setZoomOpen(true)}
+              className="relative rounded-2xl overflow-hidden border border-border bg-pearl aspect-square w-full text-left"
+            >
+              <img src={activeImage || product.image} alt={product.name} className="w-full h-full object-cover" />
               {product.badge && (
                 <span className={`absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-bold ${product.badge === 'bestseller' ? 'bg-gold-gradient text-maroon-dark' : 'bg-saffron text-primary-foreground'}`}>
                   {product.badge === 'bestseller' ? '🔥 Best Seller' : 'NEW'}
@@ -73,7 +131,7 @@ const ProductDetailPage = () => {
                   {discount}% OFF
                 </span>
               )}
-            </div>
+            </button>
           </motion.div>
 
           {/* Details */}
@@ -104,10 +162,15 @@ const ProductDetailPage = () => {
               )}
             </div>
 
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Authentic {product.category.toLowerCase()} directly sourced from the sacred land of Vrindavan.
-              Each product is blessed with devotion and delivered with care to your doorstep.
-            </p>
+            {product.description && product.description.trim() ? (
+              <div className="space-y-3">
+                {renderDescription(product.description)}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground/70 italic">
+                No description yet.
+              </p>
+            )}
 
             {/* Quantity */}
             <div className="flex items-center gap-4">
@@ -146,6 +209,19 @@ const ProductDetailPage = () => {
                 </div>
               ))}
             </div>
+            {galleryImages.length > 1 && (
+              <div className="mt-4 grid grid-cols-5 gap-2">
+                {galleryImages.map((img, idx) => (
+                  <button
+                    key={`${img}-${idx}`}
+                    onClick={() => setActiveImage(img)}
+                    className={`rounded-xl border ${activeImage === img ? 'border-saffron' : 'border-border'} overflow-hidden bg-pearl`}
+                  >
+                    <img src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-16 object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </motion.div>
         </div>
 
@@ -157,11 +233,28 @@ const ProductDetailPage = () => {
           </div>
         )}
       </div>
+      {zoomOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setZoomOpen(false)}>
+          <div className="relative max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setZoomOpen(false)}
+              className="absolute -top-4 -right-4 bg-white text-black rounded-full w-9 h-9 flex items-center justify-center shadow"
+              aria-label="Close zoom"
+            >
+              ✕
+            </button>
+            <div className="rounded-2xl overflow-hidden border border-border bg-black">
+              <img src={activeImage || product.image} alt={product.name} className="w-full h-full object-contain max-h-[80vh]" />
+            </div>
+          </div>
+        </div>
+      )}
       <Footer />
     </div>
   );
 };
 
 export default ProductDetailPage;
+
 
 

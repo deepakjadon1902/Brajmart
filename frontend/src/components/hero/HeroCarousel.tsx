@@ -39,75 +39,90 @@ const HeroCarousel = () => {
   if (!slides || slides.length === 0) return null;
 
   return (
-    <section className="relative">
-      <div className="overflow-hidden" ref={emblaRef}>
-        <div className="flex">
-          {slides.map((slide, i) => (
-            <div key={slide.id} className="flex-none w-full relative h-[60vh] md:h-[85vh]">
-              <img
-                src={slide.image}
-                alt={slide.title}
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-              <div className={`absolute inset-0 bg-gradient-to-r ${slide.overlay || 'from-black/70 via-black/40 to-transparent'}`} />
-              <div className="relative h-full container mx-auto px-6 flex items-center">
-                <div className="max-w-xl">
-                  <AnimatePresence mode="wait">
-                    {selectedIndex === i && (
-                      <motion.div
-                        key={slide.id}
-                        initial={{ opacity: 0, y: 30, filter: 'blur(6px)' }}
-                        animate={{ opacity: 1, y: 0, filter: 'blur(0)' }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-                      >
-                        {slide.tag && (
-                          <span className="inline-block px-3 py-1 rounded-full bg-primary-foreground/15 backdrop-blur text-primary-foreground text-xs font-semibold mb-4">
-                            {slide.tag}
-                          </span>
-                        )}
-                        <h1 className="font-cinzel text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-primary-foreground leading-[1.1] mb-4">
-                          {slide.title}
-                        </h1>
-                        {slide.subtitle && (
-                          <p className="text-primary-foreground/80 text-base md:text-lg mb-6 max-w-md">
-                            {slide.subtitle}
-                          </p>
-                        )}
-                        {slide.cta && (
-                          <button className="px-7 py-3 rounded-full bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform shadow-lg">
-                            {slide.cta}
-                          </button>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+    <section className="relative bg-background">
+      <div className="container mx-auto px-4 py-6 md:py-10">
+        <div className="relative">
+          <div className="overflow-hidden rounded-[28px] border border-border shadow-lg bg-white" ref={emblaRef}>
+            <div className="flex">
+              {slides.map((slide, i) => (
+                <div key={slide.id} className="flex-none w-full">
+                  <div className="grid md:grid-cols-[1fr_2fr] h-[300px] md:h-[420px] lg:h-[460px] bg-white">
+                    {/* Text panel */}
+                    <div className="bg-[#FBF4EC] px-6 md:px-10 py-8 flex items-center">
+                      <div className="max-w-sm">
+                        <AnimatePresence mode="wait">
+                          {selectedIndex === i && (
+                            <motion.div
+                              key={slide.id}
+                              initial={{ opacity: 0, y: 20, filter: 'blur(6px)' }}
+                              animate={{ opacity: 1, y: 0, filter: 'blur(0)' }}
+                              exit={{ opacity: 0, y: -10 }}
+                              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                            >
+                              {slide.tag && (
+                                <span className="inline-block text-[#8A6D4E] font-semibold text-[0.65rem] uppercase tracking-[0.2em] mb-3">
+                                  {slide.tag}
+                                </span>
+                              )}
+                              <h1 className="font-cinzel text-3xl md:text-5xl lg:text-5xl font-bold text-[#3B4F66] leading-[1.12] mb-3">
+                                {slide.title}
+                              </h1>
+                              {slide.subtitle && (
+                                <p className="text-[#6B7A8E] text-sm md:text-base leading-relaxed font-playfair mb-5">
+                                  {slide.subtitle}
+                                </p>
+                              )}
+                              {slide.cta && (
+                                <button className="px-6 py-2.5 rounded-xl bg-[#3B4F66] text-white font-bold text-sm active:scale-[0.97] transition-transform shadow">
+                                  {slide.cta}
+                                </button>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+
+                    {/* Image panel */}
+                    <div className="relative bg-white">
+                      {slide.image ? (
+                        <img
+                          src={slide.image}
+                          alt={slide.title}
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-white" />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
+          </div>
+
+          <button onClick={scrollPrev} className="absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white border border-border flex items-center justify-center hover:bg-pearl active:scale-95 transition-all" aria-label="Previous slide">
+            <ChevronLeft size={18} className="text-[#3B4F66]" />
+          </button>
+          <button onClick={scrollNext} className="absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white border border-border flex items-center justify-center hover:bg-pearl active:scale-95 transition-all" aria-label="Next slide">
+            <ChevronRight size={18} className="text-[#3B4F66]" />
+          </button>
+
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-white/80 backdrop-blur px-3 py-2 rounded-full border border-border">
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => emblaApi?.scrollTo(i)}
+                className={`h-2 rounded-full transition-all duration-300 ${selectedIndex === i ? 'w-8 bg-gold' : 'w-2 bg-[#3B4F66]/30'}`}
+                aria-label={`Go to slide ${i + 1}`}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
-      <button onClick={scrollPrev} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full glass border border-primary-foreground/20 flex items-center justify-center hover:bg-primary-foreground/10 active:scale-95 transition-all" aria-label="Previous slide">
-        <ChevronLeft size={18} className="text-primary-foreground" />
-      </button>
-      <button onClick={scrollNext} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full glass border border-primary-foreground/20 flex items-center justify-center hover:bg-primary-foreground/10 active:scale-95 transition-all" aria-label="Next slide">
-        <ChevronRight size={18} className="text-primary-foreground" />
-      </button>
-
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
-        {slides.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => emblaApi?.scrollTo(i)}
-            className={`h-2 rounded-full transition-all duration-300 ${selectedIndex === i ? 'w-8 bg-gold' : 'w-2 bg-primary-foreground/40'}`}
-            aria-label={`Go to slide ${i + 1}`}
-          />
-        ))}
-      </div>
-
-      <div className="absolute bottom-0 left-0 right-0 bg-card/90 backdrop-blur border-t border-gold/10">
+      <div className="border-t border-gold/10 bg-card/80 backdrop-blur">
         <div className="container mx-auto px-4 py-3 flex items-center justify-center gap-6 md:gap-10 flex-wrap text-sm font-medium text-foreground">
           {(heroBadges || []).map((b, i) => (
             <span key={i}>{b}</span>

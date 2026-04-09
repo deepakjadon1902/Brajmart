@@ -30,6 +30,10 @@ const badgeLabels: Record<string, string> = {
 
 const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
+  const cardImages = Array.isArray(product.images) && product.images.length
+    ? product.images
+    : (product.image ? [product.image] : []);
+  const hoverImage = cardImages.length > 1 ? cardImages[1] : cardImages[0];
   const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
   const badge = product.tags?.includes('bestseller')
     ? 'bestseller'
@@ -77,7 +81,20 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
     >
       {/* Image */}
       <Link to={`/product/${product.slug}`} className="relative aspect-square overflow-hidden bg-pearl">
-        <img src={product.image} alt={product.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]" />
+        <img
+          src={cardImages[0] || product.image}
+          alt={product.name}
+          loading="lazy"
+          className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
+        />
+        {hoverImage && hoverImage !== (cardImages[0] || product.image) && (
+          <img
+            src={hoverImage}
+            alt={`${product.name} alternate`}
+            loading="lazy"
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}
+          />
+        )}
         {badge && (
           <span className={`absolute top-3 left-3 px-2.5 py-1 text-[0.65rem] font-semibold rounded-full tracking-wide ${badgeStyles[badge]}`}>
             {badgeLabels[badge]}
@@ -130,7 +147,6 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
 };
 
 export default ProductCard;
-
 
 
 

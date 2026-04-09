@@ -12,6 +12,11 @@ const mapProductRow = (row: any) => ({
   price: Number(row.price),
   originalPrice: row.original_price !== null ? Number(row.original_price) : undefined,
   image: row.image,
+  images: (() => {
+    const parsed = parseJson(row.images, []);
+    if (Array.isArray(parsed) && parsed.length) return parsed;
+    return row.image ? [row.image] : [];
+  })(),
   category: row.category,
   rating: Number(row.rating ?? 0),
   reviewCount: Number(row.review_count ?? 0),
@@ -38,6 +43,7 @@ const buildUpdate = (data: any) => {
   if (data.price !== undefined) set('price', data.price);
   if (data.originalPrice !== undefined) set('original_price', data.originalPrice);
   if (data.image !== undefined) set('image', data.image);
+  if (data.images !== undefined) set('images', JSON.stringify(data.images || []));
   if (data.category !== undefined) set('category', data.category);
   if (data.rating !== undefined) set('rating', data.rating);
   if (data.reviewCount !== undefined) set('review_count', data.reviewCount);
@@ -79,14 +85,16 @@ router.post('/', auth, adminOnly, async (req, res) => {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const data = req.body || {};
+    const images = Array.isArray(data.images) && data.images.length ? data.images : (data.image ? [data.image] : []);
     const result: any = await dbExecute(
-      'INSERT INTO products (name, slug, price, original_price, image, category, rating, review_count, badge, tags, in_stock, sold_count, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO products (name, slug, price, original_price, image, images, category, rating, review_count, badge, tags, in_stock, sold_count, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         data.name,
         data.slug,
         data.price,
         data.originalPrice ?? null,
         data.image,
+        JSON.stringify(images || []),
         data.category,
         data.rating ?? 0,
         data.reviewCount ?? 0,

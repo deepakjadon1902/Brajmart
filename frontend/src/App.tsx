@@ -18,6 +18,7 @@ import ProfilePage from "./pages/ProfilePage";
 import SearchPage from "./pages/SearchPage";
 import AboutPage from "./pages/AboutPage";
 import BlogPage from "./pages/BlogPage";
+import BlogPostPage from "./pages/BlogPostPage";
 import ContactPage from "./pages/ContactPage";
 import HelpCenterPage from "./pages/HelpCenterPage";
 import CustomerServicePage from "./pages/CustomerServicePage";
@@ -48,6 +49,7 @@ import AdminShipments from "./pages/admin/AdminShipments";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminHero from "./pages/admin/AdminHero";
+import AdminBlogs from "./pages/admin/AdminBlogs";
 import { fetchPublicSettings } from "./lib/api";
 import { useSettingsStore } from "./store/settingsStore";
 import { useProductStore } from "./store/productStore";
@@ -159,6 +161,7 @@ const App = () => {
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/blog" element={<BlogPage />} />
+          <Route path="/blog/:slug" element={<BlogPostPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/help-center" element={<HelpCenterPage />} />
           <Route path="/customer-service" element={<CustomerServicePage />} />
@@ -180,6 +183,7 @@ const App = () => {
             <Route path="orders" element={<AdminOrders />} />
             <Route path="products" element={<AdminProducts />} />
             <Route path="categories" element={<AdminCategories />} />
+            <Route path="blogs" element={<AdminBlogs />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="shipments" element={<AdminShipments />} />

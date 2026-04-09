@@ -2,7 +2,7 @@ import { Outlet, useNavigate, Link, useLocation, Navigate } from 'react-router-d
 import { useAdminStore } from '@/store/adminStore';
 import {
   LayoutDashboard, Users, ShoppingBag, Package, Truck, CreditCard,
-  Tags, BarChart3, LogOut, Settings, ChevronRight, Menu, X,
+  Tags, BarChart3, LogOut, Settings, ChevronRight, Menu, X, PenLine,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -13,6 +13,7 @@ const navItems = [
   { label: 'Orders', icon: ShoppingBag, path: '/admin/orders' },
   { label: 'Products', icon: Package, path: '/admin/products' },
   { label: 'Categories', icon: Tags, path: '/admin/categories' },
+  { label: 'Blogs', icon: PenLine, path: '/admin/blogs' },
   { label: 'Shipments', icon: Truck, path: '/admin/shipments' },
   { label: 'Payments', icon: CreditCard, path: '/admin/payments' },
   { label: 'Hero Slides', icon: LayoutDashboard, path: '/admin/hero' },

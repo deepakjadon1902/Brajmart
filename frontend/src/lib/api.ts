@@ -179,3 +179,15 @@ export const updateHeroSlide = (id: string, payload: Record<string, unknown>) =>
   getJson(`/hero-slides/${id}`, { method: 'PUT', body: payload });
 export const deleteHeroSlide = (id: string) =>
   getJson(`/hero-slides/${id}`, { method: 'DELETE' });
+
+// Blogs
+export const fetchBlogs = () => getJson('/blogs');
+export const fetchBlogBySlug = (slug: string) => getJson(`/blogs/${slug}`);
+export const fetchAdminBlogs = () => getJson('/blogs/admin');
+export const fetchAdminBlogBySlug = (slug: string) => getJson(`/blogs/admin/${slug}`);
+export const createBlog = (payload: Record<string, unknown>) =>
+  getJson('/blogs', { method: 'POST', body: payload });
+export const updateBlog = (id: string, payload: Record<string, unknown>) =>
+  getJson(`/blogs/${id}`, { method: 'PUT', body: payload });
+export const deleteBlog = (id: string) =>
+  getJson(`/blogs/${id}`, { method: 'DELETE' });
