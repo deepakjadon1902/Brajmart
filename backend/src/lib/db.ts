@@ -41,14 +41,37 @@ export const connectDb = async () => {
 
 export const isDbConnected = () => connected && !!pool;
 
+const shouldReconnect = (err: any) => {
+  const code = err?.code || err?.errno || '';
+  const message = String(err?.message || '');
+  return (
+    code === 'PROTOCOL_CONNECTION_LOST' ||
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'EPIPE' ||
+    message.includes('ECONNRESET')
+  );
+};
+
+const withRetry = async <T>(fn: () => Promise<T>) => {
+  try {
+    return await fn();
+  } catch (err) {
+    if (!shouldReconnect(err)) throw err;
+    connected = false;
+    await connectDb();
+    return await fn();
+  }
+};
+
 export const dbQuery = async <T = any>(sql: string, params: any[] = []): Promise<T[]> => {
   if (!pool) throw new Error('Database not initialized');
-  const [rows] = await pool.query(sql, params);
+  const [rows] = await withRetry(() => pool!.query(sql, params));
   return rows as T[];
 };
 
 export const dbExecute = async (sql: string, params: any[] = []) => {
   if (!pool) throw new Error('Database not initialized');
-  const [result] = await pool.execute(sql, params);
+  const [result] = await withRetry(() => pool!.execute(sql, params));
   return result as any;
 };

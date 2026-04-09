@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ScrollReveal } from '../ui/ScrollReveal';
 import { useSettingsStore } from '@/store/settingsStore';
+import { Instagram, Facebook, Youtube, MessageCircle } from 'lucide-react';
 
 const footerLinks = {
   'Get to Know Us': [
@@ -63,20 +64,42 @@ const Footer = () => {
               )}
               <span className="font-cinzel text-lg font-bold text-gold">{settings.storeName}</span>
             </Link>
+            <p className="text-primary-foreground/70 text-xs leading-relaxed mb-2">
+              {settings.tagline}
+            </p>
             <p className="text-primary-foreground/60 text-xs leading-relaxed mb-2">
               {settings.storeAddress}
             </p>
             {settings.storeEmail && <p className="text-primary-foreground/50 text-xs mb-1">📧 {settings.storeEmail}</p>}
             {settings.storePhone && <p className="text-primary-foreground/50 text-xs mb-3">📞 {settings.storePhone}</p>}
-            <div className="flex gap-3 text-primary-foreground/50">
-              {settings.socialLinks.instagram && <a href={settings.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors text-xs">IG</a>}
-              {settings.socialLinks.facebook && <a href={settings.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors text-xs">FB</a>}
-              {settings.socialLinks.youtube && <a href={settings.socialLinks.youtube} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors text-xs">YT</a>}
-              {settings.socialLinks.whatsapp && <a href={settings.socialLinks.whatsapp} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors text-xs">WA</a>}
+            <div className="flex gap-3 text-primary-foreground/60">
+              {settings.socialLinks.instagram && (
+                <a href={settings.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors" aria-label="Instagram">
+                  <Instagram size={18} />
+                </a>
+              )}
+              {settings.socialLinks.facebook && (
+                <a href={settings.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors" aria-label="Facebook">
+                  <Facebook size={18} />
+                </a>
+              )}
+              {settings.socialLinks.youtube && (
+                <a href={settings.socialLinks.youtube} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors" aria-label="YouTube">
+                  <Youtube size={18} />
+                </a>
+              )}
+              {settings.socialLinks.whatsapp && (
+                <a href={settings.socialLinks.whatsapp} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors" aria-label="WhatsApp">
+                  <MessageCircle size={18} />
+                </a>
+              )}
               {!settings.socialLinks.instagram && !settings.socialLinks.facebook && !settings.socialLinks.youtube && !settings.socialLinks.whatsapp && (
-                ['Instagram', 'Facebook', 'YouTube', 'WhatsApp'].map((s) => (
-                  <a key={s} href="#" className="hover:text-gold transition-colors text-xs">{s.slice(0, 2)}</a>
-                ))
+                <>
+                  <span className="text-primary-foreground/40"><Instagram size={18} /></span>
+                  <span className="text-primary-foreground/40"><Facebook size={18} /></span>
+                  <span className="text-primary-foreground/40"><Youtube size={18} /></span>
+                  <span className="text-primary-foreground/40"><MessageCircle size={18} /></span>
+                </>
               )}
             </div>
           </div>
