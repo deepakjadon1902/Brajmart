@@ -4,7 +4,7 @@ import { brajDestinations } from '@/data/brajDestinations';
 import { MapPin } from 'lucide-react';
 
 const BrajYatra = () => (
-  <section className="py-14 md:py-20 bg-[#1a1a3e] relative overflow-hidden">
+  <section className="py-12 md:py-20 bg-[#1a1a3e] relative overflow-hidden">
     <div className="container mx-auto px-4">
       <ScrollReveal>
         <div className="text-center mb-10">
@@ -22,7 +22,7 @@ const BrajYatra = () => (
         </div>
       </ScrollReveal>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 max-w-5xl mx-auto">
         {brajDestinations.map((d, i) => (
           <ScrollReveal key={d.id} delay={i * 0.08}>
             <Link

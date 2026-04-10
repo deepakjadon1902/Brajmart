@@ -13,14 +13,14 @@ const ExclusiveBooks = () => {
   const topBooks = exclusiveBooks.slice(0, 4);
 
   return (
-    <section className="py-14 md:py-20 bg-maroon relative overflow-hidden">
+    <section className="py-12 md:py-20 bg-maroon relative overflow-hidden">
       <div className="container mx-auto px-4">
-        <div className="grid md:grid-cols-2 gap-10 items-center">
+        <div className="grid md:grid-cols-2 gap-8 md:gap-10 items-center">
           <ScrollReveal direction="left">
             <span className="inline-block px-3 py-1 rounded-full bg-gold-gradient text-maroon-dark text-xs font-bold mb-4">
               BRAJMART EXCLUSIVE
             </span>
-            <h2 className="font-cinzel text-2xl md:text-4xl font-bold text-primary-foreground leading-tight mb-3">
+            <h2 className="font-cinzel text-2xl sm:text-3xl md:text-4xl font-bold text-primary-foreground leading-tight mb-3">
               Brajmart Exclusive Books
             </h2>
             <h3 className="font-playfair italic text-gold-light text-lg mb-4">

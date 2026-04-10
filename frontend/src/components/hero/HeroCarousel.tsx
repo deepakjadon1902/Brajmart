@@ -42,13 +42,13 @@ const HeroCarousel = () => {
     <section className="relative bg-background">
       <div className="container mx-auto px-4 py-6 md:py-10">
         <div className="relative">
-          <div className="overflow-hidden rounded-[28px] border border-border shadow-lg bg-white" ref={emblaRef}>
+          <div className="overflow-hidden rounded-[22px] md:rounded-[28px] border border-border shadow-lg bg-white" ref={emblaRef}>
             <div className="flex">
               {slides.map((slide, i) => (
                 <div key={slide.id} className="flex-none w-full">
-                  <div className="grid md:grid-cols-[1fr_2fr] h-[300px] md:h-[420px] lg:h-[460px] bg-white">
+                  <div className="grid md:grid-cols-[1fr_2fr] md:h-[420px] lg:h-[460px] bg-white">
                     {/* Text panel */}
-                    <div className="bg-[#FBF4EC] px-6 md:px-10 py-8 flex items-center">
+                    <div className="bg-[#FBF4EC] px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center">
                       <div className="max-w-sm">
                         <AnimatePresence mode="wait">
                           {selectedIndex === i && (
@@ -64,7 +64,7 @@ const HeroCarousel = () => {
                                   {slide.tag}
                                 </span>
                               )}
-                              <h1 className="font-cinzel text-3xl md:text-5xl lg:text-5xl font-bold text-[#3B4F66] leading-[1.12] mb-3">
+                              <h1 className="font-cinzel text-2xl sm:text-3xl md:text-5xl lg:text-5xl font-bold text-[#3B4F66] leading-[1.12] mb-3">
                                 {slide.title}
                               </h1>
                               {slide.subtitle && (
@@ -84,7 +84,7 @@ const HeroCarousel = () => {
                     </div>
 
                     {/* Image panel */}
-                    <div className="relative bg-white">
+                    <div className="relative bg-white min-h-[190px] sm:min-h-[240px] md:min-h-0">
                       {slide.image ? (
                         <img
                           src={slide.image}
@@ -102,14 +102,14 @@ const HeroCarousel = () => {
             </div>
           </div>
 
-          <button onClick={scrollPrev} className="absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white border border-border flex items-center justify-center hover:bg-pearl active:scale-95 transition-all" aria-label="Previous slide">
+          <button onClick={scrollPrev} className="hidden sm:flex absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-white border border-border items-center justify-center hover:bg-pearl active:scale-95 transition-all" aria-label="Previous slide">
             <ChevronLeft size={18} className="text-[#3B4F66]" />
           </button>
-          <button onClick={scrollNext} className="absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white border border-border flex items-center justify-center hover:bg-pearl active:scale-95 transition-all" aria-label="Next slide">
+          <button onClick={scrollNext} className="hidden sm:flex absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-white border border-border items-center justify-center hover:bg-pearl active:scale-95 transition-all" aria-label="Next slide">
             <ChevronRight size={18} className="text-[#3B4F66]" />
           </button>
 
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-white/80 backdrop-blur px-3 py-2 rounded-full border border-border">
+          <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-white/80 backdrop-blur px-3 py-2 rounded-full border border-border">
             {slides.map((_, i) => (
               <button
                 key={i}
@@ -123,7 +123,7 @@ const HeroCarousel = () => {
       </div>
 
       <div className="border-t border-gold/10 bg-card/80 backdrop-blur">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-center gap-6 md:gap-10 flex-wrap text-sm font-medium text-foreground">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-center gap-3 sm:gap-6 md:gap-10 flex-wrap text-[0.7rem] sm:text-sm font-medium text-foreground">
           {(heroBadges || []).map((b, i) => (
             <span key={i}>{b}</span>
           ))}

@@ -114,10 +114,10 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
       </Link>
 
       {/* Details */}
-      <div className="flex flex-col gap-1.5 p-4 flex-1">
+      <div className="flex flex-col gap-1.5 p-3 sm:p-4 flex-1">
         <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">{product.category}</span>
         <Link to={`/product/${product.slug}`}>
-          <h3 className="font-playfair text-sm font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors">{product.name}</h3>
+          <h3 className="font-playfair text-[0.85rem] sm:text-sm font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors">{product.name}</h3>
         </Link>
         <div className="flex items-center gap-1">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -126,18 +126,18 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
           <span className="text-[0.65rem] text-muted-foreground ml-1">({product.reviewCount})</span>
         </div>
         <div className="flex items-center gap-2 mt-auto pt-1">
-          <span className="text-saffron font-bold text-base">{formatPrice(product.price)}</span>
+          <span className="text-saffron font-bold text-sm sm:text-base">{formatPrice(product.price)}</span>
           {product.originalPrice && <span className="text-muted-foreground line-through text-xs">{formatPrice(product.originalPrice)}</span>}
         </div>
         {product.soldCount && <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>}
       </div>
 
-      <div className="px-4 pb-4">
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={handleAddToCart} className="w-full py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer active:scale-[0.97] transition-transform">
+      <div className="px-3 sm:px-4 pb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <button onClick={handleAddToCart} className="w-full py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-xs sm:text-sm font-bold shimmer active:scale-[0.97] transition-transform">
             <ShoppingCart size={14} className="inline mr-1.5 -mt-0.5" /> Add to Cart
           </button>
-          <button onClick={handleBuyNow} className="w-full py-2.5 rounded-xl border border-gold/40 text-gold text-sm font-bold hover:bg-gold/10 transition-colors">
+          <button onClick={handleBuyNow} className="w-full py-2.5 rounded-xl border border-gold/40 text-gold text-xs sm:text-sm font-bold hover:bg-gold/10 transition-colors">
             Buy Now
           </button>
         </div>
@@ -147,7 +147,6 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
 };
 
 export default ProductCard;
-
 
 
 

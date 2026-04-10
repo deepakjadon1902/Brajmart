@@ -24,17 +24,17 @@ const SectionHeader = ({
   ornamentIconUrl = DEFAULT_ORNAMENT_ICON_URL,
   light = false,
 }: SectionHeaderProps) => (
-  <ScrollReveal className="text-center mb-10 md:mb-14">
+  <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
     {/* Lotus ornament */}
     <div className="flex items-center justify-center gap-3 mb-4">
-      <span className="h-px w-12 bg-gold/40" />
+      <span className="h-px w-8 sm:w-12 bg-gold/40" />
       <img
         src={ornamentIconUrl}
         alt=""
         aria-hidden="true"
-        className="h-6 w-6 opacity-80"
+        className="h-5 w-5 sm:h-6 sm:w-6 opacity-80"
       />
-      <span className="h-px w-12 bg-gold/40" />
+      <span className="h-px w-8 sm:w-12 bg-gold/40" />
     </div>
 
     {tag && (
@@ -43,14 +43,14 @@ const SectionHeader = ({
       </span>
     )}
 
-    <h2 className={`font-cinzel text-2xl md:text-3xl lg:text-4xl font-bold leading-tight ${light ? 'text-primary-foreground' : 'text-maroon'}`}>
+    <h2 className={`font-cinzel text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold leading-tight ${light ? 'text-primary-foreground' : 'text-maroon'}`}>
       <span className="inline-flex items-center justify-center gap-2">
         {titleIconUrl && (
           <img
             src={titleIconUrl}
             alt=""
             aria-hidden="true"
-            className="h-6 w-6 md:h-7 md:w-7"
+            className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7"
           />
         )}
         {title}
@@ -58,7 +58,7 @@ const SectionHeader = ({
     </h2>
 
     {subtitle && (
-      <p className={`mt-2 font-playfair italic text-base md:text-lg ${light ? 'text-gold-light' : 'text-muted-foreground'}`}>
+      <p className={`mt-2 font-playfair italic text-sm sm:text-base md:text-lg ${light ? 'text-gold-light' : 'text-muted-foreground'}`}>
         {subtitle}
       </p>
     )}

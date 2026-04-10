@@ -12,7 +12,7 @@ const stats = [
 const Testimonials = () => {
   if (!testimonials || testimonials.length === 0) return null;
   return (
-  <section className="py-14 md:py-20 bg-card">
+  <section className="py-12 md:py-20 bg-card">
     <div className="container mx-auto px-4">
       <ScrollReveal>
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -41,7 +41,7 @@ const Testimonials = () => {
       </ScrollReveal>
 
       {/* Reviews grid */}
-      <div className="grid md:grid-cols-3 gap-5 max-w-5xl mx-auto">
+      <div className="grid md:grid-cols-3 gap-4 sm:gap-5 max-w-5xl mx-auto">
         {testimonials.slice(0, 3).map((t, i) => (
           <ScrollReveal key={t.id} delay={i * 0.1}>
             <div className="p-5 rounded-2xl bg-pearl border border-border border-l-4 border-l-gold shadow-sm">

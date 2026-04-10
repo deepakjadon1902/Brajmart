@@ -25,7 +25,7 @@ const CollectionSection = ({
   ornamentIconUrl,
   bgClass = '',
 }: CollectionSectionProps) => (
-  <section className={`py-14 md:py-20 ${bgClass}`}>
+  <section className={`py-10 sm:py-12 md:py-20 ${bgClass}`}>
     <div className="container mx-auto px-4">
       <SectionHeader
         tag={tag}

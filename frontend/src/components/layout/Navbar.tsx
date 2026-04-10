@@ -38,20 +38,20 @@ const Navbar = () => {
 
   return (
     <header className={`sticky top-0 z-40 transition-all duration-300 ${scrolled ? 'glass shadow-md border-b border-gold/20' : 'bg-card border-b border-border'}`}>
-      <div className="container mx-auto flex items-center gap-4 h-16 md:h-[72px] px-4">
+      <div className="container mx-auto flex items-center gap-3 sm:gap-4 h-16 md:h-[72px] px-4">
         <button className="md:hidden text-foreground" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu">
           {mobileOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
 
-        <Link to="/" className="flex items-center gap-3 shrink-0">
+        <Link to="/" className="flex items-center gap-2 sm:gap-3 shrink-0">
           {settings.storeLogo ? (
-            <img src={settings.storeLogo} alt={settings.storeName} className="w-10 h-10 md:w-11 md:h-11 rounded object-contain" />
+            <img src={settings.storeLogo} alt={settings.storeName} className="w-9 h-9 md:w-11 md:h-11 rounded object-contain" />
           ) : (
             <span className="text-3xl">🪷</span>
           )}
           <div className="leading-none">
-            <span className="font-cinzel text-2xl md:text-[1.6rem] font-bold text-maroon-gold-gradient">{settings.storeName}</span>
-            <span className="block text-[0.65rem] md:text-xs text-foreground/80 tracking-[0.2em] font-playfair">{settings.tagline}</span>
+            <span className="font-cinzel text-[1.25rem] sm:text-2xl md:text-[1.6rem] font-bold text-maroon-gold-gradient">{settings.storeName}</span>
+            <span className="hidden sm:block text-[0.65rem] md:text-xs text-foreground/80 tracking-[0.2em] font-playfair">{settings.tagline}</span>
           </div>
         </Link>
 
@@ -71,16 +71,16 @@ const Navbar = () => {
         </form>
 
         <div className="flex items-center gap-1 sm:gap-2 ml-auto md:ml-0">
-          <Link to="/track-orders" className="relative p-2 rounded-full hover:bg-muted transition-colors" aria-label="Track Orders">
+          <Link to="/track-orders" className="relative p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Track Orders">
             <MapPin size={20} className="text-foreground" />
           </Link>
-          <Link to="/wishlist" className="relative p-2 rounded-full hover:bg-muted transition-colors" aria-label="Wishlist">
+          <Link to="/wishlist" className="relative p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Wishlist">
             <Heart size={20} className="text-foreground" />
             {wishlistCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-saffron text-primary-foreground text-[0.55rem] font-bold rounded-full flex items-center justify-center">{wishlistCount}</span>
             )}
           </Link>
-          <Link to="/cart" className="relative p-2 rounded-full hover:bg-muted transition-colors" aria-label="Cart">
+          <Link to="/cart" className="relative p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Cart">
             <ShoppingCart size={20} className="text-foreground" />
             {cartCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-saffron text-primary-foreground text-[0.55rem] font-bold rounded-full flex items-center justify-center">{cartCount}</span>
