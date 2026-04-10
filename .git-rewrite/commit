@@ -1,8 +1,8 @@
-tree 2c392cefc07556b8009b7f322ddc9fe4bcf6b15a
-parent 49590a05ac35aa334a6d9b0f712de52661602182
-author gpt-engineer-app[bot] <159125892+gpt-engineer-app[bot]@users.noreply.github.com> 1774073613 +0000
-committer gpt-engineer-app[bot] <159125892+gpt-engineer-app[bot]@users.noreply.github.com> 1774073613 +0000
+tree f4c4c4fae9d20bd3ec535a8f443b21ac9870a77c
+parent 976aa10382b44c2f0c3bdb952d30160a822c14e2
+author gpt-engineer-app[bot] <159125892+gpt-engineer-app[bot]@users.noreply.github.com> 1775108688 +0000
+committer gpt-engineer-app[bot] <159125892+gpt-engineer-app[bot]@users.noreply.github.com> 1775108688 +0000
 
-Changes
+Improve settings sync
 
 Co-authored-by: deepakjadon1902 <167414676+deepakjadon1902@users.noreply.github.com>
