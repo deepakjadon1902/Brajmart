@@ -124,7 +124,7 @@ const Footer = () => {
         <div className="container mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-2 text-xs text-primary-foreground/50">
           <span>© 2025 {settings.storeName}. Made with 🙏 in Vrindavan, India</span>
           <span className="font-devanagari text-primary-foreground/40">हरे कृष्ण 🌸 Hare Krishna</span>
-          <span>{settings.upiEnabled && 'UPI'} {settings.cardEnabled && '• Visa • Mastercard'} {settings.codEnabled && '• COD'}</span>
+          <span>{settings.upiEnabled && 'UPI'} {settings.cardEnabled && '• Visa • Mastercard'}</span>
         </div>
       </div>
     </footer>

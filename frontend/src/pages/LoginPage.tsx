@@ -33,6 +33,9 @@ const LoginPage = () => {
       toast.success('Welcome back!');
       navigate('/');
     } else {
+      if (result.message?.toLowerCase().includes('verify')) {
+        navigate(`/verify-otp?email=${encodeURIComponent(email)}`);
+      }
       toast.error(result.message || 'Login failed');
     }
   };
@@ -41,10 +44,7 @@ const LoginPage = () => {
     setLoading(true);
     const result = await loginWithGoogle();
     setLoading(false);
-    if (result.ok) {
-      toast.success('Signed in with Google');
-      navigate('/');
-    } else {
+    if (!result.ok) {
       toast.error(result.message || 'Google login failed');
     }
   };

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Product } from '@/types/product';
 import { fetchCart, updateCart, clearCartApi, getAuthToken } from '@/lib/api';
+import { createUserScopedStorage } from '@/lib/userStorage';
 
 export interface CartItem {
   product: Product;
@@ -117,6 +118,6 @@ export const useCartStore = create<CartStore>()(
         return sum + saving * i.quantity;
       }, 0),
     }),
-    { name: 'brajmart-cart' }
+    { name: 'brajmart-cart', storage: createUserScopedStorage('brajmart-cart') }
   )
 );

@@ -31,7 +31,6 @@ interface StoreSettings {
   maxOrderQuantity: number;
   deliveryEtaMinDays: number;
   deliveryEtaMaxDays: number;
-  codEnabled: boolean;
   upiEnabled: boolean;
   cardEnabled: boolean;
   storeLogo: string;
@@ -72,7 +71,6 @@ export const useSettingsStore = create<SettingsStore>()(
         maxOrderQuantity: 0,
         deliveryEtaMinDays: 0,
         deliveryEtaMaxDays: 0,
-        codEnabled: true,
         upiEnabled: true,
         cardEnabled: true,
         storeLogo: '',
@@ -81,7 +79,7 @@ export const useSettingsStore = create<SettingsStore>()(
         upiPayeeName: '',
         metaTitle: '',
         metaDescription: '',
-        heroBadges: ['??? Temple Authenticated', '?? 100% Organic', '?? Pan-India Delivery', '?? COD Available'],
+        heroBadges: ['??? Temple Authenticated', '?? 100% Organic', '?? Pan-India Delivery'],
       },
       updateSettings: (partial) =>
         set((s) => ({ settings: { ...s.settings, ...partial } })),

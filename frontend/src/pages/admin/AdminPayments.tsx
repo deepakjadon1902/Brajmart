@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CreditCard, Wallet, Banknote, DollarSign, AlertCircle } from 'lucide-react';
+import { CreditCard, Wallet, DollarSign, AlertCircle } from 'lucide-react';
 import { fetchPayments } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -30,7 +30,6 @@ const AdminPayments = () => {
 
   const icons: Record<string, any> = {
     UPI: Wallet,
-    COD: Banknote,
     Card: CreditCard,
     'PayU UPI': Wallet,
     'PayU Card': CreditCard,
@@ -55,7 +54,7 @@ const AdminPayments = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center mb-3"><AlertCircle size={20} className="text-white" /></div>
           <p className="text-2xl font-bold text-white">₹{pendingRevenue.toLocaleString('en-IN')}</p>
-          <p className="text-sm text-slate-400">Pending (COD)</p>
+          <p className="text-sm text-slate-400">Pending</p>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-3"><DollarSign size={20} className="text-white" /></div>

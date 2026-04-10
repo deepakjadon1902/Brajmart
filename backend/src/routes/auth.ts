@@ -1,15 +1,36 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { auth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import bcrypt from 'bcryptjs';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
+import { sendVerifyEmail, sendVerifyOtp } from '../lib/email';
 
 const router = Router();
 
 const signToken = (user: { id: string; email: string; role?: string }) =>
   jwt.sign(user, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
 
+const getOauthClient = () => {
+  const clientId = process.env.GOOGLE_CLIENT_ID || '';
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+  const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+  const redirectUri = `${backendUrl.replace(/\/$/, '')}/api/auth/google/callback`;
+  return new OAuth2Client(clientId, clientSecret, redirectUri);
+};
+
+const buildVerifyLink = (token: string) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+  return `${frontendUrl.replace(/\/$/, '')}/verify-email?token=${encodeURIComponent(token)}`;
+};
+
+const OTP_MINUTES = 10;
+const createOtp = () => {
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  return { otp, expires: new Date(Date.now() + OTP_MINUTES * 60 * 1000) };
+};
 
 const mapUserRow = (row: any) => ({
   _id: String(row.id),
@@ -38,16 +59,21 @@ router.post('/register', async (req, res) => {
     if (existing.length) return res.status(400).json({ message: 'Email already registered' });
 
     const passwordHash = await bcrypt.hash(password, 12);
+    const verification = createOtp();
     const result: any = await dbExecute(
       'INSERT INTO users (name, email, password, phone, role, status, google_id, avatar, is_verified, verification_token, verification_token_expires, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, email, passwordHash, '', 'user', 'active', null, '', 1, null, null, JSON.stringify([])]
+      [name, email, passwordHash, '', 'user', 'active', null, '', 0, verification.otp, verification.expires, JSON.stringify([])]
     );
 
     const userId = String(result.insertId);
-    res.status(201).json({
-      token: signToken({ id: userId, email, role: 'user' }),
-      user: { id: userId, name, email, role: 'user' },
-    });
+    try {
+      await sendVerifyOtp(email, { otp: verification.otp, minutes: OTP_MINUTES });
+    } catch {
+      await dbExecute('DELETE FROM users WHERE id = ?', [userId]);
+      return res.status(500).json({ message: 'Unable to send verification email. Please try again.' });
+    }
+
+    res.status(201).json({ message: 'Verification code sent to your email.' });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -62,6 +88,22 @@ router.post('/login', async (req, res) => {
     const row = rows[0];
     if (!row || !(await bcrypt.compare(password, row.password))) {
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+    if (row.status && row.status !== 'active') {
+      return res.status(403).json({ message: 'Account is blocked. Please contact support.' });
+    }
+    if (!row.is_verified) {
+      const verification = createOtp();
+      await dbExecute(
+        'UPDATE users SET verification_token = ?, verification_token_expires = ? WHERE id = ?',
+        [verification.otp, verification.expires, row.id]
+      );
+      try {
+        await sendVerifyOtp(row.email, { otp: verification.otp, minutes: OTP_MINUTES });
+      } catch {
+        return res.status(500).json({ message: 'Unable to send verification email. Please try again.' });
+      }
+      return res.status(403).json({ message: 'Please verify your email. A new verification code has been sent.', code: 'EMAIL_NOT_VERIFIED', email: row.email });
     }
 
     res.json({ token: signToken({ id: String(row.id), email, role: row.role }), user: { id: String(row.id), name: row.name, email, role: row.role } });
@@ -99,11 +141,47 @@ router.post('/admin-login', async (req, res) => {
   res.json({ token: signToken({ id: 'admin', email, role: 'admin' }), user: { id: 'admin', name: 'Admin', email, role: 'admin' } });
 });
 
-router.post('/google', async (req, res) => {
+router.get('/google/start', async (_req, res) => {
   try {
-    const { email, name, googleId, avatar } = req.body;
-    if (!email || !name || !googleId) return res.status(400).json({ message: 'Missing fields' });
-    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return res.status(500).json({ message: 'Google OAuth not configured' });
+
+    const client = getOauthClient();
+    const url = client.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: ['openid', 'email', 'profile'],
+    });
+    res.redirect(url);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Failed to start Google OAuth' });
+  }
+});
+
+router.get('/google/callback', async (req, res) => {
+  try {
+    const code = String(req.query.code || '');
+    if (!code) return res.status(400).send('Missing Google code');
+    if (!isDbConnected()) return res.status(503).send('Database unavailable');
+
+    const client = getOauthClient();
+    const { tokens } = await client.getToken(code);
+    const idToken = tokens.id_token;
+    if (!idToken) return res.status(400).send('Missing Google ID token');
+
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email || !payload?.name || !payload?.sub) return res.status(400).send('Invalid Google profile');
+    if (!payload.email_verified) return res.status(403).send('Google email not verified');
+
+    const email = payload.email;
+    const name = payload.name;
+    const googleId = payload.sub;
+    const avatar = payload.picture || '';
 
     const rows = await dbQuery<any>('SELECT * FROM users WHERE email = ? LIMIT 1', [email]);
     let row = rows[0];
@@ -111,16 +189,23 @@ router.post('/google', async (req, res) => {
       const passwordHash = await bcrypt.hash(googleId + (process.env.JWT_SECRET || 'secret'), 12);
       const result: any = await dbExecute(
         'INSERT INTO users (name, email, password, phone, role, status, google_id, avatar, is_verified, verification_token, verification_token_expires, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, email, passwordHash, '', 'user', 'active', googleId, avatar || '', 1, null, null, JSON.stringify([])]
+        [name, email, passwordHash, '', 'user', 'active', googleId, avatar, 1, null, null, JSON.stringify([])]
       );
-      row = { id: result.insertId, name, email, role: 'user' };
-    } else if (!row.is_verified) {
-      await dbExecute('UPDATE users SET is_verified = ?, verification_token = NULL, verification_token_expires = NULL WHERE id = ?', [1, row.id]);
+      row = { id: result.insertId, name, email, role: 'user', status: 'active' };
+    } else {
+      if (row.status && row.status !== 'active') return res.status(403).send('Account is blocked');
+      await dbExecute(
+        'UPDATE users SET google_id = ?, avatar = ?, is_verified = ?, verification_token = NULL, verification_token_expires = NULL WHERE id = ?',
+        [row.google_id || googleId, avatar || row.avatar || '', 1, row.id]
+      );
     }
 
-    res.json({ token: signToken({ id: String(row.id), email, role: row.role || 'user' }), user: { id: String(row.id), name: row.name, email, role: row.role || 'user' } });
+    const token = signToken({ id: String(row.id), email, role: row.role || 'user' });
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+    const redirectUrl = `${frontendUrl.replace(/\/$/, '')}/oauth-callback?token=${encodeURIComponent(token)}`;
+    res.redirect(redirectUrl);
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    res.status(500).send(err?.message || 'Google OAuth failed');
   }
 });
 
@@ -141,6 +226,58 @@ router.get('/verify', async (req, res) => {
     res.json({ message: 'Email verified successfully' });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const otp = String(req.body?.otp || '').trim();
+    if (!email || !otp) return res.status(400).json({ message: 'Email and OTP are required' });
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+
+    const rows = await dbQuery<any>(
+      'SELECT id, verification_token_expires FROM users WHERE LOWER(email) = ? AND verification_token = ? LIMIT 1',
+      [email, otp]
+    );
+    const row = rows[0];
+    if (!row) return res.status(400).json({ message: 'Invalid code' });
+    if (row.verification_token_expires && new Date(row.verification_token_expires) < new Date()) {
+      return res.status(400).json({ message: 'Code expired' });
+    }
+
+    await dbExecute('UPDATE users SET is_verified = 1, verification_token = NULL, verification_token_expires = NULL WHERE id = ?', [row.id]);
+
+    const refreshed = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [row.id]);
+    const userRow = refreshed[0];
+    if (!userRow) return res.json({ message: 'Email verified successfully' });
+    const token = signToken({ id: String(userRow.id), email: userRow.email, role: userRow.role || 'user' });
+    res.json({ message: 'Email verified successfully', token, user: { id: String(userRow.id), name: userRow.name, email: userRow.email, role: userRow.role || 'user' } });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Verification failed' });
+  }
+});
+
+router.post('/resend-otp', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+
+    const rows = await dbQuery<any>('SELECT id, is_verified FROM users WHERE LOWER(email) = ? LIMIT 1', [email]);
+    const row = rows[0];
+    if (!row) return res.status(404).json({ message: 'User not found' });
+    if (row.is_verified) return res.status(400).json({ message: 'Email already verified' });
+
+    const verification = createOtp();
+    await dbExecute(
+      'UPDATE users SET verification_token = ?, verification_token_expires = ? WHERE id = ?',
+      [verification.otp, verification.expires, row.id]
+    );
+    await sendVerifyOtp(email, { otp: verification.otp, minutes: OTP_MINUTES });
+    res.json({ message: 'Verification code sent.' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Unable to resend code' });
   }
 });
 

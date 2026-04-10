@@ -1,6 +1,6 @@
 ﻿import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { googleLogin, loginUser, registerUser, setAuthToken, updateMyProfile } from '@/lib/api';
+import { fetchMe, loginUser, registerUser, resendOtp, setAuthToken, startGoogleAuth, updateMyProfile, verifyOtp } from '@/lib/api';
 
 export interface User {
   id: string;
@@ -22,6 +22,9 @@ interface AuthStore {
   login: (email: string, password: string) => Promise<{ ok: boolean; message?: string }>;
   register: (data: { fullName: string; email: string; password: string; mobile?: string }) => Promise<{ ok: boolean; message?: string }>;
   loginWithGoogle: () => Promise<{ ok: boolean; message?: string }>;
+  verifyOtp: (payload: { email: string; otp: string }) => Promise<{ ok: boolean; message?: string }>;
+  resendOtp: (payload: { email: string }) => Promise<{ ok: boolean; message?: string }>;
+  completeOAuthLogin: (token: string) => Promise<{ ok: boolean; message?: string }>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<{ ok: boolean; message?: string }>;
 }
@@ -51,44 +54,66 @@ export const useAuthStore = create<AuthStore>()(
       register: async (data) => {
         try {
           const res: any = await registerUser({ name: data.fullName, email: data.email, password: data.password });
-          if (res?.token) {
-            setAuthToken(res.token);
-            const user: User = {
-              id: res.user.id,
-              fullName: res.user.name,
-              email: res.user.email,
-              mobile: data.mobile,
-              authProvider: 'email',
-            };
-            set({ user, isAuthenticated: true, token: res.token });
-            return { ok: true };
-          }
-          return { ok: true, message: res?.message || 'Verification email sent' };
+          return { ok: true, message: res?.message || 'Verification code sent' };
         } catch (err: any) {
           return { ok: false, message: err?.message || 'Registration failed' };
         }
       },
       loginWithGoogle: async () => {
         try {
-          const mockGooglePayload = {
-            name: 'Krishna Devotee',
-            email: 'devotee@gmail.com',
-            googleId: crypto.randomUUID(),
-            avatar: 'https://ui-avatars.com/api/?name=Krishna+Devotee&background=f59e0b&color=fff',
-          };
-          const res: any = await googleLogin(mockGooglePayload);
-          setAuthToken(res.token);
-          const user: User = {
-            id: res.user.id,
-            fullName: res.user.name,
-            email: res.user.email,
-            avatar: mockGooglePayload.avatar,
-            authProvider: 'google',
-          };
-          set({ user, isAuthenticated: true, token: res.token });
-          return { ok: true };
+          startGoogleAuth();
+          return { ok: true, message: 'Redirecting to Google...' };
         } catch (err: any) {
           return { ok: false, message: err?.message || 'Google login failed' };
+        }
+      },
+      verifyOtp: async (payload) => {
+        try {
+          const res: any = await verifyOtp(payload);
+          if (res?.token && res?.user) {
+            setAuthToken(res.token);
+            const user: User = {
+              id: res.user.id,
+              fullName: res.user.name,
+              email: res.user.email,
+              authProvider: 'email',
+            };
+            set({ user, isAuthenticated: true, token: res.token });
+          }
+          return { ok: true, message: res?.message || 'Email verified successfully' };
+        } catch (err: any) {
+          return { ok: false, message: err?.message || 'Verification failed' };
+        }
+      },
+      resendOtp: async (payload) => {
+        try {
+          const res: any = await resendOtp(payload);
+          return { ok: true, message: res?.message || 'Verification code sent' };
+        } catch (err: any) {
+          return { ok: false, message: err?.message || 'Unable to resend code' };
+        }
+      },
+      completeOAuthLogin: async (token) => {
+        try {
+          setAuthToken(token);
+          const res: any = await fetchMe();
+          const user: User = {
+            id: res._id || res.id,
+            fullName: res.name,
+            email: res.email,
+            mobile: res.phone || '',
+            address: '',
+            city: '',
+            state: '',
+            pincode: '',
+            avatar: res.avatar || '',
+            authProvider: res.googleId ? 'google' : 'email',
+          };
+          set({ user, isAuthenticated: true, token });
+          return { ok: true };
+        } catch (err: any) {
+          setAuthToken('');
+          return { ok: false, message: err?.message || 'OAuth login failed' };
         }
       },
       logout: () => {

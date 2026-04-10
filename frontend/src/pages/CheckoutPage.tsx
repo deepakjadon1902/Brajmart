@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Truck, QrCode, Zap } from 'lucide-react';
+import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, QrCode, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
@@ -22,7 +22,7 @@ const emptyAddress: Address = { fullName: '', mobile: '', street: '', city: '', 
 
 const CheckoutPage = () => {
   const [step, setStep] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState('cod');
+  const [paymentMethod, setPaymentMethod] = useState('upi');
   const [upiMode, setUpiMode] = useState<'payu' | 'qr'>('payu');
   const [upiQr, setUpiQr] = useState('');
   const [placedOrderId, setPlacedOrderId] = useState('');
@@ -103,7 +103,6 @@ const CheckoutPage = () => {
           taxRate: data.taxRate,
           minOrderAmount: data.minOrderAmount,
           maxOrderQuantity: data.maxOrderQuantity,
-          codEnabled: data.codEnabled,
           upiEnabled: data.upiEnabled,
           cardEnabled: data.cardEnabled,
           maintenanceMode: data.maintenanceMode,
@@ -269,13 +268,7 @@ const CheckoutPage = () => {
       return;
     }
 
-    if (paymentMethod === 'cod') {
-      setProcessing(true);
-      setTimeout(() => {
-        createOrderAndRecord('COD', 'pending', `COD-${Date.now().toString(36).toUpperCase()}`);
-        setProcessing(false);
-      }, 1000);
-    } else if (paymentMethod === 'upi') {
+    if (paymentMethod === 'upi') {
       if (upiMode === 'payu') {
         startPayuPayment('upi');
         return;
@@ -324,25 +317,16 @@ const CheckoutPage = () => {
       pills: ['Visa', 'Mastercard', 'RuPay', 'Amex', 'Maestro'],
       badge: 'Bank Offers',
     }] : []),
-    ...(settings.codEnabled ? [{
-      value: 'cod',
-      title: 'Cash on Delivery',
-      subtitle: 'Pay at your doorstep',
-      icon: Truck,
-      pills: ['Cash', 'UPI on delivery'],
-      badge: 'Flexible',
-    }] : []),
   ];
 
   useEffect(() => {
     const available: string[] = [];
     if (settings.upiEnabled) available.push('upi');
     if (settings.cardEnabled) available.push('card');
-    if (settings.codEnabled) available.push('cod');
     if (available.length > 0 && !available.includes(paymentMethod)) {
       setPaymentMethod(available[0]);
     }
-  }, [settings.codEnabled, settings.upiEnabled, settings.cardEnabled, paymentMethod]);
+  }, [settings.upiEnabled, settings.cardEnabled, paymentMethod]);
 
   const paymentGatewayLabel = 'PayU';
 
@@ -614,12 +598,6 @@ const CheckoutPage = () => {
                     )}
 
 
-                    {paymentMethod === 'cod' && (
-                      <div className="mt-4 p-4 rounded-xl border border-border bg-muted/30 text-xs text-muted-foreground">
-                        Pay by cash or UPI at the time of delivery. Please keep the exact amount ready.
-                      </div>
-                    )}
-
                     <div className="mt-5 p-4 rounded-xl border border-gold/30 bg-gold/5 text-sm">
                       <div className="flex items-center gap-2 text-foreground font-medium">
                         <ShieldCheck size={16} className="text-gold" />
@@ -637,11 +615,9 @@ const CheckoutPage = () => {
                     >
                       {processing
                         ? 'Processing Payment...'
-                        : paymentMethod === 'cod'
-                          ? `Place Order - ${formatPrice(grandTotal)}`
-                          : paymentMethod === 'upi' && upiMode === 'qr'
-                            ? `Confirm UPI Payment - ${formatPrice(grandTotal)}`
-                            : `Pay with PayU - ${formatPrice(grandTotal)}`}
+                        : paymentMethod === 'upi' && upiMode === 'qr'
+                          ? `Confirm UPI Payment - ${formatPrice(grandTotal)}`
+                          : `Pay with PayU - ${formatPrice(grandTotal)}`}
                     </button>
                   </div>
                 </motion.div>
@@ -737,7 +713,6 @@ const CheckoutPage = () => {
 };
 
 export default CheckoutPage;
-
 
 
 

@@ -34,7 +34,7 @@ const mapSettingsRow = (row: any) => ({
   socialLinks: parseJson(row.social_links, { instagram: '', facebook: '', youtube: '', whatsapp: '' }),
   announcementBar: parseJson(row.announcement_bar, { enabled: true, messages: [] }),
   notifications: parseJson(row.notifications, { orders: true, users: true, payments: true, stock: false }),
-  heroBadges: parseJson(row.hero_badges, ['🏛️ Temple Authenticated', '🌿 100% Organic', '🚚 Pan-India Delivery', '📦 COD Available']),
+  heroBadges: parseJson(row.hero_badges, ['🏛️ Temple Authenticated', '🌿 100% Organic', '🚚 Pan-India Delivery']),
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
 });

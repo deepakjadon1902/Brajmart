@@ -17,7 +17,7 @@ const topics = [
 
 const faqs = [
   { q: 'How do I track my order?', a: 'You can track your order by visiting the "My Orders" section in your profile or using the Track Order page. Enter your order ID and registered email to get real-time status updates.' },
-  { q: 'What payment methods do you accept?', a: 'We accept UPI (Google Pay, PhonePe, Paytm), Credit/Debit Cards (Visa, Mastercard, RuPay), Net Banking, Wallets, and Cash on Delivery (COD) across India.' },
+  { q: 'What payment methods do you accept?', a: 'We accept UPI (Google Pay, PhonePe, Paytm), Credit/Debit Cards (Visa, Mastercard, RuPay), Net Banking, and Wallets across India.' },
   { q: 'How long does delivery take?', a: 'Standard delivery takes 5-7 business days. Express delivery (available in select cities) takes 2-3 business days. Prasadam orders are dispatched within 24 hours for freshness.' },
   { q: 'Can I return a product?', a: 'Yes, most products can be returned within 7 days of delivery. Perishable items like Prasadam are non-returnable. Visit our Return Policy page for complete details.' },
   { q: 'Are your products authentic?', a: 'Absolutely! All our products are sourced directly from Vrindavan temples, certified artisans, and organic farms. Each product comes with an authenticity guarantee.' },

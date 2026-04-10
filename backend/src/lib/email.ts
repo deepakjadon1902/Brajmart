@@ -1,6 +1,5 @@
 import nodemailer from 'nodemailer';
 
-
 let cachedTransporter: nodemailer.Transporter | null = null;
 let verifiedOnce = false;
 
@@ -32,8 +31,7 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
   const from = `BrajMart <${fromAddress}>`;
   const transporter = getTransporter();
   if (!transporter) {
-    console.warn('SMTP not configured. Skipping email send.');
-    return;
+    throw new Error('SMTP not configured');
   }
   try {
     if (!verifiedOnce) {
@@ -137,4 +135,14 @@ export const sendVerifyEmail = async (to: string, payload: { link: string }) => 
      <p style="word-break:break-all;">${payload.link}</p>`
   );
   await sendEmail(to, 'Verify your BrajMart email', html);
+};
+
+export const sendVerifyOtp = async (to: string, payload: { otp: string; minutes: number }) => {
+  const html = brandWrapper(
+    'Your Verification Code',
+    `<p>Use the verification code below to complete your sign up.</p>
+     <p style="font-size:22px;letter-spacing:4px;font-weight:700;color:#3b1c12;">${payload.otp}</p>
+     <p>This code expires in ${payload.minutes} minutes.</p>`
+  );
+  await sendEmail(to, 'Your BrajMart verification code', html);
 };

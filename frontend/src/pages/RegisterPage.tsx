@@ -33,12 +33,8 @@ const RegisterPage = () => {
     const result = await register(form);
     setLoading(false);
     if (result.ok) {
-      toast.success(result.message || 'Account created. You can sign in now.');
-      if (!result.message) {
-        navigate('/');
-      } else {
-        navigate('/login');
-      }
+      toast.success(result.message || 'Verification code sent to your email.');
+      navigate(`/verify-otp?email=${encodeURIComponent(form.email)}`);
     } else {
       toast.error(result.message || 'Registration failed');
     }
@@ -48,10 +44,7 @@ const RegisterPage = () => {
     setLoading(true);
     const result = await loginWithGoogle();
     setLoading(false);
-    if (result.ok) {
-      toast.success('Signed up with Google');
-      navigate('/');
-    } else {
+    if (!result.ok) {
       toast.error(result.message || 'Google sign up failed');
     }
   };

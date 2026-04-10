@@ -9,6 +9,8 @@ import Home from "./pages/Home";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
+import OAuthCallbackPage from "./pages/OAuthCallbackPage";
+import VerifyOtpPage from "./pages/VerifyOtpPage";
 import CartPage from "./pages/CartPage";
 import WishlistPage from "./pages/WishlistPage";
 import CategoryPage from "./pages/CategoryPage";
@@ -55,6 +57,7 @@ import { useSettingsStore } from "./store/settingsStore";
 import { useProductStore } from "./store/productStore";
 import { useCartStore } from "./store/cartStore";
 import { useAuthStore } from "./store/authStore";
+import { useWishlistStore } from "./store/wishlistStore";
 
 const queryClient = new QueryClient();
 
@@ -63,7 +66,11 @@ const App = () => {
   const settings = useSettingsStore((s) => s.settings);
   const loadProducts = useProductStore((s) => s.loadFromApi);
   const loadCart = useCartStore((s) => s.loadFromApi);
+  const clearCart = useCartStore((s) => s.clearCart);
+  const clearWishlist = useWishlistStore((s) => s.clear);
   const authToken = useAuthStore((s) => s.token);
+  const sanitizeBadges = (badges?: string[]) =>
+    (badges || []).filter((b) => !/\bCOD\b/i.test(b) && !/cash on delivery/i.test(b));
 
   useEffect(() => {
     let active = true;
@@ -85,7 +92,6 @@ const App = () => {
           maxOrderQuantity: data.maxOrderQuantity,
           deliveryEtaMinDays: data.deliveryEtaMinDays ?? 3,
           deliveryEtaMaxDays: data.deliveryEtaMaxDays ?? 7,
-          codEnabled: data.codEnabled,
           upiEnabled: data.upiEnabled,
           cardEnabled: data.cardEnabled,
           maintenanceMode: data.maintenanceMode,
@@ -98,7 +104,7 @@ const App = () => {
           socialLinks: data.socialLinks,
           announcementBar: data.announcementBar,
           notifications: data.notifications,
-          heroBadges: data.heroBadges,
+          heroBadges: sanitizeBadges(data.heroBadges),
         });
       } catch {
         // Keep locally persisted defaults
@@ -115,6 +121,15 @@ const App = () => {
   useEffect(() => {
     if (authToken) loadCart();
   }, [authToken, loadCart]);
+
+  useEffect(() => {
+    if (!authToken) {
+      clearCart();
+      clearWishlist();
+      return;
+    }
+    useWishlistStore.persist.rehydrate();
+  }, [authToken, clearCart, clearWishlist]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -146,6 +161,8 @@ const App = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/verify-otp" element={<VerifyOtpPage />} />
+          <Route path="/oauth-callback" element={<OAuthCallbackPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />

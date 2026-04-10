@@ -26,7 +26,6 @@ const AdminSettings = () => {
   const [maxOrderQuantity, setMaxOrderQuantity] = useState(settings.maxOrderQuantity);
   const [deliveryEtaMinDays, setDeliveryEtaMinDays] = useState(settings.deliveryEtaMinDays);
   const [deliveryEtaMaxDays, setDeliveryEtaMaxDays] = useState(settings.deliveryEtaMaxDays);
-  const [codEnabled, setCodEnabled] = useState(settings.codEnabled);
   const [upiEnabled, setUpiEnabled] = useState(settings.upiEnabled);
   const [cardEnabled, setCardEnabled] = useState(settings.cardEnabled);
   const [maintenanceMode, setMaintenanceMode] = useState(settings.maintenanceMode);
@@ -43,6 +42,8 @@ const AdminSettings = () => {
   const [testEmail, setTestEmail] = useState('');
 
   const [socialLinks, setSocialLinks] = useState(settings.socialLinks);
+  const sanitizeBadges = (badges?: string[]) =>
+    (badges || []).filter((b) => !/\bCOD\b/i.test(b) && !/cash on delivery/i.test(b));
 
   useEffect(() => {
     let active = true;
@@ -51,7 +52,8 @@ const AdminSettings = () => {
       try {
         const data = await fetchPublicSettings();
         if (!active || !data) return;
-        updateSettings(data);
+        const { codEnabled: _codEnabled, ...safeData } = data || {};
+        updateSettings({ ...safeData, heroBadges: sanitizeBadges(safeData.heroBadges) });
         setStoreName(data.storeName);
         setTagline(data.tagline);
         setCurrency(data.currency);
@@ -65,7 +67,6 @@ const AdminSettings = () => {
         setMaxOrderQuantity(data.maxOrderQuantity);
         setDeliveryEtaMinDays(data.deliveryEtaMinDays ?? settings.deliveryEtaMinDays);
         setDeliveryEtaMaxDays(data.deliveryEtaMaxDays ?? settings.deliveryEtaMaxDays);
-        setCodEnabled(data.codEnabled);
         setUpiEnabled(data.upiEnabled);
         setCardEnabled(data.cardEnabled);
         setMaintenanceMode(data.maintenanceMode);
@@ -77,7 +78,7 @@ const AdminSettings = () => {
         setAnnouncementEnabled(data.announcementBar?.enabled ?? announcementEnabled);
         setAnnouncementMsgs(data.announcementBar?.messages ?? announcementMessages);
         setSocialLinks(data.socialLinks || socialLinks);
-        setHeroBadges(data.heroBadges || heroBadges);
+        setHeroBadges(sanitizeBadges(data.heroBadges || heroBadges));
       } catch (err: any) {
         toast.error(err?.message || 'Failed to load settings');
       } finally {
@@ -95,7 +96,7 @@ const AdminSettings = () => {
         storeName, tagline, currency, storeEmail, storePhone, storeAddress,
         freeShippingThreshold, shippingFee, taxRate, minOrderAmount, maxOrderQuantity,
         deliveryEtaMinDays, deliveryEtaMaxDays,
-        codEnabled, upiEnabled, cardEnabled, maintenanceMode,
+        upiEnabled, cardEnabled, maintenanceMode,
         metaTitle, metaDescription, storeLogo, upiId, upiPayeeName,
         announcementBar: { enabled: announcementEnabled, messages: announcementMessages },
         socialLinks,
@@ -278,13 +279,6 @@ const AdminSettings = () => {
       {activeTab === 'payments' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><CreditCard size={18} /> Payment Methods</h2>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-white">Cash on Delivery</p>
-              <p className="text-xs text-slate-400">Enable COD payments for customers</p>
-            </div>
-            <Toggle value={codEnabled} onChange={setCodEnabled} />
-          </div>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-white">UPI Payments</p>

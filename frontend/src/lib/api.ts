@@ -62,10 +62,20 @@ export const loginUser = (payload: { email: string; password: string }) =>
   getJson('/auth/login', { method: 'POST', body: payload });
 export const adminLogin = (payload: { email: string; password: string }) =>
   getJson('/auth/admin-login', { method: 'POST', body: payload });
-export const googleLogin = (payload: { email: string; name: string; googleId: string; avatar?: string }) =>
-  getJson('/auth/google', { method: 'POST', body: payload });
+export const startGoogleAuth = () => {
+  if (typeof window === 'undefined') return;
+  window.location.href = `${API_BASE}/auth/google/start`;
+};
 export const verifyEmail = (token: string) =>
   getJson(`/auth/verify?token=${encodeURIComponent(token)}`);
+
+export const fetchMe = () => getJson('/auth/me');
+
+export const verifyOtp = (payload: { email: string; otp: string }) =>
+  getJson('/auth/verify-otp', { method: 'POST', body: payload });
+
+export const resendOtp = (payload: { email: string }) =>
+  getJson('/auth/resend-otp', { method: 'POST', body: payload });
 
 export const createPayuOrder = (payload: {
   amount: number;

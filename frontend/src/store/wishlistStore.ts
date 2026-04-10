@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Product } from '@/types/product';
+import { createUserScopedStorage } from '@/lib/userStorage';
 
 interface WishlistStore {
   items: Product[];
@@ -8,6 +9,7 @@ interface WishlistStore {
   removeItem: (productId: string) => void;
   isInWishlist: (productId: string) => boolean;
   toggleItem: (product: Product) => void;
+  clear: () => void;
 }
 
 export const useWishlistStore = create<WishlistStore>()(
@@ -30,7 +32,8 @@ export const useWishlistStore = create<WishlistStore>()(
           set({ items: [...items, product] });
         }
       },
+      clear: () => set({ items: [] }),
     }),
-    { name: 'brajmart-wishlist' }
+    { name: 'brajmart-wishlist', storage: createUserScopedStorage('brajmart-wishlist') }
   )
 );
