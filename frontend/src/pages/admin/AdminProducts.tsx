@@ -72,9 +72,9 @@ const AdminProducts = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Products</h1>
-        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', images: [], description: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true, tags: [] }); }} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">
+        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', images: [], description: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true, tags: [] }); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
           <Plus size={16} /> Add Product
         </button>
       </div>
@@ -92,13 +92,13 @@ const AdminProducts = () => {
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs sm:text-sm min-w-[900px]">
             <thead><tr className="text-slate-400 border-b border-slate-800">
               <th className="text-left px-5 py-3 font-medium">Product</th>
-              <th className="text-left px-5 py-3 font-medium">Category</th>
+              <th className="text-left px-5 py-3 font-medium hidden sm:table-cell">Category</th>
               <th className="text-left px-5 py-3 font-medium">Price</th>
-              <th className="text-left px-5 py-3 font-medium">MRP</th>
-              <th className="text-left px-5 py-3 font-medium">Rating</th>
+              <th className="text-left px-5 py-3 font-medium hidden md:table-cell">MRP</th>
+              <th className="text-left px-5 py-3 font-medium hidden md:table-cell">Rating</th>
               <th className="text-left px-5 py-3 font-medium">Stock</th>
               <th className="text-left px-5 py-3 font-medium">Actions</th>
             </tr></thead>
@@ -111,10 +111,10 @@ const AdminProducts = () => {
                       <span className="text-white text-sm max-w-[200px] truncate">{p.name}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-slate-300">{p.category}</td>
-                  <td className="px-5 py-3 text-white font-medium">₹{p.price}</td>
-                  <td className="px-5 py-3 text-slate-400 line-through">₹{p.originalPrice || p.price}</td>
-                  <td className="px-5 py-3 text-amber-400">⭐ {p.rating}</td>
+                  <td className="px-5 py-3 text-slate-300 hidden sm:table-cell">{p.category}</td>
+                  <td className="px-5 py-3 text-white font-medium">INR {p.price}</td>
+                  <td className="px-5 py-3 text-slate-400 line-through hidden md:table-cell">INR {p.originalPrice || p.price}</td>
+                  <td className="px-5 py-3 text-amber-400 hidden md:table-cell">* {p.rating}</td>
                   <td className="px-5 py-3"><span className={`text-xs font-medium ${p.inStock ? 'text-emerald-400' : 'text-red-400'}`}>{p.inStock ? 'In Stock' : 'Out'}</span></td>
                   <td className="px-5 py-3 flex gap-2">
                     <button onClick={() => { setIsCreating(false); setEditProduct({ ...p, images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []), tags: Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []) }); }} className="text-blue-400 hover:text-blue-300"><Edit2 size={15} /></button>
@@ -218,9 +218,9 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
           <Field label="Name" value={form.name} onChange={(v) => update('name', v)} />
           <Field label="Slug" value={form.slug} onChange={(v) => update('slug', v)} />
           <Field label="Description" value={form.description || ''} onChange={(v) => update('description', v)} type="textarea" />
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Price (₹)" value={String(form.price)} onChange={(v) => update('price', Number(v))} type="number" />
-            <Field label="MRP (₹)" value={String(form.originalPrice || '')} onChange={(v) => update('originalPrice', Number(v))} type="number" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Price (INR)" value={String(form.price)} onChange={(v) => update('price', Number(v))} type="number" />
+            <Field label="MRP (INR)" value={String(form.originalPrice || '')} onChange={(v) => update('originalPrice', Number(v))} type="number" />
           </div>
           <div>
             <label className="block text-sm text-slate-300 mb-1">Category</label>
@@ -255,7 +255,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
                 >
                   <Upload size={14} /> Upload from Device
                 </button>
-                <p className="text-xs text-slate-500">JPG, PNG, WebP — any size</p>
+                <p className="text-xs text-slate-500">JPG, PNG, WebP - any size</p>
                 {imageError && <p className="text-xs text-red-400">{imageError}</p>}
               </div>
             </div>
@@ -264,7 +264,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
           {/* Gallery Images */}
           <div>
             <label className="block text-sm text-slate-300 mb-2">Gallery Images (2-4 recommended)</label>
-            <div className="grid grid-cols-4 gap-2 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
               {(Array.isArray(form.images) ? form.images : []).map((img, idx) => (
                 <div
                   key={`${img}-${idx}`}
@@ -305,7 +305,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
                 Add URL
               </button>
             </div>
-            <div className="mt-3 flex items-center gap-3">
+            <div className="mt-3 flex flex-wrap items-center gap-3">
               <input
                 ref={galleryInputRef}
                 type="file"
@@ -325,49 +325,49 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Rating" value={String(form.rating)} onChange={(v) => update('rating', Number(v))} type="number" />
             <Field label="Review Count" value={String(form.reviewCount)} onChange={(v) => update('reviewCount', Number(v))} type="number" />
           </div>
-      <div className="flex items-center gap-3">
-        <label className="text-sm text-slate-300">In Stock</label>
-        <button onClick={() => update('inStock', !form.inStock)} className={`w-10 h-5 rounded-full transition ${form.inStock ? 'bg-emerald-500' : 'bg-slate-600'}`}>
-          <div className={`w-4 h-4 rounded-full bg-white transition-transform ${form.inStock ? 'translate-x-5' : 'translate-x-0.5'}`} />
-        </button>
-      </div>
-      <div>
-        <label className="block text-sm text-slate-300 mb-2">Placement Tags</label>
-        <div className="grid grid-cols-2 gap-2">
-          {['latest', 'new', 'bestseller', 'accessories', 'prasadam', 'combo', 'exclusive'].map((tag) => {
-            const selected = Array.isArray(form.tags) && form.tags.includes(tag);
-            return (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => {
-                  const current = Array.isArray(form.tags) ? form.tags : [];
-                  const next = selected ? current.filter((t) => t !== tag) : [...current, tag];
-                  update('tags', next);
-                  const priority = ['bestseller', 'new', 'combo', 'exclusive'];
-                  const nextBadge = priority.find((t) => next.includes(t));
-                  update('badge', nextBadge);
-                }}
-                className={`px-3 py-2 rounded-lg text-xs font-medium border transition ${selected ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
-              >
-                {tag === 'latest' && 'Latest Products'}
-                {tag === 'new' && 'New Arrivals'}
-                {tag === 'bestseller' && 'Best Selling'}
-                {tag === 'accessories' && 'Top Accessories'}
-                {tag === 'prasadam' && 'Sacred Prasadam'}
-                {tag === 'combo' && 'Combo'}
-                {tag === 'exclusive' && 'Exclusive'}
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-xs text-slate-500 mt-2">Select one or more placements. Products will appear in all selected sections.</p>
-      </div>
-          <div className="flex gap-3 pt-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-sm text-slate-300">In Stock</label>
+            <button onClick={() => update('inStock', !form.inStock)} className={`w-10 h-5 rounded-full transition ${form.inStock ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${form.inStock ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">Placement Tags</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {['latest', 'new', 'bestseller', 'accessories', 'prasadam', 'combo', 'exclusive'].map((tag) => {
+                const selected = Array.isArray(form.tags) && form.tags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      const current = Array.isArray(form.tags) ? form.tags : [];
+                      const next = selected ? current.filter((t) => t !== tag) : [...current, tag];
+                      update('tags', next);
+                      const priority = ['bestseller', 'new', 'combo', 'exclusive'];
+                      const nextBadge = priority.find((t) => next.includes(t));
+                      update('badge', nextBadge);
+                    }}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium border transition ${selected ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
+                  >
+                    {tag === 'latest' && 'Latest Products'}
+                    {tag === 'new' && 'New Arrivals'}
+                    {tag === 'bestseller' && 'Best Selling'}
+                    {tag === 'accessories' && 'Top Accessories'}
+                    {tag === 'prasadam' && 'Sacred Prasadam'}
+                    {tag === 'combo' && 'Combo'}
+                    {tag === 'exclusive' && 'Exclusive'}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-slate-500 mt-2">Select one or more placements. Products will appear in all selected sections.</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-800 transition">Cancel</button>
             <button
               onClick={() => {

@@ -39,14 +39,14 @@ const AdminLayout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="min-h-screen bg-slate-950 flex overflow-x-hidden">
       {/* Mobile overlay */}
       {mobileOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen bg-slate-900 border-r border-slate-800 transition-all duration-300 flex flex-col ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+      <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen bg-slate-900 border-r border-slate-800 transition-all duration-300 flex flex-col ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} ${sidebarOpen ? 'w-72 lg:w-64' : 'w-20'} max-w-[85vw]`}>
         <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-800 shrink-0">
-          <span className="text-2xl">🪷</span>
+          <span className="text-2xl">BM</span>
           {sidebarOpen && <span className="text-lg font-bold text-white">BrajMart Admin</span>}
         </div>
 
@@ -82,7 +82,7 @@ const AdminLayout = () => {
       </aside>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex-1 flex flex-col min-h-screen min-w-0">
         <header className="sticky top-0 z-30 h-16 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 flex items-center px-4 gap-4">
           <button onClick={() => setMobileOpen(true)} className="lg:hidden text-slate-400 hover:text-white">
             <Menu size={22} />
@@ -92,12 +92,12 @@ const AdminLayout = () => {
           </button>
           <div className="ml-auto flex items-center gap-3">
             <Link to="/" className="text-xs text-slate-400 hover:text-amber-400 border border-slate-700 px-3 py-1.5 rounded-lg transition">
-              View Store →
+              View Store
             </Link>
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
+        <main className="flex-1 p-4 md:p-6 overflow-x-hidden">
           <Outlet />
         </main>
       </div>

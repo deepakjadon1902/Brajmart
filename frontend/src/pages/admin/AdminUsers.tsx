@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, MoreVertical, Ban, CheckCircle } from 'lucide-react';
+import { Search, Ban, CheckCircle } from 'lucide-react';
 import { fetchUsers, updateUserStatus } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -57,16 +57,16 @@ const AdminUsers = () => {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Users</h1>
 
-      <div className="flex gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex-1">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
           <p className="text-2xl font-bold text-white">{users.length}</p>
           <p className="text-sm text-slate-400">Total Users</p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex-1">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
           <p className="text-2xl font-bold text-emerald-400">{users.filter(u => u.status === 'active').length}</p>
           <p className="text-sm text-slate-400">Active</p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex-1">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
           <p className="text-2xl font-bold text-red-400">{users.filter(u => u.status === 'blocked').length}</p>
           <p className="text-sm text-slate-400">Blocked</p>
         </div>
@@ -79,12 +79,12 @@ const AdminUsers = () => {
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs sm:text-sm min-w-[760px]">
             <thead><tr className="text-slate-400 border-b border-slate-800">
               <th className="text-left px-5 py-3 font-medium">User</th>
               <th className="text-left px-5 py-3 font-medium">Joined</th>
-              <th className="text-left px-5 py-3 font-medium">Orders</th>
-              <th className="text-left px-5 py-3 font-medium">Spent</th>
+              <th className="text-left px-5 py-3 font-medium hidden sm:table-cell">Orders</th>
+              <th className="text-left px-5 py-3 font-medium hidden sm:table-cell">Spent</th>
               <th className="text-left px-5 py-3 font-medium">Status</th>
               <th className="text-left px-5 py-3 font-medium">Action</th>
             </tr></thead>
@@ -98,8 +98,8 @@ const AdminUsers = () => {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-slate-300">{new Date(u.joined).toLocaleDateString('en-IN')}</td>
-                  <td className="px-5 py-3 text-white">{u.orders}</td>
-                  <td className="px-5 py-3 text-white">₹{u.spent.toLocaleString('en-IN')}</td>
+                  <td className="px-5 py-3 text-white hidden sm:table-cell">{u.orders}</td>
+                  <td className="px-5 py-3 text-white hidden sm:table-cell">INR {u.spent.toLocaleString('en-IN')}</td>
                   <td className="px-5 py-3">
                     <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border ${u.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
                       {u.status}

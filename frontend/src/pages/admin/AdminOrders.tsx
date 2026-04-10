@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { OrderStatus } from '@/store/orderStore';
 import { StatusBadge } from './AdminDashboard';
-import { Search, Eye, X, ChevronDown } from 'lucide-react';
+import { Search, Eye, X } from 'lucide-react';
 import { fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -46,7 +46,7 @@ const AdminOrders = () => {
   const detail = selectedOrder ? orders.find((o) => o.id === selectedOrder) : null;
   const handleStatusUpdate = async (orderId: string, status: OrderStatus) => {
     try {
-const updated: any = await updateOrderStatusApi(orderId, { status, note: `Status updated to ${status}` });
+      const updated: any = await updateOrderStatusApi(orderId, { status, note: `Status updated to ${status}` });
       setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...(updated as object) } : o)));
       toast.success('Order updated');
     } catch (err: any) {
@@ -71,15 +71,15 @@ const updated: any = await updateOrderStatusApi(orderId, { status, note: `Status
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs sm:text-sm min-w-[980px]">
             <thead><tr className="text-slate-400 border-b border-slate-800">
               <th className="text-left px-5 py-3 font-medium">Order ID</th>
               <th className="text-left px-5 py-3 font-medium">Customer</th>
-              <th className="text-left px-5 py-3 font-medium">Items</th>
+              <th className="text-left px-5 py-3 font-medium hidden sm:table-cell">Items</th>
               <th className="text-left px-5 py-3 font-medium">Amount</th>
-              <th className="text-left px-5 py-3 font-medium">Payment</th>
+              <th className="text-left px-5 py-3 font-medium hidden sm:table-cell">Payment</th>
               <th className="text-left px-5 py-3 font-medium">Status</th>
-              <th className="text-left px-5 py-3 font-medium">Date</th>
+              <th className="text-left px-5 py-3 font-medium hidden md:table-cell">Date</th>
               <th className="text-left px-5 py-3 font-medium">Actions</th>
             </tr></thead>
             <tbody>
@@ -87,11 +87,11 @@ const updated: any = await updateOrderStatusApi(orderId, { status, note: `Status
                 <tr key={o.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                   <td className="px-5 py-3 text-amber-400 font-mono text-xs">{o.id}</td>
                   <td className="px-5 py-3 text-white">{o.shippingAddress.fullName}</td>
-                  <td className="px-5 py-3 text-slate-300">{o.items.length} items</td>
-                  <td className="px-5 py-3 text-white font-medium">₹{o.total.toLocaleString('en-IN')}</td>
-                  <td className="px-5 py-3 text-slate-300">{o.paymentMethod}</td>
+                  <td className="px-5 py-3 text-slate-300 hidden sm:table-cell">{o.items.length} items</td>
+                  <td className="px-5 py-3 text-white font-medium">INR {o.total.toLocaleString('en-IN')}</td>
+                  <td className="px-5 py-3 text-slate-300 hidden sm:table-cell">{o.paymentMethod}</td>
                   <td className="px-5 py-3"><StatusBadge status={o.status} /></td>
-                  <td className="px-5 py-3 text-slate-400 text-xs">{new Date(o.createdAt).toLocaleDateString('en-IN')}</td>
+                  <td className="px-5 py-3 text-slate-400 text-xs hidden md:table-cell">{new Date(o.createdAt).toLocaleDateString('en-IN')}</td>
                   <td className="px-5 py-3">
                     <button onClick={() => setSelectedOrder(o.id)} className="text-amber-400 hover:text-amber-300"><Eye size={16} /></button>
                   </td>
@@ -117,8 +117,11 @@ const updated: any = await updateOrderStatusApi(orderId, { status, note: `Status
                 {detail.items.map((item, i) => (
                   <div key={i} className="flex items-center gap-3 py-2">
                     <img src={item.product.image} alt={item.product.name} className="w-12 h-12 rounded-lg object-cover" />
-                    <div className="flex-1"><p className="text-white text-sm">{item.product.name}</p><p className="text-slate-400 text-xs">Qty: {item.quantity} × ₹{item.price}</p></div>
-                    <p className="text-white font-medium text-sm">₹{(item.price * item.quantity).toLocaleString('en-IN')}</p>
+                    <div className="flex-1">
+                      <p className="text-white text-sm">{item.product.name}</p>
+                      <p className="text-slate-400 text-xs">Qty: {item.quantity} x INR {item.price}</p>
+                    </div>
+                    <p className="text-white font-medium text-sm">INR {(item.price * item.quantity).toLocaleString('en-IN')}</p>
                   </div>
                 ))}
               </div>
@@ -129,8 +132,8 @@ const updated: any = await updateOrderStatusApi(orderId, { status, note: `Status
                 <div className="bg-slate-800/50 rounded-xl p-3 text-sm text-slate-300">
                   <p className="font-medium text-white">{detail.shippingAddress.fullName}</p>
                   <p>{detail.shippingAddress.street}, {detail.shippingAddress.city}</p>
-                  <p>{detail.shippingAddress.state} — {detail.shippingAddress.pincode}</p>
-                  <p>📞 {detail.shippingAddress.mobile}</p>
+                  <p>{detail.shippingAddress.state} - {detail.shippingAddress.pincode}</p>
+                  <p>Phone: {detail.shippingAddress.mobile}</p>
                 </div>
               </div>
 

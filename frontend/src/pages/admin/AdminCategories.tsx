@@ -1,5 +1,4 @@
-import * as React from "react";
-﻿import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Category } from '@/types/product';
 import { Plus, Edit2, Trash2, X, Upload, Image } from 'lucide-react';
@@ -48,9 +47,9 @@ const AdminCategories = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Categories</h1>
-        <button onClick={() => { setIsCreating(true); setEditing({ id: '', name: '', icon: '', color: '#f59e0b', productCount: 0 }); }} className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">
+        <button onClick={() => { setIsCreating(true); setEditing({ id: '', name: '', icon: '', color: '#f59e0b', productCount: 0 }); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
           <Plus size={16} /> Add Category
         </button>
       </div>
@@ -129,7 +128,7 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
           )}
           <div className="flex-1">
             <p className="text-sm text-slate-300">{form.icon ? 'Change icon image' : 'Upload icon image'}</p>
-            <p className="text-xs text-slate-500">PNG, JPG, WebP â€” any size</p>
+            <p className="text-xs text-slate-500">PNG, JPG, WebP - any size</p>
           </div>
           <Upload size={16} className="text-slate-400" />
         </div>
@@ -139,7 +138,7 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
         <label className="block text-sm text-slate-300 mb-1">Color</label>
         <input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} className="w-16 h-10 rounded-lg border border-slate-700 bg-slate-800 cursor-pointer" />
       </div>
-      <div className="flex gap-3 pt-2">
+      <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <button onClick={onClose} className="flex-1 py-2.5 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-800 transition">Cancel</button>
         <button onClick={() => onSave(form)} className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">{isCreating ? 'Create' : 'Save'}</button>
       </div>
@@ -148,5 +147,3 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
 };
 
 export default AdminCategories;
-
-

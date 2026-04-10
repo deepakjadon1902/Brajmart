@@ -263,7 +263,7 @@ const AdminSettings = () => {
       {activeTab === 'shipping' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Truck size={18} /> Shipping & Order Settings</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <InputField label="Free Shipping Above (₹)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
             <InputField label="Shipping Fee (₹)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
             <InputField label="Tax Rate (%)" value={String(taxRate)} onChange={(v) => setTaxRate(Number(v))} type="number" />
@@ -304,7 +304,7 @@ const AdminSettings = () => {
       {activeTab === 'notifications' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Bell size={18} /> Notifications</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {Object.entries(settings.notifications).map(([key, value]) => (
               <div key={key} className="flex items-center justify-between bg-slate-800 rounded-xl p-3">
                 <span className="text-sm text-white capitalize">{key}</span>
@@ -444,3 +444,4 @@ const InputField = ({ label, value, onChange, type = 'text' }: { label: string; 
 );
 
 export default AdminSettings;
+
