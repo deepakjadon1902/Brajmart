@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { sendPaymentReceipt, sendPaymentFailed, sendAdminPaymentNotice } from '../lib/email';
 import { getEtaConfig, getEtaText } from '../lib/eta';
+import { parseJson } from '../lib/dbHelpers';
 
 const router = Router();
 
@@ -34,11 +35,26 @@ router.post('/webhook', async (req, res) => {
       [token, normalized, payment.order_id, payment.amount, payment.method, newTxnId]
     );
 
+    let orderDetails: any = null;
+    if (payment.order_id) {
+      const orderRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [payment.order_id]);
+      const orderRow = orderRows[0];
+      if (orderRow) {
+        orderDetails = {
+          items: parseJson(orderRow.items, []),
+          total: Number(orderRow.total),
+          paymentMethod: orderRow.payment_method,
+          shippingAddress: parseJson(orderRow.shipping_address, {}),
+          billingAddress: parseJson(orderRow.billing_address, {}),
+        };
+      }
+    }
+
     if (payment.customer_email) {
       if (normalized === 'paid') {
-        sendPaymentReceipt(payment.customer_email, { orderId: String(payment.order_id), amount: payment.amount, paymentId: newTxnId, eta: etaText }).catch(() => {});
+        sendPaymentReceipt(payment.customer_email, { orderId: String(payment.order_id), amount: payment.amount, paymentId: newTxnId, eta: etaText, details: orderDetails }).catch(() => {});
       } else if (normalized === 'failed') {
-        sendPaymentFailed(payment.customer_email, { orderId: String(payment.order_id), amount: payment.amount, paymentId: newTxnId, eta: etaText }).catch(() => {});
+        sendPaymentFailed(payment.customer_email, { orderId: String(payment.order_id), amount: payment.amount, paymentId: newTxnId, eta: etaText, details: orderDetails }).catch(() => {});
       }
     }
     if (normalized === 'paid' || normalized === 'failed') {

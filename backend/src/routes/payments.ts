@@ -3,7 +3,7 @@ import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { auth, adminOnly } from '../middleware/auth';
 import { sendPaymentReceipt, sendPaymentFailed, sendAdminPaymentNotice } from '../lib/email';
 import { getEtaConfig, getEtaText } from '../lib/eta';
-import { toIsoString } from '../lib/dbHelpers';
+import { parseJson, toIsoString } from '../lib/dbHelpers';
 
 const router = Router();
 
@@ -68,11 +68,26 @@ router.post('/', auth, async (req, res) => {
     const rows = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [result.insertId]);
     const payment = mapPaymentRow(rows[0]);
 
+    let orderDetails: any = null;
+    if (payment.orderId) {
+      const orderRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [payment.orderId]);
+      const orderRow = orderRows[0];
+      if (orderRow) {
+        orderDetails = {
+          items: parseJson(orderRow.items, []),
+          total: Number(orderRow.total),
+          paymentMethod: orderRow.payment_method,
+          shippingAddress: parseJson(orderRow.shipping_address, {}),
+          billingAddress: parseJson(orderRow.billing_address, {}),
+        };
+      }
+    }
+
     if (payment.customerEmail) {
       if (payment.status === 'paid') {
-        sendPaymentReceipt(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText }).catch(() => {});
+        sendPaymentReceipt(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText, details: orderDetails }).catch(() => {});
       } else if (payment.status === 'failed') {
-        sendPaymentFailed(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText }).catch(() => {});
+        sendPaymentFailed(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText, details: orderDetails }).catch(() => {});
       }
     }
 
@@ -102,6 +117,9 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
+    const { min, max } = await getEtaConfig();
+    const etaText = getEtaText(min, max);
+
     await dbExecute('UPDATE payments SET status = ?, updated_at = NOW() WHERE id = ?', [req.body.status, req.params.id]);
     const rows = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [req.params.id]);
     const payment = rows[0] ? mapPaymentRow(rows[0]) : null;
@@ -113,7 +131,29 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
       );
     }
 
+    let orderDetails: any = null;
+    if (payment?.orderId) {
+      const orderRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [payment.orderId]);
+      const orderRow = orderRows[0];
+      if (orderRow) {
+        orderDetails = {
+          items: parseJson(orderRow.items, []),
+          total: Number(orderRow.total),
+          paymentMethod: orderRow.payment_method,
+          shippingAddress: parseJson(orderRow.shipping_address, {}),
+          billingAddress: parseJson(orderRow.billing_address, {}),
+        };
+      }
+    }
+
     if (payment && (payment.status === 'paid' || payment.status === 'failed')) {
+      if (payment.customerEmail) {
+        if (payment.status === 'paid') {
+          sendPaymentReceipt(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText, details: orderDetails }).catch(() => {});
+        } else {
+          sendPaymentFailed(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText, details: orderDetails }).catch(() => {});
+        }
+      }
       sendAdminPaymentNotice({
         status: payment.status as 'paid' | 'failed',
         orderId: String(payment.orderId),

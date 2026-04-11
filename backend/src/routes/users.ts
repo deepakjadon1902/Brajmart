@@ -35,8 +35,10 @@ router.get('/', auth, adminOnly, async (_req, res) => {
 router.put('/me', auth, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    const userIdRaw = req.user?.id;
+    if (!userIdRaw) return res.status(401).json({ message: 'Unauthorized' });
+    const userId = Number(userIdRaw);
+    if (!Number.isFinite(userId)) return res.status(401).json({ message: 'Unauthorized' });
 
     const {
       fullName,
@@ -62,24 +64,32 @@ router.put('/me', auth, async (req: AuthRequest, res) => {
 
     const currentRows = await dbQuery<any>('SELECT email FROM users WHERE id = ? LIMIT 1', [userId]);
     if (!currentRows[0]) return res.status(404).json({ message: 'User not found' });
-    const currentEmailRaw = String(currentRows[0].email || '');
-    const currentEmail = currentEmailRaw.trim().toLowerCase();
+    const currentEmailRaw = String(currentRows[0].email || '').trim();
+    const currentEmail = currentEmailRaw.toLowerCase();
     const nextEmailRaw = String(email || '').trim();
     const nextEmail = nextEmailRaw.toLowerCase();
+    let finalEmailRaw = nextEmailRaw ? nextEmailRaw : currentEmailRaw;
+    let emailConflict = false;
 
-    if (nextEmail && nextEmail !== currentEmail) {
-      const exists = await dbQuery<any>('SELECT id FROM users WHERE LOWER(email) = ? AND id <> ? LIMIT 1', [nextEmail, userId]);
-      if (exists.length) return res.status(400).json({ message: 'Email already in use' });
+    if (nextEmailRaw && nextEmail !== currentEmail) {
+      const exists = await dbQuery<any>(
+        'SELECT id FROM users WHERE LOWER(email) = ? AND id <> ? LIMIT 1',
+        [nextEmail, userId]
+      );
+      if (exists.length) {
+        emailConflict = true;
+        finalEmailRaw = currentEmailRaw;
+      }
     }
 
     await dbExecute(
       'UPDATE users SET name = ?, email = ?, phone = ?, addresses = ?, updated_at = NOW() WHERE id = ?',
-      [fullName || '', nextEmailRaw || currentEmailRaw, mobile || '', JSON.stringify(addresses), userId]
+      [fullName || '', finalEmailRaw, mobile || '', JSON.stringify(addresses), userId]
     );
 
     const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [userId]);
     if (!rows[0]) return res.status(404).json({ message: 'User not found' });
-    res.json(mapUserRow(rows[0]));
+    res.json({ ...mapUserRow(rows[0]), emailConflict });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }

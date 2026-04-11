@@ -66,36 +66,120 @@ const brandWrapper = (title: string, body: string) => `
   </div>
 `;
 
-export const sendOrderConfirmation = async (to: string, payload: { orderId: string; total: number; itemsCount: number; eta?: string }) => {
+type OrderItem = { name?: string; quantity?: number; price?: number };
+type OrderAddress = { fullName?: string; mobile?: string; street?: string; city?: string; state?: string; pincode?: string };
+
+const formatMoney = (value?: number) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '';
+  return `&#8377;${Number(value).toLocaleString('en-IN')}`;
+};
+
+const renderItemsTable = (items?: OrderItem[]) => {
+  if (!Array.isArray(items) || items.length === 0) return '';
+  const rows = items.map((item) => {
+    const qty = Number(item.quantity || 0);
+    const price = Number(item.price || 0);
+    const subtotal = qty * price;
+    return `
+      <tr>
+        <td style="padding:8px 6px;border-bottom:1px solid #efe6d6;">${item.name || 'Item'}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #efe6d6;text-align:center;">${qty || 1}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #efe6d6;text-align:right;">${formatMoney(price)}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #efe6d6;text-align:right;">${formatMoney(subtotal)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #dbcdb8;">Item</th>
+          <th style="text-align:center;padding:8px 6px;border-bottom:1px solid #dbcdb8;">Qty</th>
+          <th style="text-align:right;padding:8px 6px;border-bottom:1px solid #dbcdb8;">Price</th>
+          <th style="text-align:right;padding:8px 6px;border-bottom:1px solid #dbcdb8;">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+};
+
+const renderAddress = (label: string, addr?: OrderAddress) => {
+  if (!addr) return '';
+  const parts = [addr.street, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ');
+  const hasAny = addr.fullName || addr.mobile || parts;
+  if (!hasAny) return '';
+  return `
+    <p style="margin:8px 0 4px;"><strong>${label}</strong></p>
+    <p style="margin:0;">${addr.fullName || ''}${addr.mobile ? `, ${addr.mobile}` : ''}</p>
+    ${parts ? `<p style="margin:2px 0 0;">${parts}</p>` : ''}
+  `;
+};
+
+const renderOrderDetails = (payload: {
+  items?: OrderItem[];
+  total?: number;
+  paymentMethod?: string;
+  transactionId?: string;
+  shippingAddress?: OrderAddress;
+  billingAddress?: OrderAddress;
+}) => {
+  const itemsHtml = renderItemsTable(payload.items);
+  const totalHtml = payload.total !== undefined ? `<p><strong>Total:</strong> ${formatMoney(payload.total)}</p>` : '';
+  const methodHtml = payload.paymentMethod ? `<p><strong>Payment Method:</strong> ${payload.paymentMethod}</p>` : '';
+  const txnHtml = payload.transactionId ? `<p><strong>Transaction ID:</strong> ${payload.transactionId}</p>` : '';
+  const shipHtml = renderAddress('Shipping Address', payload.shippingAddress);
+  const billHtml = renderAddress('Billing Address', payload.billingAddress);
+  return `
+    ${itemsHtml}
+    ${totalHtml}
+    ${methodHtml}
+    ${txnHtml}
+    ${shipHtml}
+    ${billHtml}
+  `;
+};
+
+export const sendOrderConfirmation = async (to: string, payload: { orderId: string; total: number; itemsCount: number; eta?: string; items?: OrderItem[]; paymentMethod?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress }) => {
   const html = brandWrapper(
     'Order Confirmed',
     `<p>Your order <strong>${payload.orderId}</strong> has been placed successfully.</p>
      <p>Items: ${payload.itemsCount}</p>
      <p>Total: &#8377;${payload.total}</p>
-     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}`
+     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}
+     ${renderOrderDetails({
+       items: payload.items,
+       total: payload.total,
+       paymentMethod: payload.paymentMethod,
+       shippingAddress: payload.shippingAddress,
+       billingAddress: payload.billingAddress,
+     })}`
   );
   await sendEmail(to, 'Your BrajMart Order Confirmation', html);
 };
 
-export const sendPaymentReceipt = async (to: string, payload: { orderId: string; amount: number; paymentId: string; eta?: string }) => {
+export const sendPaymentReceipt = async (to: string, payload: { orderId: string; amount: number; paymentId: string; eta?: string; details?: { items?: OrderItem[]; total?: number; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } }) => {
   const html = brandWrapper(
     'Payment Received',
     `<p>Payment received for Order <strong>${payload.orderId}</strong>.</p>
      <p>Amount: &#8377;${payload.amount}</p>
      <p>Payment ID: ${payload.paymentId}</p>
-     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}`
+     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}
+     ${payload.details ? renderOrderDetails(payload.details) : ''}`
   );
   await sendEmail(to, 'BrajMart Payment Receipt', html);
 };
 
-export const sendPaymentFailed = async (to: string, payload: { orderId: string; amount: number; paymentId?: string; eta?: string }) => {
+export const sendPaymentFailed = async (to: string, payload: { orderId: string; amount: number; paymentId?: string; eta?: string; details?: { items?: OrderItem[]; total?: number; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } }) => {
   const html = brandWrapper(
     'Payment Failed',
     `<p>Your payment for Order <strong>${payload.orderId}</strong> could not be completed.</p>
      <p>Amount: &#8377;${payload.amount}</p>
      ${payload.paymentId ? `<p>Payment ID: ${payload.paymentId}</p>` : ''}
      ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}
-     <p>Please try again or choose another payment method.</p>`
+     <p>Please try again or choose another payment method.</p>
+     ${payload.details ? renderOrderDetails(payload.details) : ''}`
   );
   await sendEmail(to, 'BrajMart Payment Failed', html);
 };
@@ -115,12 +199,13 @@ export const sendAdminPaymentNotice = async (payload: { status: 'paid' | 'failed
   await sendEmail(adminEmail, `Payment ${payload.status === 'paid' ? 'Success' : 'Failed'} - ${payload.orderId}`, html);
 };
 
-export const sendShippingUpdate = async (to: string, payload: { orderId: string; status: string; trackingId?: string; eta?: string }) => {
+export const sendShippingUpdate = async (to: string, payload: { orderId: string; status: string; trackingId?: string; eta?: string; details?: { items?: OrderItem[]; total?: number; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } }) => {
   const html = brandWrapper(
     'Shipping Update',
     `<p>Your order <strong>${payload.orderId}</strong> status is now <strong>${payload.status}</strong>.</p>
      ${payload.trackingId ? `<p>Tracking ID: ${payload.trackingId}</p>` : ''}
-     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}`
+     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}
+     ${payload.details ? renderOrderDetails(payload.details) : ''}`
   );
   await sendEmail(to, 'BrajMart Shipping Update', html);
 };

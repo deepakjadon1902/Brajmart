@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CreditCard, Wallet, DollarSign, AlertCircle } from 'lucide-react';
-import { fetchPayments } from '@/lib/api';
+import { fetchPayments, updatePaymentStatus } from '@/lib/api';
 import { toast } from 'sonner';
 
 const AdminPayments = () => {
@@ -17,6 +17,16 @@ const AdminPayments = () => {
     };
     load();
   }, []);
+
+  const setStatus = async (paymentId: string, status: 'paid' | 'failed' | 'pending') => {
+    try {
+      const updated: any = await updatePaymentStatus(paymentId, status);
+      setPayments((prev) => prev.map((p) => (p.id === paymentId ? { ...p, ...updated, id: updated.id || updated._id || p.id } : p)));
+      toast.success(`Payment marked as ${status}`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update payment status');
+    }
+  };
   const totalRevenue = payments.reduce((s, p) => s + p.amount, 0);
   const paidRevenue = payments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
   const pendingRevenue = payments.filter((p) => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
@@ -101,6 +111,7 @@ const AdminPayments = () => {
                   <th className="text-left px-5 py-3 font-medium">Amount</th>
                   <th className="text-left px-5 py-3 font-medium hidden md:table-cell">Date</th>
                   <th className="text-left px-5 py-3 font-medium">Status</th>
+                  <th className="text-left px-5 py-3 font-medium">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -121,6 +132,26 @@ const AdminPayments = () => {
                         p.status === 'refunded' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
                         'bg-red-500/10 text-red-400 border-red-500/20'
                       }`}>{p.status}</span>
+                    </td>
+                    <td className="px-5 py-3">
+                      {p.status === 'pending' ? (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => setStatus(p.id, 'paid')}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
+                          >
+                            Mark Paid
+                          </button>
+                          <button
+                            onClick={() => setStatus(p.id, 'failed')}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25"
+                          >
+                            Mark Failed
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-500">-</span>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -15,6 +15,27 @@ export interface User {
   authProvider?: 'email' | 'google';
 }
 
+const pickDefaultAddress = (addresses: any[]) => {
+  if (!Array.isArray(addresses) || !addresses.length) return null;
+  return addresses.find((a) => a?.isDefault) || addresses[0];
+};
+
+const mapUserFromApi = (res: any, fallback?: Partial<User>): User => {
+  const addr = pickDefaultAddress(res?.addresses);
+  return {
+    id: res?._id || res?.id || fallback?.id || '',
+    fullName: res?.name || fallback?.fullName || '',
+    email: res?.email || fallback?.email || '',
+    mobile: addr?.mobile || res?.phone || fallback?.mobile || '',
+    address: addr?.street || fallback?.address || '',
+    city: addr?.city || fallback?.city || '',
+    state: addr?.state || fallback?.state || '',
+    pincode: addr?.pincode || fallback?.pincode || '',
+    avatar: res?.avatar || fallback?.avatar || '',
+    authProvider: fallback?.authProvider || (res?.googleId ? 'google' : 'email'),
+  };
+};
+
 interface AuthStore {
   user: User | null;
   isAuthenticated: boolean;
@@ -31,7 +52,7 @@ interface AuthStore {
 
 export const useAuthStore = create<AuthStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
       token: null,
@@ -97,18 +118,7 @@ export const useAuthStore = create<AuthStore>()(
         try {
           setAuthToken(token);
           const res: any = await fetchMe();
-          const user: User = {
-            id: res._id || res.id,
-            fullName: res.name,
-            email: res.email,
-            mobile: res.phone || '',
-            address: '',
-            city: '',
-            state: '',
-            pincode: '',
-            avatar: res.avatar || '',
-            authProvider: res.googleId ? 'google' : 'email',
-          };
+          const user: User = mapUserFromApi(res, { authProvider: res?.googleId ? 'google' : 'email' });
           set({ user, isAuthenticated: true, token });
           return { ok: true };
         } catch (err: any) {
@@ -131,18 +141,22 @@ export const useAuthStore = create<AuthStore>()(
             state: data.state || '',
             pincode: data.pincode || '',
           });
-          const user: User = {
-            id: res._id || res.id,
-            fullName: res.name || data.fullName || '',
-            email: res.email || data.email || '',
-            mobile: res.phone || data.mobile || '',
+          const currentProvider = get().user?.authProvider;
+          const user: User = mapUserFromApi(res, {
+            id: res?._id || res?.id || '',
+            fullName: data.fullName || '',
+            email: data.email || '',
+            mobile: data.mobile || '',
             address: data.address || '',
             city: data.city || '',
             state: data.state || '',
             pincode: data.pincode || '',
-            authProvider: 'email',
-          };
+            authProvider: currentProvider || 'email',
+          });
           set({ user });
+          if (res?.emailConflict) {
+            return { ok: true, message: 'Profile updated, but this email is already in use. We kept your current email.' };
+          }
           return { ok: true };
         } catch (err: any) {
           return { ok: false, message: err?.message || 'Profile update failed' };

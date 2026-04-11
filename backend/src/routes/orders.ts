@@ -29,6 +29,14 @@ const mapOrderRow = (row: any) => ({
 router.get('/my', auth, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const email = String(req.user?.email || '').trim().toLowerCase();
+    if (email) {
+      const rows = await dbQuery<any>(
+        'SELECT * FROM orders WHERE user_id = ? OR (user_id IS NULL AND LOWER(customer_email) = ?) ORDER BY created_at DESC',
+        [req.user?.id, email]
+      );
+      return res.json(rows.map(mapOrderRow));
+    }
     const rows = await dbQuery<any>('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC', [req.user?.id]);
     res.json(rows.map(mapOrderRow));
   } catch (err: any) {
@@ -98,8 +106,16 @@ router.post('/', auth, async (req: AuthRequest, res) => {
     const order = mapOrderRow(rows[0]);
 
     if (order.customerEmail) {
-      sendOrderConfirmation(order.customerEmail, { orderId: String(order.orderId), total: order.total, itemsCount: order.items?.length || 0, eta: etaText })
-        .catch(() => {});
+      sendOrderConfirmation(order.customerEmail, {
+        orderId: String(order.orderId),
+        total: order.total,
+        itemsCount: order.items?.length || 0,
+        eta: etaText,
+        items: order.items,
+        paymentMethod: order.paymentMethod,
+        shippingAddress: order.shippingAddress,
+        billingAddress: order.billingAddress,
+      }).catch(() => {});
     }
     res.status(201).json(order);
   } catch (err: any) {
@@ -132,6 +148,13 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
         status,
         trackingId: order.trackingId,
         eta: etaText,
+        details: {
+          items: order.items,
+          total: order.total,
+          paymentMethod: order.paymentMethod,
+          shippingAddress: order.shippingAddress,
+          billingAddress: order.billingAddress,
+        },
       }).catch(() => {});
     }
     res.json(order);

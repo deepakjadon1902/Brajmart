@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Edit2, Save } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
@@ -23,6 +23,19 @@ const ProfilePage = () => {
     pincode: user?.pincode || '',
   });
 
+  useEffect(() => {
+    if (!user) return;
+    setForm({
+      fullName: user.fullName || '',
+      email: user.email || '',
+      mobile: user.mobile || '',
+      address: user.address || '',
+      city: user.city || '',
+      state: user.state || '',
+      pincode: user.pincode || '',
+    });
+  }, [user]);
+
   if (!isAuthenticated || !user) {
     navigate('/login');
     return null;
@@ -32,7 +45,7 @@ const ProfilePage = () => {
     const result = await updateProfile(form);
     if (result.ok) {
       setEditing(false);
-      toast.success('Profile updated!');
+      toast.success(result.message || 'Profile updated!');
     } else {
       toast.error(result.message || 'Profile update failed');
     }

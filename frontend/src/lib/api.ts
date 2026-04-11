@@ -24,7 +24,12 @@ export const getAuthToken = () => {
     }
   };
 
-  return tryParse('brajmart-admin') || tryParse('brajmart-auth') || memoryToken || '';
+  const path = typeof window !== 'undefined' ? window.location.pathname : '';
+  const preferAdmin = path.startsWith('/admin');
+  if (preferAdmin) {
+    return tryParse('brajmart-admin') || tryParse('brajmart-auth') || memoryToken || '';
+  }
+  return tryParse('brajmart-auth') || tryParse('brajmart-admin') || memoryToken || '';
 };
 
 const getJson = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
