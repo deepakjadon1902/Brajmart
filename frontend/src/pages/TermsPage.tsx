@@ -3,17 +3,23 @@ import Footer from '@/components/layout/Footer';
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
 
 const sections = [
-  { title: '1. Acceptance of Terms', content: 'By accessing and using BrajMart (brajmart.com), you agree to be bound by these Terms & Conditions. If you do not agree to any part of these terms, please do not use our platform. These terms apply to all users, including browsers, customers, merchants, and contributors.' },
-  { title: '2. Account Registration', content: 'To place an order, you may need to create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities under your account. You must provide accurate, current, and complete information during registration. BrajMart reserves the right to suspend or terminate accounts that violate these terms.' },
-  { title: '3. Products & Pricing', content: 'We strive to display accurate product descriptions, images, and prices. However, we do not warrant that descriptions or pricing are error-free. All prices are in Indian Rupees (₹) and include applicable taxes unless stated otherwise. BrajMart reserves the right to modify prices without prior notice. Promotional prices are valid only during the specified period.' },
-  { title: '4. Orders & Payment', content: 'Placing an order constitutes an offer to purchase. We reserve the right to accept or decline any order. Payment must be made through our accepted methods (UPI, Cards, Net Banking, or Wallets). Orders are confirmed only after successful payment verification.' },
-  { title: '5. Shipping & Delivery', content: 'Delivery timelines are estimates and may vary based on location and availability. BrajMart is not liable for delays caused by logistics partners, natural disasters, or circumstances beyond our control. Risk of loss passes to you upon delivery. Please inspect products upon receipt and report damages within 48 hours.' },
-  { title: '6. Returns & Refunds', content: 'Returns are accepted within 7 days of delivery for eligible products as per our Return Policy. Perishable items (Prasadam, food products) are non-returnable. Refunds are processed within 5-7 business days to the original payment method. Shipping charges are non-refundable unless the return is due to our error.' },
-  { title: '7. Intellectual Property', content: 'All content on BrajMart — including logos, text, images, graphics, and software — is our intellectual property or licensed to us. You may not reproduce, distribute, modify, or create derivative works without our written consent. User-generated content (reviews, ratings) grants BrajMart a non-exclusive license to use and display such content.' },
-  { title: '8. Prohibited Activities', content: 'You agree not to: use the platform for unlawful purposes, attempt to hack or disrupt our systems, post false reviews or misleading content, resell products commercially without authorization, use automated tools to scrape data, or impersonate other users or BrajMart staff.' },
-  { title: '9. Limitation of Liability', content: 'BrajMart shall not be liable for indirect, incidental, or consequential damages arising from your use of the platform. Our total liability for any claim shall not exceed the amount paid by you for the specific product or service in question. We are not responsible for third-party services linked from our platform.' },
-  { title: '10. Governing Law', content: 'These terms are governed by the laws of India. Any disputes shall be subject to the exclusive jurisdiction of the courts in Mathura, Uttar Pradesh. We encourage users to first contact our customer service to resolve issues amicably before pursuing legal action.' },
-  { title: '11. Changes to Terms', content: 'BrajMart reserves the right to modify these terms at any time. Changes become effective upon posting on the website. Continued use of the platform after changes constitutes acceptance. We recommend reviewing these terms periodically.' },
+  { title: '1. Introduction', content: 'Brajmart is an online platform offering spiritual and devotional products inspired by the sacred land of Braj. These Terms govern your use of our website and any purchases made through it.' },
+  { title: '2. Eligibility', content: 'By using our website, you confirm that you are at least 18 years old or are using the website under the supervision of a parent or guardian. You agree to provide accurate and complete information during registration and checkout.' },
+  { title: '3. Account Responsibility', content: 'You are responsible for maintaining the confidentiality of your login credentials and for all activities under your account. Notify us immediately of any unauthorized use.' },
+  { title: '4. Products & Services', content: 'We strive to ensure product descriptions, images, and prices are accurate. Minor variations may occur in color, size, or appearance. Availability may change without notice, and we reserve the right to modify or discontinue products at any time.' },
+  { title: '5. Pricing & Payments', content: 'All prices are listed in INR and are inclusive or exclusive of applicable taxes as specified. Additional charges such as shipping may apply. We reserve the right to correct pricing errors. Payments are processed securely through trusted gateways.' },
+  { title: '6. Order Acceptance & Cancellation', content: 'Placing an order does not guarantee acceptance. We may cancel or refuse orders due to product unavailability, pricing errors, or suspected fraud. If an order is canceled after payment, a full refund will be issued.' },
+  { title: '7. Shipping & Delivery', content: 'Delivery timelines are estimates and may vary due to external factors. We are not liable for delays caused by logistics partners or unforeseen circumstances. Risk of loss or damage passes to you upon delivery.' },
+  { title: '8. Returns & Refunds', content: 'Returns and refunds are governed by our Return & Refund Policy. Returns must be requested within the specified timeframe, items must be unused and in original packaging, and certain items may not be eligible for return.' },
+  { title: '9. User Conduct', content: 'You agree not to use the website for unlawful or fraudulent activities, post harmful or misleading content, interfere with site security or functionality, or impersonate others. Violations may result in termination of access.' },
+  { title: '10. Intellectual Property', content: 'All content on Brajmart, including logos, images, product descriptions, and website design, is our property and protected by applicable laws. Unauthorized use is prohibited.' },
+  { title: '11. Third-Party Links', content: 'Our website may contain links to third-party websites for convenience. We are not responsible for their content, policies, or practices.' },
+  { title: '12. Limitation of Liability', content: 'Brajmart is not liable for indirect or consequential damages, losses arising from use or inability to use our website, or delays caused by events beyond our control.' },
+  { title: '13. Privacy', content: 'Your use of our website is also governed by our Privacy Policy, which explains how we collect and use your data.' },
+  { title: '14. Changes to Terms', content: 'We may update these Terms from time to time. Continued use of the website after changes are posted constitutes acceptance of the updated terms.' },
+  { title: '15. Governing Law', content: 'These Terms are governed by the laws of India. Any disputes are subject to the jurisdiction of courts in Uttar Pradesh.' },
+  { title: '16. Force Majeure', content: 'We are not responsible for delays or failure to perform obligations due to events beyond our control, such as natural disasters, strikes, or government restrictions.' },
+  { title: '17. Contact Us', content: 'Brajmart, ISKCON Vrindavan, Raman Reti, Mathura, Uttar Pradesh. Email: support@brajmart.com. Phone: +91 9634359003.' },
 ];
 
 const TermsPage = () => (
@@ -25,7 +31,7 @@ const TermsPage = () => (
         <ScrollReveal>
           <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">LEGAL</p>
           <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4">Terms & Conditions</h1>
-          <p className="text-primary-foreground/70 max-w-xl mx-auto">Last updated: March 1, 2025</p>
+          <p className="text-primary-foreground/70 max-w-xl mx-auto">Last updated: April 13, 2026</p>
         </ScrollReveal>
       </div>
     </section>
@@ -34,7 +40,7 @@ const TermsPage = () => (
       <div className="container mx-auto px-4 max-w-3xl">
         <ScrollReveal>
           <p className="text-muted-foreground leading-relaxed mb-10">
-            Welcome to BrajMart. These Terms & Conditions govern your use of our platform and services. Please read them carefully before using our website or placing any orders.
+            Welcome to Brajmart. By accessing or using our website, you agree to comply with these Terms & Conditions. If you do not agree, please do not use the website.
           </p>
         </ScrollReveal>
         <div className="space-y-8">
