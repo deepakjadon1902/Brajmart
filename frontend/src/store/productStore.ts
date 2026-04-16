@@ -42,7 +42,17 @@ export const useProductStore = create<ProductStore>()(
           const tags = Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []);
           return { ...p, id: p.id || p._id, tags };
         });
-        const mappedCategories = (Array.isArray(categories) ? categories : []).map((c: any) => ({ ...c, id: c.id || c._id }));
+        const orderValue = (value: unknown) => {
+          const n = typeof value === 'number' ? value : Number(value ?? 0);
+          return n > 0 ? n : Number.MAX_SAFE_INTEGER;
+        };
+        const mappedCategories = (Array.isArray(categories) ? categories : [])
+          .map((c: any) => ({
+            ...c,
+            id: c.id || c._id,
+            displayOrder: typeof c.displayOrder === 'number' ? c.displayOrder : Number(c.displayOrder ?? 0),
+          }))
+          .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name)));
         set({ products: mappedProducts, categories: mappedCategories });
       },
 
@@ -52,10 +62,24 @@ export const useProductStore = create<ProductStore>()(
       })),
       deleteProduct: (id) => set((s) => ({ products: s.products.filter((p) => p.id !== id) })),
 
-      addCategory: (category) => set((s) => ({ categories: [...s.categories, category] })),
-      updateCategory: (id, data) => set((s) => ({
-        categories: s.categories.map((c) => (c.id === id ? { ...c, ...data } : c)),
-      })),
+      addCategory: (category) => set((s) => {
+        const orderValue = (value: unknown) => {
+          const n = typeof value === 'number' ? value : Number(value ?? 0);
+          return n > 0 ? n : Number.MAX_SAFE_INTEGER;
+        };
+        const categories = [...s.categories, category].sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name)));
+        return { categories };
+      }),
+      updateCategory: (id, data) => set((s) => {
+        const orderValue = (value: unknown) => {
+          const n = typeof value === 'number' ? value : Number(value ?? 0);
+          return n > 0 ? n : Number.MAX_SAFE_INTEGER;
+        };
+        const categories = s.categories
+          .map((c) => (c.id === id ? { ...c, ...data } : c))
+          .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name)));
+        return { categories };
+      }),
       deleteCategory: (id) => set((s) => ({ categories: s.categories.filter((c) => c.id !== id) })),
 
       getProductsByCategory: (category) => {

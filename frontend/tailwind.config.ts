@@ -16,7 +16,7 @@ export default {
       fontFamily: {
         cinzel: ['Cinzel', 'serif'],
         playfair: ['Playfair Display', 'Georgia', 'serif'],
-        sans: ['Inter', 'DM Sans', 'sans-serif'],
+        sans: ['Roboto', 'Inter', 'DM Sans', 'sans-serif'],
         devanagari: ['Noto Serif Devanagari', 'serif'],
       },
       colors: {

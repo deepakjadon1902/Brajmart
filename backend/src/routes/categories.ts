@@ -11,6 +11,7 @@ const mapCategoryRow = (row: any) => ({
   icon: row.icon,
   color: row.color,
   productCount: Number(row.product_count ?? 0),
+  displayOrder: Number(row.display_order ?? 0),
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
 });
@@ -28,6 +29,7 @@ const buildUpdate = (data: any) => {
   if (data.icon !== undefined) set('icon', data.icon);
   if (data.color !== undefined) set('color', data.color);
   if (data.productCount !== undefined) set('product_count', data.productCount);
+  if (data.displayOrder !== undefined) set('display_order', data.displayOrder);
 
   if (!fields.length) return null;
   fields.push('updated_at = NOW()');
@@ -37,7 +39,7 @@ const buildUpdate = (data: any) => {
 router.get('/', async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    const rows = await dbQuery<any>('SELECT * FROM categories ORDER BY created_at DESC');
+    const rows = await dbQuery<any>('SELECT * FROM categories ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
     res.json(rows.map(mapCategoryRow));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -49,8 +51,8 @@ router.post('/', auth, adminOnly, async (req, res) => {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const data = req.body || {};
     const result: any = await dbExecute(
-      'INSERT INTO categories (name, icon, color, product_count) VALUES (?, ?, ?, ?)',
-      [data.name, data.icon, data.color ?? '#f59e0b', data.productCount ?? 0]
+      'INSERT INTO categories (name, icon, color, product_count, display_order) VALUES (?, ?, ?, ?, ?)',
+      [data.name, data.icon, data.color ?? '#f59e0b', data.productCount ?? 0, data.displayOrder ?? 0]
     );
     const rows = await dbQuery<any>('SELECT * FROM categories WHERE id = ? LIMIT 1', [result.insertId]);
     res.status(201).json(mapCategoryRow(rows[0]));

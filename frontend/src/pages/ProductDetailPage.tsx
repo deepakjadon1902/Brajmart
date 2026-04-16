@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -23,6 +23,8 @@ const ProductDetailPage = () => {
     : (product?.image ? [product.image] : []);
   const [activeImage, setActiveImage] = useState(galleryImages[0] || product?.image || '');
   const [zoomOpen, setZoomOpen] = useState(false);
+  const thumbsColRef = useRef<HTMLDivElement | null>(null);
+  const thumbsRowRef = useRef<HTMLDivElement | null>(null);
   const addToCart = useCartStore(s => s.addItem);
   const { toggleItem, isInWishlist } = useWishlistStore();
   const navigate = useNavigate();
@@ -54,6 +56,13 @@ const ProductDetailPage = () => {
     for (let i = 0; i < quantity; i++) addToCart(product);
     toast.success(`${product.name} added to cart!`);
   };
+
+  const handleBuyNow = () => {
+    for (let i = 0; i < quantity; i++) addToCart(product);
+    navigate('/checkout');
+  };
+
+  // Thumbnails scroll naturally (wheel / touch); hover swaps active image.
 
   const renderInline = (text: string) => {
     const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
@@ -115,11 +124,52 @@ const ProductDetailPage = () => {
         <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
           {/* Image */}
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
-            <button
-              type="button"
-              onClick={() => setZoomOpen(true)}
-              className="relative rounded-2xl overflow-hidden border border-border bg-pearl aspect-square w-full text-left"
-            >
+            <div className="flex flex-col sm:flex-row gap-3">
+              {galleryImages.length > 1 && (
+                <div className="sm:hidden">
+                  <div ref={thumbsRowRef} className="flex gap-2 overflow-x-auto scrollbar-hide py-1">
+                    {galleryImages.map((img, idx) => (
+                      <button
+                        key={`${img}-${idx}`}
+                        type="button"
+                        onMouseEnter={() => setActiveImage(img)}
+                        onFocus={() => setActiveImage(img)}
+                        onClick={() => setActiveImage(img)}
+                        className={`shrink-0 rounded-xl border ${activeImage === img ? 'border-saffron' : 'border-border'} overflow-hidden bg-pearl w-16 h-16`}
+                        aria-label={`View image ${idx + 1}`}
+                      >
+                        <img src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {galleryImages.length > 1 && (
+                <div className="hidden sm:flex flex-col items-center gap-2 w-20">
+                  <div ref={thumbsColRef} className="w-full flex flex-col gap-2 overflow-y-auto scrollbar-hide max-h-[420px] pr-1">
+                    {galleryImages.map((img, idx) => (
+                      <button
+                        key={`${img}-${idx}`}
+                        type="button"
+                        onMouseEnter={() => setActiveImage(img)}
+                        onFocus={() => setActiveImage(img)}
+                        onClick={() => setActiveImage(img)}
+                        className={`rounded-xl border ${activeImage === img ? 'border-saffron' : 'border-border'} overflow-hidden bg-pearl aspect-square w-full`}
+                        aria-label={`View image ${idx + 1}`}
+                      >
+                        <img src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setZoomOpen(true)}
+                className="relative rounded-2xl overflow-hidden border border-border bg-pearl aspect-square w-full md:max-w-[520px] md:mx-auto text-left"
+              >
               <img src={activeImage || product.image} alt={product.name} className="w-full h-full object-cover" />
               {product.badge && (
                 <span className={`absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-bold ${product.badge === 'bestseller' ? 'bg-gold-gradient text-maroon-dark' : 'bg-saffron text-primary-foreground'}`}>
@@ -131,7 +181,8 @@ const ProductDetailPage = () => {
                   {discount}% OFF
                 </span>
               )}
-            </button>
+              </button>
+            </div>
           </motion.div>
 
           {/* Details */}
@@ -162,16 +213,6 @@ const ProductDetailPage = () => {
               )}
             </div>
 
-            {product.description && product.description.trim() ? (
-              <div className="space-y-3">
-                {renderDescription(product.description)}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground/70 italic">
-                No description yet.
-              </p>
-            )}
-
             {/* Quantity */}
             <div className="flex items-center gap-4">
               <span className="text-sm font-medium">Quantity:</span>
@@ -184,12 +225,18 @@ const ProductDetailPage = () => {
 
             {/* Action buttons */}
             <div className="flex gap-3">
-              <button onClick={handleAddToCart} className="flex-1 py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform">
-                <ShoppingCart size={16} className="inline mr-2 -mt-0.5" />Add to Cart
+              <button onClick={handleAddToCart} className="flex-1 py-3.5 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-base shimmer active:scale-[0.97] transition-transform">
+                <ShoppingCart size={18} className="inline mr-2 -mt-0.5" />Add to Cart
+              </button>
+              <button
+                onClick={handleBuyNow}
+                className="flex-1 py-3.5 rounded-xl bg-saffron text-primary-foreground font-bold text-base hover:brightness-95 active:scale-[0.97] transition-transform"
+              >
+                Buy Now
               </button>
               <button
                 onClick={() => { toggleItem(product); toast.success(inWishlist ? 'Removed from wishlist' : 'Added to wishlist ❤️'); }}
-                className={`px-4 py-3 rounded-xl border-2 transition-colors active:scale-[0.97] ${inWishlist ? 'border-saffron bg-saffron/10 text-saffron' : 'border-border text-foreground hover:border-saffron hover:text-saffron'}`}
+                className={`px-4 py-3.5 rounded-xl border-2 transition-colors active:scale-[0.97] ${inWishlist ? 'border-saffron bg-saffron/10 text-saffron' : 'border-border text-foreground hover:border-saffron hover:text-saffron'}`}
               >
                 <Heart size={18} className={inWishlist ? 'fill-current' : ''} />
               </button>
@@ -209,18 +256,15 @@ const ProductDetailPage = () => {
                 </div>
               ))}
             </div>
-            {galleryImages.length > 1 && (
-              <div className="mt-4 grid grid-cols-5 gap-2">
-                {galleryImages.map((img, idx) => (
-                  <button
-                    key={`${img}-${idx}`}
-                    onClick={() => setActiveImage(img)}
-                    className={`rounded-xl border ${activeImage === img ? 'border-saffron' : 'border-border'} overflow-hidden bg-pearl`}
-                  >
-                    <img src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-16 object-cover" />
-                  </button>
-                ))}
+
+            {product.description && product.description.trim() ? (
+              <div className="space-y-3 pt-2">
+                {renderDescription(product.description)}
               </div>
+            ) : (
+              <p className="text-sm text-muted-foreground/70 italic pt-2">
+                No description yet.
+              </p>
             )}
           </motion.div>
         </div>

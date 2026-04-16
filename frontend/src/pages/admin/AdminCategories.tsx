@@ -49,7 +49,14 @@ const AdminCategories = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Categories</h1>
-        <button onClick={() => { setIsCreating(true); setEditing({ id: '', name: '', icon: '', color: '#f59e0b', productCount: 0 }); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
+        <button
+          onClick={() => {
+            const nextOrder = Math.max(0, ...categories.map((c) => c.displayOrder ?? 0)) + 1;
+            setIsCreating(true);
+            setEditing({ id: '', name: '', icon: '', color: '#f59e0b', productCount: 0, displayOrder: nextOrder });
+          }}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto"
+        >
           <Plus size={16} /> Add Category
         </button>
       </div>
@@ -70,6 +77,7 @@ const AdminCategories = () => {
             </div>
             <h3 className="text-white font-semibold text-lg">{cat.name}</h3>
             <p className="text-slate-400 text-sm mt-1">{getCatCount(cat.name)} products</p>
+            <p className="text-slate-500 text-xs mt-2">Order: {cat.displayOrder ?? 0}</p>
           </div>
         ))}
       </div>
@@ -111,6 +119,17 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
       <div>
         <label className="block text-sm text-slate-300 mb-1">Name</label>
         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+      </div>
+      <div>
+        <label className="block text-sm text-slate-300 mb-1">Display Order</label>
+        <input
+          type="number"
+          value={form.displayOrder ?? 0}
+          onChange={(e) => setForm({ ...form, displayOrder: Number(e.target.value) })}
+          className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+          min={0}
+        />
+        <p className="text-xs text-slate-500 mt-1">Use 1 for first position, 2 for second… (0/unset shows at the end).</p>
       </div>
       <div>
         <label className="block text-sm text-slate-300 mb-1">Icon Image</label>

@@ -22,4 +22,5 @@ export interface Category {
   icon: string;
   color: string;
   productCount: number;
+  displayOrder?: number;
 }
