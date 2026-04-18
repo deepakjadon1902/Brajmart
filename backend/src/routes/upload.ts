@@ -19,9 +19,10 @@ const upload = multer({ storage });
 router.post('/', upload.single('image'), (req, res) => {
   const file = req.file;
   if (!file) return res.status(400).json({ message: 'No file uploaded' });
-  const host = req.get('host');
-  const protocol = req.protocol;
-  res.json({ url: `${protocol}://${host}/uploads/${file.filename}` });
+
+  const host = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+  const normalizedHost = host.replace(/\/$/, '');
+  res.json({ url: `${normalizedHost}/uploads/${file.filename}` });
 });
 
 export default router;
