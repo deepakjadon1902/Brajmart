@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
+const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const auth_1 = __importDefault(require("./routes/auth"));
 const users_1 = __importDefault(require("./routes/users"));
@@ -20,13 +21,16 @@ const cart_1 = __importDefault(require("./routes/cart"));
 const heroSlides_1 = __importDefault(require("./routes/heroSlides"));
 const blogs_1 = __importDefault(require("./routes/blogs"));
 const app = (0, express_1.default)();
+const UPLOADS_DIR = path_1.default.join(__dirname, '..', 'uploads');
+if (!fs_1.default.existsSync(UPLOADS_DIR))
+    fs_1.default.mkdirSync(UPLOADS_DIR, { recursive: true });
 app.use((0, cors_1.default)({
     origin: process.env.CORS_ORIGIN || '*',
     credentials: true,
 }));
 app.use(express_1.default.json({ limit: '50mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
-app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '..', 'uploads')));
+app.use('/uploads', express_1.default.static(UPLOADS_DIR));
 app.use('/api/auth', auth_1.default);
 app.use('/api/users', users_1.default);
 app.use('/api/products', products_1.default);

@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
 import path from 'path';
 
 import authRoutes from './routes/auth';
@@ -18,13 +19,16 @@ import blogRoutes from './routes/blogs';
 
 const app = express();
 
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
