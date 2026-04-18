@@ -1,27 +1,45 @@
 import { Router } from 'express';
 import multer from 'multer';
-import fs from 'fs';
-import path from 'path';
+import cloudinary from 'cloudinary';
+import streamifier from 'streamifier';
 
 const router = Router();
 
-const UPLOADS_DIR = path.join(__dirname, '..', '..', 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-  filename: (_req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
+cloudinary.v2.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
-router.post('/', upload.single('image'), (req, res) => {
+const uploadToCloudinary = (buffer: Buffer) =>
+  new Promise<string>((resolve, reject) => {
+    const uploadStream = cloudinary.v2.uploader.upload_stream(
+      { folder: 'brajmart', resource_type: 'image' },
+      (error: any, result: any) => {
+        if (error || !result) return reject(error || new Error('Upload failed'));
+        resolve(result.secure_url);
+      }
+    );
+
+    streamifier.createReadStream(buffer).pipe(uploadStream);
+  });
+
+router.post('/', upload.single('image'), async (req, res) => {
   const file = req.file;
   if (!file) return res.status(400).json({ message: 'No file uploaded' });
 
-  const host = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
-  const normalizedHost = host.replace(/\/$/, '');
-  res.json({ url: `${normalizedHost}/uploads/${file.filename}` });
+  try {
+    const url = await uploadToCloudinary(file.buffer);
+    res.json({ url });
+  } catch (err: any) {
+    console.error('Cloudinary upload error:', err);
+    res.status(500).json({ message: err?.message || 'Upload failed' });
+  }
 });
 
 export default router;
