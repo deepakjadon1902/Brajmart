@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
+import React from 'react';
 import { X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSettingsStore } from '@/store/settingsStore';
 
 const AnnouncementBar = () => {
   const { settings } = useSettingsStore();
-  const [visible, setVisible] = useState(true);
-  const [currentMsg, setCurrentMsg] = useState(0);
+  const [visible, setVisible] = React.useState(true);
+  const [currentMsg, setCurrentMsg] = React.useState(0);
 
   const messages = settings.announcementBar.messages;
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (messages.length <= 1) return;
     const interval = setInterval(() => {
       setCurrentMsg((prev) => (prev + 1) % messages.length);
@@ -21,7 +22,7 @@ const AnnouncementBar = () => {
   if (!visible || !settings.announcementBar.enabled || messages.length === 0) return null;
 
   return (
-    <div className="relative bg-saffron h-8 sm:h-9 flex items-center justify-center overflow-hidden z-50">
+    <div className="relative bg-saffron h-9 sm:h-10 flex items-center justify-center overflow-hidden z-50">
       <AnimatePresence mode="wait">
         <motion.span
           key={currentMsg}
@@ -29,7 +30,7 @@ const AnnouncementBar = () => {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -14, opacity: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="text-primary-foreground text-[0.7rem] sm:text-sm font-medium tracking-wide px-8 text-center"
+          className="text-primary-foreground text-sm sm:text-base font-semibold tracking-wide px-8 text-center"
         >
           {messages[currentMsg]}
         </motion.span>

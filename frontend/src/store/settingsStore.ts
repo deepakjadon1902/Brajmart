@@ -35,8 +35,6 @@ interface StoreSettings {
   cardEnabled: boolean;
   storeLogo: string;
   favicon: string;
-  upiId: string;
-  upiPayeeName: string;
   metaTitle: string;
   metaDescription: string;
   heroBadges: string[];
@@ -75,8 +73,6 @@ export const useSettingsStore = create<SettingsStore>()(
         cardEnabled: true,
         storeLogo: '',
         favicon: '',
-        upiId: '',
-        upiPayeeName: '',
         metaTitle: '',
         metaDescription: '',
         heroBadges: ['??? Temple Authenticated', '?? 100% Organic', '?? Pan-India Delivery'],

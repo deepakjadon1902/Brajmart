@@ -99,8 +99,6 @@ const App = () => {
           metaDescription: data.metaDescription,
           storeLogo: data.storeLogo,
           favicon: data.favicon,
-          upiId: data.upiId,
-          upiPayeeName: data.upiPayeeName,
           socialLinks: data.socialLinks,
           announcementBar: data.announcementBar,
           notifications: data.notifications,

@@ -32,8 +32,6 @@ const AdminSettings = () => {
   const [metaTitle, setMetaTitle] = useState(settings.metaTitle);
   const [metaDescription, setMetaDescription] = useState(settings.metaDescription);
   const [storeLogo, setStoreLogo] = useState(settings.storeLogo);
-  const [upiId, setUpiId] = useState(settings.upiId);
-  const [upiPayeeName, setUpiPayeeName] = useState(settings.upiPayeeName || settings.storeName);
   const [announcementEnabled, setAnnouncementEnabled] = useState(settings.announcementBar.enabled);
   const [announcementMessages, setAnnouncementMsgs] = useState<string[]>(settings.announcementBar.messages);
   const [newAnnouncement, setNewAnnouncement] = useState('');
@@ -73,8 +71,6 @@ const AdminSettings = () => {
         setMetaTitle(data.metaTitle);
         setMetaDescription(data.metaDescription);
         setStoreLogo(data.storeLogo);
-        setUpiId(data.upiId || '');
-        setUpiPayeeName(data.upiPayeeName || data.storeName || settings.storeName);
         setAnnouncementEnabled(data.announcementBar?.enabled ?? announcementEnabled);
         setAnnouncementMsgs(data.announcementBar?.messages ?? announcementMessages);
         setSocialLinks(data.socialLinks || socialLinks);
@@ -97,7 +93,7 @@ const AdminSettings = () => {
         freeShippingThreshold, shippingFee, taxRate, minOrderAmount, maxOrderQuantity,
         deliveryEtaMinDays, deliveryEtaMaxDays,
         upiEnabled, cardEnabled, maintenanceMode,
-        metaTitle, metaDescription, storeLogo, upiId, upiPayeeName,
+        metaTitle, metaDescription, storeLogo,
         announcementBar: { enabled: announcementEnabled, messages: announcementMessages },
         socialLinks,
         notifications: settings.notifications,
@@ -281,8 +277,8 @@ const AdminSettings = () => {
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><CreditCard size={18} /> Payment Methods</h2>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-white">UPI Payments</p>
-              <p className="text-xs text-slate-400">Enable UPI payments in checkout</p>
+              <p className="text-sm font-medium text-white">UPI Payments (PayU)</p>
+              <p className="text-xs text-slate-400">Enable PayU UPI in checkout</p>
             </div>
             <Toggle value={upiEnabled} onChange={setUpiEnabled} />
           </div>
@@ -292,10 +288,6 @@ const AdminSettings = () => {
               <p className="text-xs text-slate-400">Enable card payments via PayU gateway</p>
             </div>
             <Toggle value={cardEnabled} onChange={setCardEnabled} />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputField label="UPI ID" value={upiId} onChange={setUpiId} />
-            <InputField label="UPI Payee Name" value={upiPayeeName} onChange={setUpiPayeeName} />
           </div>
         </div>
       )}

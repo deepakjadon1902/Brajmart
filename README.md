@@ -38,8 +38,6 @@ SMTP_PORT=587
 SMTP_USER=your_smtp_user
 SMTP_PASS=your_smtp_password
 SMTP_FROM=orders@yourdomain.com
-
-UPI_WEBHOOK_SECRET=your_secret
 ```
 
 ## 3) Admin Access (Separate Admin Table)

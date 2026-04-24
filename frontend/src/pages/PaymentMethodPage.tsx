@@ -4,7 +4,7 @@ import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { CreditCard, Smartphone, Building2, Wallet, Shield } from 'lucide-react';
 
 const methods = [
-  { icon: Smartphone, title: 'UPI', desc: 'Pay instantly using Google Pay, PhonePe, Paytm, BHIM, or any UPI app. Scan QR or enter UPI ID.', tag: 'Most Popular' },
+  { icon: Smartphone, title: 'UPI (PayU)', desc: 'Pay instantly using Google Pay, PhonePe, Paytm, BHIM, or any UPI app via PayU secure checkout.', tag: 'Most Popular' },
   { icon: CreditCard, title: 'Credit & Debit Cards', desc: 'We accept Visa, Mastercard, RuPay, and American Express. All transactions are 3D Secure protected.', tag: '' },
   { icon: Building2, title: 'Net Banking', desc: 'Pay directly from your bank account. All major Indian banks are supported including SBI, HDFC, ICICI, and more.', tag: '' },
   { icon: Wallet, title: 'Wallets', desc: 'Use Paytm Wallet, Amazon Pay, Mobikwik, Freecharge, and other popular digital wallets.', tag: '' },

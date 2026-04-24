@@ -35,7 +35,7 @@ router.post('/', upload.single('image'), async (req, res) => {
     }
     catch (err) {
         console.error('Cloudinary upload error:', err);
-        res.status(500).json({ message: err === null || err === void 0 ? void 0 : err.message || 'Upload failed' });
+        res.status(500).json({ message: err?.message || 'Upload failed' });
     }
 });
 exports.default = router;

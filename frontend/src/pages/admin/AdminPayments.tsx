@@ -43,7 +43,6 @@ const AdminPayments = () => {
     Card: CreditCard,
     'PayU UPI': Wallet,
     'PayU Card': CreditCard,
-    'UPI QR': Wallet,
   };
 
   return (

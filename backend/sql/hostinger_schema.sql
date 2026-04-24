@@ -144,8 +144,6 @@ CREATE TABLE IF NOT EXISTS settings (
   meta_description TEXT NULL,
   store_logo VARCHAR(1024) NOT NULL DEFAULT '',
   favicon VARCHAR(1024) NOT NULL DEFAULT '',
-  upi_id VARCHAR(255) NOT NULL DEFAULT '',
-  upi_payee_name VARCHAR(255) NOT NULL DEFAULT 'BrajMart',
   social_links JSON NULL,
   announcement_bar JSON NULL,
   notifications JSON NULL,

@@ -71,7 +71,7 @@ const PaymentStatusPage = () => {
               <>
                 <Loader2 size={56} className="mx-auto text-saffron animate-spin mb-4" />
                 <h1 className="font-cinzel text-2xl font-bold mb-2">Payment Pending</h1>
-                <p className="text-muted-foreground text-sm">We are verifying your UPI payment. This may take a few minutes.</p>
+                <p className="text-muted-foreground text-sm">We are verifying your PayU payment. This may take a few minutes.</p>
               </>
             ) : (
               <>

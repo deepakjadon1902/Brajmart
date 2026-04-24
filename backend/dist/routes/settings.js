@@ -29,8 +29,6 @@ const mapSettingsRow = (row) => ({
     metaDescription: row.meta_description,
     storeLogo: row.store_logo,
     favicon: row.favicon,
-    upiId: row.upi_id,
-    upiPayeeName: row.upi_payee_name,
     socialLinks: (0, dbHelpers_1.parseJson)(row.social_links, { instagram: '', facebook: '', youtube: '', whatsapp: '' }),
     announcementBar: (0, dbHelpers_1.parseJson)(row.announcement_bar, { enabled: true, messages: [] }),
     notifications: (0, dbHelpers_1.parseJson)(row.notifications, { orders: true, users: true, payments: true, stock: false }),
@@ -87,10 +85,6 @@ const buildUpdate = (data) => {
         set('store_logo', data.storeLogo);
     if (data.favicon !== undefined)
         set('favicon', data.favicon);
-    if (data.upiId !== undefined)
-        set('upi_id', data.upiId);
-    if (data.upiPayeeName !== undefined)
-        set('upi_payee_name', data.upiPayeeName);
     if (data.socialLinks !== undefined)
         set('social_links', JSON.stringify(data.socialLinks || {}));
     if (data.announcementBar !== undefined)
