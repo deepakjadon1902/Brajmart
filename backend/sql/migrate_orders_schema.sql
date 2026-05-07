@@ -1,9 +1,9 @@
 -- Migration Script: Add tracking ID and shipping service support to orders table
--- This script updates the orders table to support 6-digit unique tracking IDs and shipping service selection
+-- This script updates the orders table to support admin-provided tracking IDs and shipping service selection
 
 -- Step 1: Add new columns to orders table
 ALTER TABLE orders 
-ADD COLUMN tracking_id VARCHAR(6) UNIQUE NULL AFTER tracking_id,
+ADD COLUMN tracking_id VARCHAR(255) UNIQUE NULL AFTER tracking_id,
 ADD COLUMN shipping_service ENUM('DTDC','Shree Maruti','Delhivery','India Post','Ekart') NULL AFTER tracking_id;
 
 -- Step 2: Create index on tracking_id for faster lookups

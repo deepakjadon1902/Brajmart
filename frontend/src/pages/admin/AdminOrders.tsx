@@ -178,7 +178,7 @@ const AdminOrders = () => {
                   <input
                     value={editingTrackingId}
                     onChange={(e) => setEditingTrackingId(e.target.value)}
-                    placeholder="Enter 6-digit Order ID"
+                    placeholder="Enter Order ID"
                     className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 font-mono"
                   />
                   <button
@@ -188,7 +188,7 @@ const AdminOrders = () => {
                     Update
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">This 6-digit ID is shown to the user for tracking.</p>
+                <p className="text-xs text-slate-500 mt-2">This ID is shown to the user for tracking.</p>
               </div>
 
               {/* Status Update */}

@@ -148,8 +148,6 @@ router.put('/:id/status', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 nextTrackingId = null;
             }
             else {
-                if (!/^\d{6}$/.test(cleaned))
-                    return res.status(400).json({ message: 'Tracking ID must be a 6-digit number' });
                 nextTrackingId = cleaned;
             }
         }
