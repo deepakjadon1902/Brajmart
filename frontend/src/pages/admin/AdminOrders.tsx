@@ -19,18 +19,20 @@ const AdminOrders = () => {
     const load = async () => {
       try {
         const data = await fetchOrders();
-        const mapped = (Array.isArray(data) ? data : []).map((o: any) => ({
+        const normalizeOrder = (o: any) => ({
           ...o,
           id: o.orderId ? String(o.orderId) : o._id,
           _id: o._id,
           items: (o.items || []).map((i: any) => ({
             ...i,
             product: {
-              name: i.name || i.product?.name || 'Item',
-              image: i.image || i.product?.image || '',
+              name: i?.name || i?.product?.name || 'Item',
+              image: i?.image || i?.product?.image || '',
             },
           })),
-        }));
+        });
+
+        const mapped = (Array.isArray(data) ? data : []).map(normalizeOrder);
         setOrders(mapped);
       } catch (err: any) {
         toast.error(err?.message || 'Failed to load orders');
@@ -38,6 +40,19 @@ const AdminOrders = () => {
     };
     load();
   }, []);
+
+  const normalizeOrder = (o: any) => ({
+    ...o,
+    id: o.orderId ? String(o.orderId) : o._id,
+    _id: o._id,
+    items: (o.items || []).map((i: any) => ({
+      ...i,
+      product: {
+        name: i?.name || i?.product?.name || 'Item',
+        image: i?.image || i?.product?.image || '',
+      },
+    })),
+  });
 
   useEffect(() => {
     if (!selectedOrder) {
@@ -69,7 +84,8 @@ const AdminOrders = () => {
         trackingId: cleaned,
         note: `Tracking ID updated to ${cleaned}`,
       });
-      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...(updated as object) } : o)));
+      const normalized = normalizeOrder(updated);
+      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...normalized } : o)));
       toast.success('Tracking ID updated');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update tracking ID');
@@ -81,7 +97,8 @@ const AdminOrders = () => {
       const payload: any = { status, note: `Status updated to ${status}` };
       if (shippingService) payload.shippingService = shippingService;
       const updated: any = await updateOrderStatusApi(orderId, payload);
-      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...(updated as object) } : o)));
+      const normalized = normalizeOrder(updated);
+      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...normalized } : o)));
       toast.success('Order updated');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update order');
