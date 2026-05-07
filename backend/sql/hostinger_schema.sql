@@ -81,12 +81,14 @@ CREATE TABLE IF NOT EXISTS orders (
   shipping_address JSON NOT NULL,
   billing_address JSON NOT NULL,
   payment_method VARCHAR(100) NOT NULL,
-  tracking_id VARCHAR(64) NULL,
+  tracking_id VARCHAR(6) UNIQUE NULL,
+  shipping_service ENUM('DTDC','Shree Maruti','Delhivery','India Post','Ekart') NULL,
   estimated_delivery DATETIME NULL,
   status_history JSON NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_orders_user_id (user_id),
+  INDEX idx_orders_tracking_id (tracking_id),
   CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

@@ -46,12 +46,20 @@ const ProfileOrdersPage = () => {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Order ID</p>
-                      <p className="font-mono text-sm text-saffron">{o.trackingId || o.id}</p>
+                      <button onClick={() => navigate(`/track-order?orderId=${o.trackingId || o.id}`)} className="font-mono text-sm text-saffron hover:underline">
+                        {o.trackingId || o.id}
+                      </button>
                     </div>
                     <span className="px-2.5 py-1 rounded-full text-xs border border-gold/30 bg-gold/10 text-gold">
                       {o.status}
                     </span>
                   </div>
+                  {o.shippingService && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground">Shipping Service</p>
+                      <p className="text-sm font-medium text-foreground">{o.shippingService}</p>
+                    </div>
+                  )}
                   <div className="mt-4 space-y-2">
                     {o.items.map((i, idx) => (
                       <div key={`${o.id}-${idx}`} className="flex items-center gap-3">

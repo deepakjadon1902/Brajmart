@@ -7,6 +7,17 @@ import { parseJson, toIsoString } from '../lib/dbHelpers';
 
 const router = Router();
 
+const generateUniqueTrackingId = async (): Promise<string> => {
+  let trackingId: string;
+  let attempts = 0;
+  do {
+    trackingId = Math.floor(100000 + Math.random() * 900000).toString();
+    attempts++;
+    if (attempts > 10) throw new Error('Unable to generate unique tracking ID');
+  } while (await dbQuery('SELECT 1 FROM orders WHERE tracking_id = ? LIMIT 1', [trackingId]).then(rows => rows.length > 0));
+  return trackingId;
+};
+
 const mapOrderRow = (row: any) => ({
   _id: String(row.id),
   orderId: Number(row.id),
@@ -20,6 +31,7 @@ const mapOrderRow = (row: any) => ({
   billingAddress: parseJson(row.billing_address, {}),
   paymentMethod: row.payment_method,
   trackingId: row.tracking_id ?? undefined,
+  shippingService: row.shipping_service ?? undefined,
   estimatedDelivery: toIsoString(row.estimated_delivery),
   statusHistory: parseJson(row.status_history, []),
   createdAt: toIsoString(row.created_at),
@@ -66,6 +78,18 @@ router.get('/track/:orderId', async (req, res) => {
   }
 });
 
+router.get('/track-by-id/:trackingId', async (req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const trackingId = req.params.trackingId;
+    const rows = await dbQuery<any>('SELECT * FROM orders WHERE tracking_id = ? LIMIT 1', [trackingId]);
+    if (!rows[0]) return res.status(404).json({ message: 'Order not found' });
+    res.json(mapOrderRow(rows[0]));
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.post('/', auth, async (req: AuthRequest, res) => {
   try {
     const { min, max } = await getEtaConfig();
@@ -81,7 +105,7 @@ router.post('/', auth, async (req: AuthRequest, res) => {
       : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
 
     const result: any = await dbExecute(
-      'INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         data.userId || req.user?.id || null,
         JSON.stringify(data.items || []),
@@ -93,13 +117,14 @@ router.post('/', auth, async (req: AuthRequest, res) => {
         JSON.stringify(data.billingAddress || {}),
         data.paymentMethod,
         null,
+        null,
         estimatedDelivery,
         JSON.stringify(statusHistory),
       ]
     );
 
     const orderId = result.insertId;
-    const trackingId = `BM${orderId}`;
+    const trackingId = await generateUniqueTrackingId();
     await dbExecute('UPDATE orders SET tracking_id = ? WHERE id = ?', [trackingId, orderId]);
 
     const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
@@ -125,7 +150,7 @@ router.post('/', auth, async (req: AuthRequest, res) => {
 
 router.put('/:id/status', auth, adminOnly, async (req, res) => {
   try {
-    const { status, note } = req.body;
+    const { status, note, shippingService } = req.body;
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
@@ -133,9 +158,14 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
     if (!row) return res.status(404).json({ message: 'Order not found' });
 
     const history = parseJson<Array<{ status: string; date: string; note?: string }>>(row.status_history, []);
-    history.push({ status, date: new Date().toISOString(), note });
+    if (status !== row.status) {
+      history.push({ status, date: new Date().toISOString(), note });
+    }
 
-    await dbExecute('UPDATE orders SET status = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [status, JSON.stringify(history), req.params.id]);
+    await dbExecute('UPDATE orders SET status = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [status, shippingService || row.shipping_service, JSON.stringify(history), req.params.id]);
+
+    const updatedRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
+    const order = mapOrderRow(updatedRows[0]);
 
     const updatedRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
     const order = mapOrderRow(updatedRows[0]);

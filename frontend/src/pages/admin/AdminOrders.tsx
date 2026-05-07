@@ -6,6 +6,7 @@ import { fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/ap
 import { toast } from 'sonner';
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
+const shippingServices = ['DTDC', 'Shree Maruti', 'Delhivery', 'India Post', 'Ekart'];
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -44,9 +45,11 @@ const AdminOrders = () => {
   });
 
   const detail = selectedOrder ? orders.find((o) => o.id === selectedOrder) : null;
-  const handleStatusUpdate = async (orderId: string, status: OrderStatus) => {
+  const handleStatusUpdate = async (orderId: string, status: OrderStatus, shippingService?: string) => {
     try {
-      const updated: any = await updateOrderStatusApi(orderId, { status, note: `Status updated to ${status}` });
+      const payload: any = { status, note: `Status updated to ${status}` };
+      if (shippingService) payload.shippingService = shippingService;
+      const updated: any = await updateOrderStatusApi(orderId, payload);
       setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...(updated as object) } : o)));
       toast.success('Order updated');
     } catch (err: any) {
@@ -140,16 +143,32 @@ const AdminOrders = () => {
               {/* Status Update */}
               <div>
                 <h3 className="text-sm font-medium text-slate-400 mb-2">Update Status</h3>
-                <div className="flex flex-wrap gap-2">
-                  {statusOptions.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => handleStatusUpdate(detail._id, s)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${detail.status === s ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Shipping Service</label>
+                    <select
+                      value={detail.shippingService || ''}
+                      onChange={(e) => handleStatusUpdate(detail._id, detail.status, e.target.value || undefined)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                     >
-                      {s.replace(/_/g, ' ')}
-                    </button>
-                  ))}
+                      <option value="">Select Service</option>
+                      {shippingServices.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Order Status</label>
+                    <div className="flex flex-wrap gap-2">
+                      {statusOptions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => handleStatusUpdate(detail._id, s)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${detail.status === s ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
+                        >
+                          {s.replace(/_/g, ' ')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 

@@ -1,11 +1,12 @@
 import * as React from "react";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { Search, Package, CheckCircle2, Truck, MapPin, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { trackOrder } from '@/lib/api';
+import { trackOrder, trackOrderById } from '@/lib/api';
 
 const steps = [
   { key: 'confirmed', label: 'Order Placed', icon: Package },
@@ -26,20 +27,40 @@ const statusIdx: Record<string, number> = {
 
 const TrackOrderPage = () => {
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [orderId, setOrderId] = useState('');
   const [order, setOrder] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const orderIdParam = searchParams.get('orderId');
+    if (orderIdParam) {
+      setOrderId(orderIdParam);
+    }
+  }, [searchParams]);
+
   const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();
-    const numeric = orderId.replace(/\D/g, '');
-    if (!numeric) {
-      toast({ title: 'Please enter a valid Order ID', variant: 'destructive' });
+    const input = orderId.trim();
+    if (!input) {
+      toast({ title: 'Please enter a valid Order ID or Tracking ID', variant: 'destructive' });
       return;
     }
     setLoading(true);
     try {
-      const found = await trackOrder(numeric);
+      let found;
+      // Try tracking by tracking ID first
+      try {
+        found = await trackOrderById(input);
+      } catch {
+        // If not found by tracking ID, try by order ID if numeric
+        const numeric = input.replace(/\D/g, '');
+        if (numeric && numeric === input) {
+          found = await trackOrder(numeric);
+        } else {
+          throw new Error('Order not found');
+        }
+      }
       setOrder(found);
       toast({ title: 'Order Found!' });
     } catch (err: any) {
@@ -63,7 +84,7 @@ const TrackOrderPage = () => {
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">ORDER TRACKING</p>
             <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-6">Track Your Order</h1>
             <form onSubmit={handleTrack} className="max-w-lg mx-auto flex rounded-full border border-primary-foreground/20 overflow-hidden bg-primary-foreground/5">
-              <input value={orderId} onChange={e => setOrderId(e.target.value)} placeholder="Enter Order ID (e.g., BM10001)" className="flex-1 px-5 py-3 bg-transparent text-sm outline-none placeholder:text-primary-foreground/40" />
+              <input value={orderId} onChange={e => setOrderId(e.target.value)} placeholder="Enter Order ID or Tracking ID" className="flex-1 px-5 py-3 bg-transparent text-sm outline-none placeholder:text-primary-foreground/40" />
               <button type="submit" className="px-6 bg-gold-gradient text-maroon-dark font-bold text-sm shimmer" disabled={loading}>
                 <Search size={18} />
               </button>
@@ -80,6 +101,18 @@ const TrackOrderPage = () => {
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="font-cinzel text-lg font-bold text-foreground">Order #{order.orderId || order._id}</h2>
                   <span className="text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN') : ''}</span>
+                </div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tracking ID</p>
+                    <p className="font-mono text-sm text-saffron">{order.trackingId || 'N/A'}</p>
+                  </div>
+                  {order.shippingService && (
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Shipping Service</p>
+                      <p className="text-sm font-medium text-foreground">{order.shippingService}</p>
+                    </div>
+                  )}
                 </div>
                 {etaText && (
                   <div className="flex items-center gap-2 mb-8">
