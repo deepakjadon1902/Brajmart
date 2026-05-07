@@ -140,7 +140,7 @@ router.put('/:id/status', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             return res.status(404).json({ message: 'Order not found' });
         const history = (0, dbHelpers_1.parseJson)(row.status_history, []);
         const nextStatus = status || row.status;
-        const nextShippingService = shippingService ?? row.shipping_service;
+        const nextShippingService = (shippingService !== undefined ? shippingService : row.shipping_service) ?? null;
         let nextTrackingId = undefined;
         if (trackingId !== undefined) {
             const cleaned = String(trackingId).trim();
@@ -156,11 +156,33 @@ router.put('/:id/status', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (statusChanged || trackingChanged) {
             history.push({ status: nextStatus, date: new Date().toISOString(), note });
         }
-        if (nextTrackingId === undefined) {
-            await (0, db_1.dbExecute)('UPDATE orders SET status = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus, nextShippingService, JSON.stringify(history), req.params.id]);
+        const updateWithShippingService = async () => {
+            if (nextTrackingId === undefined) {
+                await (0, db_1.dbExecute)('UPDATE orders SET status = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus, nextShippingService, JSON.stringify(history), req.params.id]);
+            }
+            else {
+                await (0, db_1.dbExecute)('UPDATE orders SET status = ?, tracking_id = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus, nextTrackingId, nextShippingService, JSON.stringify(history), req.params.id]);
+            }
+        };
+        const updateWithoutShippingService = async () => {
+            if (nextTrackingId === undefined) {
+                await (0, db_1.dbExecute)('UPDATE orders SET status = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus, JSON.stringify(history), req.params.id]);
+            }
+            else {
+                await (0, db_1.dbExecute)('UPDATE orders SET status = ?, tracking_id = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus, nextTrackingId, JSON.stringify(history), req.params.id]);
+            }
+        };
+        try {
+            await updateWithShippingService();
         }
-        else {
-            await (0, db_1.dbExecute)('UPDATE orders SET status = ?, tracking_id = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus, nextTrackingId, nextShippingService, JSON.stringify(history), req.params.id]);
+        catch (err) {
+            const message = String(err?.message || '');
+            if (message.includes("Unknown column 'shipping_service'")) {
+                await updateWithoutShippingService();
+            }
+            else {
+                throw err;
+            }
         }
         const updatedRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
         const order = mapOrderRow(updatedRows[0]);

@@ -147,7 +147,7 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
     const history = parseJson<Array<{ status: string; date: string; note?: string }>>(row.status_history, []);
 
     const nextStatus = status || row.status;
-    const nextShippingService = shippingService ?? row.shipping_service;
+    const nextShippingService = (shippingService !== undefined ? shippingService : row.shipping_service) ?? null;
 
     let nextTrackingId: string | null | undefined = undefined;
     if (trackingId !== undefined) {
@@ -166,16 +166,43 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
       history.push({ status: nextStatus, date: new Date().toISOString(), note });
     }
 
-    if (nextTrackingId === undefined) {
-      await dbExecute(
-        'UPDATE orders SET status = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
-        [nextStatus, nextShippingService, JSON.stringify(history), req.params.id]
-      );
-    } else {
-      await dbExecute(
-        'UPDATE orders SET status = ?, tracking_id = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
-        [nextStatus, nextTrackingId, nextShippingService, JSON.stringify(history), req.params.id]
-      );
+    const updateWithShippingService = async () => {
+      if (nextTrackingId === undefined) {
+        await dbExecute(
+          'UPDATE orders SET status = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
+          [nextStatus, nextShippingService, JSON.stringify(history), req.params.id]
+        );
+      } else {
+        await dbExecute(
+          'UPDATE orders SET status = ?, tracking_id = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
+          [nextStatus, nextTrackingId, nextShippingService, JSON.stringify(history), req.params.id]
+        );
+      }
+    };
+
+    const updateWithoutShippingService = async () => {
+      if (nextTrackingId === undefined) {
+        await dbExecute(
+          'UPDATE orders SET status = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
+          [nextStatus, JSON.stringify(history), req.params.id]
+        );
+      } else {
+        await dbExecute(
+          'UPDATE orders SET status = ?, tracking_id = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
+          [nextStatus, nextTrackingId, JSON.stringify(history), req.params.id]
+        );
+      }
+    };
+
+    try {
+      await updateWithShippingService();
+    } catch (err: any) {
+      const message = String(err?.message || '');
+      if (message.includes("Unknown column 'shipping_service'")) {
+        await updateWithoutShippingService();
+      } else {
+        throw err;
+      }
     }
 
     const updatedRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
