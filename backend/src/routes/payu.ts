@@ -103,6 +103,39 @@ const buildResponseHash = (params: {
   return sha512(hashString);
 };
 
+const buildResponseHashWithAdditionalCharges = (params: {
+  key: string;
+  salt: string;
+  status: string;
+  txnid: string;
+  amount: string;
+  productinfo: string;
+  firstname: string;
+  email: string;
+  additionalCharges: string;
+  udf1?: string;
+  udf2?: string;
+  udf3?: string;
+  udf4?: string;
+  udf5?: string;
+}) => {
+  const udf = [params.udf1, params.udf2, params.udf3, params.udf4, params.udf5].map((v) => v || '');
+  const hashString = [
+    params.additionalCharges,
+    params.salt,
+    params.status,
+    '', '', '', '', '', '',
+    udf[4], udf[3], udf[2], udf[1], udf[0],
+    params.email,
+    params.firstname,
+    params.productinfo,
+    params.amount,
+    params.txnid,
+    params.key,
+  ].join('|');
+  return sha512(hashString);
+};
+
 const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
   const status = orderData.status || 'confirmed';
   const statusHistory = Array.isArray(orderData.statusHistory) && orderData.statusHistory.length
@@ -128,8 +161,6 @@ const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
   );
 
   const orderId = result.insertId;
-  const trackingId = `BM${orderId}`;
-  await dbExecute('UPDATE orders SET tracking_id = ? WHERE id = ?', [trackingId, orderId]);
   const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
   return rows[0];
 };
@@ -216,26 +247,42 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
   }
 });
 
-const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success' | 'failure') => {
-  const { key, salt } = getPayuConfig();
-  if (!key || !salt) return res.status(500).send('PayU not configured');
-  if (!isDbConnected()) return res.status(503).send('Database unavailable');
+const normalizePayuStatus = (value: any) => String(value || '').trim().toLowerCase();
 
-  const status = statusOverride || req.body.status;
-  const txnid = req.body.txnid;
-  const amount = req.body.amount;
-  const productinfo = req.body.productinfo;
-  const firstname = req.body.firstname;
-  const email = req.body.email;
-  const receivedHash = req.body.hash;
-  const udf1 = req.body.udf1;
-  const udf2 = req.body.udf2;
-  const udf3 = req.body.udf3;
-  const udf4 = req.body.udf4;
-  const udf5 = req.body.udf5;
-  const paymentId = req.body.mihpayid || req.body.payuMoneyId || txnid;
+const computePayuResponseHash = (payload: any, key: string, salt: string) => {
+  const status = normalizePayuStatus(payload.status);
+  const txnid = String(payload.txnid || '');
+  const amount = String(payload.amount || '');
+  const productinfo = String(payload.productinfo || '');
+  const firstname = String(payload.firstname || '');
+  const email = String(payload.email || '');
+  const udf1 = payload.udf1;
+  const udf2 = payload.udf2;
+  const udf3 = payload.udf3;
+  const udf4 = payload.udf4;
+  const udf5 = payload.udf5;
+  const additionalCharges = payload.additionalCharges;
 
-  const computed = buildResponseHash({
+  if (additionalCharges !== undefined && additionalCharges !== null && String(additionalCharges) !== '') {
+    return buildResponseHashWithAdditionalCharges({
+      key,
+      salt,
+      status,
+      txnid,
+      amount,
+      productinfo,
+      firstname,
+      email,
+      additionalCharges: String(additionalCharges),
+      udf1,
+      udf2,
+      udf3,
+      udf4,
+      udf5,
+    });
+  }
+
+  return buildResponseHash({
     key,
     salt,
     status,
@@ -250,6 +297,22 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
     udf4,
     udf5,
   });
+};
+
+const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success' | 'failure') => {
+  const { key, salt } = getPayuConfig();
+  if (!key || !salt) return res.status(500).send('PayU not configured');
+  if (!isDbConnected()) return res.status(503).send('Database unavailable');
+
+  const payload = req.body?.event_payload ? req.body.event_payload : req.body;
+
+  const status = normalizePayuStatus(statusOverride || payload.status);
+  const txnid = payload.txnid;
+  const amount = payload.amount;
+  const receivedHash = payload.hash;
+  const paymentId = payload.mihpayid || payload.payuMoneyId || txnid;
+
+  const computed = computePayuResponseHash({ ...payload, status }, key, salt);
 
   const frontendUrl = getFrontendUrl();
 
@@ -430,6 +493,33 @@ router.post('/failure', async (req, res) => {
     console.error(err);
     res.redirect(`${getFrontendUrl()}/payment-status/${req.body?.txnid || 'unknown'}`);
   });
+});
+
+router.post('/webhook', async (req, res) => {
+  const { key, salt } = getPayuConfig();
+  if (!key || !salt) return res.status(500).json({ message: 'PayU not configured' });
+  if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+
+  const payload = req.body?.event_payload ? req.body.event_payload : req.body;
+  const txnid = payload?.txnid;
+  if (!txnid) return res.status(400).json({ message: 'Missing txnid' });
+
+  const status = normalizePayuStatus(payload.status);
+  const receivedHash = payload.hash;
+  const computed = computePayuResponseHash({ ...payload, status }, key, salt);
+
+  if (!receivedHash || computed !== receivedHash) {
+    return res.status(400).json({ message: 'Invalid hash' });
+  }
+
+  try {
+    // Reuse existing callback handler logic, but don't rely on browser redirect.
+    await handlePayuCallback({ body: payload }, { redirect: () => undefined }, status === 'success' ? 'success' : status === 'failure' ? 'failure' : undefined);
+    return res.status(200).json({ ok: true });
+  } catch (err: any) {
+    console.error(err);
+    return res.status(500).json({ message: err?.message || 'Webhook processing failed' });
+  }
 });
 
 export default router;
