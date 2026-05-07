@@ -20,6 +20,7 @@ const mapOrderRow = (row) => ({
     billingAddress: (0, dbHelpers_1.parseJson)(row.billing_address, {}),
     paymentMethod: row.payment_method,
     trackingId: row.tracking_id ?? undefined,
+    shippingService: row.shipping_service ?? undefined,
     estimatedDelivery: (0, dbHelpers_1.toIsoString)(row.estimated_delivery),
     statusHistory: (0, dbHelpers_1.parseJson)(row.status_history, []),
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
@@ -66,6 +67,20 @@ router.get('/track/:orderId', async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
+router.get('/track-by-id/:trackingId', async (req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        const trackingId = req.params.trackingId;
+        const rows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE tracking_id = ? LIMIT 1', [trackingId]);
+        if (!rows[0])
+            return res.status(404).json({ message: 'Order not found' });
+        res.json(mapOrderRow(rows[0]));
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
 router.post('/', auth_1.auth, async (req, res) => {
     try {
         const { min, max } = await (0, eta_1.getEtaConfig)();
@@ -78,7 +93,7 @@ router.post('/', auth_1.auth, async (req, res) => {
         const statusHistory = Array.isArray(data.statusHistory) && data.statusHistory.length
             ? data.statusHistory
             : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
-        const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.userId || req.user?.id || null,
             JSON.stringify(data.items || []),
             data.total,
@@ -89,12 +104,11 @@ router.post('/', auth_1.auth, async (req, res) => {
             JSON.stringify(data.billingAddress || {}),
             data.paymentMethod,
             null,
+            null,
             estimatedDelivery,
             JSON.stringify(statusHistory),
         ]);
         const orderId = result.insertId;
-        const trackingId = `BM${orderId}`;
-        await (0, db_1.dbExecute)('UPDATE orders SET tracking_id = ? WHERE id = ?', [trackingId, orderId]);
         const rows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
         const order = mapOrderRow(rows[0]);
         if (order.customerEmail) {
@@ -117,7 +131,7 @@ router.post('/', auth_1.auth, async (req, res) => {
 });
 router.put('/:id/status', auth_1.auth, auth_1.adminOnly, async (req, res) => {
     try {
-        const { status, note } = req.body;
+        const { status, note, shippingService, trackingId } = req.body;
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         const rows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
@@ -125,8 +139,31 @@ router.put('/:id/status', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!row)
             return res.status(404).json({ message: 'Order not found' });
         const history = (0, dbHelpers_1.parseJson)(row.status_history, []);
-        history.push({ status, date: new Date().toISOString(), note });
-        await (0, db_1.dbExecute)('UPDATE orders SET status = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [status, JSON.stringify(history), req.params.id]);
+        const nextStatus = status || row.status;
+        const nextShippingService = shippingService ?? row.shipping_service;
+        let nextTrackingId = undefined;
+        if (trackingId !== undefined) {
+            const cleaned = String(trackingId).trim();
+            if (!cleaned) {
+                nextTrackingId = null;
+            }
+            else {
+                if (!/^\d{6}$/.test(cleaned))
+                    return res.status(400).json({ message: 'Tracking ID must be a 6-digit number' });
+                nextTrackingId = cleaned;
+            }
+        }
+        const trackingChanged = nextTrackingId !== undefined && (row.tracking_id ?? null) !== nextTrackingId;
+        const statusChanged = nextStatus !== row.status;
+        if (statusChanged || trackingChanged) {
+            history.push({ status: nextStatus, date: new Date().toISOString(), note });
+        }
+        if (nextTrackingId === undefined) {
+            await (0, db_1.dbExecute)('UPDATE orders SET status = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus, nextShippingService, JSON.stringify(history), req.params.id]);
+        }
+        else {
+            await (0, db_1.dbExecute)('UPDATE orders SET status = ?, tracking_id = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus, nextTrackingId, nextShippingService, JSON.stringify(history), req.params.id]);
+        }
         const updatedRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
         const order = mapOrderRow(updatedRows[0]);
         if (order.customerEmail) {
@@ -134,7 +171,7 @@ router.put('/:id/status', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             const etaText = (0, eta_1.getEtaText)(min, max);
             (0, email_1.sendShippingUpdate)(order.customerEmail, {
                 orderId: String(order.orderId),
-                status,
+                status: nextStatus,
                 trackingId: order.trackingId,
                 eta: etaText,
                 details: {

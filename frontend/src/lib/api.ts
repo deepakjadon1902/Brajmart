@@ -130,7 +130,7 @@ export const deleteCategory = (id: string) =>
 // Orders
 export const fetchOrders = () => getJson<any[]>('/orders');
 export const fetchMyOrders = () => getJson<any[]>('/orders/my');
-export const updateOrderStatus = (id: string, payload: { status: string; note?: string; shippingService?: string }) =>
+export const updateOrderStatus = (id: string, payload: { status: string; note?: string; shippingService?: string; trackingId?: string | null }) =>
   getJson<Record<string, any>>(`/orders/${id}/status`, { method: 'PUT', body: payload });
 export const createOrder = (payload: Record<string, unknown>) =>
   getJson('/orders', { method: 'POST', body: payload });

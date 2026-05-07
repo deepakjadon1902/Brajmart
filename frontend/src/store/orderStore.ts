@@ -108,7 +108,7 @@ export const useOrderStore = create<OrderStore>()(
           id,
           createdAt: now,
           updatedAt: now,
-          trackingId: `BM${id}`,
+          trackingId: undefined,
           estimatedDelivery,
           statusHistory: [{ status: orderData.status, date: now, note: 'Order placed successfully' }],
         };
@@ -117,7 +117,7 @@ export const useOrderStore = create<OrderStore>()(
       },
       getOrdersByUser: (userId) =>
         get().orders.filter((o) => String(o.userId || '') === String(userId || '')),
-      getOrderById: (id) => get().orders.find((o) => o.id === id),
+      getOrderById: (id) => get().orders.find((o) => o.id === id || (o.trackingId && o.trackingId === id)),
       updateOrderStatus: (id, status, note) =>
         set((s) => ({
           orders: s.orders.map((o) =>

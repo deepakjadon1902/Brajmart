@@ -87,15 +87,15 @@ const UserOrderTracking = () => {
                 <div>
                   <p className="text-xs text-muted-foreground">Order ID</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-xl font-bold text-saffron font-mono">{selectedOrder.id}</p>
-                    <button onClick={() => { navigator.clipboard.writeText(selectedOrder.id); toast.success('Copied!'); }} className="text-muted-foreground hover:text-foreground">
+                    <p className="text-xl font-bold text-saffron font-mono">{selectedOrder.trackingId || 'Pending'}</p>
+                    <button onClick={() => { navigator.clipboard.writeText(selectedOrder.trackingId || selectedOrder.id); toast.success('Copied!'); }} className="text-muted-foreground hover:text-foreground">
                       <Copy size={14} />
                     </button>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Tracking ID</p>
-                  <p className="font-mono text-foreground">{selectedOrder.trackingId || 'Pending'}</p>
+                  <p className="text-xs text-muted-foreground">System Order No.</p>
+                  <p className="font-mono text-foreground">{selectedOrder.id}</p>
                 </div>
               </div>
 
@@ -209,11 +209,11 @@ const UserOrderTracking = () => {
               userOrders.map((order) => (
                 <button
                   key={order.id}
-                  onClick={() => setSelectedOrderId(order.id)}
+                  onClick={() => setSelectedOrderId(order.trackingId || order.id)}
                   className="w-full bg-card border border-border rounded-2xl p-5 text-left hover:border-saffron/40 transition"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono text-saffron text-sm font-bold">#{order.id}</span>
+                    <span className="font-mono text-saffron text-sm font-bold">#{order.trackingId || order.id}</span>
                     <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium border ${
                       order.status === 'delivered' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
                       order.status === 'cancelled' ? 'bg-red-500/10 text-red-500 border-red-500/20' :

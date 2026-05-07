@@ -99,13 +99,13 @@ const TrackOrderPage = () => {
             <ScrollReveal>
               <div className="bg-card rounded-2xl border border-border p-6 md:p-8 mb-8">
                 <div className="flex items-center justify-between mb-2">
-                  <h2 className="font-cinzel text-lg font-bold text-foreground">Order #{order.orderId || order._id}</h2>
+                  <h2 className="font-cinzel text-lg font-bold text-foreground">Order ID: {order.trackingId || order.orderId || order._id}</h2>
                   <span className="text-xs text-muted-foreground">{order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN') : ''}</span>
                 </div>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-xs text-muted-foreground">Tracking ID</p>
-                    <p className="font-mono text-sm text-saffron">{order.trackingId || 'N/A'}</p>
+                    <p className="text-xs text-muted-foreground">System Order No.</p>
+                    <p className="font-mono text-sm text-saffron">{order.orderId || order._id}</p>
                   </div>
                   {order.shippingService && (
                     <div className="text-right">

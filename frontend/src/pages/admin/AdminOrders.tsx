@@ -39,6 +39,15 @@ const AdminOrders = () => {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!selectedOrder) {
+      setEditingTrackingId('');
+      return;
+    }
+    const found = orders.find((o) => o.id === selectedOrder);
+    setEditingTrackingId(found?.trackingId || '');
+  }, [selectedOrder, orders]);
+
   const filtered = orders.filter((o) => {
     const matchSearch = o.id.toLowerCase().includes(search.toLowerCase()) || o.shippingAddress.fullName.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'all' || o.status === filterStatus;
@@ -48,14 +57,19 @@ const AdminOrders = () => {
   const detail = selectedOrder ? orders.find((o) => o.id === selectedOrder) : null;
 
   const handleUpdateTrackingId = async (orderId: string) => {
+    if (!detail) return;
     if (!editingTrackingId.trim()) {
       toast.error('Please enter a tracking ID');
       return;
     }
     try {
-      const updated: any = await updateOrderStatusApi(orderId, { status: detail.status, note: `Tracking ID updated to ${editingTrackingId}` });
+      const cleaned = editingTrackingId.trim();
+      const updated: any = await updateOrderStatusApi(orderId, {
+        status: detail.status,
+        trackingId: cleaned,
+        note: `Tracking ID updated to ${cleaned}`,
+      });
       setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...(updated as object) } : o)));
-      setEditingTrackingId('');
       toast.success('Tracking ID updated');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update tracking ID');
@@ -155,6 +169,26 @@ const AdminOrders = () => {
                   <p>{detail.shippingAddress.state} - {detail.shippingAddress.pincode}</p>
                   <p>Phone: {detail.shippingAddress.mobile}</p>
                 </div>
+              </div>
+
+              {/* Tracking ID */}
+              <div>
+                <h3 className="text-sm font-medium text-slate-400 mb-2">Order ID (Tracking)</h3>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    value={editingTrackingId}
+                    onChange={(e) => setEditingTrackingId(e.target.value)}
+                    placeholder="Enter 6-digit Order ID"
+                    className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 font-mono"
+                  />
+                  <button
+                    onClick={() => handleUpdateTrackingId(detail._id)}
+                    className="px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-sm font-medium"
+                  >
+                    Update
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">This 6-digit ID is shown to the user for tracking.</p>
               </div>
 
               {/* Status Update */}

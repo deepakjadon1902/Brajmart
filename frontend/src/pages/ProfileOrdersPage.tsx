@@ -46,9 +46,13 @@ const ProfileOrdersPage = () => {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Order ID</p>
-                      <button onClick={() => navigate(`/track-order?orderId=${o.trackingId || o.id}`)} className="font-mono text-sm text-saffron hover:underline">
-                        {o.trackingId || o.id}
-                      </button>
+                      {o.trackingId ? (
+                        <button onClick={() => navigate(`/track-order?orderId=${o.trackingId}`)} className="font-mono text-sm text-saffron hover:underline">
+                          {o.trackingId}
+                        </button>
+                      ) : (
+                        <p className="font-mono text-sm text-muted-foreground">Pending</p>
+                      )}
                     </div>
                     <span className="px-2.5 py-1 rounded-full text-xs border border-gold/30 bg-gold/10 text-gold">
                       {o.status}

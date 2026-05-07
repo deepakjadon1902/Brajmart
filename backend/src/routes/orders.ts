@@ -7,17 +7,6 @@ import { parseJson, toIsoString } from '../lib/dbHelpers';
 
 const router = Router();
 
-const generateUniqueTrackingId = async (): Promise<string> => {
-  let trackingId: string;
-  let attempts = 0;
-  do {
-    trackingId = Math.floor(100000 + Math.random() * 900000).toString();
-    attempts++;
-    if (attempts > 10) throw new Error('Unable to generate unique tracking ID');
-  } while (await dbQuery('SELECT 1 FROM orders WHERE tracking_id = ? LIMIT 1', [trackingId]).then(rows => rows.length > 0));
-  return trackingId;
-};
-
 const mapOrderRow = (row: any) => ({
   _id: String(row.id),
   orderId: Number(row.id),
@@ -124,8 +113,6 @@ router.post('/', auth, async (req: AuthRequest, res) => {
     );
 
     const orderId = result.insertId;
-    const trackingId = await generateUniqueTrackingId();
-    await dbExecute('UPDATE orders SET tracking_id = ? WHERE id = ?', [trackingId, orderId]);
 
     const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
     const order = mapOrderRow(rows[0]);
@@ -150,7 +137,7 @@ router.post('/', auth, async (req: AuthRequest, res) => {
 
 router.put('/:id/status', auth, adminOnly, async (req, res) => {
   try {
-    const { status, note, shippingService } = req.body;
+    const { status, note, shippingService, trackingId } = req.body;
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
@@ -158,14 +145,39 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
     if (!row) return res.status(404).json({ message: 'Order not found' });
 
     const history = parseJson<Array<{ status: string; date: string; note?: string }>>(row.status_history, []);
-    if (status !== row.status) {
-      history.push({ status, date: new Date().toISOString(), note });
+
+    const nextStatus = status || row.status;
+    const nextShippingService = shippingService ?? row.shipping_service;
+
+    let nextTrackingId: string | null | undefined = undefined;
+    if (trackingId !== undefined) {
+      const cleaned = String(trackingId).trim();
+      if (!cleaned) {
+        nextTrackingId = null;
+      } else {
+        if (!/^\d{6}$/.test(cleaned)) return res.status(400).json({ message: 'Tracking ID must be a 6-digit number' });
+        nextTrackingId = cleaned;
+      }
     }
 
-    await dbExecute('UPDATE orders SET status = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [status, shippingService || row.shipping_service, JSON.stringify(history), req.params.id]);
+    const trackingChanged = nextTrackingId !== undefined && (row.tracking_id ?? null) !== nextTrackingId;
+    const statusChanged = nextStatus !== row.status;
 
-    const updatedRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
-    const order = mapOrderRow(updatedRows[0]);
+    if (statusChanged || trackingChanged) {
+      history.push({ status: nextStatus, date: new Date().toISOString(), note });
+    }
+
+    if (nextTrackingId === undefined) {
+      await dbExecute(
+        'UPDATE orders SET status = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
+        [nextStatus, nextShippingService, JSON.stringify(history), req.params.id]
+      );
+    } else {
+      await dbExecute(
+        'UPDATE orders SET status = ?, tracking_id = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
+        [nextStatus, nextTrackingId, nextShippingService, JSON.stringify(history), req.params.id]
+      );
+    }
 
     const updatedRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
     const order = mapOrderRow(updatedRows[0]);
@@ -175,7 +187,7 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
       const etaText = getEtaText(min, max);
       sendShippingUpdate(order.customerEmail, {
         orderId: String(order.orderId),
-        status,
+        status: nextStatus,
         trackingId: order.trackingId,
         eta: etaText,
         details: {
