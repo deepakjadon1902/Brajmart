@@ -13,6 +13,7 @@ const AdminOrders = () => {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [editingTrackingId, setEditingTrackingId] = useState<string>('');
 
   useEffect(() => {
     const load = async () => {
@@ -45,6 +46,22 @@ const AdminOrders = () => {
   });
 
   const detail = selectedOrder ? orders.find((o) => o.id === selectedOrder) : null;
+
+  const handleUpdateTrackingId = async (orderId: string) => {
+    if (!editingTrackingId.trim()) {
+      toast.error('Please enter a tracking ID');
+      return;
+    }
+    try {
+      const updated: any = await updateOrderStatusApi(orderId, { status: detail.status, note: `Tracking ID updated to ${editingTrackingId}` });
+      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...(updated as object) } : o)));
+      setEditingTrackingId('');
+      toast.success('Tracking ID updated');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update tracking ID');
+    }
+  };
+
   const handleStatusUpdate = async (orderId: string, status: OrderStatus, shippingService?: string) => {
     try {
       const payload: any = { status, note: `Status updated to ${status}` };
