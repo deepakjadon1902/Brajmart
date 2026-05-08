@@ -5,6 +5,9 @@ const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const router = (0, express_1.Router)();
+const LIST_CACHE_TTL_MS = 60000;
+const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
+let listCache = null;
 const mapCategoryRow = (row) => ({
     _id: String(row.id),
     name: row.name,
@@ -41,8 +44,14 @@ router.get('/', async (_req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        res.setHeader('Cache-Control', LIST_CACHE_CONTROL);
+        if (listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
+            return res.json(listCache.data);
+        }
         const rows = await (0, db_1.dbQuery)('SELECT * FROM categories ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
-        res.json(rows.map(mapCategoryRow));
+        const data = rows.map(mapCategoryRow);
+        listCache = { at: Date.now(), data };
+        res.json(data);
     }
     catch (err) {
         res.status(500).json({ message: err.message });
@@ -55,6 +64,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         const data = req.body || {};
         const result = await (0, db_1.dbExecute)('INSERT INTO categories (name, icon, color, product_count, display_order) VALUES (?, ?, ?, ?, ?)', [data.name, data.icon, data.color ?? '#f59e0b', data.productCount ?? 0, data.displayOrder ?? 0]);
         const rows = await (0, db_1.dbQuery)('SELECT * FROM categories WHERE id = ? LIMIT 1', [result.insertId]);
+        listCache = null;
         res.status(201).json(mapCategoryRow(rows[0]));
     }
     catch (err) {
@@ -72,6 +82,7 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         const rows = await (0, db_1.dbQuery)('SELECT * FROM categories WHERE id = ? LIMIT 1', [req.params.id]);
         if (!rows[0])
             return res.status(404).json({ message: 'Category not found' });
+        listCache = null;
         res.json(mapCategoryRow(rows[0]));
     }
     catch (err) {
@@ -83,6 +94,7 @@ router.delete('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         await (0, db_1.dbExecute)('DELETE FROM categories WHERE id = ?', [req.params.id]);
+        listCache = null;
         res.json({ message: 'Category deleted' });
     }
     catch (err) {

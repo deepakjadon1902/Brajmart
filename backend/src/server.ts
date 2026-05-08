@@ -1,4 +1,5 @@
 import express from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
@@ -21,13 +22,20 @@ const app = express();
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
+app.use(compression());
 app.use(cors({
   origin: process.env.CORS_ORIGIN || '*',
   credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/uploads', express.static(UPLOADS_DIR, {
+  maxAge: '7d',
+  setHeaders: (res) => {
+    // Helps product images load instantly on reload (localhost + deployed).
+    res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+  },
+}));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);

@@ -5,6 +5,30 @@ const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const router = (0, express_1.Router)();
+const LIST_CACHE_TTL_MS = 60000;
+const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
+let listCache = null;
+const ensureProductVariantColumns = async () => {
+    const rows = await (0, db_1.dbQuery)("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND COLUMN_NAME IN ('sizes','size_pricing','piece_pricing')");
+    const existing = new Set((rows || []).map((r) => String(r.COLUMN_NAME || r.column_name || '').toLowerCase()).filter(Boolean));
+    const missing = {
+        sizes: !existing.has('sizes'),
+        size_pricing: !existing.has('size_pricing'),
+        piece_pricing: !existing.has('piece_pricing'),
+    };
+    if (!missing.sizes && !missing.size_pricing && !missing.piece_pricing)
+        return;
+    // Add columns in a safe order so AFTER clauses work.
+    if (missing.sizes) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN sizes JSON NULL AFTER description');
+    }
+    if (missing.size_pricing) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN size_pricing JSON NULL AFTER sizes');
+    }
+    if (missing.piece_pricing) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN piece_pricing JSON NULL AFTER size_pricing');
+    }
+};
 const mapProductRow = (row) => ({
     _id: String(row.id),
     name: row.name,
@@ -26,6 +50,9 @@ const mapProductRow = (row) => ({
     inStock: (0, dbHelpers_1.boolFromDb)(row.in_stock),
     soldCount: Number(row.sold_count ?? 0),
     description: row.description ?? '',
+    sizes: (0, dbHelpers_1.parseJson)(row.sizes, []),
+    sizePricing: (0, dbHelpers_1.parseJson)(row.size_pricing, []),
+    piecePricing: (0, dbHelpers_1.parseJson)(row.piece_pricing, []),
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
 });
@@ -64,6 +91,12 @@ const buildUpdate = (data) => {
         set('sold_count', data.soldCount);
     if (data.description !== undefined)
         set('description', data.description);
+    if (data.sizes !== undefined)
+        set('sizes', JSON.stringify(data.sizes || []));
+    if (data.sizePricing !== undefined)
+        set('size_pricing', JSON.stringify(data.sizePricing || []));
+    if (data.piecePricing !== undefined)
+        set('piece_pricing', JSON.stringify(data.piecePricing || []));
     if (!fields.length)
         return null;
     fields.push('updated_at = NOW()');
@@ -73,8 +106,14 @@ router.get('/', async (_req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        res.setHeader('Cache-Control', LIST_CACHE_CONTROL);
+        if (listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
+            return res.json(listCache.data);
+        }
         const rows = await (0, db_1.dbQuery)('SELECT * FROM products ORDER BY created_at DESC');
-        res.json(rows.map(mapProductRow));
+        const data = rows.map(mapProductRow);
+        listCache = { at: Date.now(), data };
+        res.json(data);
     }
     catch (err) {
         res.status(500).json({ message: err.message });
@@ -99,8 +138,35 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         const data = req.body || {};
+        if (data.sizes !== undefined || data.sizePricing !== undefined || data.piecePricing !== undefined) {
+            try {
+                await ensureProductVariantColumns();
+            }
+            catch {
+                // If permissions are restricted, fall back to legacy insert behavior below.
+            }
+        }
         const images = Array.isArray(data.images) && data.images.length ? data.images : (data.image ? [data.image] : []);
-        const result = await (0, db_1.dbExecute)('INSERT INTO products (name, slug, price, original_price, image, images, category, rating, review_count, badge, tags, in_stock, sold_count, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (name, slug, price, original_price, image, images, category, rating, review_count, badge, tags, in_stock, sold_count, description, sizes, size_pricing, piece_pricing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            data.name,
+            data.slug,
+            data.price,
+            data.originalPrice ?? null,
+            data.image,
+            JSON.stringify(images || []),
+            data.category,
+            data.rating ?? 0,
+            data.reviewCount ?? 0,
+            data.badge ?? null,
+            JSON.stringify(data.tags || []),
+            data.inStock === undefined ? 1 : data.inStock ? 1 : 0,
+            data.soldCount ?? 0,
+            data.description ?? '',
+            JSON.stringify(data.sizes || []),
+            JSON.stringify(data.sizePricing || []),
+            JSON.stringify(data.piecePricing || []),
+        ]);
+        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (name, slug, price, original_price, image, images, category, rating, review_count, badge, tags, in_stock, sold_count, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.price,
@@ -116,7 +182,23 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.soldCount ?? 0,
             data.description ?? '',
         ]);
+        let result;
+        try {
+            result = await insertWithVariants();
+        }
+        catch (err) {
+            const message = String(err?.message || '');
+            if (message.includes("Unknown column 'sizes'") ||
+                message.includes("Unknown column 'size_pricing'") ||
+                message.includes("Unknown column 'piece_pricing'")) {
+                result = await insertWithoutVariants();
+            }
+            else {
+                throw err;
+            }
+        }
         const rows = await (0, db_1.dbQuery)('SELECT * FROM products WHERE id = ? LIMIT 1', [result.insertId]);
+        listCache = null;
         res.status(201).json(mapProductRow(rows[0]));
     }
     catch (err) {
@@ -127,13 +209,43 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
-        const update = buildUpdate(req.body || {});
+        const body = req.body || {};
+        if (body.sizes !== undefined || body.sizePricing !== undefined || body.piecePricing !== undefined) {
+            try {
+                await ensureProductVariantColumns();
+            }
+            catch {
+                // If permissions are restricted, fall back to legacy update behavior below.
+            }
+        }
+        const update = buildUpdate(body);
         if (!update)
             return res.status(400).json({ message: 'No fields to update' });
-        await (0, db_1.dbExecute)(`UPDATE products SET ${update.sql} WHERE id = ?`, [...update.values, req.params.id]);
+        try {
+            await (0, db_1.dbExecute)(`UPDATE products SET ${update.sql} WHERE id = ?`, [...update.values, req.params.id]);
+        }
+        catch (err) {
+            const message = String(err?.message || '');
+            if (message.includes("Unknown column 'sizes'") ||
+                message.includes("Unknown column 'size_pricing'") ||
+                message.includes("Unknown column 'piece_pricing'")) {
+                const fallbackBody = { ...(req.body || {}) };
+                delete fallbackBody.sizes;
+                delete fallbackBody.sizePricing;
+                delete fallbackBody.piecePricing;
+                const fallbackUpdate = buildUpdate(fallbackBody);
+                if (!fallbackUpdate)
+                    return res.status(400).json({ message: 'No fields to update' });
+                await (0, db_1.dbExecute)(`UPDATE products SET ${fallbackUpdate.sql} WHERE id = ?`, [...fallbackUpdate.values, req.params.id]);
+            }
+            else {
+                throw err;
+            }
+        }
         const rows = await (0, db_1.dbQuery)('SELECT * FROM products WHERE id = ? LIMIT 1', [req.params.id]);
         if (!rows[0])
             return res.status(404).json({ message: 'Product not found' });
+        listCache = null;
         res.json(mapProductRow(rows[0]));
     }
     catch (err) {
@@ -145,6 +257,7 @@ router.delete('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         await (0, db_1.dbExecute)('DELETE FROM products WHERE id = ?', [req.params.id]);
+        listCache = null;
         res.json({ message: 'Product deleted' });
     }
     catch (err) {

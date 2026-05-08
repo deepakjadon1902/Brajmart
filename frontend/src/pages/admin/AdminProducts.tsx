@@ -74,7 +74,7 @@ const AdminProducts = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Products</h1>
-        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', images: [], description: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true, tags: [] }); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
+        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', images: [], description: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true, tags: [], sizes: [], sizePricing: [], piecePricing: [] }); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
           <Plus size={16} /> Add Product
         </button>
       </div>
@@ -139,9 +139,29 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
   const [imageError, setImageError] = useState('');
   const [galleryUrl, setGalleryUrl] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [sizeText, setSizeText] = useState('');
+  const [sizePriceText, setSizePriceText] = useState('');
+  const [piecesText, setPiecesText] = useState('');
+  const [piecesPriceText, setPiecesPriceText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const update = (field: string, value: any) => setForm((prev) => ({ ...prev, [field]: value }));
+
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+
+  const supportsVariants = (() => {
+    const cat = normalize(form.category || '');
+    return cat.includes('dress') || cat.includes('clothing') || cat.includes('accessor') || cat.includes('idol');
+  })();
+
+  const sizes = Array.isArray(form.sizes) ? form.sizes.filter(Boolean) : [];
+  const sizePricing = Array.isArray(form.sizePricing) ? form.sizePricing : [];
+  const piecePricing = Array.isArray(form.piecePricing) ? form.piecePricing : [];
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -228,6 +248,155 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
               {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
+
+          {/* Sizes & Piece Pricing (only for Dresses / Accessories / Idols) */}
+          {(supportsVariants || sizes.length > 0 || piecePricing.length > 0) && (
+            <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
+              <div>
+                <p className="text-sm font-semibold text-white">Sizes & Piece Pricing</p>
+                <p className="text-xs text-slate-500">Shown only for Dresses / Accessories / Idols categories.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm text-slate-300">Sizes</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    value={sizeText}
+                    onChange={(e) => setSizeText(e.target.value)}
+                    placeholder="e.g. S, M, L, XL"
+                    className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  />
+                  <input
+                    value={sizePriceText}
+                    onChange={(e) => setSizePriceText(e.target.value)}
+                    placeholder="Price (INR) (optional)"
+                    type="number"
+                    className="px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = sizeText.trim();
+                      if (!next) return;
+                      const current = Array.isArray(form.sizes) ? form.sizes.filter(Boolean) : [];
+                      if (current.includes(next)) return;
+                      update('sizes', [...current, next]);
+
+                      const price = Number(sizePriceText);
+                      if (Number.isFinite(price) && price > 0) {
+                        const currentPricing = Array.isArray(form.sizePricing) ? form.sizePricing : [];
+                        const withoutDup = currentPricing.filter((x) => String(x?.size || '') !== next);
+                        update('sizePricing', [...withoutDup, { size: next, price }].sort((a, b) => String(a.size).localeCompare(String(b.size))));
+                      }
+                      setSizeText('');
+                      setSizePriceText('');
+                    }}
+                    className="px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white hover:bg-slate-700 transition"
+                  >
+                    Add
+                  </button>
+                </div>
+                {sizes.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {sizes.map((s) => (
+                      <span key={s} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs text-slate-200">
+                        {s}
+                        {(() => {
+                          const priced = sizePricing.find((x) => String(x?.size || '') === s);
+                          if (!priced || !Number.isFinite(Number(priced.price))) return null;
+                          return <span className="text-slate-400">₹{Number(priced.price).toLocaleString('en-IN')}</span>;
+                        })()}
+                        <button
+                          type="button"
+                          onClick={() => update('sizes', sizes.filter((x) => x !== s))}
+                          className="text-slate-400 hover:text-white"
+                          aria-label={`Remove size ${s}`}
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {sizes.length > 0 && (
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        update('sizePricing', []);
+                        setSizePriceText('');
+                      }}
+                      className="text-xs text-slate-400 hover:text-white underline underline-offset-2"
+                    >
+                      Clear size pricing
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm text-slate-300">Piece-based Pricing</label>
+                <p className="text-xs text-slate-500">Set prices for 2+ pieces (1 piece uses the main Price field).</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    value={piecesText}
+                    onChange={(e) => setPiecesText(e.target.value)}
+                    placeholder="Pieces (e.g. 2)"
+                    type="number"
+                    className="px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  />
+                  <input
+                    value={piecesPriceText}
+                    onChange={(e) => setPiecesPriceText(e.target.value)}
+                    placeholder="Price (INR)"
+                    type="number"
+                    className="px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const pieces = Number(piecesText);
+                      const price = Number(piecesPriceText);
+                      if (!Number.isFinite(pieces) || pieces < 2) return;
+                      if (!Number.isFinite(price) || price <= 0) return;
+                      const current = Array.isArray(form.piecePricing) ? form.piecePricing : [];
+                      const withoutDup = current.filter((x) => Number(x?.pieces) !== pieces);
+                      const next = [...withoutDup, { pieces, price }].sort((a, b) => a.pieces - b.pieces);
+                      update('piecePricing', next);
+                      setPiecesText('');
+                      setPiecesPriceText('');
+                    }}
+                    className="px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white hover:bg-slate-700 transition"
+                  >
+                    Add Tier
+                  </button>
+                </div>
+
+                {piecePricing.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    {piecePricing
+                      .slice()
+                      .sort((a, b) => Number(a.pieces) - Number(b.pieces))
+                      .map((tier) => (
+                        <div key={String(tier.pieces)} className="flex items-center justify-between gap-3 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2">
+                          <div className="text-sm text-slate-200">
+                            <span className="font-semibold">{tier.pieces}</span> pcs → <span className="font-semibold">₹{Number(tier.price).toLocaleString('en-IN')}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => update('piecePricing', piecePricing.filter((x) => Number(x?.pieces) !== Number(tier.pieces)))}
+                            className="text-slate-400 hover:text-white"
+                            aria-label={`Remove tier ${tier.pieces} pieces`}
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Image Upload */}
           <div>

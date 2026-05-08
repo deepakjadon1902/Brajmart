@@ -128,17 +128,19 @@ const CheckoutPage = () => {
     }
     setProcessing(true);
     try {
-      const orderPayload = {
-        userId: user?.id || undefined,
-        items: items.map((i) => ({
-          name: i.product.name,
-          image: i.product.image,
-          quantity: i.quantity,
-          price: i.product.price,
-        })),
-        total: grandTotal,
-        status: 'confirmed',
-        customerName: billingAddress.fullName,
+        const orderPayload = {
+          userId: user?.id || undefined,
+          items: items.map((i) => ({
+            name: i.product.name,
+            image: i.product.image,
+            quantity: i.quantity,
+            price: i.product.price,
+            selectedSize: i.product.selectedSize,
+            selectedPieces: i.product.selectedPieces,
+          })),
+          total: grandTotal,
+          status: 'confirmed',
+          customerName: billingAddress.fullName,
         customerEmail: user?.email || 'guest@brajmart.com',
         shippingAddress: effectiveShipping,
         billingAddress,

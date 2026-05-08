@@ -32,6 +32,7 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   trackingId?: string;
+  shippingService?: string;
   estimatedDelivery?: string;
   statusHistory: { status: OrderStatus; date: string; note?: string }[];
 }
@@ -78,6 +79,8 @@ export const useOrderStore = create<OrderStore>()(
                 reviewCount: i.product?.reviewCount || 0,
                 badge: i.product?.badge,
                 inStock: i.product?.inStock ?? true,
+                selectedSize: i.selectedSize || i.product?.selectedSize,
+                selectedPieces: i.selectedPieces || i.product?.selectedPieces,
               },
               quantity: i.quantity || 1,
               price: i.price || 0,
@@ -90,6 +93,7 @@ export const useOrderStore = create<OrderStore>()(
             createdAt: o.createdAt,
             updatedAt: o.updatedAt,
             trackingId: o.trackingId,
+            shippingService: o.shippingService,
             estimatedDelivery: o.estimatedDelivery,
             statusHistory: o.statusHistory || [],
           }));

@@ -6,6 +6,9 @@ const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const email_1 = require("../lib/email");
 const router = (0, express_1.Router)();
+const SETTINGS_CACHE_TTL_MS = 5 * 60000;
+const SETTINGS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=600';
+let settingsCache = null;
 const mapSettingsRow = (row) => ({
     _id: String(row.id),
     storeName: row.store_name,
@@ -102,12 +105,18 @@ router.get('/', async (_req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        res.setHeader('Cache-Control', SETTINGS_CACHE_CONTROL);
+        if (settingsCache && (Date.now() - settingsCache.at) < SETTINGS_CACHE_TTL_MS) {
+            return res.json(settingsCache.data);
+        }
         let rows = await (0, db_1.dbQuery)('SELECT * FROM settings LIMIT 1');
         if (!rows[0]) {
             await (0, db_1.dbExecute)('INSERT INTO settings () VALUES ()');
             rows = await (0, db_1.dbQuery)('SELECT * FROM settings LIMIT 1');
         }
-        res.json(mapSettingsRow(rows[0]));
+        const data = mapSettingsRow(rows[0]);
+        settingsCache = { at: Date.now(), data };
+        res.json(data);
     }
     catch (err) {
         res.status(500).json({ message: err.message });
@@ -127,6 +136,7 @@ router.put('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             await (0, db_1.dbExecute)(`UPDATE settings SET ${update.sql} WHERE id = ?`, [...update.values, rows[0].id]);
         }
         const refreshed = await (0, db_1.dbQuery)('SELECT * FROM settings LIMIT 1');
+        settingsCache = null;
         res.json(mapSettingsRow(refreshed[0]));
     }
     catch (err) {

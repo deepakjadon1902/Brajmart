@@ -34,6 +34,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
     ? product.images
     : (product.image ? [product.image] : []);
   const hoverImage = cardImages.length > 1 ? cardImages[1] : cardImages[0];
+  const isAboveTheFold = index < 4;
   const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
   const badge = product.tags?.includes('bestseller')
     ? 'bestseller'
@@ -84,7 +85,9 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
         <img
           src={cardImages[0] || product.image}
           alt={product.name}
-          loading="lazy"
+          loading={isAboveTheFold ? 'eager' : 'lazy'}
+          decoding="async"
+          fetchPriority={index < 2 ? 'high' : 'auto'}
           className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
         />
         {hoverImage && hoverImage !== (cardImages[0] || product.image) && (
@@ -92,6 +95,8 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
             src={hoverImage}
             alt={`${product.name} alternate`}
             loading="lazy"
+            decoding="async"
+            fetchPriority="low"
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}
           />
         )}

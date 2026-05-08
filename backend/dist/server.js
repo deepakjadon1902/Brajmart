@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const compression_1 = __importDefault(require("compression"));
 const cors_1 = __importDefault(require("cors"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -23,13 +24,20 @@ const app = (0, express_1.default)();
 const UPLOADS_DIR = path_1.default.join(__dirname, '..', 'uploads');
 if (!fs_1.default.existsSync(UPLOADS_DIR))
     fs_1.default.mkdirSync(UPLOADS_DIR, { recursive: true });
+app.use((0, compression_1.default)());
 app.use((0, cors_1.default)({
     origin: process.env.CORS_ORIGIN || '*',
     credentials: true,
 }));
 app.use(express_1.default.json({ limit: '50mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
-app.use('/uploads', express_1.default.static(UPLOADS_DIR));
+app.use('/uploads', express_1.default.static(UPLOADS_DIR, {
+    maxAge: '7d',
+    setHeaders: (res) => {
+        // Helps product images load instantly on reload (localhost + deployed).
+        res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+    },
+}));
 app.use('/api/auth', auth_1.default);
 app.use('/api/users', users_1.default);
 app.use('/api/products', products_1.default);

@@ -42,6 +42,8 @@ export const useCartStore = create<CartStore>()(
               reviewCount: i.product?.reviewCount || 0,
               badge: i.product?.badge,
               inStock: i.product?.inStock ?? true,
+              selectedSize: i.selectedSize || i.product?.selectedSize,
+              selectedPieces: i.selectedPieces || i.product?.selectedPieces,
             },
             quantity: i.quantity || 1,
           }));
@@ -61,6 +63,8 @@ export const useCartStore = create<CartStore>()(
               image: i.product.image,
               quantity: i.quantity,
               price: i.product.price,
+              selectedSize: i.product.selectedSize,
+              selectedPieces: i.product.selectedPieces,
             })));
           }
           return { items };
@@ -73,6 +77,8 @@ export const useCartStore = create<CartStore>()(
             image: i.product.image,
             quantity: i.quantity,
             price: i.product.price,
+            selectedSize: i.product.selectedSize,
+            selectedPieces: i.product.selectedPieces,
           })));
         }
         return { items };
@@ -86,6 +92,8 @@ export const useCartStore = create<CartStore>()(
             image: i.product.image,
             quantity: i.quantity,
             price: i.product.price,
+            selectedSize: i.product.selectedSize,
+            selectedPieces: i.product.selectedPieces,
           })));
         }
         return { items };
@@ -101,6 +109,8 @@ export const useCartStore = create<CartStore>()(
             image: i.product.image,
             quantity: i.quantity,
             price: i.product.price,
+            selectedSize: i.product.selectedSize,
+            selectedPieces: i.product.selectedPieces,
           })));
         }
         return { items };

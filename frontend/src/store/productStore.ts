@@ -3,12 +3,17 @@ import { persist } from 'zustand/middleware';
 import { Product, Category } from '@/types/product';
 import { fetchProducts, fetchCategories } from '@/lib/api';
 
+const STALE_AFTER_MS = 5 * 60 * 1000; // 5 minutes
+
 interface ProductStore {
   products: Product[];
   categories: Category[];
+  lastFetchedAt: number;
+  loading: boolean;
+  error: string | null;
   setProducts: (products: Product[]) => void;
   setCategories: (categories: Category[]) => void;
-  loadFromApi: () => Promise<void>;
+  loadFromApi: (opts?: { force?: boolean }) => Promise<void>;
 
   addProduct: (product: Product) => void;
   updateProduct: (id: string, data: Partial<Product>) => void;
@@ -33,27 +38,42 @@ export const useProductStore = create<ProductStore>()(
     (set, get) => ({
       products: [],
       categories: [],
+      lastFetchedAt: 0,
+      loading: false,
+      error: null,
 
       setProducts: (products) => set({ products }),
       setCategories: (categories) => set({ categories }),
-      loadFromApi: async () => {
-        const [products, categories] = await Promise.all([fetchProducts(), fetchCategories()]);
-        const mappedProducts = (Array.isArray(products) ? products : []).map((p: any) => {
-          const tags = Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []);
-          return { ...p, id: p.id || p._id, tags };
-        });
-        const orderValue = (value: unknown) => {
-          const n = typeof value === 'number' ? value : Number(value ?? 0);
-          return n > 0 ? n : Number.MAX_SAFE_INTEGER;
-        };
-        const mappedCategories = (Array.isArray(categories) ? categories : [])
-          .map((c: any) => ({
-            ...c,
-            id: c.id || c._id,
-            displayOrder: typeof c.displayOrder === 'number' ? c.displayOrder : Number(c.displayOrder ?? 0),
-          }))
-          .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name)));
-        set({ products: mappedProducts, categories: mappedCategories });
+      loadFromApi: async (opts) => {
+        const force = Boolean(opts?.force);
+        const state = get();
+        const hasData = state.products.length > 0 || state.categories.length > 0;
+        const isFresh = state.lastFetchedAt > 0 && (Date.now() - state.lastFetchedAt) < STALE_AFTER_MS;
+        if (!force && hasData && isFresh) return;
+
+        if (!get().loading) set({ loading: true, error: null });
+        try {
+          const [products, categories] = await Promise.all([fetchProducts(), fetchCategories()]);
+          const mappedProducts = (Array.isArray(products) ? products : []).map((p: any) => {
+            const tags = Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []);
+            return { ...p, id: p.id || p._id, tags };
+          });
+          const orderValue = (value: unknown) => {
+            const n = typeof value === 'number' ? value : Number(value ?? 0);
+            return n > 0 ? n : Number.MAX_SAFE_INTEGER;
+          };
+          const mappedCategories = (Array.isArray(categories) ? categories : [])
+            .map((c: any) => ({
+              ...c,
+              id: c.id || c._id,
+              displayOrder: typeof c.displayOrder === 'number' ? c.displayOrder : Number(c.displayOrder ?? 0),
+            }))
+            .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name)));
+
+          set({ products: mappedProducts, categories: mappedCategories, lastFetchedAt: Date.now(), loading: false, error: null });
+        } catch (err: any) {
+          set({ loading: false, error: String(err?.message || 'Failed to load products') });
+        }
       },
 
       addProduct: (product) => set((s) => ({ products: [product, ...s.products] })),
@@ -119,16 +139,13 @@ export const useProductStore = create<ProductStore>()(
     {
       name: 'brajmart-products',
       partialize: (state) => ({
+        products: state.products,
         categories: state.categories.map((c) => ({
           ...c,
           icon: typeof c.icon === 'string' && c.icon.startsWith('data:') ? '' : c.icon,
         })),
+        lastFetchedAt: state.lastFetchedAt,
       }),
-      onRehydrateStorage: () => (state) => {
-        if (!state) return;
-        state.setProducts([]);
-        state.setCategories([]);
-      },
     }
   )
 );

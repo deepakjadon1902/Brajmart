@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useProductStore } from '@/store/productStore';
@@ -15,7 +15,7 @@ import Footer from '@/components/layout/Footer';
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
-  const { getProductBySlug, products } = useProductStore();
+  const { getProductBySlug, products, loading } = useProductStore();
   const product = getProductBySlug(slug || '');
   const [quantity, setQuantity] = useState(1);
   const galleryImages = product?.images && product.images.length
@@ -29,13 +29,131 @@ const ProductDetailPage = () => {
   const { toggleItem, isInWishlist } = useWishlistStore();
   const navigate = useNavigate();
 
+  const pieceOptions = useMemo(() => {
+    if (!product) return [];
+    const tiers = Array.isArray(product.piecePricing) ? product.piecePricing : [];
+    const normalized = tiers
+      .map((t) => ({ pieces: Number(t?.pieces), price: Number(t?.price) }))
+      .filter((t) => Number.isFinite(t.pieces) && t.pieces >= 2 && Number.isFinite(t.price) && t.price > 0)
+      .sort((a, b) => a.pieces - b.pieces);
+    const base = [{ pieces: 1, price: product.price }];
+    // de-dupe by pieces, prefer explicit tier (2+)
+    const seen = new Set<number>([1]);
+    const rest = normalized.filter((t) => (seen.has(t.pieces) ? false : (seen.add(t.pieces), true)));
+    return [...base, ...rest];
+  }, [product?.id]);
+
+  const sizeOptions = useMemo(() => {
+    if (!product) return [];
+    const sizes = Array.isArray(product.sizes) ? product.sizes : [];
+    return sizes.map((s) => String(s).trim()).filter(Boolean);
+  }, [product?.id]);
+
+  const sizePricingMap = useMemo(() => {
+    if (!product) return new Map<string, number>();
+    const entries = Array.isArray(product.sizePricing) ? product.sizePricing : [];
+    const map = new Map<string, number>();
+    for (const e of entries) {
+      const key = String(e?.size ?? '').trim();
+      const price = Number(e?.price);
+      if (!key) continue;
+      if (!Number.isFinite(price) || price <= 0) continue;
+      map.set(key, price);
+    }
+    return map;
+  }, [product?.id]);
+
+  const [selectedPieces, setSelectedPieces] = useState<number>(1);
+  const [selectedSize, setSelectedSize] = useState<string>('');
+
+  useEffect(() => {
+    setSelectedPieces(1);
+    setSelectedSize(sizeOptions[0] || '');
+  }, [product?.id, sizeOptions.join('|')]);
+
   useEffect(() => {
     if (galleryImages[0]) {
       setActiveImage(galleryImages[0]);
     }
   }, [product?.id]);
 
+  const computedPrice = useMemo(() => {
+    if (!product) return 0;
+    if (selectedPieces <= 1) {
+      const sized = selectedSize ? sizePricingMap.get(selectedSize) : undefined;
+      if (sized && Number.isFinite(sized)) return sized;
+      return product.price;
+    }
+    const explicit = pieceOptions.find((o) => o.pieces === selectedPieces)?.price;
+    if (explicit && Number.isFinite(explicit)) return explicit;
+    return product.price * selectedPieces;
+  }, [pieceOptions, product, selectedPieces, selectedSize, sizePricingMap]);
+
+  const discount = useMemo(() => {
+    if (!product) return 0;
+    return product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
+  }, [product]);
+
+  const inWishlist = useMemo(() => {
+    if (!product) return false;
+    return isInWishlist(product.id);
+  }, [isInWishlist, product]);
+
+  const relatedProducts = useMemo(() => {
+    if (!product) return [];
+    return products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 6);
+  }, [product, products]);
+
+  const variantSuffix = useMemo(() => {
+    const parts: string[] = [];
+    if (selectedSize) parts.push(`Size: ${selectedSize}`);
+    if (selectedPieces && selectedPieces > 1) parts.push(`${selectedPieces} pcs`);
+    return parts.length ? ` (${parts.join(', ')})` : '';
+  }, [selectedPieces, selectedSize]);
+
+  const variantProduct = useMemo(() => {
+    if (!product) return null;
+    const variantIdParts: string[] = [];
+    if (selectedSize) variantIdParts.push(`s=${encodeURIComponent(selectedSize)}`);
+    if (selectedPieces && selectedPieces > 1) variantIdParts.push(`p=${selectedPieces}`);
+    const suffix = variantIdParts.length ? `::${variantIdParts.join('::')}` : '';
+    return {
+      ...product,
+      id: `${product.id}${suffix}`,
+      price: computedPrice,
+      selectedSize: selectedSize || undefined,
+      selectedPieces: selectedPieces || undefined,
+      name: `${product.name}${variantSuffix}`,
+    };
+  }, [computedPrice, product, selectedPieces, selectedSize, variantSuffix]);
+
+  const handleAddToCart = () => {
+    if (!variantProduct) return;
+    for (let i = 0; i < quantity; i++) addToCart(variantProduct);
+    toast.success(`${variantProduct.name} added to cart!`);
+  };
+
+  const handleBuyNow = () => {
+    if (!variantProduct) return;
+    for (let i = 0; i < quantity; i++) addToCart(variantProduct);
+    navigate('/checkout');
+  };
+
   if (!product) {
+    if (loading || products.length === 0) {
+      return (
+        <div className="min-h-screen bg-background">
+          <AnnouncementBar /><Navbar />
+          <div className="container mx-auto px-4 py-20 text-center">
+            <div className="inline-flex items-center gap-2 text-muted-foreground">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+              <span>Loading product…</span>
+            </div>
+          </div>
+          <Footer />
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-background">
         <AnnouncementBar /><Navbar />
@@ -47,20 +165,6 @@ const ProductDetailPage = () => {
       </div>
     );
   }
-
-  const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
-  const inWishlist = isInWishlist(product.id);
-  const relatedProducts = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 6);
-
-  const handleAddToCart = () => {
-    for (let i = 0; i < quantity; i++) addToCart(product);
-    toast.success(`${product.name} added to cart!`);
-  };
-
-  const handleBuyNow = () => {
-    for (let i = 0; i < quantity; i++) addToCart(product);
-    navigate('/checkout');
-  };
 
   // Thumbnails scroll naturally (wheel / touch); hover swaps active image.
 
@@ -170,7 +274,14 @@ const ProductDetailPage = () => {
                 onClick={() => setZoomOpen(true)}
                 className="relative rounded-2xl overflow-hidden border border-border bg-pearl aspect-square w-full md:max-w-[520px] md:mx-auto text-left"
               >
-              <img src={activeImage || product.image} alt={product.name} className="w-full h-full object-cover" />
+              <img
+                src={activeImage || product.image}
+                alt={product.name}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                className="w-full h-full object-cover"
+              />
               {product.badge && (
                 <span className={`absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-bold ${product.badge === 'bestseller' ? 'bg-gold-gradient text-maroon-dark' : 'bg-saffron text-primary-foreground'}`}>
                   {product.badge === 'bestseller' ? '🔥 Best Seller' : 'NEW'}
@@ -204,14 +315,58 @@ const ProductDetailPage = () => {
 
             {/* Price */}
             <div className="flex items-center gap-3">
-              <span className="text-3xl font-bold text-saffron">{formatPrice(product.price)}</span>
+              <span className="text-3xl font-bold text-saffron">{formatPrice(computedPrice)}</span>
               {product.originalPrice && (
                 <>
                   <span className="text-lg text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>
-                  <span className="px-2 py-0.5 bg-tulsi/10 text-tulsi text-sm font-semibold rounded">Save {formatPrice(product.originalPrice - product.price)}</span>
+                  <span className="px-2 py-0.5 bg-tulsi/10 text-tulsi text-sm font-semibold rounded">Save {formatPrice(product.originalPrice - computedPrice)}</span>
                 </>
               )}
             </div>
+
+            {/* Size & Pieces */}
+            {(sizeOptions.length > 0 || pieceOptions.length > 1) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {sizeOptions.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Size</label>
+                    <select
+                      value={selectedSize}
+                      onChange={(e) => setSelectedSize(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-saffron/40"
+                    >
+                      {sizeOptions.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                          {(() => {
+                            const p = sizePricingMap.get(s);
+                            if (!p) return '';
+                            return ` — ${formatPrice(p)}`;
+                          })()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {pieceOptions.length > 1 && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Pieces</label>
+                    <select
+                      value={String(selectedPieces)}
+                      onChange={(e) => setSelectedPieces(Number(e.target.value) || 1)}
+                      className="w-full px-4 py-2.5 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-saffron/40"
+                    >
+                      {pieceOptions.map((o) => (
+                        <option key={o.pieces} value={String(o.pieces)}>
+                          {o.pieces} {o.pieces === 1 ? 'piece' : 'pieces'} — {formatPrice(o.price)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Quantity */}
             <div className="flex items-center gap-4">
@@ -288,7 +443,14 @@ const ProductDetailPage = () => {
               ✕
             </button>
             <div className="rounded-2xl overflow-hidden border border-border bg-black">
-              <img src={activeImage || product.image} alt={product.name} className="w-full h-full object-contain max-h-[80vh]" />
+              <img
+                src={activeImage || product.image}
+                alt={product.name}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                className="w-full h-full object-contain max-h-[80vh]"
+              />
             </div>
           </div>
         </div>

@@ -14,6 +14,11 @@ export interface Product {
   tags?: string[];
   inStock: boolean;
   soldCount?: number;
+  sizes?: string[];
+  sizePricing?: Array<{ size: string; price: number }>;
+  piecePricing?: Array<{ pieces: number; price: number }>;
+  selectedSize?: string;
+  selectedPieces?: number;
 }
 
 export interface Category {
