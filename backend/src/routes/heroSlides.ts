@@ -4,6 +4,10 @@ import { dbExecute, dbQuery, isDbConnected } from '../lib/db';
 
 const router = Router();
 
+const LIST_CACHE_TTL_MS = 60_000;
+const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
+let listCache: { at: number; data: any[] } | null = null;
+
 const mapRow = (row: any) => ({
   id: String(row.id),
   tag: row.tag || '',
@@ -21,8 +25,15 @@ const mapRow = (row: any) => ({
 router.get('/', async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    res.setHeader('Cache-Control', LIST_CACHE_CONTROL);
+
+    if (listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
+      return res.json(listCache.data);
+    }
     const rows = await dbQuery<any>('SELECT * FROM hero_slides WHERE is_active = 1 ORDER BY sort_order ASC, id ASC');
-    res.json(rows.map(mapRow));
+    const data = rows.map(mapRow);
+    listCache = { at: Date.now(), data };
+    res.json(data);
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -39,6 +50,7 @@ router.post('/', auth, adminOnly, async (req, res) => {
       [tag || '', title, subtitle || '', cta || '', image, overlay || '', sortOrder ?? 0, isActive === false ? 0 : 1]
     );
     const rows = await dbQuery<any>('SELECT * FROM hero_slides WHERE id = ? LIMIT 1', [result.insertId]);
+    listCache = null;
     res.status(201).json(mapRow(rows[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -55,6 +67,7 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
     );
     const rows = await dbQuery<any>('SELECT * FROM hero_slides WHERE id = ? LIMIT 1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ message: 'Slide not found' });
+    listCache = null;
     res.json(mapRow(rows[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -65,6 +78,7 @@ router.delete('/:id', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await dbExecute('DELETE FROM hero_slides WHERE id = ?', [req.params.id]);
+    listCache = null;
     res.json({ message: 'Slide deleted' });
   } catch (err: any) {
     res.status(500).json({ message: err.message });

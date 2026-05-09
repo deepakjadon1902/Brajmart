@@ -1,14 +1,15 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { fetchHeroSlides } from '@/lib/api';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useHeroStore } from '@/store/heroStore';
 
 const HeroCarousel = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [slides, setSlides] = useState<any[]>([]);
+  const slides = useHeroStore((s) => s.slides);
+  const loadSlides = useHeroStore((s) => s.loadFromApi);
   const heroBadges = useSettingsStore((s) => s.settings.heroBadges);
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true }, [
     Autoplay({ delay: 5000, stopOnInteraction: false, stopOnMouseEnter: true }),
@@ -18,16 +19,22 @@ const HeroCarousel = () => {
   const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await fetchHeroSlides();
-        setSlides(Array.isArray(data) ? data : []);
-      } catch {
-        setSlides([]);
-      }
-    };
-    load();
-  }, []);
+    loadSlides();
+  }, [loadSlides]);
+
+  const preloadUrls = useMemo(() => {
+    const urls = (slides || []).map((s: any) => String(s?.image || '')).filter(Boolean);
+    return urls.slice(0, 2);
+  }, [slides]);
+
+  useEffect(() => {
+    // Preload first 1-2 hero images so the carousel looks instant on reload.
+    for (const url of preloadUrls) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = url;
+    }
+  }, [preloadUrls.join('|')]);
 
   useEffect(() => {
     if (!emblaApi) return;
@@ -89,6 +96,9 @@ const HeroCarousel = () => {
                         <img
                           src={slide.image}
                           alt={slide.title}
+                          loading={i === 0 ? 'eager' : 'lazy'}
+                          decoding="async"
+                          fetchPriority={i === 0 ? 'high' : 'low'}
                           className="absolute inset-0 w-full h-full object-cover"
                         />
                       ) : (
