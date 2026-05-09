@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart, ShoppingCart, Star, Eye } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -35,6 +35,76 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
     : (product.image ? [product.image] : []);
   const hoverImage = cardImages.length > 1 ? cardImages[1] : cardImages[0];
   const isAboveTheFold = index < 4;
+
+  const sizeOptions = useMemo(() => {
+    const raw = Array.isArray(product.sizes) ? product.sizes : [];
+    const cleaned = raw.map((s) => String(s).trim()).filter(Boolean);
+
+    const parseUnitSize = (rawSize: string) => {
+      const s = rawSize.toLowerCase().trim().replace(/\s+/g, ' ');
+      const match = s.match(/^(\d+(?:\.\d+)?)\s*([a-z]+)$/i) || s.match(/^(\d+(?:\.\d+)?)\s+([a-z]+)$/i);
+      if (!match) return null;
+      const n = Number(match[1]);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      const unit = String(match[2] || '').toLowerCase();
+
+      // liquids
+      if (unit === 'ml') return { group: 1, value: n };
+      if (unit === 'l' || unit === 'lt' || unit === 'ltr' || unit === 'lit' || unit === 'litre' || unit === 'liter' || unit === 'liters' || unit === 'litres') {
+        return { group: 1, value: n * 1000 };
+      }
+
+      // solids
+      if (unit === 'g' || unit === 'gm' || unit === 'grm' || unit === 'gram' || unit === 'grams') return { group: 2, value: n };
+      if (unit === 'kg' || unit === 'kgs' || unit === 'kilogram' || unit === 'kilograms') return { group: 2, value: n * 1000 };
+
+      return null;
+    };
+
+    const allNumeric = cleaned.length > 0 && cleaned.every((s) => /^\d+$/.test(s));
+    if (allNumeric) return [...cleaned].sort((a, b) => Number(a) - Number(b));
+
+    const parsed = cleaned.map((s) => ({ s, k: parseUnitSize(s) }));
+    const allParsed = parsed.length > 0 && parsed.every((x) => x.k);
+    if (allParsed) {
+      return parsed
+        .sort((a, b) => (a.k!.group - b.k!.group) || (a.k!.value - b.k!.value) || a.s.localeCompare(b.s))
+        .map((x) => x.s);
+    }
+
+    return cleaned;
+  }, [product.id, JSON.stringify(product.sizes || [])]);
+
+  const sizePricingMap = useMemo(() => {
+    const entries = Array.isArray(product.sizePricing) ? product.sizePricing : [];
+    const map = new Map<string, number>();
+    for (const e of entries) {
+      const key = String(e?.size ?? '').trim();
+      const price = Number(e?.price);
+      if (!key) continue;
+      if (!Number.isFinite(price) || price <= 0) continue;
+      map.set(key, price);
+    }
+    return map;
+  }, [product.id, JSON.stringify(product.sizePricing || [])]);
+
+  const [selectedSize, setSelectedSize] = useState<string>('');
+  const effectiveSelectedSize = selectedSize || sizeOptions[0] || '';
+  const sizedPrice = effectiveSelectedSize ? sizePricingMap.get(effectiveSelectedSize) : undefined;
+  const displayPrice = typeof sizedPrice === 'number' && Number.isFinite(sizedPrice) && sizedPrice > 0 ? sizedPrice : product.price;
+  const variantProduct = useMemo(() => {
+    if (!effectiveSelectedSize) return product;
+    if (!sizePricingMap.has(effectiveSelectedSize)) return product;
+    const suffix = `::s=${encodeURIComponent(effectiveSelectedSize)}`;
+    return {
+      ...product,
+      id: `${product.id}${suffix}`,
+      price: displayPrice,
+      selectedSize: effectiveSelectedSize,
+      name: `${product.name} — Size: ${effectiveSelectedSize}`,
+    };
+  }, [product, effectiveSelectedSize, displayPrice, sizePricingMap]);
+
   const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
   const badge = product.tags?.includes('bestseller')
     ? 'bestseller'
@@ -53,8 +123,8 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(product);
-    toast.success(`${product.name} added to cart!`);
+    addToCart(variantProduct);
+    toast.success(`${variantProduct.name} added to cart!`);
   };
 
   const handleToggleWishlist = (e: React.MouseEvent) => {
@@ -67,7 +137,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
   const handleBuyNow = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(product);
+    addToCart(variantProduct);
     navigate('/checkout');
   };
 
@@ -124,6 +194,26 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
         <Link to={`/product/${product.slug}`}>
           <h3 className="font-playfair text-[0.85rem] sm:text-sm font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors">{product.name}</h3>
         </Link>
+        {sizeOptions.length > 0 && sizePricingMap.size > 0 && (
+          <select
+            value={effectiveSelectedSize}
+            onChange={(e) => setSelectedSize(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            className="mt-1 w-full px-3 py-2 bg-card border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-saffron/40"
+            aria-label="Select size"
+          >
+            {sizeOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+                {(() => {
+                  const p = sizePricingMap.get(s);
+                  if (!p) return '';
+                  return ` — ${formatPrice(p)}`;
+                })()}
+              </option>
+            ))}
+          </select>
+        )}
         <div className="flex items-center gap-1">
           {Array.from({ length: 5 }).map((_, i) => (
             <Star key={i} size={12} className={i < Math.floor(product.rating) ? 'fill-gold text-gold' : 'text-border'} />
@@ -131,7 +221,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
           <span className="text-[0.65rem] text-muted-foreground ml-1">({product.reviewCount})</span>
         </div>
         <div className="flex items-center gap-2 mt-auto pt-1">
-          <span className="text-saffron font-bold text-sm sm:text-base">{formatPrice(product.price)}</span>
+          <span className="text-saffron font-bold text-sm sm:text-base">{formatPrice(displayPrice)}</span>
           {product.originalPrice && <span className="text-muted-foreground line-through text-xs">{formatPrice(product.originalPrice)}</span>}
         </div>
         {product.soldCount && <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>}

@@ -46,7 +46,41 @@ const ProductDetailPage = () => {
   const sizeOptions = useMemo(() => {
     if (!product) return [];
     const sizes = Array.isArray(product.sizes) ? product.sizes : [];
-    return sizes.map((s) => String(s).trim()).filter(Boolean);
+    const cleaned = sizes.map((s) => String(s).trim()).filter(Boolean);
+
+    const parseUnitSize = (raw: string) => {
+      const s = raw.toLowerCase().trim().replace(/\s+/g, ' ');
+      const match = s.match(/^(\d+(?:\.\d+)?)\s*([a-z]+)$/i) || s.match(/^(\d+(?:\.\d+)?)\s+([a-z]+)$/i);
+      if (!match) return null;
+      const n = Number(match[1]);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      const unit = String(match[2] || '').toLowerCase();
+
+      // liquids
+      if (unit === 'ml') return { group: 1, value: n };
+      if (unit === 'l' || unit === 'lt' || unit === 'ltr' || unit === 'lit' || unit === 'litre' || unit === 'liter' || unit === 'liters' || unit === 'litres') {
+        return { group: 1, value: n * 1000 };
+      }
+
+      // solids
+      if (unit === 'g' || unit === 'gm' || unit === 'grm' || unit === 'gram' || unit === 'grams') return { group: 2, value: n };
+      if (unit === 'kg' || unit === 'kgs' || unit === 'kilogram' || unit === 'kilograms') return { group: 2, value: n * 1000 };
+
+      return null;
+    };
+
+    const allNumeric = cleaned.length > 0 && cleaned.every((s) => /^\d+$/.test(s));
+    if (allNumeric) return [...cleaned].sort((a, b) => Number(a) - Number(b));
+
+    const parsed = cleaned.map((s) => ({ s, k: parseUnitSize(s) }));
+    const allParsed = parsed.length > 0 && parsed.every((x) => x.k);
+    if (allParsed) {
+      return parsed
+        .sort((a, b) => (a.k!.group - b.k!.group) || (a.k!.value - b.k!.value) || a.s.localeCompare(b.s))
+        .map((x) => x.s);
+    }
+
+    return cleaned;
   }, [product?.id]);
 
   const sizePricingMap = useMemo(() => {

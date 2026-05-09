@@ -156,12 +156,26 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
 
   const supportsVariants = (() => {
     const cat = normalize(form.category || '');
-    return cat.includes('dress') || cat.includes('clothing') || cat.includes('accessor') || cat.includes('idol');
+    return cat.includes('dress') || cat.includes('clothing') || cat.includes('accessor') || cat.includes('idol') || cat.includes('grocer');
   })();
 
   const sizes = Array.isArray(form.sizes) ? form.sizes.filter(Boolean) : [];
   const sizePricing = Array.isArray(form.sizePricing) ? form.sizePricing : [];
   const piecePricing = Array.isArray(form.piecePricing) ? form.piecePricing : [];
+
+  const variantPreset = (() => {
+    const cat = normalize(form.category || '');
+    if (cat.includes('idols-shringar') || (cat.includes('idol') && cat.includes('shringar'))) {
+      return { kind: 'idol-numeric' as const, label: 'Idols & Shringar (0-7)', sizes: ['0', '1', '2', '3', '4', '5', '6', '7'] };
+    }
+    if (cat.includes('idol')) {
+      return { kind: 'idol-numeric' as const, label: 'Idols (0-7)', sizes: ['0', '1', '2', '3', '4', '5', '6', '7'] };
+    }
+    if (cat.includes('grocer')) {
+      return { kind: 'grocery-units' as const, label: 'Groceries (ml/gm/kg)', sizes: ['250 ml', '500 ml', '1 l', '2 l', '250 gm', '500 gm', '1 kg', '2 kg'] };
+    }
+    return null;
+  })();
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -254,16 +268,45 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
             <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
               <div>
                 <p className="text-sm font-semibold text-white">Sizes & Piece Pricing</p>
-                <p className="text-xs text-slate-500">Shown only for Dresses / Accessories / Idols categories.</p>
+                <p className="text-xs text-slate-500">Shown only for Dresses / Accessories / Idols / Groceries categories.</p>
               </div>
 
               <div className="space-y-2">
                 <label className="block text-sm text-slate-300">Sizes</label>
+                {variantPreset && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-400">Preset:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = Array.isArray(form.sizes) ? form.sizes.filter(Boolean) : [];
+                        const merged = [...current];
+                        for (const s of variantPreset.sizes) {
+                          if (!merged.includes(s)) merged.push(s);
+                        }
+                        update('sizes', merged);
+                      }}
+                      className="px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs text-white hover:bg-slate-700 transition"
+                    >
+                      Add {variantPreset.label}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        update('sizes', variantPreset.sizes);
+                        update('sizePricing', (Array.isArray(form.sizePricing) ? form.sizePricing : []).filter((x) => variantPreset.sizes.includes(String(x?.size || ''))));
+                      }}
+                      className="px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs text-white hover:bg-slate-700 transition"
+                    >
+                      Replace with preset
+                    </button>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <input
                     value={sizeText}
                     onChange={(e) => setSizeText(e.target.value)}
-                    placeholder="e.g. S, M, L, XL"
+                    placeholder={variantPreset?.kind === 'idol-numeric' ? 'e.g. 0, 1, 2...' : variantPreset?.kind === 'grocery-units' ? 'e.g. 500 ml, 1 kg...' : 'e.g. S, M, L, XL'}
                     className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                   />
                   <input
