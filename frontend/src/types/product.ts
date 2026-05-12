@@ -17,8 +17,11 @@ export interface Product {
   sizes?: string[];
   sizePricing?: Array<{ size: string; price: number }>;
   piecePricing?: Array<{ pieces: number; price: number }>;
+  attributes?: Array<{ name: string; slug: string; terms: string[] }>;
+  variantPricing?: Array<{ selections: Record<string, string>; price: number }>;
   selectedSize?: string;
   selectedPieces?: number;
+  selectedAttributes?: Record<string, string>;
 }
 
 export interface Category {

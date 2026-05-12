@@ -5,6 +5,7 @@ import { Heart, ShoppingCart, Star, Eye } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Product } from '@/types/product';
 import { formatPrice, calculateDiscount } from '@/utils/formatPrice';
+import { toSquareImageUrl } from '@/utils/image';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { toast } from 'sonner';
@@ -33,6 +34,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
   const cardImages = Array.isArray(product.images) && product.images.length
     ? product.images
     : (product.image ? [product.image] : []);
+  const baseImage = cardImages[0] || product.image;
   const hoverImage = cardImages.length > 1 ? cardImages[1] : cardImages[0];
   const isAboveTheFold = index < 4;
 
@@ -146,23 +148,23 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
       initial={{ opacity: 0, y: 20, filter: 'blur(4px)' }}
       animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
       transition={{ duration: 0.5, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative flex flex-col rounded-2xl border border-border bg-card overflow-hidden gold-glow-hover cursor-pointer"
+      className="group relative flex flex-col h-full rounded-2xl border border-border bg-card overflow-hidden gold-glow-hover cursor-pointer"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Image */}
       <Link to={`/product/${product.slug}`} className="relative aspect-square overflow-hidden bg-pearl">
         <img
-          src={cardImages[0] || product.image}
+          src={toSquareImageUrl(baseImage)}
           alt={product.name}
           loading={isAboveTheFold ? 'eager' : 'lazy'}
           decoding="async"
           fetchPriority={index < 2 ? 'high' : 'auto'}
           className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
         />
-        {hoverImage && hoverImage !== (cardImages[0] || product.image) && (
+        {hoverImage && hoverImage !== baseImage && (
           <img
-            src={hoverImage}
+            src={toSquareImageUrl(hoverImage)}
             alt={`${product.name} alternate`}
             loading="lazy"
             decoding="async"
@@ -191,40 +193,52 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
       {/* Details */}
       <div className="flex flex-col gap-1.5 p-3 sm:p-4 flex-1">
         <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">{product.category}</span>
-        <Link to={`/product/${product.slug}`}>
-          <h3 className="font-playfair text-[0.85rem] sm:text-sm font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors">{product.name}</h3>
-        </Link>
-        {sizeOptions.length > 0 && sizePricingMap.size > 0 && (
-          <select
-            value={effectiveSelectedSize}
-            onChange={(e) => setSelectedSize(e.target.value)}
-            onClick={(e) => e.stopPropagation()}
-            className="mt-1 w-full px-3 py-2 bg-card border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-saffron/40"
-            aria-label="Select size"
-          >
-            {sizeOptions.map((s) => (
-              <option key={s} value={s}>
-                {s}
-                {(() => {
-                  const p = sizePricingMap.get(s);
-                  if (!p) return '';
-                  return ` — ${formatPrice(p)}`;
-                })()}
-              </option>
-            ))}
-          </select>
-        )}
+        <div className="mt-1 min-h-[40px]">
+          {sizeOptions.length > 0 && sizePricingMap.size > 0 ? (
+            <select
+              value={effectiveSelectedSize}
+              onChange={(e) => setSelectedSize(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full px-3 py-2 bg-card border border-border rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-saffron/40"
+              aria-label="Select size"
+            >
+              {sizeOptions.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                  {(() => {
+                    const p = sizePricingMap.get(s);
+                    if (!p) return '';
+                    return ` — ${formatPrice(p)}`;
+                  })()}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div aria-hidden="true" />
+          )}
+        </div>
         <div className="flex items-center gap-1">
           {Array.from({ length: 5 }).map((_, i) => (
             <Star key={i} size={12} className={i < Math.floor(product.rating) ? 'fill-gold text-gold' : 'text-border'} />
           ))}
           <span className="text-[0.65rem] text-muted-foreground ml-1">({product.reviewCount})</span>
         </div>
-        <div className="flex items-center gap-2 mt-auto pt-1">
+
+        <Link to={`/product/${product.slug}`} className="mt-auto">
+          <h3 className="font-playfair text-[0.85rem] sm:text-sm font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors min-h-[2.6rem]">
+            {product.name}
+          </h3>
+        </Link>
+
+        <div className="flex items-center gap-2 pt-1">
           <span className="text-saffron font-bold text-sm sm:text-base">{formatPrice(displayPrice)}</span>
           {product.originalPrice && <span className="text-muted-foreground line-through text-xs">{formatPrice(product.originalPrice)}</span>}
         </div>
-        {product.soldCount && <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>}
+        <div className="min-h-[16px]">
+          {product.soldCount ? (
+            <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>
+          ) : null}
+        </div>
       </div>
 
       <div className="px-3 sm:px-4 pb-4">

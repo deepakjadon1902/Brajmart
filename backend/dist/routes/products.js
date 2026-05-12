@@ -8,15 +8,17 @@ const router = (0, express_1.Router)();
 const LIST_CACHE_TTL_MS = 60000;
 const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
 let listCache = null;
-const ensureProductVariantColumns = async () => {
-    const rows = await (0, db_1.dbQuery)("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND COLUMN_NAME IN ('sizes','size_pricing','piece_pricing')");
+const getMissingProductColumns = async (cols) => {
+    const rows = await (0, db_1.dbQuery)(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND COLUMN_NAME IN (${cols.map(() => '?').join(',')})`, cols);
     const existing = new Set((rows || []).map((r) => String(r.COLUMN_NAME || r.column_name || '').toLowerCase()).filter(Boolean));
-    const missing = {
-        sizes: !existing.has('sizes'),
-        size_pricing: !existing.has('size_pricing'),
-        piece_pricing: !existing.has('piece_pricing'),
-    };
-    if (!missing.sizes && !missing.size_pricing && !missing.piece_pricing)
+    const missing = {};
+    for (const c of cols)
+        missing[c] = !existing.has(String(c).toLowerCase());
+    return missing;
+};
+const ensureProductVariantColumns = async () => {
+    const missing = await getMissingProductColumns(['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing']);
+    if (!missing.sizes && !missing.size_pricing && !missing.piece_pricing && !missing.attributes && !missing.variant_pricing)
         return;
     // Add columns in a safe order so AFTER clauses work.
     if (missing.sizes) {
@@ -28,6 +30,24 @@ const ensureProductVariantColumns = async () => {
     if (missing.piece_pricing) {
         await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN piece_pricing JSON NULL AFTER size_pricing');
     }
+    if (missing.attributes) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN attributes JSON NULL AFTER piece_pricing');
+    }
+    if (missing.variant_pricing) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN variant_pricing JSON NULL AFTER attributes');
+    }
+};
+const variantFieldsProvided = (data) => data?.sizes !== undefined ||
+    data?.sizePricing !== undefined ||
+    data?.piecePricing !== undefined ||
+    data?.attributes !== undefined ||
+    data?.variantPricing !== undefined;
+const getMissingVariantColumns = async () => getMissingProductColumns(['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing']);
+const variantSchemaErrorMessage = (missing) => {
+    const missingCols = Object.keys(missing).filter((k) => missing[k]);
+    if (!missingCols.length)
+        return null;
+    return `Database schema missing product variant columns: ${missingCols.join(', ')}. Run backend/sql/migrate_products_all_variants.sql (safe migration section) and restart the backend.`;
 };
 const mapProductRow = (row) => ({
     _id: String(row.id),
@@ -53,6 +73,8 @@ const mapProductRow = (row) => ({
     sizes: (0, dbHelpers_1.parseJson)(row.sizes, []),
     sizePricing: (0, dbHelpers_1.parseJson)(row.size_pricing, []),
     piecePricing: (0, dbHelpers_1.parseJson)(row.piece_pricing, []),
+    attributes: (0, dbHelpers_1.parseJson)(row.attributes, []),
+    variantPricing: (0, dbHelpers_1.parseJson)(row.variant_pricing, []),
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
 });
@@ -60,7 +82,7 @@ const buildUpdate = (data) => {
     const fields = [];
     const values = [];
     const set = (column, value) => {
-        fields.push(`${column} = ?`);
+        fields.push(`\`${column}\` = ?`);
         values.push(value);
     };
     if (data.name !== undefined)
@@ -97,6 +119,16 @@ const buildUpdate = (data) => {
         set('size_pricing', JSON.stringify(data.sizePricing || []));
     if (data.piecePricing !== undefined)
         set('piece_pricing', JSON.stringify(data.piecePricing || []));
+    if (data.attributes !== undefined) {
+        const attrs = Array.isArray(data.attributes) ? data.attributes : [];
+        // Ensure this always hits the DB as a string (works for JSON/LONGTEXT/BLOB columns).
+        set('attributes', JSON.stringify(attrs));
+    }
+    if (data.variantPricing !== undefined) {
+        const variants = Array.isArray(data.variantPricing) ? data.variantPricing : [];
+        // Ensure this always hits the DB as a string (works for JSON/LONGTEXT/BLOB columns).
+        set('variant_pricing', JSON.stringify(variants));
+    }
     if (!fields.length)
         return null;
     fields.push('updated_at = NOW()');
@@ -119,6 +151,28 @@ router.get('/', async (_req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
+// Admin diagnostic: verify the connected DB schema supports product variants/attributes.
+router.get('/schema', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        const dbRow = await (0, db_1.dbQuery)('SELECT DATABASE() AS db');
+        const database = dbRow?.[0]?.db ?? null;
+        const cols = ['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing'];
+        const missing = await getMissingProductColumns(cols);
+        res.json({
+            database,
+            table: 'products',
+            columns: cols.reduce((acc, c) => {
+                acc[c] = missing[c] ? 'missing' : 'present';
+                return acc;
+            }, {}),
+        });
+    }
+    catch (err) {
+        res.status(500).json({ message: err?.message || 'Failed to read schema' });
+    }
+});
 router.get('/:slug', async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
@@ -138,16 +192,36 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         const data = req.body || {};
-        if (data.sizes !== undefined || data.sizePricing !== undefined || data.piecePricing !== undefined) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('POST /products payload keys:', Object.keys(data));
+            console.log('POST /products attributes count:', Array.isArray(data.attributes) ? data.attributes.length : 'n/a');
+            console.log('POST /products variantPricing count:', Array.isArray(data.variantPricing) ? data.variantPricing.length : 'n/a');
+        }
+        const wantsVariants = variantFieldsProvided(data);
+        if (wantsVariants) {
             try {
                 await ensureProductVariantColumns();
             }
             catch {
-                // If permissions are restricted, fall back to legacy insert behavior below.
+                // If permissions are restricted, we'll validate below and return a helpful error
+                // instead of silently dropping fields.
             }
         }
+        // If schema is missing required columns, fail fast with a clear message.
+        if (wantsVariants) {
+            const missing = await getMissingVariantColumns();
+            const msg = variantSchemaErrorMessage(missing);
+            if (msg)
+                return res.status(400).json({ message: msg });
+        }
         const images = Array.isArray(data.images) && data.images.length ? data.images : (data.image ? [data.image] : []);
-        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (name, slug, price, original_price, image, images, category, rating, review_count, badge, tags, in_stock, sold_count, description, sizes, size_pricing, piece_pricing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        // Defensive: ensure attribute fields are present if the client sent them, even if empty.
+        // This prevents "undefined" from omitting columns in some client payload paths.
+        if (data.attributes === undefined)
+            data.attributes = [];
+        if (data.variantPricing === undefined)
+            data.variantPricing = [];
+        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.price,
@@ -165,8 +239,10 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             JSON.stringify(data.sizes || []),
             JSON.stringify(data.sizePricing || []),
             JSON.stringify(data.piecePricing || []),
+            JSON.stringify(data.attributes || []),
+            JSON.stringify(data.variantPricing || []),
         ]);
-        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (name, slug, price, original_price, image, images, category, rating, review_count, badge, tags, in_stock, sold_count, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.price,
@@ -190,7 +266,14 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             const message = String(err?.message || '');
             if (message.includes("Unknown column 'sizes'") ||
                 message.includes("Unknown column 'size_pricing'") ||
-                message.includes("Unknown column 'piece_pricing'")) {
+                message.includes("Unknown column 'piece_pricing'") ||
+                message.includes("Unknown column 'attributes'") ||
+                message.includes("Unknown column 'variant_pricing'")) {
+                if (wantsVariants) {
+                    const missing = await getMissingVariantColumns();
+                    const msg = variantSchemaErrorMessage(missing) || 'Database schema missing product variant columns. Run the SQL migration and retry.';
+                    return res.status(400).json({ message: msg });
+                }
                 result = await insertWithoutVariants();
             }
             else {
@@ -210,13 +293,44 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         const body = req.body || {};
-        if (body.sizes !== undefined || body.sizePricing !== undefined || body.piecePricing !== undefined) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('PUT /products payload keys:', Object.keys(body));
+            console.log('PUT /products attributes count:', Array.isArray(body.attributes) ? body.attributes.length : 'n/a');
+            console.log('PUT /products variantPricing count:', Array.isArray(body.variantPricing) ? body.variantPricing.length : 'n/a');
+            if (body.attributes !== undefined)
+                console.log('PUT /products attributes raw:', body.attributes);
+            if (body.variantPricing !== undefined)
+                console.log('PUT /products variantPricing raw:', body.variantPricing);
+        }
+        const wantsVariants = variantFieldsProvided(body);
+        if (wantsVariants) {
             try {
                 await ensureProductVariantColumns();
             }
             catch {
-                // If permissions are restricted, fall back to legacy update behavior below.
+                // If permissions are restricted, we'll validate below and return a helpful error
+                // instead of silently dropping fields.
             }
+        }
+        if (wantsVariants) {
+            const missing = await getMissingVariantColumns();
+            const msg = variantSchemaErrorMessage(missing);
+            if (msg)
+                return res.status(400).json({ message: msg });
+        }
+        // Defensive: always write these columns when the client is doing a variant-enabled save.
+        // This guarantees they persist (db will store "[]") and stops them reverting to NULL on refresh.
+        if (wantsVariants) {
+            if (body.attributes === undefined)
+                body.attributes = [];
+            if (body.variantPricing === undefined)
+                body.variantPricing = [];
+            if (body.sizes === undefined)
+                body.sizes = [];
+            if (body.sizePricing === undefined)
+                body.sizePricing = [];
+            if (body.piecePricing === undefined)
+                body.piecePricing = [];
         }
         const update = buildUpdate(body);
         if (!update)
@@ -228,11 +342,20 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             const message = String(err?.message || '');
             if (message.includes("Unknown column 'sizes'") ||
                 message.includes("Unknown column 'size_pricing'") ||
-                message.includes("Unknown column 'piece_pricing'")) {
+                message.includes("Unknown column 'piece_pricing'") ||
+                message.includes("Unknown column 'attributes'") ||
+                message.includes("Unknown column 'variant_pricing'")) {
+                if (wantsVariants) {
+                    const missing = await getMissingVariantColumns();
+                    const msg = variantSchemaErrorMessage(missing) || 'Database schema missing product variant columns. Run the SQL migration and retry.';
+                    return res.status(400).json({ message: msg });
+                }
                 const fallbackBody = { ...(req.body || {}) };
                 delete fallbackBody.sizes;
                 delete fallbackBody.sizePricing;
                 delete fallbackBody.piecePricing;
+                delete fallbackBody.attributes;
+                delete fallbackBody.variantPricing;
                 const fallbackUpdate = buildUpdate(fallbackBody);
                 if (!fallbackUpdate)
                     return res.status(400).json({ message: 'No fields to update' });
@@ -246,6 +369,19 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!rows[0])
             return res.status(404).json({ message: 'Product not found' });
         listCache = null;
+        // Diagnostic: if client attempted to save attributes but DB still returns NULL, surface a clear error.
+        // This prevents "success" toasts when the DB schema/permissions/connection is wrong.
+        const saved = rows[0];
+        const attemptedAttrs = body.attributes !== undefined || body.variantPricing !== undefined;
+        if (attemptedAttrs) {
+            const attrsNull = saved.attributes === null || saved.attributes === undefined;
+            const variantsNull = saved.variant_pricing === null || saved.variant_pricing === undefined;
+            if (attrsNull || variantsNull) {
+                return res.status(500).json({
+                    message: 'Product updated, but custom attributes did not persist to DB. Verify you restarted the backend, the backend is connected to the same database you are checking in phpMyAdmin, and the `products.attributes` / `products.variant_pricing` columns are writable.',
+                });
+            }
+        }
         res.json(mapProductRow(rows[0]));
     }
     catch (err) {

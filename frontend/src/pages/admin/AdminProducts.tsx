@@ -3,11 +3,20 @@ import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Product } from '@/types/product';
 import { Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
-import { createProduct, deleteProduct as deleteProductApi, updateProduct as updateProductApi, uploadImage } from '@/lib/api';
+import { createProduct, deleteProduct as deleteProductApi, updateProduct as updateProductApi, uploadImage, fetchProductsSchema } from '@/lib/api';
 import { toast } from 'sonner';
+
+const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
 
 // No image size limit
 const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+
+const normalizeKey = (value: string) =>
   value
     .toLowerCase()
     .trim()
@@ -26,6 +35,28 @@ const AdminProducts = () => {
   useEffect(() => {
     loadFromApi();
   }, [loadFromApi]);
+
+  useEffect(() => {
+    // Warn admins if DB schema is missing the new columns, otherwise attributes will never persist.
+    const run = async () => {
+      try {
+        const schema: any = await fetchProductsSchema();
+        const cols = schema?.columns || {};
+        if (
+          cols.sizes === 'missing' ||
+          cols.size_pricing === 'missing' ||
+          cols.piece_pricing === 'missing' ||
+          cols.attributes === 'missing' ||
+          cols.variant_pricing === 'missing'
+        ) {
+          toast.error('Database missing product variant columns. Run `backend/sql/migrate_products_all_variants.sql` (safe migration section).');
+        }
+      } catch {
+        // ignore schema check errors (permissions / offline)
+      }
+    };
+    run();
+  }, []);
 
   const filtered = products.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -50,9 +81,33 @@ const AdminProducts = () => {
         toast.error('Description is required');
         return;
       }
+
+      const normalizedAttributes = (Array.isArray(product.attributes) ? product.attributes : [])
+        .map((a: any) => ({
+          name: String(a?.name || '').trim(),
+          slug: normalizeKey(String(a?.slug || a?.name || '')),
+          terms: (Array.isArray(a?.terms) ? a.terms : [])
+            .map((t: any) => String(t).trim())
+            .filter(Boolean),
+        }))
+        .filter((a: any) => a.slug && a.terms?.length);
+
+      const normalizedVariantPricing = (Array.isArray(product.variantPricing) ? product.variantPricing : [])
+        .map((v: any) => ({
+          selections: (v?.selections && typeof v.selections === 'object') ? v.selections : {},
+          price: Number(v?.price),
+        }))
+        .filter((v: any) => Object.keys(v.selections || {}).length > 0 && Number.isFinite(v.price) && v.price > 0);
+
       const normalized = {
         ...product,
         tags: Array.isArray(product.tags) ? product.tags : (product.badge ? [product.badge] : []),
+        // Always send these keys so backend always persists them (never reverts to NULL).
+        attributes: normalizedAttributes,
+        variantPricing: normalizedVariantPricing,
+        sizes: Array.isArray(product.sizes) ? product.sizes : [],
+        sizePricing: Array.isArray(product.sizePricing) ? product.sizePricing : [],
+        piecePricing: Array.isArray(product.piecePricing) ? product.piecePricing : [],
       };
       if (isCreating) {
         const created: any = await createProduct(normalized as any);
@@ -62,6 +117,16 @@ const AdminProducts = () => {
         const updated: any = await updateProductApi(product.id, normalized as any);
         updateProduct(product.id, { ...updated, tags: normalized.tags });
         toast.success('Product updated');
+      }
+
+      // Force re-fetch from DB so Admin + Store always reflect what was actually saved.
+      await loadFromApi({ force: true });
+
+      // Notify other open tabs (main store) to refresh immediately.
+      try {
+        localStorage.setItem(PRODUCT_SYNC_KEY, String(Date.now()));
+      } catch {
+        // ignore storage permission errors
       }
       setEditProduct(null);
       setIsCreating(false);
@@ -74,7 +139,7 @@ const AdminProducts = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Products</h1>
-        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', images: [], description: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true, tags: [], sizes: [], sizePricing: [], piecePricing: [] }); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
+        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', images: [], description: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true, tags: [], sizes: [], sizePricing: [], piecePricing: [], attributes: [], variantPricing: [] }); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
           <Plus size={16} /> Add Product
         </button>
       </div>
@@ -143,6 +208,10 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
   const [sizePriceText, setSizePriceText] = useState('');
   const [piecesText, setPiecesText] = useState('');
   const [piecesPriceText, setPiecesPriceText] = useState('');
+  const [attrNameText, setAttrNameText] = useState('');
+  const [attrTermsText, setAttrTermsText] = useState('');
+  const [variantPriceText, setVariantPriceText] = useState('');
+  const [variantSelections, setVariantSelections] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const update = (field: string, value: any) => setForm((prev) => ({ ...prev, [field]: value }));
@@ -162,6 +231,41 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
   const sizes = Array.isArray(form.sizes) ? form.sizes.filter(Boolean) : [];
   const sizePricing = Array.isArray(form.sizePricing) ? form.sizePricing : [];
   const piecePricing = Array.isArray(form.piecePricing) ? form.piecePricing : [];
+  const attributes = Array.isArray(form.attributes) ? form.attributes : [];
+  const variantPricing = Array.isArray(form.variantPricing) ? form.variantPricing : [];
+
+  const ATTRIBUTE_PRESETS: Array<{ name: string; slug: string; terms: string[] }> = [
+    {
+      name: 'Color',
+      slug: 'color',
+      terms: ['Black', 'Orange', 'Red', 'White', 'Blue', 'Dark Blue', 'Green', 'Light Blue', 'Light Yellow', 'Maroon', 'Multi Color', 'Pink', 'Red-Yellow', 'Sky Blue', 'Yellow'],
+    },
+    { name: 'Language', slug: 'language', terms: ['English', 'Hindi'] },
+    { name: 'Sleeves', slug: 'sleeves', terms: ['Full Sleeves', 'Half Sleeves'] },
+    { name: 'Weight', slug: 'weight', terms: ['250 gm', '500 gm', '1 kg'] },
+    { name: 'Size/Height', slug: 'size-height', terms: ['6"', '7.5"', '10"', '12"'] },
+    { name: 'Size/No.', slug: 'size-no', terms: ['0', '1', '2', '3', '4', '5', '6', '7', '8'] },
+  ];
+
+  const upsertAttribute = (attr: { name: string; slug: string; terms: string[] }) => {
+    const slug = normalize(attr.slug || attr.name || '');
+    if (!slug) return;
+    const cleanedTerms = (Array.isArray(attr.terms) ? attr.terms : [])
+      .map((t) => String(t).trim())
+      .filter(Boolean);
+
+    const existing = attributes.find((a) => normalize(String(a?.slug || '')) === slug);
+    if (!existing) {
+      update('attributes', [...attributes, { name: attr.name, slug, terms: cleanedTerms }]);
+      return;
+    }
+
+    const merged = Array.from(new Set([...(Array.isArray(existing.terms) ? existing.terms : []), ...cleanedTerms]));
+    update(
+      'attributes',
+      attributes.map((a) => (normalize(String(a?.slug || '')) === slug ? { ...a, name: attr.name || a.name, slug, terms: merged } : a))
+    );
+  };
 
   const variantPreset = (() => {
     const cat = normalize(form.category || '');
@@ -438,6 +542,215 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Custom Attributes */}
+          <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
+            <div>
+              <p className="text-sm font-semibold text-white">Custom Attributes</p>
+              <p className="text-xs text-slate-500">Add options like Color, Language, Sleeves, Weight, etc.</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-400">Presets:</span>
+              {ATTRIBUTE_PRESETS.map((preset) => (
+                <button
+                  key={preset.slug}
+                  type="button"
+                  onClick={() => upsertAttribute(preset)}
+                  className="px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs text-white hover:bg-slate-700 transition"
+                >
+                  Add {preset.name}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <input
+                value={attrNameText}
+                onChange={(e) => setAttrNameText(e.target.value)}
+                placeholder="Attribute name (e.g. Color)"
+                className="px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              />
+              <input
+                value={attrTermsText}
+                onChange={(e) => setAttrTermsText(e.target.value)}
+                placeholder="Terms (comma separated)"
+                className="px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const name = attrNameText.trim();
+                  if (!name) return;
+                  const slug = normalize(name);
+                  const terms = attrTermsText
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter(Boolean);
+                  upsertAttribute({ name, slug, terms });
+                  setAttrNameText('');
+                  setAttrTermsText('');
+                }}
+                className="px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white hover:bg-slate-700 transition"
+              >
+                Add Attribute
+              </button>
+            </div>
+
+            {attributes.length > 0 && (
+              <div className="space-y-3 pt-1">
+                {attributes.map((attr) => {
+                  const slug = normalize(String(attr?.slug || attr?.name || ''));
+                  const terms = Array.isArray(attr?.terms) ? attr.terms : [];
+                  return (
+                    <div key={slug} className="rounded-xl border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm text-slate-200">
+                          <span className="font-semibold">{attr.name || slug}</span>
+                          <span className="ml-2 text-xs text-slate-500">{slug}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            update('attributes', attributes.filter((a) => normalize(String(a?.slug || '')) !== slug));
+                            update('variantPricing', variantPricing.filter((v) => !Object.prototype.hasOwnProperty.call((v as any)?.selections || {}, slug)));
+                            setVariantSelections((prev) => {
+                              const next = { ...prev };
+                              delete next[slug];
+                              return next;
+                            });
+                          }}
+                          className="text-slate-400 hover:text-white"
+                          aria-label={`Remove attribute ${slug}`}
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                      <input
+                        value={terms.join(', ')}
+                        onChange={(e) => {
+                          const nextTerms = e.target.value
+                            .split(',')
+                            .map((t) => t.trim())
+                            .filter(Boolean);
+                          update(
+                            'attributes',
+                            attributes.map((a) => (normalize(String(a?.slug || '')) === slug ? { ...a, terms: nextTerms } : a))
+                          );
+                        }}
+                        placeholder="Terms (comma separated)"
+                        className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Variant Pricing */}
+          {attributes.length > 0 && (
+            <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
+              <div>
+                <p className="text-sm font-semibold text-white">Attribute Pricing</p>
+                <p className="text-xs text-slate-500">Set a price for a selected combination of attribute values.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {attributes
+                  .filter((a) => Array.isArray(a?.terms) && a.terms.length > 0)
+                  .map((attr) => {
+                    const slug = normalize(String(attr?.slug || attr?.name || ''));
+                    const terms = Array.isArray(attr?.terms) ? attr.terms : [];
+                    const value = variantSelections[slug] || terms[0] || '';
+                    return (
+                      <div key={slug} className="space-y-1">
+                        <label className="block text-xs text-slate-400">{attr.name || slug}</label>
+                        <select
+                          value={value}
+                          onChange={(e) => setVariantSelections((prev) => ({ ...prev, [slug]: e.target.value }))}
+                          className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+                        >
+                          {terms.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="sm:col-span-2">
+                  <input
+                    value={variantPriceText}
+                    onChange={(e) => setVariantPriceText(e.target.value)}
+                    placeholder="Price (INR)"
+                    type="number"
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const price = Number(variantPriceText);
+                    if (!Number.isFinite(price) || price <= 0) return;
+
+                    const selections: Record<string, string> = {};
+                    for (const attr of attributes) {
+                      const slug = normalize(String(attr?.slug || attr?.name || ''));
+                      const terms = Array.isArray(attr?.terms) ? attr.terms : [];
+                      if (!slug || !terms.length) continue;
+                      selections[slug] = variantSelections[slug] || terms[0];
+                    }
+
+                    const key = JSON.stringify(Object.keys(selections).sort().reduce((acc: any, k) => (acc[k] = selections[k], acc), {}));
+                    const current = Array.isArray(form.variantPricing) ? form.variantPricing : [];
+                    const withoutDup = current.filter((v) => {
+                      const s = (v as any)?.selections || {};
+                      const k = JSON.stringify(Object.keys(s).sort().reduce((acc: any, kk) => (acc[kk] = s[kk], acc), {}));
+                      return k !== key;
+                    });
+                    update('variantPricing', [...withoutDup, { selections, price }]);
+                    setVariantPriceText('');
+                  }}
+                  className="px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white hover:bg-slate-700 transition"
+                >
+                  Add Price
+                </button>
+              </div>
+
+              {variantPricing.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  {variantPricing.map((v, idx) => {
+                    const selections = (v as any)?.selections || {};
+                    const label = Object.keys(selections)
+                      .sort()
+                      .map((k) => `${k}: ${selections[k]}`)
+                      .join(', ');
+                    return (
+                      <div key={`${label}-${idx}`} className="flex items-center justify-between gap-3 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2">
+                        <div className="text-sm text-slate-200">
+                          <span className="text-slate-300">{label || 'Variant'}</span>
+                          <span className="ml-2 font-semibold">₹{Number((v as any)?.price || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => update('variantPricing', variantPricing.filter((_, i) => i !== idx))}
+                          className="text-slate-400 hover:text-white"
+                          aria-label="Remove variant price"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

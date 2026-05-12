@@ -4,6 +4,7 @@ import { Product, Category } from '@/types/product';
 import { fetchProducts, fetchCategories } from '@/lib/api';
 
 const STALE_AFTER_MS = 5 * 60 * 1000; // 5 minutes
+const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
 
 interface ProductStore {
   products: Product[];
@@ -149,6 +150,20 @@ export const useProductStore = create<ProductStore>()(
     }
   )
 );
+
+// Cross-tab instant refresh when Admin updates products.
+// Admin writes to localStorage key `brajmart-products-updated-at`, which triggers `storage` events in other tabs.
+if (typeof window !== 'undefined') {
+  try {
+    window.addEventListener('storage', (e) => {
+      if (e.key !== PRODUCT_SYNC_KEY) return;
+      const state = useProductStore.getState();
+      state.loadFromApi({ force: true }).catch(() => undefined);
+    });
+  } catch {
+    // ignore (older browsers / locked down environments)
+  }
+}
 
 export const categorySlugMap: Record<string, string> = {
   'prasadam': 'Prasadam',

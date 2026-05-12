@@ -6,6 +6,7 @@ import { useProductStore } from '@/store/productStore';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { formatPrice, calculateDiscount } from '@/utils/formatPrice';
+import { toSquareImageUrl } from '@/utils/image';
 import { toast } from 'sonner';
 import ProductCarousel from '@/components/product/ProductCarousel';
 import SectionHeader from '@/components/ui/SectionHeader';
@@ -99,11 +100,33 @@ const ProductDetailPage = () => {
 
   const [selectedPieces, setSelectedPieces] = useState<number>(1);
   const [selectedSize, setSelectedSize] = useState<string>('');
+  const customAttributes = useMemo(() => {
+    const raw = Array.isArray(product?.attributes) ? product!.attributes : [];
+    return raw
+      .map((a) => ({
+        name: String((a as any)?.name || ''),
+        slug: String((a as any)?.slug || '').trim(),
+        terms: (Array.isArray((a as any)?.terms) ? (a as any).terms : []).map((t: any) => String(t).trim()).filter(Boolean),
+      }))
+      .filter((a) => a.slug && a.terms.length > 0);
+  }, [product?.id]);
+  const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
+  const variantPricingList = useMemo(() => {
+    const raw = Array.isArray(product?.variantPricing) ? product!.variantPricing : [];
+    return raw
+      .map((v) => ({ selections: (v as any)?.selections || {}, price: Number((v as any)?.price) }))
+      .filter((v) => v.selections && typeof v.selections === 'object' && Number.isFinite(v.price) && v.price > 0);
+  }, [product?.id]);
 
   useEffect(() => {
     setSelectedPieces(1);
     setSelectedSize(sizeOptions[0] || '');
-  }, [product?.id, sizeOptions.join('|')]);
+    const next: Record<string, string> = {};
+    for (const attr of customAttributes) {
+      next[attr.slug] = attr.terms[0] || '';
+    }
+    setSelectedAttributes(next);
+  }, [product?.id, sizeOptions.join('|'), customAttributes.map((a) => `${a.slug}:${a.terms.join('|')}`).join('||')]);
 
   useEffect(() => {
     if (galleryImages[0]) {
@@ -113,15 +136,87 @@ const ProductDetailPage = () => {
 
   const computedPrice = useMemo(() => {
     if (!product) return 0;
+
+    const selection: Record<string, string> = { ...(selectedAttributes || {}) };
+    if (selectedSize) selection.size = selectedSize;
+    if (selectedPieces && selectedPieces > 1) selection.pieces = String(selectedPieces);
+
+    const matched = variantPricingList.find((v) => {
+      const s = v.selections as Record<string, string>;
+      return Object.keys(s).every((k) => String(selection[k] ?? '') === String(s[k] ?? ''));
+    });
+    if (matched) return matched.price;
+
     if (selectedPieces <= 1) {
       const sized = selectedSize ? sizePricingMap.get(selectedSize) : undefined;
       if (sized && Number.isFinite(sized)) return sized;
       return product.price;
     }
+
     const explicit = pieceOptions.find((o) => o.pieces === selectedPieces)?.price;
     if (explicit && Number.isFinite(explicit)) return explicit;
     return product.price * selectedPieces;
-  }, [pieceOptions, product, selectedPieces, selectedSize, sizePricingMap]);
+  }, [pieceOptions, product, selectedAttributes, selectedPieces, selectedSize, sizePricingMap, variantPricingList]);
+
+  const getPriceForSelection = (override: Partial<Record<string, string>> = {}) => {
+    if (!product) return 0;
+
+    const selection: Record<string, string> = { ...(selectedAttributes || {}) };
+    if (selectedSize) selection.size = selectedSize;
+    if (selectedPieces && selectedPieces > 1) selection.pieces = String(selectedPieces);
+
+    for (const k of Object.keys(override)) {
+      const v = override[k];
+      if (v === undefined || v === null || String(v) === '') delete selection[k];
+      else selection[k] = String(v);
+    }
+
+    const matched = variantPricingList.find((v) => {
+      const s = v.selections as Record<string, string>;
+      return Object.keys(s).every((k) => String(selection[k] ?? '') === String(s[k] ?? ''));
+    });
+    if (matched) return matched.price;
+
+    const pieces = Number(selection.pieces || 1);
+    const size = selection.size || '';
+
+    if (pieces <= 1) {
+      const sized = size ? sizePricingMap.get(size) : undefined;
+      if (sized && Number.isFinite(sized)) return sized;
+      return product.price;
+    }
+
+    const explicit = pieceOptions.find((o) => o.pieces === pieces)?.price;
+    if (explicit && Number.isFinite(explicit)) return explicit;
+    return product.price * pieces;
+  };
+
+  const colorHexForTerm = (term: string) => {
+    const key = term.toLowerCase().trim().replace(/\s+/g, ' ');
+    const map: Record<string, string> = {
+      black: '#0b0f19',
+      white: '#ffffff',
+      red: '#ef4444',
+      'dark red': '#991b1b',
+      maroon: '#7f1d1d',
+      orange: '#f97316',
+      yellow: '#facc15',
+      'light yellow': '#fde68a',
+      green: '#22c55e',
+      'light green': '#86efac',
+      blue: '#3b82f6',
+      'dark blue': '#1d4ed8',
+      'light blue': '#7dd3fc',
+      'sky blue': '#38bdf8',
+      pink: '#ec4899',
+      purple: '#a855f7',
+      brown: '#92400e',
+      grey: '#6b7280',
+      gray: '#6b7280',
+      'multi color': 'conic-gradient(from 180deg, #ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444)',
+    };
+    return map[key] || null;
+  };
 
   const discount = useMemo(() => {
     if (!product) return 0;
@@ -142,14 +237,22 @@ const ProductDetailPage = () => {
     const parts: string[] = [];
     if (selectedSize) parts.push(`Size: ${selectedSize}`);
     if (selectedPieces && selectedPieces > 1) parts.push(`${selectedPieces} pcs`);
+    for (const attr of customAttributes) {
+      const v = selectedAttributes[attr.slug];
+      if (v) parts.push(`${attr.name || attr.slug}: ${v}`);
+    }
     return parts.length ? ` (${parts.join(', ')})` : '';
-  }, [selectedPieces, selectedSize]);
+  }, [customAttributes, selectedAttributes, selectedPieces, selectedSize]);
 
   const variantProduct = useMemo(() => {
     if (!product) return null;
     const variantIdParts: string[] = [];
     if (selectedSize) variantIdParts.push(`s=${encodeURIComponent(selectedSize)}`);
     if (selectedPieces && selectedPieces > 1) variantIdParts.push(`p=${selectedPieces}`);
+    for (const attr of customAttributes) {
+      const v = selectedAttributes[attr.slug];
+      if (v) variantIdParts.push(`${encodeURIComponent(attr.slug)}=${encodeURIComponent(v)}`);
+    }
     const suffix = variantIdParts.length ? `::${variantIdParts.join('::')}` : '';
     return {
       ...product,
@@ -157,9 +260,10 @@ const ProductDetailPage = () => {
       price: computedPrice,
       selectedSize: selectedSize || undefined,
       selectedPieces: selectedPieces || undefined,
+      selectedAttributes,
       name: `${product.name}${variantSuffix}`,
     };
-  }, [computedPrice, product, selectedPieces, selectedSize, variantSuffix]);
+  }, [computedPrice, customAttributes, product, selectedAttributes, selectedPieces, selectedSize, variantSuffix]);
 
   const handleAddToCart = () => {
     if (!variantProduct) return;
@@ -276,7 +380,7 @@ const ProductDetailPage = () => {
                         className={`shrink-0 rounded-xl border ${activeImage === img ? 'border-saffron' : 'border-border'} overflow-hidden bg-pearl w-16 h-16`}
                         aria-label={`View image ${idx + 1}`}
                       >
-                        <img src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-cover" />
+                        <img src={toSquareImageUrl(img)} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-cover" />
                       </button>
                     ))}
                   </div>
@@ -296,7 +400,7 @@ const ProductDetailPage = () => {
                         className={`rounded-xl border ${activeImage === img ? 'border-saffron' : 'border-border'} overflow-hidden bg-pearl aspect-square w-full`}
                         aria-label={`View image ${idx + 1}`}
                       >
-                        <img src={img} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-cover" />
+                        <img src={toSquareImageUrl(img)} alt={`${product.name} ${idx + 1}`} className="w-full h-full object-cover" />
                       </button>
                     ))}
                   </div>
@@ -309,7 +413,7 @@ const ProductDetailPage = () => {
                 className="relative rounded-2xl overflow-hidden border border-border bg-pearl aspect-square w-full md:max-w-[520px] md:mx-auto text-left"
               >
               <img
-                src={activeImage || product.image}
+                src={toSquareImageUrl(activeImage || product.image)}
                 alt={product.name}
                 loading="eager"
                 decoding="async"
@@ -360,45 +464,143 @@ const ProductDetailPage = () => {
 
             {/* Size & Pieces */}
             {(sizeOptions.length > 0 || pieceOptions.length > 1) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-4">
                 {sizeOptions.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Size</label>
-                    <select
-                      value={selectedSize}
-                      onChange={(e) => setSelectedSize(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-saffron/40"
-                    >
-                      {sizeOptions.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                          {(() => {
-                            const p = sizePricingMap.get(s);
-                            if (!p) return '';
-                            return ` — ${formatPrice(p)}`;
-                          })()}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="space-y-2">
+                    <div className="flex items-end justify-between gap-3">
+                      <label className="block text-sm font-semibold">Size</label>
+                      {selectedSize && (
+                        <span className="text-xs text-muted-foreground">
+                          Selected: <span className="font-semibold text-foreground">{selectedSize}</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {sizeOptions.map((s) => {
+                        const active = s === selectedSize;
+                        const price = getPriceForSelection({ size: s });
+                        const delta = price - computedPrice;
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setSelectedSize(s)}
+                            className={[
+                              'rounded-xl border px-3 py-2 text-left transition active:scale-[0.98]',
+                              active ? 'border-saffron bg-saffron/10 shadow-sm' : 'border-border bg-card hover:border-saffron/60 hover:bg-muted/40',
+                            ].join(' ')}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold">{s}</span>
+                              {Number.isFinite(delta) && Math.abs(delta) >= 1 && (
+                                <span className={`text-[0.65rem] font-semibold px-2 py-0.5 rounded-full ${delta > 0 ? 'bg-saffron/15 text-saffron' : 'bg-tulsi/10 text-tulsi'}`}>
+                                  {delta > 0 ? '+' : ''}{formatPrice(delta)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[0.7rem] text-muted-foreground mt-0.5">{formatPrice(price)}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
                 {pieceOptions.length > 1 && (
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Pieces</label>
-                    <select
-                      value={String(selectedPieces)}
-                      onChange={(e) => setSelectedPieces(Number(e.target.value) || 1)}
-                      className="w-full px-4 py-2.5 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-saffron/40"
-                    >
-                      {pieceOptions.map((o) => (
-                        <option key={o.pieces} value={String(o.pieces)}>
-                          {o.pieces} {o.pieces === 1 ? 'piece' : 'pieces'} — {formatPrice(o.price)}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="space-y-2">
+                    <div className="flex items-end justify-between gap-3">
+                      <label className="block text-sm font-semibold">Quantity Pack</label>
+                      {selectedPieces > 1 && (
+                        <span className="text-xs text-muted-foreground">
+                          Selected: <span className="font-semibold text-foreground">{selectedPieces} pcs</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {pieceOptions.map((o) => {
+                        const value = String(o.pieces);
+                        const active = String(selectedPieces) === value;
+                        const price = getPriceForSelection({ pieces: value });
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setSelectedPieces(o.pieces)}
+                            className={[
+                              'rounded-full border px-4 py-2 text-sm font-semibold transition active:scale-[0.98]',
+                              active ? 'border-saffron bg-saffron text-primary-foreground shadow-sm' : 'border-border bg-card hover:border-saffron/60',
+                            ].join(' ')}
+                            aria-pressed={active}
+                          >
+                            {o.pieces} {o.pieces === 1 ? 'pc' : 'pcs'} · {formatPrice(price)}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Custom Attributes */}
+            {customAttributes.length > 0 && (
+              <div className="space-y-4">
+                {customAttributes.map((attr) => {
+                  const selected = selectedAttributes[attr.slug] || attr.terms[0] || '';
+                  const looksLikeColor = attr.slug.toLowerCase().includes('color') || attr.name.toLowerCase().includes('color');
+
+                  return (
+                    <div key={attr.slug} className="space-y-2">
+                      <div className="flex items-end justify-between gap-3">
+                        <label className="block text-sm font-semibold">{attr.name || attr.slug}</label>
+                        {selected && (
+                          <span className="text-xs text-muted-foreground">
+                            Selected: <span className="font-semibold text-foreground">{selected}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {attr.terms.map((t) => {
+                          const active = t === selected;
+                          const price = getPriceForSelection({ [attr.slug]: t });
+                          const delta = price - computedPrice;
+                          const hex = looksLikeColor ? colorHexForTerm(t) : null;
+                          const isGradient = typeof hex === 'string' && hex.includes('gradient');
+
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => setSelectedAttributes((prev) => ({ ...prev, [attr.slug]: t }))}
+                              className={[
+                                'group rounded-full border px-4 py-2 text-sm font-semibold transition active:scale-[0.98]',
+                                active ? 'border-saffron bg-saffron/10 text-foreground shadow-sm' : 'border-border bg-card hover:border-saffron/60',
+                              ].join(' ')}
+                              aria-pressed={active}
+                              title={t}
+                            >
+                              <span className="inline-flex items-center gap-2">
+                                {hex && (
+                                  <span
+                                    className={['h-4 w-4 rounded-full border border-border/70', active ? 'ring-2 ring-saffron/60 ring-offset-2 ring-offset-background' : ''].join(' ')}
+                                    style={isGradient ? { backgroundImage: hex } : { backgroundColor: hex }}
+                                  />
+                                )}
+                                <span>{t}</span>
+                                {Number.isFinite(delta) && Math.abs(delta) >= 1 && (
+                                  <span className={`text-[0.65rem] font-semibold px-2 py-0.5 rounded-full ${delta > 0 ? 'bg-saffron/15 text-saffron' : 'bg-tulsi/10 text-tulsi'}`}>
+                                    {delta > 0 ? '+' : ''}{formatPrice(delta)}
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

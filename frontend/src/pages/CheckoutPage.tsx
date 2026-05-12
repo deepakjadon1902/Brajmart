@@ -137,6 +137,7 @@ const CheckoutPage = () => {
             price: i.product.price,
             selectedSize: i.product.selectedSize,
             selectedPieces: i.product.selectedPieces,
+            selectedAttributes: i.product.selectedAttributes,
           })),
           total: grandTotal,
           status: 'confirmed',

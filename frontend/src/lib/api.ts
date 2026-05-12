@@ -111,6 +111,7 @@ export const setAuthToken = (token: string) => {
 // Products
 export const fetchProducts = () => getJson('/products');
 export const fetchProductBySlug = (slug: string) => getJson(`/products/${slug}`);
+export const fetchProductsSchema = () => getJson('/products/schema');
 export const createProduct = (payload: Record<string, unknown>) =>
   getJson('/products', { method: 'POST', body: payload });
 export const updateProduct = (id: string, payload: Record<string, unknown>) =>

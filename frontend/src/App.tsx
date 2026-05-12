@@ -113,7 +113,8 @@ const App = () => {
   }, [updateSettings]);
 
   useEffect(() => {
-    loadProducts();
+    // Always refresh products on app start so Admin changes reflect quickly for all users.
+    loadProducts({ force: true });
   }, [loadProducts]);
 
   useEffect(() => {
