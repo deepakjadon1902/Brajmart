@@ -68,9 +68,16 @@ router.post('/register', async (req, res) => {
     const userId = String(result.insertId);
     try {
       await sendVerifyOtp(email, { otp: verification.otp, minutes: OTP_MINUTES });
-    } catch {
+    } catch (err: any) {
       await dbExecute('DELETE FROM users WHERE id = ?', [userId]);
-      return res.status(500).json({ message: 'Unable to send verification email. Please try again.' });
+      const raw = String(err?.message || '');
+      const hint =
+        raw.includes('SMTP not configured')
+          ? 'Email service is not configured on the server.'
+          : raw
+            ? `Email service error: ${raw}`
+            : 'Email service error.';
+      return res.status(500).json({ message: `Unable to send verification email. ${hint}` });
     }
 
     res.status(201).json({ message: 'Verification code sent to your email.' });
@@ -100,8 +107,15 @@ router.post('/login', async (req, res) => {
       );
       try {
         await sendVerifyOtp(row.email, { otp: verification.otp, minutes: OTP_MINUTES });
-      } catch {
-        return res.status(500).json({ message: 'Unable to send verification email. Please try again.' });
+      } catch (err: any) {
+        const raw = String(err?.message || '');
+        const hint =
+          raw.includes('SMTP not configured')
+            ? 'Email service is not configured on the server.'
+            : raw
+              ? `Email service error: ${raw}`
+              : 'Email service error.';
+        return res.status(500).json({ message: `Unable to send verification email. ${hint}` });
       }
       return res.status(403).json({ message: 'Please verify your email. A new verification code has been sent.', code: 'EMAIL_NOT_VERIFIED', email: row.email });
     }
