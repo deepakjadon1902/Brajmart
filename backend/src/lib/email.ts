@@ -3,6 +3,47 @@ import nodemailer from 'nodemailer';
 let cachedTransporter: nodemailer.Transporter | null = null;
 let verifiedOnce = false;
 
+const asNumber = (value: any, fallback: number) => {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const shouldRetryWithAltPort = (err: any) => {
+  const code = String(err?.code || '').toUpperCase();
+  const message = String(err?.message || '').toLowerCase();
+  return (
+    code === 'ETIMEDOUT' ||
+    code === 'ESOCKET' ||
+    code === 'ECONNRESET' ||
+    code === 'ECONNREFUSED' ||
+    message.includes('timeout') ||
+    message.includes('timed out') ||
+    message.includes('econnreset') ||
+    message.includes('econnrefused')
+  );
+};
+
+const createTransporter = (opts: { host: string; port: number; user: string; pass: string }) => {
+  const secure = opts.port === 465;
+  const rejectUnauthorizedEnv = process.env.SMTP_TLS_REJECT_UNAUTHORIZED;
+  const rejectUnauthorized = rejectUnauthorizedEnv === undefined ? true : !(String(rejectUnauthorizedEnv).toLowerCase() === 'false' || String(rejectUnauthorizedEnv) === '0');
+
+  return nodemailer.createTransport({
+    host: opts.host,
+    port: opts.port,
+    secure,
+    auth: { user: opts.user, pass: opts.pass },
+    requireTLS: !secure, // for 587 (STARTTLS)
+    connectionTimeout: asNumber(process.env.SMTP_CONNECTION_TIMEOUT_MS, 15_000),
+    greetingTimeout: asNumber(process.env.SMTP_GREETING_TIMEOUT_MS, 15_000),
+    socketTimeout: asNumber(process.env.SMTP_SOCKET_TIMEOUT_MS, 20_000),
+    tls: {
+      servername: opts.host,
+      rejectUnauthorized,
+    },
+  });
+};
+
 const getTransporter = () => {
   const host = process.env.SMTP_HOST;
   const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
@@ -13,16 +54,7 @@ const getTransporter = () => {
 
   if (cachedTransporter) return cachedTransporter;
 
-  cachedTransporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-    tls: {
-      servername: host,
-      rejectUnauthorized: false,
-    },
-  });
+  cachedTransporter = createTransporter({ host, port, user, pass });
   return cachedTransporter;
 };
 
@@ -41,6 +73,26 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
     await transporter.sendMail({ from, to, subject, html });
     console.log('Email sent', { to, subject });
   } catch (err) {
+    // Render/Cloud hosts often block port 465; if it times out, retry on 587 automatically.
+    try {
+      const host = process.env.SMTP_HOST;
+      const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+      const user = process.env.SMTP_USER;
+      const pass = process.env.SMTP_PASS;
+      if (host && user && pass && shouldRetryWithAltPort(err)) {
+        const altPort = port === 465 ? 587 : 465;
+        const alt = createTransporter({ host, port: altPort, user, pass });
+        await alt.verify();
+        await alt.sendMail({ from, to, subject, html });
+        cachedTransporter = alt;
+        verifiedOnce = true;
+        console.log('Email sent (retry)', { to, subject, port: altPort });
+        return;
+      }
+    } catch (retryErr) {
+      console.error('Email retry failed', retryErr);
+    }
+
     console.error('Email send failed', err);
     throw err;
   }
