@@ -7,6 +7,11 @@ exports.sendVerifyOtp = exports.sendVerifyEmail = exports.sendShippingUpdate = e
 const nodemailer_1 = __importDefault(require("nodemailer"));
 let cachedTransporter = null;
 let verifiedOnce = false;
+const getResendConfig = () => {
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@brajmart.com';
+    return { apiKey, from };
+};
 const asNumber = (value, fallback) => {
     const n = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(n) ? n : fallback;
@@ -54,9 +59,39 @@ const getTransporter = () => {
     cachedTransporter = createTransporter({ host, port, user, pass });
     return cachedTransporter;
 };
+const sendViaResend = async (to, subject, html) => {
+    const { apiKey, from } = getResendConfig();
+    if (!apiKey)
+        throw new Error('Resend not configured');
+    const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            from,
+            to,
+            subject,
+            html,
+        }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const msg = typeof data?.message === 'string' ? data.message : `Resend request failed (${res.status})`;
+        throw new Error(msg);
+    }
+};
 const sendEmail = async (to, subject, html) => {
-    const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@brajmart.com';
+    const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@brajmart.com';
     const from = `BrajMart <${fromAddress}>`;
+    // Prefer HTTPS-based email providers in production since many hosts block outbound SMTP ports.
+    const preferProvider = String(process.env.EMAIL_PROVIDER || '').toLowerCase();
+    if (preferProvider === 'resend' || process.env.RESEND_API_KEY) {
+        await sendViaResend(to, subject, html);
+        console.log('Email sent (resend)', { to, subject });
+        return;
+    }
     const transporter = getTransporter();
     if (!transporter) {
         throw new Error('SMTP not configured');
