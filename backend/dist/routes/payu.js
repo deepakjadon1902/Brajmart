@@ -403,6 +403,11 @@ router.post('/webhook', async (req, res) => {
     if (!receivedHash || computed !== receivedHash) {
         return res.status(400).json({ message: 'Invalid hash' });
     }
+    // This endpoint is meant to auto-confirm/auto-fail payments.
+    // Ignore non-terminal statuses (like pending/refund/etc.) so they don't incorrectly mark orders failed.
+    if (status !== 'success' && status !== 'failure') {
+        return res.status(200).json({ ok: true, ignored: true, status });
+    }
     try {
         // Reuse existing callback handler logic, but don't rely on browser redirect.
         await handlePayuCallback({ body: payload }, { redirect: () => undefined }, status === 'success' ? 'success' : status === 'failure' ? 'failure' : undefined);

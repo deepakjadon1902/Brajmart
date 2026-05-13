@@ -19,9 +19,12 @@ const ExclusiveShop = () => (
         <p className="text-primary-foreground/70 text-sm max-w-lg mx-auto mb-8">
           Handpicked, temple-authenticated, premium spiritual products curated exclusively for true devotees.
         </p>
-        <button className="px-8 py-3.5 rounded-full bg-gold-gradient text-maroon-dark font-bold shimmer active:scale-[0.97] transition-transform shadow-xl text-sm">
-          Enter Exclusive Shop →
-        </button>
+        <button
+  onClick={() => window.location.href = "/category/brajmart-special"}
+  className="px-8 py-3.5 rounded-full bg-gold-gradient text-maroon-dark font-bold shimmer active:scale-[0.97] transition-transform shadow-xl text-sm"
+>
+  Enter Exclusive Shop →
+</button>
       </ScrollReveal>
     </div>
   </section>

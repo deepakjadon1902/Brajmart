@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const db_1 = require("../lib/db");
@@ -6,6 +9,7 @@ const auth_1 = require("../middleware/auth");
 const email_1 = require("../lib/email");
 const eta_1 = require("../lib/eta");
 const dbHelpers_1 = require("../lib/dbHelpers");
+const crypto_1 = __importDefault(require("crypto"));
 const router = (0, express_1.Router)();
 const mapPaymentRow = (row) => ({
     _id: String(row.id),
@@ -29,6 +33,45 @@ const mapPaymentStatusRow = (row) => ({
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
 });
+const sha512 = (value) => crypto_1.default.createHash('sha512').update(value).digest('hex');
+const getPayuVerifyEndpoint = () => {
+    const env = String(process.env.PAYU_ENV || 'test').toLowerCase();
+    const isLive = env === 'live' || env === 'prod' || env === 'production';
+    // PayU verify_payment endpoint uses form=2.
+    return isLive
+        ? 'https://info.payu.in/merchant/postservice?form=2'
+        : 'https://test.payu.in/merchant/postservice?form=2';
+};
+const verifyPayuPayment = async (txnid) => {
+    const key = process.env.PAYU_KEY;
+    const salt = process.env.PAYU_SALT;
+    if (!key || !salt)
+        return null;
+    const command = 'verify_payment';
+    const hash = sha512([key, command, txnid, salt].join('|'));
+    const body = new URLSearchParams();
+    body.set('key', key);
+    body.set('command', command);
+    body.set('var1', txnid);
+    body.set('hash', hash);
+    const res = await fetch(getPayuVerifyEndpoint(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+    });
+    const text = await res.text();
+    // PayU returns JSON on this endpoint. If it changes, fail gracefully.
+    const parsed = (() => {
+        try {
+            return JSON.parse(text);
+        }
+        catch {
+            return null;
+        }
+    })();
+    return parsed;
+};
+const normalizePayuStatus = (value) => String(value || '').trim().toLowerCase();
 router.get('/', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
@@ -48,7 +91,50 @@ router.get('/status/:token', async (req, res) => {
         const rows = await (0, db_1.dbQuery)('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
         if (!rows[0])
             return res.status(404).json({ message: 'Payment not found' });
-        res.json(mapPaymentStatusRow(rows[0]));
+        // Auto-reconcile pending PayU payments (no manual verification needed).
+        // If webhook is delayed/missed, we verify directly with PayU when the customer views the status page.
+        const current = rows[0];
+        if (String(current.status) === 'pending' && (process.env.PAYU_KEY && process.env.PAYU_SALT)) {
+            try {
+                const verify = await verifyPayuPayment(token);
+                const details = verify?.transaction_details?.[token] || verify?.transaction_details?.[String(token)] || null;
+                const status = normalizePayuStatus(details?.status);
+                const mihpayid = details?.mihpayid || details?.mihpayId || details?.payuid || null;
+                if (status === 'success' || status === 'failure') {
+                    const nextStatus = status === 'success' ? 'paid' : 'failed';
+                    const orderId = current.order_id ?? null;
+                    const amount = current.amount ?? null;
+                    const method = current.method ?? null;
+                    await (0, db_1.dbExecute)('UPDATE payment_status SET status = ?, payment_id = COALESCE(?, payment_id), updated_at = NOW() WHERE token = ?', [nextStatus, mihpayid ? String(mihpayid) : null, token]);
+                    // Update payments table for the linked order if present.
+                    if (orderId) {
+                        const paymentRows = await (0, db_1.dbQuery)('SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1', [orderId]);
+                        const payment = paymentRows[0];
+                        if (payment) {
+                            await (0, db_1.dbExecute)('UPDATE payments SET status = ?, transaction_id = COALESCE(?, transaction_id), updated_at = NOW() WHERE id = ?', [nextStatus, mihpayid ? String(mihpayid) : null, payment.id]);
+                        }
+                        // Update order status/history.
+                        const orderRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
+                        const orderRow = orderRows[0];
+                        if (orderRow) {
+                            const history = (0, dbHelpers_1.parseJson)(orderRow.status_history, []);
+                            history.push({
+                                status: nextStatus === 'paid' ? 'confirmed' : 'cancelled',
+                                date: new Date().toISOString(),
+                                note: nextStatus === 'paid' ? 'Payment verified via PayU verify_payment' : 'Payment failed (verified via PayU verify_payment)',
+                            });
+                            await (0, db_1.dbExecute)('UPDATE orders SET status = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus === 'paid' ? 'confirmed' : 'cancelled', JSON.stringify(history), orderId]);
+                        }
+                    }
+                    const refreshed = await (0, db_1.dbQuery)('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
+                    return res.json(mapPaymentStatusRow(refreshed[0] || current));
+                }
+            }
+            catch {
+                // ignore reconciliation errors; fall back to current pending status
+            }
+        }
+        res.json(mapPaymentStatusRow(current));
     }
     catch (err) {
         res.status(500).json({ message: err.message });
