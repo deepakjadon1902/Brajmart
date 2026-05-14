@@ -82,6 +82,12 @@ export const verifyOtp = (payload: { email: string; otp: string }) =>
 export const resendOtp = (payload: { email: string }) =>
   getJson('/auth/resend-otp', { method: 'POST', body: payload });
 
+export const requestPasswordResetOtp = (payload: { email: string }) =>
+  getJson('/auth/forgot-password/request', { method: 'POST', body: payload });
+
+export const verifyPasswordResetOtp = (payload: { email: string; otp: string }) =>
+  getJson('/auth/forgot-password/verify', { method: 'POST', body: payload });
+
 export const createPayuOrder = (payload: {
   amount: number;
   method: 'upi' | 'card';
@@ -165,6 +171,9 @@ export const updateMyProfile = (payload: {
   state?: string;
   pincode?: string;
 }) => getJson('/users/me', { method: 'PUT', body: payload });
+
+export const updateMyPassword = (payload: { currentPassword?: string; newPassword: string }) =>
+  getJson('/users/me/password', { method: 'PUT', body: payload });
 
 // Cart
 export const fetchCart = () => getJson('/cart');

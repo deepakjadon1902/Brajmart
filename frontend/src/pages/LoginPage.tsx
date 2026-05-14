@@ -1,5 +1,5 @@
 import * as React from "react";
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -120,6 +120,15 @@ const LoginPage = () => {
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
+
+            <div className="text-center">
+              <Link
+                to={`/forgot-password?email=${encodeURIComponent(email || '')}`}
+                className="text-sm text-saffron font-semibold hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
           </form>
 
           <div className="mt-6 text-center">

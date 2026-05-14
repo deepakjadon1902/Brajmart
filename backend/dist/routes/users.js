@@ -1,9 +1,13 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const router = (0, express_1.Router)();
 const mapUserRow = (row) => ({
     _id: String(row.id),
@@ -78,6 +82,40 @@ router.put('/me', auth_1.auth, async (req, res) => {
     }
     catch (err) {
         res.status(500).json({ message: err.message });
+    }
+});
+router.put('/me/password', auth_1.auth, async (req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        const userIdRaw = req.user?.id;
+        if (!userIdRaw)
+            return res.status(401).json({ message: 'Unauthorized' });
+        const userId = Number(userIdRaw);
+        if (!Number.isFinite(userId))
+            return res.status(401).json({ message: 'Unauthorized' });
+        const currentPassword = String(req.body?.currentPassword || '');
+        const newPassword = String(req.body?.newPassword || '');
+        if (!newPassword || newPassword.length < 6)
+            return res.status(400).json({ message: 'Password must be at least 6 characters' });
+        const rows = await (0, db_1.dbQuery)('SELECT id, password FROM users WHERE id = ? LIMIT 1', [userId]);
+        const row = rows[0];
+        if (!row)
+            return res.status(404).json({ message: 'User not found' });
+        const allowWithoutCurrent = !!req.user?.pwdReset;
+        if (!allowWithoutCurrent) {
+            if (!currentPassword)
+                return res.status(400).json({ message: 'Current password is required' });
+            const ok = await bcryptjs_1.default.compare(currentPassword, row.password);
+            if (!ok)
+                return res.status(400).json({ message: 'Current password is incorrect' });
+        }
+        const passwordHash = await bcryptjs_1.default.hash(newPassword, 12);
+        await (0, db_1.dbExecute)('UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?', [passwordHash, userId]);
+        res.json({ message: 'Password updated successfully' });
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message || 'Unable to update password' });
     }
 });
 router.get('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {

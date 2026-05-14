@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check } from 'lucide-react';
+import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Minus, Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
@@ -25,7 +25,7 @@ const CheckoutPage = () => {
   const [sameAsBilling, setSameAsBilling] = useState(true);
   const [processing, setProcessing] = useState(false);
 
-  const { items, totalPrice, totalSavings, clearCart } = useCartStore();
+  const { items, totalPrice, totalSavings, updateQuantity, removeItem } = useCartStore();
   const { user, isAuthenticated } = useAuthStore();
   const { settings, updateSettings } = useSettingsStore();
   const navigate = useNavigate();
@@ -92,6 +92,15 @@ const CheckoutPage = () => {
     return () => { active = false; };
   }, [updateSettings]);
 
+  useEffect(() => {
+    const available: string[] = [];
+    if (settings.upiEnabled) available.push('upi');
+    if (settings.cardEnabled) available.push('card');
+    if (available.length > 0 && !available.includes(paymentMethod)) {
+      setPaymentMethod(available[0]);
+    }
+  }, [settings.upiEnabled, settings.cardEnabled, paymentMethod]);
+
   const shouldRedirectToCart = items.length === 0 && step < 2;
   useEffect(() => {
     if (shouldRedirectToCart) navigate('/cart');
@@ -156,7 +165,7 @@ const CheckoutPage = () => {
       submitPayuForm(result.actionUrl, result.fields);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
-      toast.error(message || 'Unable to start PayU payment. Please try again.');
+      toast.error(message || 'Unable to start payment. Please try again.');
       setProcessing(false);
     }
   };
@@ -202,8 +211,8 @@ const CheckoutPage = () => {
   const paymentOptions = [
     ...(settings.upiEnabled ? [{
       value: 'upi',
-      title: 'UPI (PayU)',
-      subtitle: 'Pay securely via PayU checkout',
+      title: 'UPI',
+      subtitle: 'Pay securely using UPI',
       icon: Smartphone,
       pills: ['GPay', 'PhonePe', 'Paytm', 'BHIM'],
       badge: 'Recommended',
@@ -217,17 +226,6 @@ const CheckoutPage = () => {
       badge: 'Bank Offers',
     }] : []),
   ];
-
-  useEffect(() => {
-    const available: string[] = [];
-    if (settings.upiEnabled) available.push('upi');
-    if (settings.cardEnabled) available.push('card');
-    if (available.length > 0 && !available.includes(paymentMethod)) {
-      setPaymentMethod(available[0]);
-    }
-  }, [settings.upiEnabled, settings.cardEnabled, paymentMethod]);
-
-  const paymentGatewayLabel = 'PayU';
 
   const renderAddressForm = (
     addr: Address,
@@ -375,25 +373,44 @@ const CheckoutPage = () => {
                     {paymentMethod === 'upi' && (
                       <div className="mt-5 grid lg:grid-cols-2 gap-4">
                         <div className="space-y-3">
-                          <div className="text-sm font-semibold text-foreground">UPI via PayU</div>
+                          <div className="text-sm font-semibold text-foreground">UPI Payments</div>
                           <div className="grid sm:grid-cols-2 gap-3">
-                            <div
-                              className="text-left p-4 rounded-xl border-2 border-emerald-400 bg-emerald-500/10"
-                            >
-                              <div className="text-sm font-bold text-emerald-500">PayU Online</div>
-                              <div className="text-xs text-muted-foreground mt-1">Instant confirmation • Secure</div>
+                            <div className="text-left p-4 rounded-xl border border-border bg-muted/30">
+                              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <CheckCircle2 size={16} className="text-tulsi" />
+                                Instant confirmation
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1">Pay using any UPI app. No extra steps.</div>
+                            </div>
+                            <div className="text-left p-4 rounded-xl border border-border bg-muted/30">
+                              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <ShieldCheck size={16} className="text-gold" />
+                                Safe & encrypted
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1">Your UPI PIN is never shared with BrajMart.</div>
                             </div>
                           </div>
-                          <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                            Works with GPay, PhonePe, Paytm, BHIM and all UPI apps.
+                          <div className="rounded-xl border border-border bg-pearl p-3 text-xs text-muted-foreground">
+                            Works with GPay, PhonePe, Paytm, BHIM, Amazon Pay, and all UPI apps.
                           </div>
                         </div>
 
                         <div className="rounded-2xl border border-border bg-muted/30 p-4">
-                          <div className="text-sm font-semibold text-foreground mb-1">PayU UPI Checkout</div>
-                          <p className="text-xs text-muted-foreground">
-                            You will be redirected to PayU's hosted checkout to complete payment securely.
-                          </p>
+                          <div className="text-sm font-semibold text-foreground mb-2">How UPI payment works</div>
+                          <div className="space-y-2 text-xs text-muted-foreground">
+                            <div className="flex items-start gap-2">
+                              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold font-bold text-[11px]">1</span>
+                              <span>Choose UPI and place the order.</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold font-bold text-[11px]">2</span>
+                              <span>Approve the payment request in your UPI app.</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold font-bold text-[11px]">3</span>
+                              <span>Enter UPI PIN to complete payment.</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -402,7 +419,7 @@ const CheckoutPage = () => {
                       <div className="mt-5 rounded-2xl border border-border bg-gradient-to-br from-[#0b1220] via-[#121a2b] to-[#1a1f3d] p-5 text-white shadow-lg">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-xs uppercase tracking-widest text-white/60">PayU Secure</p>
+                            <p className="text-xs uppercase tracking-widest text-white/60">Secure Payments</p>
                             <h3 className="text-lg font-semibold">Card Payment</h3>
                             <p className="text-xs text-white/70 mt-1">Cards • NetBanking • Wallets • EMI</p>
                           </div>
@@ -422,7 +439,7 @@ const CheckoutPage = () => {
                           ))}
                         </div>
                         <div className="mt-4 text-xs text-white/70">
-                          You will be redirected to PayU’s hosted checkout to complete payment securely.
+                          You may be redirected to a secure payment page to complete payment.
                         </div>
                       </div>
                     )}
@@ -431,10 +448,10 @@ const CheckoutPage = () => {
                     <div className="mt-5 p-4 rounded-xl border border-gold/30 bg-gold/5 text-sm">
                       <div className="flex items-center gap-2 text-foreground font-medium">
                         <ShieldCheck size={16} className="text-gold" />
-                        Secure payments by {paymentGatewayLabel}
+                        100% Secure Checkout
                       </div>
                       <p className="text-muted-foreground text-xs mt-1">
-                        Your payment details are encrypted and processed on {paymentGatewayLabel}'s secure infrastructure.
+                        Payments are encrypted end-to-end. BrajMart never stores your card details or UPI PIN.
                       </p>
                     </div>
 
@@ -445,7 +462,7 @@ const CheckoutPage = () => {
                     >
                       {processing
                         ? 'Processing Payment...'
-                        : `Pay with PayU - ${formatPrice(grandTotal)}`}
+                        : `Pay Now - ${formatPrice(grandTotal)}`}
                     </button>
                   </div>
                 </motion.div>
@@ -490,17 +507,48 @@ const CheckoutPage = () => {
           {/* Summary sidebar */}
           {step < 2 && (
             <div className="lg:col-span-1">
-              <div className="bg-card rounded-2xl border border-border p-6 sticky top-24">
+              <div className="bg-card rounded-2xl border border-border p-6 lg:sticky lg:top-24">
                 <h3 className="font-cinzel text-lg font-bold mb-4">Order Summary</h3>
-                <div className="space-y-3 mb-4">
+                <div className="space-y-3 mb-5">
                   {items.map((item) => (
                     <div key={item.product.id} className="flex gap-3">
-                      <img src={item.product.image} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                      <img src={item.product.image} alt={item.product.name} className="w-12 h-12 rounded-lg object-cover border border-border" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium line-clamp-1">{item.product.name}</p>
-                        <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                        <p className="text-xs font-semibold text-foreground line-clamp-1">{item.product.name}</p>
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <div className="inline-flex items-center border border-border rounded-lg overflow-hidden bg-background">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                              className="px-2.5 py-1.5 hover:bg-muted transition-colors"
+                              aria-label={`Decrease quantity of ${item.product.name}`}
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <span className="px-3 text-xs font-semibold tabular-nums">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                              className="px-2.5 py-1.5 hover:bg-muted transition-colors"
+                              aria-label={`Increase quantity of ${item.product.name}`}
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(item.product.id)}
+                            className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                            aria-label={`Remove ${item.product.name} from order`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-xs font-semibold">{formatPrice(item.product.price * item.quantity)}</span>
+                      <div className="shrink-0 text-right">
+                        <div className="text-xs font-semibold tabular-nums">{formatPrice(item.product.price * item.quantity)}</div>
+                        <div className="text-[0.7rem] text-muted-foreground tabular-nums">{formatPrice(item.product.price)} each</div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -523,12 +571,17 @@ const CheckoutPage = () => {
                   )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Shipping</span>
-                    <span>{shipping === 0 ? 'FREE' : formatPrice(shipping)}</span>
+                    <span className={shipping === 0 ? 'text-tulsi font-medium' : ''}>{shipping === 0 ? 'FREE' : formatPrice(shipping)}</span>
                   </div>
                   <div className="flex justify-between font-bold text-base border-t border-border pt-2">
                     <span>Total</span>
                     <span className="text-saffron">{formatPrice(grandTotal)}</span>
                   </div>
+                </div>
+
+                <div className="mt-4 flex items-center gap-2 rounded-xl border border-border bg-pearl px-3 py-2 text-xs text-muted-foreground">
+                  <ShieldCheck size={16} className="text-tulsi" />
+                  <span>Secure checkout. Prices update with quantity.</span>
                 </div>
               </div>
             </div>

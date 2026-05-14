@@ -6,7 +6,7 @@ import { auth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import bcrypt from 'bcryptjs';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
-import { sendVerifyEmail, sendVerifyOtp } from '../lib/email';
+import { sendVerifyEmail, sendVerifyOtp, sendPasswordResetOtp } from '../lib/email';
 
 const router = Router();
 
@@ -31,6 +31,31 @@ const createOtp = () => {
   const otp = String(Math.floor(100000 + Math.random() * 900000));
   return { otp, expires: new Date(Date.now() + OTP_MINUTES * 60 * 1000) };
 };
+
+const RESET_OTP_MINUTES = 10;
+const hashOtp = (otp: string) => crypto
+  .createHash('sha256')
+  .update(`${otp}:${process.env.JWT_SECRET || 'secret'}`)
+  .digest('hex');
+
+const ensurePasswordResetTable = async () => {
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS password_reset_otps (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL,
+      otp_hash VARCHAR(128) NOT NULL,
+      expires_at DATETIME NOT NULL,
+      consumed TINYINT(1) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_password_reset_user (user_id),
+      INDEX idx_password_reset_created (created_at),
+      CONSTRAINT fk_password_reset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+};
+
+const signResetToken = (user: { id: string; email: string; role?: string }) =>
+  jwt.sign({ ...user, pwdReset: true }, process.env.JWT_SECRET || 'secret', { expiresIn: '15m' });
 
 const mapUserRow = (row: any) => ({
   _id: String(row.id),
@@ -123,6 +148,86 @@ router.post('/login', async (req, res) => {
     res.json({ token: signToken({ id: String(row.id), email, role: row.role }), user: { id: String(row.id), name: row.name, email, role: row.role } });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/forgot-password/request', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+
+    await ensurePasswordResetTable();
+
+    const rows = await dbQuery<any>('SELECT id, email, status, role FROM users WHERE LOWER(email) = ? LIMIT 1', [email]);
+    const row = rows[0];
+
+    // Always respond with success to avoid leaking account existence.
+    if (!row) return res.json({ message: 'If the email exists, we sent a code.' });
+    if (row.status && row.status !== 'active') return res.json({ message: 'If the email exists, we sent a code.' });
+
+    // Basic throttle: 1 OTP per 60s per user.
+    const recent = await dbQuery<any>(
+      'SELECT id FROM password_reset_otps WHERE user_id = ? AND created_at > (NOW() - INTERVAL 60 SECOND) LIMIT 1',
+      [row.id]
+    );
+    if (recent.length) return res.json({ message: 'If the email exists, we sent a code.' });
+
+    const { otp, expires } = (() => {
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      return { otp: code, expires: new Date(Date.now() + RESET_OTP_MINUTES * 60 * 1000) };
+    })();
+
+    await dbExecute(
+      'INSERT INTO password_reset_otps (user_id, otp_hash, expires_at, consumed) VALUES (?, ?, ?, 0)',
+      [row.id, hashOtp(otp), expires]
+    );
+
+    try {
+      await sendPasswordResetOtp(row.email, { otp, minutes: RESET_OTP_MINUTES });
+    } catch {
+      // Do not reveal email service issues to attackers; still return ok message.
+    }
+
+    res.json({ message: 'If the email exists, we sent a code.' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Unable to send code' });
+  }
+});
+
+router.post('/forgot-password/verify', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const otp = String(req.body?.otp || '').trim();
+    if (!email || !otp) return res.status(400).json({ message: 'Email and code are required' });
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+
+    await ensurePasswordResetTable();
+
+    const rows = await dbQuery<any>('SELECT id, name, email, role, status FROM users WHERE LOWER(email) = ? LIMIT 1', [email]);
+    const userRow = rows[0];
+    if (!userRow) return res.status(400).json({ message: 'Invalid code' });
+    if (userRow.status && userRow.status !== 'active') return res.status(400).json({ message: 'Invalid code' });
+
+    const candidates = await dbQuery<any>(
+      'SELECT id, otp_hash, expires_at FROM password_reset_otps WHERE user_id = ? AND consumed = 0 ORDER BY created_at DESC LIMIT 5',
+      [userRow.id]
+    );
+    const otpHash = hashOtp(otp);
+    const match = candidates.find((c) => String(c.otp_hash) === otpHash);
+    if (!match) return res.status(400).json({ message: 'Invalid code' });
+    if (match.expires_at && new Date(match.expires_at) < new Date()) return res.status(400).json({ message: 'Code expired' });
+
+    await dbExecute('UPDATE password_reset_otps SET consumed = 1 WHERE id = ?', [match.id]);
+
+    const token = signResetToken({ id: String(userRow.id), email: userRow.email, role: userRow.role || 'user' });
+    res.json({
+      message: 'Code verified',
+      token,
+      user: { id: String(userRow.id), name: userRow.name, email: userRow.email, role: userRow.role || 'user' },
+    });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Verification failed' });
   }
 });
 

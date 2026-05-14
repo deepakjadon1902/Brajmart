@@ -10,7 +10,7 @@ import Footer from '@/components/layout/Footer';
 import ProfileSidebar from '@/components/profile/ProfileSidebar';
 
 const ProfilePage = () => {
-  const { user, isAuthenticated, updateProfile } = useAuthStore();
+  const { user, isAuthenticated, updateProfile, updatePassword } = useAuthStore();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -22,6 +22,8 @@ const ProfilePage = () => {
     state: user?.state || '',
     pincode: user?.pincode || '',
   });
+  const [pwd, setPwd] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [pwdSaving, setPwdSaving] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -36,6 +38,8 @@ const ProfilePage = () => {
     });
   }, [user]);
 
+  const resetHint = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('reset') === '1' : false;
+
   if (!isAuthenticated || !user) {
     navigate('/login');
     return null;
@@ -49,6 +53,17 @@ const ProfilePage = () => {
     } else {
       toast.error(result.message || 'Profile update failed');
     }
+  };
+
+  const handlePasswordSave = async () => {
+    if (!pwd.newPassword || pwd.newPassword.length < 6) return toast.error('New password must be at least 6 characters');
+    if (pwd.newPassword !== pwd.confirmPassword) return toast.error('Passwords do not match');
+    setPwdSaving(true);
+    const res = await updatePassword({ currentPassword: pwd.currentPassword || undefined, newPassword: pwd.newPassword });
+    setPwdSaving(false);
+    if (!res.ok) return toast.error(res.message || 'Unable to update password');
+    toast.success(res.message || 'Password updated');
+    setPwd({ currentPassword: '', newPassword: '', confirmPassword: '' });
   };
 
   return (
@@ -91,6 +106,59 @@ const ProfilePage = () => {
                     />
                   </div>
                 ))}
+              </div>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-2xl border border-border p-6 mt-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-cinzel text-lg font-bold">Change Password</h2>
+                <button
+                  onClick={handlePasswordSave}
+                  disabled={pwdSaving}
+                  className="px-4 py-2 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer disabled:opacity-60"
+                >
+                  {pwdSaving ? 'Saving...' : 'Save Password'}
+                </button>
+              </div>
+
+              {resetHint && (
+                <div className="mb-4 rounded-xl border border-border bg-pearl px-4 py-3 text-sm text-muted-foreground">
+                  You signed in using OTP. Set a new password now to log in normally next time.
+                </div>
+              )}
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Current Password</label>
+                  <input
+                    type="password"
+                    value={pwd.currentPassword}
+                    onChange={(e) => setPwd(v => ({ ...v, currentPassword: e.target.value }))}
+                    placeholder={resetHint ? 'Leave blank (OTP login)' : 'Enter current password'}
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors"
+                  />
+                </div>
+                <div />
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">New Password</label>
+                  <input
+                    type="password"
+                    value={pwd.newPassword}
+                    onChange={(e) => setPwd(v => ({ ...v, newPassword: e.target.value }))}
+                    placeholder="New password"
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={pwd.confirmPassword}
+                    onChange={(e) => setPwd(v => ({ ...v, confirmPassword: e.target.value }))}
+                    placeholder="Confirm new password"
+                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors"
+                  />
+                </div>
               </div>
             </motion.div>
           </div>

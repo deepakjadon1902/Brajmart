@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 interface ProductCardProps {
   product: Product;
   index?: number;
+  variant?: 'default' | 'compact';
 }
 
 const badgeStyles: Record<string, string> = {
@@ -28,7 +29,7 @@ const badgeLabels: Record<string, string> = {
   exclusive: 'Exclusive',
 };
 
-const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
+const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const cardImages = Array.isArray(product.images) && product.images.length
     ? product.images
@@ -74,6 +75,10 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
     navigate('/checkout');
   };
 
+  const isCompact = variant === 'compact';
+  const mediaAspectClass = isCompact ? 'aspect-[4/3]' : 'aspect-square';
+  const mediaFitClass = isCompact ? 'object-contain p-2' : 'object-cover';
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20, filter: 'blur(4px)' }}
@@ -83,14 +88,14 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Link to={`/product/${product.slug}`} className="relative aspect-square overflow-hidden bg-pearl">
+      <Link to={`/product/${product.slug}`} className={`relative ${mediaAspectClass} overflow-hidden bg-pearl`}>
         <img
           src={toSquareImageUrl(baseImage)}
           alt={product.name}
           loading={isAboveTheFold ? 'eager' : 'lazy'}
           decoding="async"
           fetchPriority={index < 2 ? 'high' : 'auto'}
-          className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
+          className={`w-full h-full ${mediaFitClass} transition-transform duration-500 ease-out group-hover:scale-[1.06]`}
         />
         {hoverImage && hoverImage !== baseImage && (
           <img
@@ -99,7 +104,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
             loading="lazy"
             decoding="async"
             fetchPriority="low"
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}
+            className={`absolute inset-0 w-full h-full ${mediaFitClass} transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}
           />
         )}
 
@@ -133,7 +138,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
         )}
       </Link>
 
-      <div className="flex flex-col gap-1.5 p-3 sm:p-4 flex-1">
+      <div className={`flex flex-col ${isCompact ? 'gap-0.5 p-2.5' : 'gap-1 p-2.5'} sm:p-3 flex-1`}>
         <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">{product.category}</span>
 
         <div className="flex items-center gap-1 mt-1">
@@ -144,7 +149,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
         </div>
 
         <Link to={`/product/${product.slug}`} className="mt-auto">
-          <h3 className="font-playfair text-[0.85rem] sm:text-sm font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors min-h-[2.6rem]">
+          <h3 className={`font-playfair text-[0.82rem] sm:text-sm font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors ${isCompact ? 'min-h-[2rem]' : 'min-h-[2.2rem]'}`}>
             {product.name}
           </h3>
         </Link>
@@ -154,19 +159,21 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
           {product.originalPrice && <span className="text-muted-foreground line-through text-xs">{formatPrice(product.originalPrice)}</span>}
         </div>
 
-        <div className="min-h-[16px]">
-          {product.soldCount ? (
-            <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>
-          ) : null}
-        </div>
+        {!isCompact && (
+          <div className="min-h-[14px]">
+            {product.soldCount ? (
+              <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>
+            ) : null}
+          </div>
+        )}
       </div>
 
-      <div className="px-3 sm:px-4 pb-4">
+      <div className={`px-2.5 sm:px-3 ${isCompact ? 'pb-2.5' : 'pb-3'}`}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button onClick={handleAddToCart} className="w-full py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-xs sm:text-sm font-bold shimmer active:scale-[0.97] transition-transform">
+          <button onClick={handleAddToCart} className={`w-full ${isCompact ? 'py-1.5' : 'py-2'} rounded-xl bg-gold-gradient text-maroon-dark text-xs sm:text-sm font-bold shimmer active:scale-[0.97] transition-transform`}>
             <ShoppingCart size={14} className="inline mr-1.5 -mt-0.5" /> Add to Cart
           </button>
-          <button onClick={handleBuyNow} className="w-full py-2.5 rounded-xl border border-gold/40 text-gold text-xs sm:text-sm font-bold hover:bg-gold/10 transition-colors">
+          <button onClick={handleBuyNow} className={`w-full ${isCompact ? 'py-1.5' : 'py-2'} rounded-xl border border-gold/40 text-gold text-xs sm:text-sm font-bold hover:bg-gold/10 transition-colors`}>
             Buy Now
           </button>
         </div>

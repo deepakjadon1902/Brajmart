@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
+import bcrypt from 'bcryptjs';
 
 const router = Router();
 
@@ -92,6 +93,37 @@ router.put('/me', auth, async (req: AuthRequest, res) => {
     res.json({ ...mapUserRow(rows[0]), emailConflict });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+router.put('/me/password', auth, async (req: AuthRequest, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const userIdRaw = req.user?.id;
+    if (!userIdRaw) return res.status(401).json({ message: 'Unauthorized' });
+    const userId = Number(userIdRaw);
+    if (!Number.isFinite(userId)) return res.status(401).json({ message: 'Unauthorized' });
+
+    const currentPassword = String(req.body?.currentPassword || '');
+    const newPassword = String(req.body?.newPassword || '');
+    if (!newPassword || newPassword.length < 6) return res.status(400).json({ message: 'Password must be at least 6 characters' });
+
+    const rows = await dbQuery<any>('SELECT id, password FROM users WHERE id = ? LIMIT 1', [userId]);
+    const row = rows[0];
+    if (!row) return res.status(404).json({ message: 'User not found' });
+
+    const allowWithoutCurrent = !!req.user?.pwdReset;
+    if (!allowWithoutCurrent) {
+      if (!currentPassword) return res.status(400).json({ message: 'Current password is required' });
+      const ok = await bcrypt.compare(currentPassword, row.password);
+      if (!ok) return res.status(400).json({ message: 'Current password is incorrect' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await dbExecute('UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?', [passwordHash, userId]);
+    res.json({ message: 'Password updated successfully' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Unable to update password' });
   }
 });
 

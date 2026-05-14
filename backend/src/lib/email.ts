@@ -323,3 +323,14 @@ export const sendVerifyOtp = async (to: string, payload: { otp: string; minutes:
   );
   await sendEmail(to, 'Your BrajMart verification code', html);
 };
+
+export const sendPasswordResetOtp = async (to: string, payload: { otp: string; minutes: number }) => {
+  const html = brandWrapper(
+    'Password Reset Code',
+    `<p>Use the code below to sign in and reset your password.</p>
+     <p style="font-size:22px;letter-spacing:4px;font-weight:700;color:#3b1c12;">${payload.otp}</p>
+     <p>This code expires in ${payload.minutes} minutes.</p>
+     <p>If you didn’t request this, you can ignore this email.</p>`
+  );
+  await sendEmail(to, 'Your BrajMart password reset code', html);
+};

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendVerifyOtp = exports.sendVerifyEmail = exports.sendShippingUpdate = exports.sendAdminPaymentNotice = exports.sendPaymentFailed = exports.sendPaymentReceipt = exports.sendOrderConfirmation = exports.sendEmail = void 0;
+exports.sendPasswordResetOtp = exports.sendVerifyOtp = exports.sendVerifyEmail = exports.sendShippingUpdate = exports.sendAdminPaymentNotice = exports.sendPaymentFailed = exports.sendPaymentReceipt = exports.sendOrderConfirmation = exports.sendEmail = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 let cachedTransporter = null;
 let verifiedOnce = false;
@@ -284,3 +284,11 @@ const sendVerifyOtp = async (to, payload) => {
     await (0, exports.sendEmail)(to, 'Your BrajMart verification code', html);
 };
 exports.sendVerifyOtp = sendVerifyOtp;
+const sendPasswordResetOtp = async (to, payload) => {
+    const html = brandWrapper('Password Reset Code', `<p>Use the code below to sign in and reset your password.</p>
+     <p style="font-size:22px;letter-spacing:4px;font-weight:700;color:#3b1c12;">${payload.otp}</p>
+     <p>This code expires in ${payload.minutes} minutes.</p>
+     <p>If you didn’t request this, you can ignore this email.</p>`);
+    await (0, exports.sendEmail)(to, 'Your BrajMart password reset code', html);
+};
+exports.sendPasswordResetOtp = sendPasswordResetOtp;

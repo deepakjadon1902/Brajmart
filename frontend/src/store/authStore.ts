@@ -1,6 +1,6 @@
 ﻿import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { fetchMe, loginUser, registerUser, resendOtp, setAuthToken, startGoogleAuth, updateMyProfile, verifyOtp } from '@/lib/api';
+import { fetchMe, loginUser, registerUser, resendOtp, requestPasswordResetOtp, setAuthToken, startGoogleAuth, updateMyPassword, updateMyProfile, verifyOtp, verifyPasswordResetOtp } from '@/lib/api';
 
 export interface User {
   id: string;
@@ -45,9 +45,12 @@ interface AuthStore {
   loginWithGoogle: () => Promise<{ ok: boolean; message?: string }>;
   verifyOtp: (payload: { email: string; otp: string }) => Promise<{ ok: boolean; message?: string }>;
   resendOtp: (payload: { email: string }) => Promise<{ ok: boolean; message?: string }>;
+  requestPasswordResetOtp: (payload: { email: string }) => Promise<{ ok: boolean; message?: string }>;
+  verifyPasswordResetOtp: (payload: { email: string; otp: string }) => Promise<{ ok: boolean; message?: string }>;
   completeOAuthLogin: (token: string) => Promise<{ ok: boolean; message?: string }>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<{ ok: boolean; message?: string }>;
+  updatePassword: (payload: { currentPassword?: string; newPassword: string }) => Promise<{ ok: boolean; message?: string }>;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -114,6 +117,32 @@ export const useAuthStore = create<AuthStore>()(
           return { ok: false, message: err?.message || 'Unable to resend code' };
         }
       },
+      requestPasswordResetOtp: async (payload) => {
+        try {
+          const res: any = await requestPasswordResetOtp(payload);
+          return { ok: true, message: res?.message || 'Code sent' };
+        } catch (err: any) {
+          return { ok: false, message: err?.message || 'Unable to send code' };
+        }
+      },
+      verifyPasswordResetOtp: async (payload) => {
+        try {
+          const res: any = await verifyPasswordResetOtp(payload);
+          if (res?.token && res?.user) {
+            setAuthToken(res.token);
+            const user: User = {
+              id: res.user.id,
+              fullName: res.user.name,
+              email: res.user.email,
+              authProvider: 'email',
+            };
+            set({ user, isAuthenticated: true, token: res.token });
+          }
+          return { ok: true, message: res?.message || 'Verified' };
+        } catch (err: any) {
+          return { ok: false, message: err?.message || 'Verification failed' };
+        }
+      },
       completeOAuthLogin: async (token) => {
         try {
           setAuthToken(token);
@@ -160,6 +189,14 @@ export const useAuthStore = create<AuthStore>()(
           return { ok: true };
         } catch (err: any) {
           return { ok: false, message: err?.message || 'Profile update failed' };
+        }
+      },
+      updatePassword: async (payload) => {
+        try {
+          const res: any = await updateMyPassword(payload);
+          return { ok: true, message: res?.message || 'Password updated' };
+        } catch (err: any) {
+          return { ok: false, message: err?.message || 'Password update failed' };
         }
       },
     }),
