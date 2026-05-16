@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Product } from '@/types/product';
 import { Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
-import { createProduct, deleteProduct as deleteProductApi, updateProduct as updateProductApi, uploadImage, fetchProductsSchema } from '@/lib/api';
+import { createProduct, deleteProduct as deleteProductApi, updateProduct as updateProductApi, uploadImage, uploadImages, fetchProductsSchema } from '@/lib/api';
 import { toast } from 'sonner';
 
 const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
@@ -37,7 +37,7 @@ const AdminProducts = () => {
   }, [loadFromApi]);
 
   useEffect(() => {
-    // Warn admins if DB schema is missing the new columns, otherwise attributes will never persist.
+    // Soft-check schema to avoid noisy toasts in environments that don't run migrations.
     const run = async () => {
       try {
         const schema: any = await fetchProductsSchema();
@@ -47,9 +47,11 @@ const AdminProducts = () => {
           cols.size_pricing === 'missing' ||
           cols.piece_pricing === 'missing' ||
           cols.attributes === 'missing' ||
-          cols.variant_pricing === 'missing'
+          cols.variant_pricing === 'missing' ||
+          cols.color_variants === 'missing'
         ) {
-          toast.error('Database missing product variant columns. Run `backend/sql/migrate_products_all_variants.sql` (safe migration section).');
+          // Features will still work on servers that allow auto-ALTER in `products` routes.
+          // We'll surface a clear error only if a save fails.
         }
       } catch {
         // ignore schema check errors (permissions / offline)
@@ -82,7 +84,12 @@ const AdminProducts = () => {
         return;
       }
 
-      const normalizedAttributes = (Array.isArray(product.attributes) ? product.attributes : [])
+      const normalizedColorVariants = Array.isArray((product as any).colorVariants) ? (product as any).colorVariants : [];
+      const normalizedColorNames = normalizedColorVariants
+        .map((v: any) => String(v?.color || '').trim())
+        .filter(Boolean);
+
+      const normalizedAttributesBase = (Array.isArray(product.attributes) ? product.attributes : [])
         .map((a: any) => ({
           name: String(a?.name || '').trim(),
           slug: normalizeKey(String(a?.slug || a?.name || '')),
@@ -91,6 +98,20 @@ const AdminProducts = () => {
             .filter(Boolean),
         }))
         .filter((a: any) => a.slug && a.terms?.length);
+
+      const normalizedAttributes = (() => {
+        if (!normalizedColorNames.length) return normalizedAttributesBase;
+        const colorSlug = 'color';
+        const existing = normalizedAttributesBase.find((a: any) => String(a.slug) === colorSlug);
+        const merged = [...(existing?.terms || []), ...normalizedColorNames]
+          .map((t) => String(t).trim())
+          .filter(Boolean)
+          .filter((t, i, arr) => arr.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i);
+        if (existing) {
+          return normalizedAttributesBase.map((a: any) => String(a.slug) === colorSlug ? { ...a, name: a.name || 'Color', terms: merged } : a);
+        }
+        return [...normalizedAttributesBase, { name: 'Color', slug: colorSlug, terms: merged }];
+      })();
 
       const normalizedVariantPricing = (Array.isArray(product.variantPricing) ? product.variantPricing : [])
         .map((v: any) => ({
@@ -105,6 +126,7 @@ const AdminProducts = () => {
         // Always send these keys so backend always persists them (never reverts to NULL).
         attributes: normalizedAttributes,
         variantPricing: normalizedVariantPricing,
+        colorVariants: normalizedColorVariants,
         sizes: Array.isArray(product.sizes) ? product.sizes : [],
         sizePricing: Array.isArray(product.sizePricing) ? product.sizePricing : [],
         piecePricing: Array.isArray(product.piecePricing) ? product.piecePricing : [],
@@ -139,7 +161,7 @@ const AdminProducts = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Products</h1>
-        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', images: [], description: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true, tags: [], sizes: [], sizePricing: [], piecePricing: [], attributes: [], variantPricing: [] }); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
+        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', images: [], colorVariants: [], description: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true, tags: [], sizes: [], sizePricing: [], piecePricing: [], attributes: [], variantPricing: [] }); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
           <Plus size={16} /> Add Product
         </button>
       </div>
@@ -182,7 +204,7 @@ const AdminProducts = () => {
                   <td className="px-5 py-3 text-amber-400 hidden md:table-cell">* {p.rating}</td>
                   <td className="px-5 py-3"><span className={`text-xs font-medium ${p.inStock ? 'text-emerald-400' : 'text-red-400'}`}>{p.inStock ? 'In Stock' : 'Out'}</span></td>
                   <td className="px-5 py-3 flex gap-2">
-                    <button onClick={() => { setIsCreating(false); setEditProduct({ ...p, images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []), tags: Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []) }); }} className="text-blue-400 hover:text-blue-300"><Edit2 size={15} /></button>
+                    <button onClick={() => { setIsCreating(false); setEditProduct({ ...p, images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []), colorVariants: Array.isArray((p as any).colorVariants) ? (p as any).colorVariants : [], tags: Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []) }); }} className="text-blue-400 hover:text-blue-300"><Edit2 size={15} /></button>
                     <button onClick={() => handleDelete(p.id)} className="text-red-400 hover:text-red-300"><Trash2 size={15} /></button>
                   </td>
                 </tr>
@@ -202,8 +224,9 @@ const AdminProducts = () => {
 const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { product: Product; categories: string[]; isCreating: boolean; onClose: () => void; onSave: (p: Product) => void }) => {
   const [form, setForm] = useState(product);
   const [imageError, setImageError] = useState('');
-  const [galleryUrl, setGalleryUrl] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [colorUploadKey, setColorUploadKey] = useState<string>('');
+  const [newColorName, setNewColorName] = useState('');
   const [sizeText, setSizeText] = useState('');
   const [sizePriceText, setSizePriceText] = useState('');
   const [piecesText, setPiecesText] = useState('');
@@ -214,6 +237,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
   const [variantSelections, setVariantSelections] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const colorFileInputRef = useRef<HTMLInputElement>(null);
   const update = (field: string, value: any) => setForm((prev) => ({ ...prev, [field]: value }));
 
   const normalize = (value: string) =>
@@ -233,12 +257,51 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
   const piecePricing = Array.isArray(form.piecePricing) ? form.piecePricing : [];
   const attributes = Array.isArray(form.attributes) ? form.attributes : [];
   const variantPricing = Array.isArray(form.variantPricing) ? form.variantPricing : [];
+  const colorVariants = Array.isArray((form as any).colorVariants) ? (form as any).colorVariants : [];
+
+  const colorAttr = attributes.find((a: any) => normalize(String(a?.slug || a?.name || '')).includes('color'));
+  const colorSlug = colorAttr ? normalize(String(colorAttr.slug || 'color')) : 'color';
+  const pricingAttributes = attributes.filter((a: any) => {
+    const slug = normalize(String(a?.slug || a?.name || ''));
+    if (!slug) return false;
+    return slug !== colorSlug;
+  });
+
+  const upsertColorVariantImages = (color: string, images: string[]) => {
+    const key = String(color || '').trim();
+    if (!key) return;
+    const next = [...colorVariants];
+    const idx = next.findIndex((v: any) => String(v?.color || '').toLowerCase() === key.toLowerCase());
+    const payload = { color: key, images: images.filter(Boolean) };
+    if (idx >= 0) next[idx] = payload;
+    else next.push(payload);
+    update('colorVariants', next);
+  };
+
+  const removeColorImage = (color: string, idx: number) => {
+    const existing = colorVariants.find((v: any) => String(v?.color || '').toLowerCase() === String(color).toLowerCase());
+    const current = Array.isArray(existing?.images) ? existing.images : [];
+    upsertColorVariantImages(color, current.filter((_: any, i: number) => i !== idx));
+  };
+
+  const addColorVariant = () => {
+    const name = String(newColorName || '').trim();
+    if (!name) return;
+    const exists = colorVariants.some((v: any) => String(v?.color || '').toLowerCase() === name.toLowerCase());
+    if (exists) return toast.error('Color already exists');
+    update('colorVariants', [...colorVariants, { color: name, images: [] }]);
+    setNewColorName('');
+  };
+
+  const removeColorVariant = (color: string) => {
+    update('colorVariants', colorVariants.filter((v: any) => String(v?.color || '').toLowerCase() !== String(color).toLowerCase()));
+  };
 
   const ATTRIBUTE_PRESETS: Array<{ name: string; slug: string; terms: string[] }> = [
     {
       name: 'Color',
       slug: 'color',
-      terms: ['Black', 'Orange', 'Red', 'White', 'Blue', 'Dark Blue', 'Green', 'Light Blue', 'Light Yellow', 'Maroon', 'Multi Color', 'Pink', 'Red-Yellow', 'Sky Blue', 'Yellow'],
+      terms: [],
     },
     { name: 'Language', slug: 'language', terms: ['English', 'Hindi'] },
     { name: 'Sleeves', slug: 'sleeves', terms: ['Full Sleeves', 'Half Sleeves'] },
@@ -305,13 +368,9 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     setImageError('');
-    const uploaded: string[] = [];
     try {
-      for (const file of files) {
-        if (!file.type.startsWith('image/')) continue;
-        const { url } = await uploadImage(file);
-        uploaded.push(url);
-      }
+      const cleaned = files.filter((f) => f && f.type.startsWith('image/'));
+      const { urls: uploaded } = await uploadImages(cleaned);
       if (uploaded.length) {
         const current = Array.isArray(form.images) ? form.images : [];
         update('images', [...current, ...uploaded]);
@@ -323,12 +382,22 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
     }
   };
 
-  const addGalleryUrl = () => {
-    const url = galleryUrl.trim();
-    if (!url) return;
-    const current = Array.isArray(form.images) ? form.images : [];
-    update('images', [...current, url]);
-    setGalleryUrl('');
+  const handleColorUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const key = String(colorUploadKey || '').trim();
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = '';
+    if (!key || files.length === 0) return;
+
+    try {
+      const cleaned = files.filter((f) => f && f.type.startsWith('image/'));
+      const { urls: uploaded } = await uploadImages(cleaned);
+      const existing = colorVariants.find((v: any) => String(v?.color || '').toLowerCase() === key.toLowerCase());
+      const current = Array.isArray(existing?.images) ? existing.images : [];
+      upsertColorVariantImages(key, [...current, ...uploaded]);
+      toast.success('Color images uploaded');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to upload images');
+    }
   };
 
   const removeGalleryImage = (index: number) => {
@@ -651,17 +720,33 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
           </div>
 
           {/* Variant Pricing */}
-          {attributes.length > 0 && (
+          {(pricingAttributes.length > 0 || sizes.length > 0) && (
             <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
               <div>
                 <p className="text-sm font-semibold text-white">Attribute Pricing</p>
-                <p className="text-xs text-slate-500">Set a price for a selected combination of attribute values.</p>
+                <p className="text-xs text-slate-500">Set a price for a selected combination of size + custom attributes (color never affects price).</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {attributes
-                  .filter((a) => Array.isArray(a?.terms) && a.terms.length > 0)
-                  .map((attr) => {
+                {sizes.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="block text-xs text-slate-400">Size</label>
+                    <select
+                      value={variantSelections.size || sizes[0] || ''}
+                      onChange={(e) => setVariantSelections((prev) => ({ ...prev, size: e.target.value }))}
+                      className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+                    >
+                      {sizes.map((s: string) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {pricingAttributes
+                  .filter((a: any) => Array.isArray(a?.terms) && a.terms.length > 0)
+                  .map((attr: any) => {
                     const slug = normalize(String(attr?.slug || attr?.name || ''));
                     const terms = Array.isArray(attr?.terms) ? attr.terms : [];
                     const value = variantSelections[slug] || terms[0] || '';
@@ -673,9 +758,9 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
                           onChange={(e) => setVariantSelections((prev) => ({ ...prev, [slug]: e.target.value }))}
                           className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
                         >
-                          {terms.map((t) => (
-                            <option key={t} value={t}>
-                              {t}
+                          {terms.map((t: any) => (
+                            <option key={String(t)} value={String(t)}>
+                              {String(t)}
                             </option>
                           ))}
                         </select>
@@ -701,12 +786,17 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
                     if (!Number.isFinite(price) || price <= 0) return;
 
                     const selections: Record<string, string> = {};
-                    for (const attr of attributes) {
-                      const slug = normalize(String(attr?.slug || attr?.name || ''));
-                      const terms = Array.isArray(attr?.terms) ? attr.terms : [];
+                    if (sizes.length > 0) {
+                      const s = String(variantSelections.size || sizes[0] || '').trim();
+                      if (s) selections.size = s;
+                    }
+                    for (const attr of pricingAttributes) {
+                      const slug = normalize(String((attr as any)?.slug || (attr as any)?.name || ''));
+                      const terms = Array.isArray((attr as any)?.terms) ? (attr as any).terms : [];
                       if (!slug || !terms.length) continue;
                       selections[slug] = variantSelections[slug] || terms[0];
                     }
+                    if (Object.keys(selections).length === 0) return;
 
                     const key = JSON.stringify(Object.keys(selections).sort().reduce((acc: any, k) => (acc[k] = selections[k], acc), {}));
                     const current = Array.isArray(form.variantPricing) ? form.variantPricing : [];
@@ -819,17 +909,6 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
                 </div>
               ))}
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                value={galleryUrl}
-                onChange={(e) => setGalleryUrl(e.target.value)}
-                placeholder="Paste image URL and click Add"
-                className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
-              />
-              <button type="button" onClick={addGalleryUrl} className="px-4 py-2.5 rounded-xl border border-slate-700 text-white text-sm">
-                Add URL
-              </button>
-            </div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <input
                 ref={galleryInputRef}
@@ -848,6 +927,99 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
               </button>
               <span className="text-xs text-slate-500">Drag thumbnails to reorder</span>
             </div>
+          </div>
+
+          {/* Color-wise Images */}
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">Color Variants (Images)</label>
+              <input
+                ref={colorFileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleColorUpload}
+                className="hidden"
+              />
+
+              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                <input
+                  value={newColorName}
+                  onChange={(e) => setNewColorName(e.target.value)}
+                  placeholder="Add a color (e.g. Blue, Maroon)"
+                  className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={addColorVariant}
+                  className="px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition"
+                >
+                  Add Color
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {colorVariants.map((entry: any) => {
+                  const term = String(entry?.color || '').trim();
+                  if (!term) return null;
+                  const existing = colorVariants.find((v: any) => String(v?.color || '').toLowerCase() === String(term).toLowerCase());
+                  const imgs = Array.isArray(existing?.images) ? existing.images : [];
+                  return (
+                    <div key={term} className="rounded-2xl border border-slate-700 bg-slate-900/40 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-white font-semibold text-sm">{term}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">Set images to switch when user selects this color.</div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <button
+                            type="button"
+                            onClick={() => removeColorVariant(term)}
+                            className="px-3 py-2 rounded-xl border border-slate-700 text-slate-300 text-xs hover:bg-slate-800 transition"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+
+                      {imgs.length > 0 && (
+                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-6 gap-2">
+                          {imgs.map((img: string, idx: number) => (
+                            <div key={`${img}-${idx}`} className="relative rounded-lg border border-slate-700 bg-slate-800">
+                              <img src={img} alt={`${term} ${idx + 1}`} className="w-full h-16 rounded-lg object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeColorImage(term, idx)}
+                                className="absolute -top-2 -right-2 bg-slate-900 border border-slate-600 rounded-full p-1 text-slate-300 hover:text-white"
+                                aria-label="Remove"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setColorUploadKey(term);
+                            colorFileInputRef.current?.click();
+                          }}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white hover:bg-slate-700 transition"
+                        >
+                          <Upload size={14} /> Upload
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            {colorVariants.length === 0 && (
+              <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4 text-sm text-slate-400">
+                Add your product colors above, then upload images for each color.
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

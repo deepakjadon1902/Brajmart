@@ -5,6 +5,43 @@ const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const router = (0, express_1.Router)();
+const isColorSelectionKey = (key) => String(key || '').toLowerCase().includes('color');
+const sanitizeColorVariants = (input) => {
+    const list = Array.isArray(input) ? input : [];
+    return list
+        .map((v) => {
+        const color = String(v?.color ?? '').trim();
+        const images = Array.isArray(v?.images) ? v.images.map((x) => String(x ?? '').trim()).filter(Boolean) : [];
+        return color ? { color, images } : null;
+    })
+        .filter(Boolean);
+};
+const sanitizeVariantPricing = (input) => {
+    const list = Array.isArray(input) ? input : [];
+    return list
+        .map((v) => {
+        const selectionsRaw = v?.selections;
+        const selectionsObj = selectionsRaw && typeof selectionsRaw === 'object' && !Array.isArray(selectionsRaw)
+            ? selectionsRaw
+            : {};
+        const selections = {};
+        for (const [k, val] of Object.entries(selectionsObj)) {
+            if (isColorSelectionKey(k))
+                continue; // color never affects price
+            const value = val === null || val === undefined ? '' : String(val);
+            if (!value.trim())
+                continue;
+            selections[String(k)] = value;
+        }
+        const price = Number(v?.price);
+        if (!Number.isFinite(price) || price <= 0)
+            return null;
+        if (Object.keys(selections).length === 0)
+            return null;
+        return { selections, price };
+    })
+        .filter(Boolean);
+};
 const LIST_CACHE_TTL_MS = 60000;
 const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
 let listCache = null;
@@ -17,8 +54,8 @@ const getMissingProductColumns = async (cols) => {
     return missing;
 };
 const ensureProductVariantColumns = async () => {
-    const missing = await getMissingProductColumns(['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing']);
-    if (!missing.sizes && !missing.size_pricing && !missing.piece_pricing && !missing.attributes && !missing.variant_pricing)
+    const missing = await getMissingProductColumns(['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants']);
+    if (!missing.sizes && !missing.size_pricing && !missing.piece_pricing && !missing.attributes && !missing.variant_pricing && !missing.color_variants)
         return;
     // Add columns in a safe order so AFTER clauses work.
     if (missing.sizes) {
@@ -36,13 +73,17 @@ const ensureProductVariantColumns = async () => {
     if (missing.variant_pricing) {
         await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN variant_pricing JSON NULL AFTER attributes');
     }
+    if (missing.color_variants) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN color_variants JSON NULL AFTER variant_pricing');
+    }
 };
 const variantFieldsProvided = (data) => data?.sizes !== undefined ||
     data?.sizePricing !== undefined ||
     data?.piecePricing !== undefined ||
     data?.attributes !== undefined ||
-    data?.variantPricing !== undefined;
-const getMissingVariantColumns = async () => getMissingProductColumns(['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing']);
+    data?.variantPricing !== undefined ||
+    data?.colorVariants !== undefined;
+const getMissingVariantColumns = async () => getMissingProductColumns(['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants']);
 const variantSchemaErrorMessage = (missing) => {
     const missingCols = Object.keys(missing).filter((k) => missing[k]);
     if (!missingCols.length)
@@ -74,7 +115,8 @@ const mapProductRow = (row) => ({
     sizePricing: (0, dbHelpers_1.parseJson)(row.size_pricing, []),
     piecePricing: (0, dbHelpers_1.parseJson)(row.piece_pricing, []),
     attributes: (0, dbHelpers_1.parseJson)(row.attributes, []),
-    variantPricing: (0, dbHelpers_1.parseJson)(row.variant_pricing, []),
+    variantPricing: sanitizeVariantPricing((0, dbHelpers_1.parseJson)(row.variant_pricing, [])),
+    colorVariants: sanitizeColorVariants((0, dbHelpers_1.parseJson)(row.color_variants, [])),
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
 });
@@ -125,9 +167,13 @@ const buildUpdate = (data) => {
         set('attributes', JSON.stringify(attrs));
     }
     if (data.variantPricing !== undefined) {
-        const variants = Array.isArray(data.variantPricing) ? data.variantPricing : [];
+        const variants = sanitizeVariantPricing(data.variantPricing);
         // Ensure this always hits the DB as a string (works for JSON/LONGTEXT/BLOB columns).
         set('variant_pricing', JSON.stringify(variants));
+    }
+    if (data.colorVariants !== undefined) {
+        const variants = sanitizeColorVariants(data.colorVariants);
+        set('color_variants', JSON.stringify(variants));
     }
     if (!fields.length)
         return null;
@@ -158,7 +204,7 @@ router.get('/schema', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
             return res.status(503).json({ message: 'Database unavailable' });
         const dbRow = await (0, db_1.dbQuery)('SELECT DATABASE() AS db');
         const database = dbRow?.[0]?.db ?? null;
-        const cols = ['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing'];
+        const cols = ['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants'];
         const missing = await getMissingProductColumns(cols);
         res.json({
             database,
@@ -221,7 +267,9 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.attributes = [];
         if (data.variantPricing === undefined)
             data.variantPricing = [];
-        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        if (data.colorVariants === undefined)
+            data.colorVariants = [];
+        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.price,
@@ -239,8 +287,9 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             JSON.stringify(data.sizes || []),
             JSON.stringify(data.sizePricing || []),
             JSON.stringify(data.piecePricing || []),
-            JSON.stringify(data.attributes || []),
-            JSON.stringify(data.variantPricing || []),
+            JSON.stringify(Array.isArray(data.attributes) ? data.attributes : []),
+            JSON.stringify(sanitizeVariantPricing(data.variantPricing || [])),
+            JSON.stringify(sanitizeColorVariants(data.colorVariants || [])),
         ]);
         const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
@@ -268,7 +317,8 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 message.includes("Unknown column 'size_pricing'") ||
                 message.includes("Unknown column 'piece_pricing'") ||
                 message.includes("Unknown column 'attributes'") ||
-                message.includes("Unknown column 'variant_pricing'")) {
+                message.includes("Unknown column 'variant_pricing'") ||
+                message.includes("Unknown column 'color_variants'")) {
                 if (wantsVariants) {
                     const missing = await getMissingVariantColumns();
                     const msg = variantSchemaErrorMessage(missing) || 'Database schema missing product variant columns. Run the SQL migration and retry.';
@@ -325,6 +375,8 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 body.attributes = [];
             if (body.variantPricing === undefined)
                 body.variantPricing = [];
+            if (body.colorVariants === undefined)
+                body.colorVariants = [];
             if (body.sizes === undefined)
                 body.sizes = [];
             if (body.sizePricing === undefined)
@@ -344,7 +396,8 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 message.includes("Unknown column 'size_pricing'") ||
                 message.includes("Unknown column 'piece_pricing'") ||
                 message.includes("Unknown column 'attributes'") ||
-                message.includes("Unknown column 'variant_pricing'")) {
+                message.includes("Unknown column 'variant_pricing'") ||
+                message.includes("Unknown column 'color_variants'")) {
                 if (wantsVariants) {
                     const missing = await getMissingVariantColumns();
                     const msg = variantSchemaErrorMessage(missing) || 'Database schema missing product variant columns. Run the SQL migration and retry.';
@@ -356,6 +409,7 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 delete fallbackBody.piecePricing;
                 delete fallbackBody.attributes;
                 delete fallbackBody.variantPricing;
+                delete fallbackBody.colorVariants;
                 const fallbackUpdate = buildUpdate(fallbackBody);
                 if (!fallbackUpdate)
                     return res.status(400).json({ message: 'No fields to update' });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CreditCard, Wallet, DollarSign, AlertCircle } from 'lucide-react';
-import { fetchPayments, updatePaymentStatus } from '@/lib/api';
+import { fetchPayments, reconcilePayments } from '@/lib/api';
 import { toast } from 'sonner';
 
 const AdminPayments = () => {
@@ -8,6 +8,8 @@ const AdminPayments = () => {
   useEffect(() => {
     const load = async () => {
       try {
+        // Auto-reconcile PayU pending payments on page open so status updates without manual marking.
+        await reconcilePayments().catch(() => {});
         const data = await fetchPayments();
         const mapped = (Array.isArray(data) ? data : []).map((p: any) => ({ ...p, id: p.id || p._id }));
         setPayments(mapped);
@@ -16,17 +18,9 @@ const AdminPayments = () => {
       }
     };
     load();
+    const t = setInterval(() => load(), 20_000);
+    return () => clearInterval(t);
   }, []);
-
-  const setStatus = async (paymentId: string, status: 'paid' | 'failed' | 'pending') => {
-    try {
-      const updated: any = await updatePaymentStatus(paymentId, status);
-      setPayments((prev) => prev.map((p) => (p.id === paymentId ? { ...p, ...updated, id: updated.id || updated._id || p.id } : p)));
-      toast.success(`Payment marked as ${status}`);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to update payment status');
-    }
-  };
   const totalRevenue = payments.reduce((s, p) => s + p.amount, 0);
   const paidRevenue = payments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
   const pendingRevenue = payments.filter((p) => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
@@ -92,7 +86,25 @@ const AdminPayments = () => {
       )}
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-slate-800"><h2 className="text-lg font-semibold text-white">Transaction History</h2></div>
+        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-white">Transaction History</h2>
+          <button
+            onClick={async () => {
+              try {
+                await reconcilePayments();
+                const data = await fetchPayments();
+                const mapped = (Array.isArray(data) ? data : []).map((p: any) => ({ ...p, id: p.id || p._id }));
+                setPayments(mapped);
+                toast.success('Payment status refreshed');
+              } catch (err: any) {
+                toast.error(err?.message || 'Failed to refresh payments');
+              }
+            }}
+            className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white hover:bg-slate-700 transition"
+          >
+            Refresh
+          </button>
+        </div>
         {payments.length === 0 ? (
           <div className="p-12 text-center text-slate-400">
             <CreditCard size={40} className="mx-auto mb-3 opacity-40" />
@@ -133,24 +145,7 @@ const AdminPayments = () => {
                       }`}>{p.status}</span>
                     </td>
                     <td className="px-5 py-3">
-                      {p.status === 'pending' ? (
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => setStatus(p.id, 'paid')}
-                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
-                          >
-                            Mark Paid
-                          </button>
-                          <button
-                            onClick={() => setStatus(p.id, 'failed')}
-                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25"
-                          >
-                            Mark Failed
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-slate-500">-</span>
-                      )}
+                      <span className="text-xs text-slate-500">{p.status === 'pending' ? 'Auto verifying…' : '-'}</span>
                     </td>
                   </tr>
                 ))}

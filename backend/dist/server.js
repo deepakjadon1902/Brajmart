@@ -34,7 +34,6 @@ app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/uploads', express_1.default.static(UPLOADS_DIR, {
     maxAge: '7d',
     setHeaders: (res) => {
-        // Helps product images load instantly on reload (localhost + deployed).
         res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
     },
 }));

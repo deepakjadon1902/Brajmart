@@ -72,15 +72,153 @@ const verifyPayuPayment = async (txnid) => {
     return parsed;
 };
 const normalizePayuStatus = (value) => String(value || '').trim().toLowerCase();
+const getPaymentOrderDetails = async (orderId) => {
+    if (!orderId)
+        return null;
+    const orderRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
+    const orderRow = orderRows[0];
+    if (!orderRow)
+        return null;
+    return {
+        orderRow,
+        details: {
+            items: (0, dbHelpers_1.parseJson)(orderRow.items, []),
+            total: Number(orderRow.total),
+            paymentMethod: orderRow.payment_method,
+            shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
+            billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),
+        },
+    };
+};
+const reconcilePendingPayuToken = async (token) => {
+    if (!token)
+        return null;
+    if (!(0, db_1.isDbConnected)())
+        return null;
+    if (!(process.env.PAYU_KEY && process.env.PAYU_SALT))
+        return null;
+    const rows = await (0, db_1.dbQuery)('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
+    const current = rows[0];
+    if (!current)
+        return null;
+    if (String(current.status) !== 'pending')
+        return current;
+    const verify = await verifyPayuPayment(token);
+    const details = verify?.transaction_details?.[token] || verify?.transaction_details?.[String(token)] || null;
+    const status = normalizePayuStatus(details?.status);
+    const mihpayid = details?.mihpayid || details?.mihpayId || details?.payuid || null;
+    if (status !== 'success' && status !== 'failure')
+        return current;
+    const nextStatus = status === 'success' ? 'paid' : 'failed';
+    const orderId = current.order_id ?? null;
+    const amount = current.amount ?? null;
+    const method = current.method ?? null;
+    const paymentId = mihpayid ? String(mihpayid) : null;
+    await (0, db_1.dbExecute)('UPDATE payment_status SET status = ?, payment_id = COALESCE(?, payment_id), updated_at = NOW() WHERE token = ?', [nextStatus, paymentId, token]);
+    let paymentRow = null;
+    if (orderId) {
+        const paymentRows = await (0, db_1.dbQuery)('SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1', [orderId]);
+        paymentRow = paymentRows[0];
+        if (paymentRow) {
+            await (0, db_1.dbExecute)('UPDATE payments SET status = ?, transaction_id = COALESCE(?, transaction_id), updated_at = NOW() WHERE id = ?', [nextStatus, paymentId, paymentRow.id]);
+            const refreshed = await (0, db_1.dbQuery)('SELECT * FROM payments WHERE id = ? LIMIT 1', [paymentRow.id]);
+            paymentRow = refreshed[0] || paymentRow;
+        }
+        const orderRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
+        const orderRow = orderRows[0];
+        if (orderRow) {
+            const history = (0, dbHelpers_1.parseJson)(orderRow.status_history, []);
+            history.push({
+                status: nextStatus === 'paid' ? 'confirmed' : 'cancelled',
+                date: new Date().toISOString(),
+                note: nextStatus === 'paid' ? 'Payment verified via PayU verify_payment' : 'Payment failed (verified via PayU verify_payment)',
+            });
+            await (0, db_1.dbExecute)('UPDATE orders SET status = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus === 'paid' ? 'confirmed' : 'cancelled', JSON.stringify(history), orderId]);
+        }
+    }
+    // If PayU callback/webhook was missed, still notify customer/admin.
+    try {
+        const { min, max } = await (0, eta_1.getEtaConfig)();
+        const etaText = (0, eta_1.getEtaText)(min, max);
+        if (paymentRow?.customer_email) {
+            const orderData = await getPaymentOrderDetails(orderId);
+            const orderDetails = orderData?.details || undefined;
+            if (nextStatus === 'paid') {
+                (0, email_1.sendPaymentReceipt)(paymentRow.customer_email, { orderId: String(orderId), amount: Number(amount || paymentRow.amount || 0), paymentId: paymentId || paymentRow.transaction_id, eta: etaText, details: orderDetails }).catch(() => { });
+            }
+            else {
+                (0, email_1.sendPaymentFailed)(paymentRow.customer_email, { orderId: String(orderId), amount: Number(amount || paymentRow.amount || 0), paymentId: paymentId || paymentRow.transaction_id, eta: etaText, details: orderDetails }).catch(() => { });
+            }
+        }
+        (0, email_1.sendAdminPaymentNotice)({
+            status: nextStatus,
+            orderId: orderId ? String(orderId) : 'N/A',
+            amount: Number(amount || paymentRow?.amount || 0),
+            paymentId: paymentId || token,
+            method: method || paymentRow?.method,
+            customerEmail: paymentRow?.customer_email,
+        }).catch(() => { });
+    }
+    catch {
+        // ignore email failures
+    }
+    const refreshed = await (0, db_1.dbQuery)('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
+    return refreshed[0] || current;
+};
 router.get('/', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        // Automatically reconcile a few most-recent pending PayU payments so admin panel updates automatically.
+        if (process.env.PAYU_KEY && process.env.PAYU_SALT) {
+            const pending = await (0, db_1.dbQuery)("SELECT token FROM payment_status WHERE status = 'pending' AND method LIKE 'PayU%' ORDER BY updated_at DESC LIMIT 10");
+            for (const row of pending) {
+                const token = String(row?.token || '').trim();
+                if (!token)
+                    continue;
+                try {
+                    await reconcilePendingPayuToken(token);
+                }
+                catch {
+                    // ignore per-token failures
+                }
+            }
+        }
         const rows = await (0, db_1.dbQuery)('SELECT * FROM payments ORDER BY created_at DESC');
         res.json(rows.map(mapPaymentRow));
     }
     catch (err) {
         res.status(500).json({ message: err.message });
+    }
+});
+router.post('/reconcile', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        if (!(process.env.PAYU_KEY && process.env.PAYU_SALT))
+            return res.json({ ok: true, reconciled: 0, message: 'PayU credentials not configured' });
+        const pending = await (0, db_1.dbQuery)("SELECT token FROM payment_status WHERE status = 'pending' AND method LIKE 'PayU%' ORDER BY updated_at DESC LIMIT 25");
+        let reconciled = 0;
+        for (const row of pending) {
+            const token = String(row?.token || '').trim();
+            if (!token)
+                continue;
+            try {
+                const beforeRows = await (0, db_1.dbQuery)('SELECT status FROM payment_status WHERE token = ? LIMIT 1', [token]);
+                const before = String(beforeRows?.[0]?.status || '');
+                const after = await reconcilePendingPayuToken(token);
+                const afterStatus = String(after?.status || '');
+                if (before === 'pending' && afterStatus !== 'pending')
+                    reconciled += 1;
+            }
+            catch {
+                // ignore
+            }
+        }
+        return res.json({ ok: true, reconciled });
+    }
+    catch (err) {
+        return res.status(500).json({ message: err?.message || 'Failed to reconcile payments' });
     }
 });
 router.get('/status/:token', async (req, res) => {
@@ -96,39 +234,9 @@ router.get('/status/:token', async (req, res) => {
         const current = rows[0];
         if (String(current.status) === 'pending' && (process.env.PAYU_KEY && process.env.PAYU_SALT)) {
             try {
-                const verify = await verifyPayuPayment(token);
-                const details = verify?.transaction_details?.[token] || verify?.transaction_details?.[String(token)] || null;
-                const status = normalizePayuStatus(details?.status);
-                const mihpayid = details?.mihpayid || details?.mihpayId || details?.payuid || null;
-                if (status === 'success' || status === 'failure') {
-                    const nextStatus = status === 'success' ? 'paid' : 'failed';
-                    const orderId = current.order_id ?? null;
-                    const amount = current.amount ?? null;
-                    const method = current.method ?? null;
-                    await (0, db_1.dbExecute)('UPDATE payment_status SET status = ?, payment_id = COALESCE(?, payment_id), updated_at = NOW() WHERE token = ?', [nextStatus, mihpayid ? String(mihpayid) : null, token]);
-                    // Update payments table for the linked order if present.
-                    if (orderId) {
-                        const paymentRows = await (0, db_1.dbQuery)('SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1', [orderId]);
-                        const payment = paymentRows[0];
-                        if (payment) {
-                            await (0, db_1.dbExecute)('UPDATE payments SET status = ?, transaction_id = COALESCE(?, transaction_id), updated_at = NOW() WHERE id = ?', [nextStatus, mihpayid ? String(mihpayid) : null, payment.id]);
-                        }
-                        // Update order status/history.
-                        const orderRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
-                        const orderRow = orderRows[0];
-                        if (orderRow) {
-                            const history = (0, dbHelpers_1.parseJson)(orderRow.status_history, []);
-                            history.push({
-                                status: nextStatus === 'paid' ? 'confirmed' : 'cancelled',
-                                date: new Date().toISOString(),
-                                note: nextStatus === 'paid' ? 'Payment verified via PayU verify_payment' : 'Payment failed (verified via PayU verify_payment)',
-                            });
-                            await (0, db_1.dbExecute)('UPDATE orders SET status = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [nextStatus === 'paid' ? 'confirmed' : 'cancelled', JSON.stringify(history), orderId]);
-                        }
-                    }
-                    const refreshed = await (0, db_1.dbQuery)('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
-                    return res.json(mapPaymentStatusRow(refreshed[0] || current));
-                }
+                const reconciled = await reconcilePendingPayuToken(token);
+                if (reconciled && String(reconciled.status) !== 'pending')
+                    return res.json(mapPaymentStatusRow(reconciled));
             }
             catch {
                 // ignore reconciliation errors; fall back to current pending status

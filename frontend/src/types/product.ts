@@ -6,6 +6,7 @@ export interface Product {
   originalPrice?: number;
   image: string;
   images?: string[];
+  colorVariants?: Array<{ color: string; images: string[] }>;
   category: string;
   description?: string;
   rating: number;

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart, ShoppingCart, Star, Eye } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -31,11 +32,11 @@ const badgeLabels: Record<string, string> = {
 
 const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [hoverImageIndex, setHoverImageIndex] = useState(0);
   const cardImages = Array.isArray(product.images) && product.images.length
     ? product.images
     : (product.image ? [product.image] : []);
   const baseImage = cardImages[0] || product.image;
-  const hoverImage = cardImages.length > 1 ? cardImages[1] : cardImages[0];
   const isAboveTheFold = index < 4;
 
   const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
@@ -79,6 +80,20 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
   const mediaAspectClass = isCompact ? 'aspect-[4/3]' : 'aspect-square';
   const mediaFitClass = isCompact ? 'object-contain p-2' : 'object-cover';
 
+  useEffect(() => {
+    if (!isHovered) {
+      setHoverImageIndex(0);
+      return;
+    }
+    if (cardImages.length <= 1) return;
+    const id = window.setInterval(() => {
+      setHoverImageIndex((i) => (i + 1) % cardImages.length);
+    }, 900);
+    return () => window.clearInterval(id);
+  }, [isHovered, cardImages.length, cardImages.join('|')]);
+
+  const displayImage = isHovered && cardImages.length > 1 ? (cardImages[hoverImageIndex] || baseImage) : baseImage;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20, filter: 'blur(4px)' }}
@@ -90,23 +105,13 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
     >
       <Link to={`/product/${product.slug}`} className={`relative ${mediaAspectClass} overflow-hidden bg-pearl`}>
         <img
-          src={toSquareImageUrl(baseImage)}
+          src={toSquareImageUrl(displayImage)}
           alt={product.name}
           loading={isAboveTheFold ? 'eager' : 'lazy'}
           decoding="async"
           fetchPriority={index < 2 ? 'high' : 'auto'}
-          className={`w-full h-full ${mediaFitClass} transition-transform duration-500 ease-out group-hover:scale-[1.06]`}
+          className={`w-full h-full ${mediaFitClass} transition-all duration-300 ease-out group-hover:scale-[1.02]`}
         />
-        {hoverImage && hoverImage !== baseImage && (
-          <img
-            src={toSquareImageUrl(hoverImage)}
-            alt={`${product.name} alternate`}
-            loading="lazy"
-            decoding="async"
-            fetchPriority="low"
-            className={`absolute inset-0 w-full h-full ${mediaFitClass} transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}
-          />
-        )}
 
         {badge && (
           <span className={`absolute top-3 left-3 px-2.5 py-1 text-[0.65rem] font-semibold rounded-full tracking-wide ${badgeStyles[badge]}`}>

@@ -19,10 +19,10 @@ const ProductDetailPage = () => {
   const { getProductBySlug, products, loading } = useProductStore();
   const product = getProductBySlug(slug || '');
   const [quantity, setQuantity] = useState(1);
-  const galleryImages = product?.images && product.images.length
+  const baseGalleryImages = product?.images && product.images.length
     ? product.images
     : (product?.image ? [product.image] : []);
-  const [activeImage, setActiveImage] = useState(galleryImages[0] || product?.image || '');
+  const [activeImage, setActiveImage] = useState(baseGalleryImages[0] || product?.image || '');
   const [zoomOpen, setZoomOpen] = useState(false);
   const thumbsColRef = useRef<HTMLDivElement | null>(null);
   const thumbsRowRef = useRef<HTMLDivElement | null>(null);
@@ -101,21 +101,84 @@ const ProductDetailPage = () => {
   const [selectedPieces, setSelectedPieces] = useState<number>(1);
   const [selectedSize, setSelectedSize] = useState<string>('');
   const customAttributes = useMemo(() => {
-    const raw = Array.isArray(product?.attributes) ? product!.attributes : [];
+    const raw = Array.isArray(product?.attributes) ? product.attributes : [];
     return raw
-      .map((a) => ({
-        name: String((a as any)?.name || ''),
-        slug: String((a as any)?.slug || '').trim(),
-        terms: (Array.isArray((a as any)?.terms) ? (a as any).terms : []).map((t: any) => String(t).trim()).filter(Boolean),
-      }))
+      .map((attr) => {
+        const record = (attr && typeof attr === 'object') ? (attr as Record<string, unknown>) : {};
+        const termsRaw = record.terms;
+        const terms = Array.isArray(termsRaw) ? termsRaw.map((t) => String(t).trim()).filter(Boolean) : [];
+        return {
+          name: String(record.name || ''),
+          slug: String(record.slug || '').trim(),
+          terms,
+        };
+      })
       .filter((a) => a.slug && a.terms.length > 0);
   }, [product?.id]);
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
+
+  const colorVariantImages = useMemo(() => {
+    if (!product) return [];
+    const variants = Array.isArray(product.colorVariants) ? product.colorVariants : [];
+    if (!variants.length) return [];
+
+    const colorAttr = customAttributes.find((a) => a.slug.toLowerCase().includes('color') || a.name.toLowerCase().includes('color'));
+    const colorSlug = colorAttr?.slug || '';
+    if (!colorSlug) return [];
+
+    const selected = String(selectedAttributes[colorSlug] || '').trim();
+    if (!selected) return [];
+
+    const match = variants.find((v) => String(v.color || '').toLowerCase() === selected.toLowerCase());
+    const images = Array.isArray(match?.images) ? match.images : [];
+    return images.map((x) => String(x).trim()).filter(Boolean);
+  }, [customAttributes, product, selectedAttributes]);
+
+  const dedupeImages = (list: string[]) => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of list) {
+      const url = String(raw || '').trim();
+      if (!url) continue;
+      const key = url.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(url);
+    }
+    return out;
+  };
+
+  // Thumbnails should show all images. If a color is selected, show its images first,
+  // but still include the base gallery afterwards (like your "pic 2" layout).
+  const thumbImages = useMemo(() => {
+    const base = Array.isArray(baseGalleryImages) ? baseGalleryImages : [];
+    const color = Array.isArray(colorVariantImages) ? colorVariantImages : [];
+    return dedupeImages(color.length ? [...color, ...base] : base);
+  }, [baseGalleryImages.join('|'), colorVariantImages.join('|'), product?.id]);
+
+  const displayImages = thumbImages;
   const variantPricingList = useMemo(() => {
-    const raw = Array.isArray(product?.variantPricing) ? product!.variantPricing : [];
+    const raw = Array.isArray(product?.variantPricing) ? product.variantPricing : [];
     return raw
-      .map((v) => ({ selections: (v as any)?.selections || {}, price: Number((v as any)?.price) }))
-      .filter((v) => v.selections && typeof v.selections === 'object' && Number.isFinite(v.price) && v.price > 0);
+      .map((v) => {
+        const record = (v && typeof v === 'object') ? (v as Record<string, unknown>) : {};
+        const selectionsRaw = record.selections;
+        const selectionsObj =
+          selectionsRaw && typeof selectionsRaw === 'object' && !Array.isArray(selectionsRaw)
+            ? (selectionsRaw as Record<string, unknown>)
+            : {};
+        const selections: Record<string, string> = {};
+        for (const [k, val] of Object.entries(selectionsObj)) {
+          const value = val === null || val === undefined ? '' : String(val);
+          if (!value.trim()) continue;
+          selections[String(k)] = value;
+        }
+        const price = Number(record.price);
+        return { selections, price };
+      })
+      .filter((v) => v.selections && typeof v.selections === 'object' && Object.keys(v.selections).length > 0 && Number.isFinite(v.price) && v.price > 0)
+      // Prefer the most specific match (e.g., color+size over color-only).
+      .sort((a, b) => Object.keys(b.selections).length - Object.keys(a.selections).length);
   }, [product?.id]);
 
   useEffect(() => {
@@ -129,15 +192,19 @@ const ProductDetailPage = () => {
   }, [product?.id, sizeOptions.join('|'), customAttributes.map((a) => `${a.slug}:${a.terms.join('|')}`).join('||')]);
 
   useEffect(() => {
-    if (galleryImages[0]) {
-      setActiveImage(galleryImages[0]);
-    }
-  }, [product?.id]);
+    // Keep current image if it still exists; otherwise switch to the first thumbnail (color-first).
+    if (!displayImages.length) return;
+    const current = String(activeImage || '').trim();
+    const stillExists = current && displayImages.some((u) => u === current);
+    if (!stillExists) setActiveImage(displayImages[0]);
+  }, [product?.id, displayImages[0]]);
 
   const computedPrice = useMemo(() => {
     if (!product) return 0;
 
     const selection: Record<string, string> = { ...(selectedAttributes || {}) };
+    const colorAttr = customAttributes.find((a) => a.slug.toLowerCase().includes('color') || a.name.toLowerCase().includes('color'));
+    if (colorAttr?.slug) delete selection[colorAttr.slug]; // color never affects price
     if (selectedSize) selection.size = selectedSize;
     if (selectedPieces && selectedPieces > 1) selection.pieces = String(selectedPieces);
 
@@ -162,6 +229,8 @@ const ProductDetailPage = () => {
     if (!product) return 0;
 
     const selection: Record<string, string> = { ...(selectedAttributes || {}) };
+    const colorAttr = customAttributes.find((a) => a.slug.toLowerCase().includes('color') || a.name.toLowerCase().includes('color'));
+    if (colorAttr?.slug) delete selection[colorAttr.slug]; // color never affects price
     if (selectedSize) selection.size = selectedSize;
     if (selectedPieces && selectedPieces > 1) selection.pieces = String(selectedPieces);
 
@@ -246,6 +315,7 @@ const ProductDetailPage = () => {
 
   const variantProduct = useMemo(() => {
     if (!product) return null;
+    const variantImages = displayImages.length ? displayImages : (product.images && product.images.length ? product.images : (product.image ? [product.image] : []));
     const variantIdParts: string[] = [];
     if (selectedSize) variantIdParts.push(`s=${encodeURIComponent(selectedSize)}`);
     if (selectedPieces && selectedPieces > 1) variantIdParts.push(`p=${selectedPieces}`);
@@ -258,12 +328,14 @@ const ProductDetailPage = () => {
       ...product,
       id: `${product.id}${suffix}`,
       price: computedPrice,
+      image: variantImages[0] || product.image,
+      images: variantImages,
       selectedSize: selectedSize || undefined,
       selectedPieces: selectedPieces || undefined,
       selectedAttributes,
       name: `${product.name}${variantSuffix}`,
     };
-  }, [computedPrice, customAttributes, product, selectedAttributes, selectedPieces, selectedSize, variantSuffix]);
+  }, [computedPrice, customAttributes, displayImages, product, selectedAttributes, selectedPieces, selectedSize, variantSuffix]);
 
   const handleAddToCart = () => {
     if (!variantProduct) return;
@@ -367,10 +439,10 @@ const ProductDetailPage = () => {
           {/* Image */}
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
             <div className="flex flex-col sm:flex-row gap-3">
-              {galleryImages.length > 1 && (
+              {thumbImages.length > 1 && (
                 <div className="sm:hidden">
                   <div ref={thumbsRowRef} className="flex gap-2 overflow-x-auto scrollbar-hide py-1">
-                    {galleryImages.map((img, idx) => (
+                    {thumbImages.map((img, idx) => (
                       <button
                         key={`${img}-${idx}`}
                         type="button"
@@ -387,10 +459,10 @@ const ProductDetailPage = () => {
                 </div>
               )}
 
-              {galleryImages.length > 1 && (
+              {thumbImages.length > 1 && (
                 <div className="hidden sm:flex flex-col items-center gap-2 w-20">
                   <div ref={thumbsColRef} className="w-full flex flex-col gap-2 overflow-y-auto scrollbar-hide max-h-[420px] pr-1">
-                    {galleryImages.map((img, idx) => (
+                    {thumbImages.map((img, idx) => (
                       <button
                         key={`${img}-${idx}`}
                         type="button"

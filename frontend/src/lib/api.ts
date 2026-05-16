@@ -102,6 +102,9 @@ export const createPayuOrder = (payload: {
 export const fetchPaymentStatus = (token: string) =>
   getJson(`/payments/status/${token}`);
 
+export const reconcilePayments = () =>
+  getJson('/payments/reconcile', { method: 'POST' });
+
 export const getApiBase = () => API_BASE;
 export const setAuthToken = (token: string) => {
   if (typeof window === 'undefined') return;
@@ -198,6 +201,41 @@ export const uploadImage = async (file: File) => {
     throw new Error(message);
   }
   return data as { url: string };
+};
+
+export const uploadImages = async (files: File[]) => {
+  const token = getAuthToken();
+  const list = Array.isArray(files) ? files.filter(Boolean) : [];
+  if (list.length === 0) return { urls: [] as string[] };
+
+  // Prefer single-request multi upload for speed.
+  const form = new FormData();
+  for (const f of list) form.append('images', f);
+
+  try {
+    const res = await fetch(`${API_BASE}/upload/multiple`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = typeof data?.message === 'string' ? data.message : 'Upload failed';
+      throw new Error(message);
+    }
+    const urls = Array.isArray(data?.urls) ? data.urls.map((u: any) => String(u || '').trim()).filter(Boolean) : [];
+    return { urls };
+  } catch {
+    // Fallback: sequential upload (older backend).
+    const urls: string[] = [];
+    for (const f of list) {
+      const { url } = await uploadImage(f);
+      urls.push(url);
+    }
+    return { urls };
+  }
 };
 
 // Hero slides
