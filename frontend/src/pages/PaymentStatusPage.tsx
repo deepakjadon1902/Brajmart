@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import { fetchPaymentStatus } from '@/lib/api';
+import { fetchPaymentStatus, trackOrder } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
@@ -12,6 +12,8 @@ const PaymentStatusPage = () => {
   const [orderId, setOrderId] = useState<number | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
   const [method, setMethod] = useState<string | null>(null);
+  const [orderItems, setOrderItems] = useState<any[] | null>(null);
+  const purchasePushedRef = useRef<string>('');
 
   useEffect(() => {
     let active = true;
@@ -49,6 +51,56 @@ const PaymentStatusPage = () => {
     }, 5000);
     return () => clearInterval(interval);
   }, [token, status]);
+
+  useEffect(() => {
+    let active = true;
+    const loadOrder = async () => {
+      if (!orderId) return;
+      try {
+        const order: any = await trackOrder(orderId);
+        if (!active) return;
+        setOrderItems(Array.isArray(order?.items) ? order.items : []);
+      } catch {
+        if (active) setOrderItems([]);
+      }
+    };
+    if (status === 'paid' && orderId) loadOrder();
+    return () => { active = false; };
+  }, [status, orderId]);
+
+  useEffect(() => {
+    if (!token || status !== 'paid' || amount === null) return;
+    if (purchasePushedRef.current === token) return;
+
+    const items = (Array.isArray(orderItems) ? orderItems : []).map((i: any) => ({
+      item_id: String(i.productId || i.id || i._id || i.slug || i.name || ''),
+      item_name: String(i.name || ''),
+      price: Number(i.price || 0),
+      quantity: Number(i.quantity || 1),
+    }));
+
+    // Push GA4 ecommerce purchase event to GTM dataLayer.
+    // Use payment token as the stable transaction identifier.
+    const dl = (window as any).dataLayer;
+    if (Array.isArray(dl)) {
+      // GA4 recommended: clear previous ecommerce object to avoid bleed between events.
+      dl.push({ ecommerce: null });
+      dl.push({
+        event: 'purchase',
+        ecommerce: {
+          transaction_id: String(orderId || token),
+          transaction_token: token,
+          affiliation: 'BrajMart',
+          value: Number(amount),
+          currency: 'INR',
+          payment_type: method || undefined,
+          order_id: orderId || undefined,
+          items,
+        },
+      });
+      purchasePushedRef.current = token;
+    }
+  }, [token, status, amount, method, orderId, orderItems]);
 
   return (
     <div className="min-h-screen bg-background">
