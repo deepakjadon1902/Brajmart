@@ -58,6 +58,10 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!product.inStock) {
+      toast.error('This product is out of stock');
+      return;
+    }
     addToCart(product);
     toast.success(`${product.name} added to cart!`);
   };
@@ -72,6 +76,10 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
   const handleBuyNow = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!product.inStock) {
+      toast.error('This product is out of stock');
+      return;
+    }
     addToCart(product);
     navigate('/checkout');
   };
@@ -112,6 +120,12 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
           fetchPriority={index < 2 ? 'high' : 'auto'}
           className={`w-full h-full ${mediaFitClass} transition-all duration-300 ease-out group-hover:scale-[1.02]`}
         />
+
+        {!product.inStock && (
+          <span className="absolute bottom-3 right-3 px-2.5 py-1 text-[0.65rem] font-extrabold rounded-full bg-destructive text-primary-foreground tracking-wide">
+            OUT OF STOCK
+          </span>
+        )}
 
         {badge && (
           <span className={`absolute top-3 left-3 px-2.5 py-1 text-[0.65rem] font-semibold rounded-full tracking-wide ${badgeStyles[badge]}`}>
@@ -175,10 +189,18 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
 
       <div className={`px-2.5 sm:px-3 ${isCompact ? 'pb-2.5' : 'pb-3'}`}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <button onClick={handleAddToCart} className={`w-full ${isCompact ? 'py-1.5' : 'py-2'} rounded-xl bg-gold-gradient text-maroon-dark text-xs sm:text-sm font-bold shimmer active:scale-[0.97] transition-transform`}>
+          <button
+            onClick={handleAddToCart}
+            disabled={!product.inStock}
+            className={`w-full ${isCompact ? 'py-1.5' : 'py-2'} rounded-xl text-xs sm:text-sm font-bold transition ${product.inStock ? 'bg-gold-gradient text-maroon-dark shimmer active:scale-[0.97] transition-transform' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
+          >
             <ShoppingCart size={14} className="inline mr-1.5 -mt-0.5" /> Add to Cart
           </button>
-          <button onClick={handleBuyNow} className={`w-full ${isCompact ? 'py-1.5' : 'py-2'} rounded-xl border border-gold/40 text-gold text-xs sm:text-sm font-bold hover:bg-gold/10 transition-colors`}>
+          <button
+            onClick={handleBuyNow}
+            disabled={!product.inStock}
+            className={`w-full ${isCompact ? 'py-1.5' : 'py-2'} rounded-xl text-xs sm:text-sm font-bold transition ${product.inStock ? 'border border-gold/40 text-gold hover:bg-gold/10' : 'border border-border text-muted-foreground cursor-not-allowed'}`}
+          >
             Buy Now
           </button>
         </div>

@@ -339,12 +339,20 @@ const ProductDetailPage = () => {
 
   const handleAddToCart = () => {
     if (!variantProduct) return;
+    if (!product?.inStock) {
+      toast.error('This product is out of stock');
+      return;
+    }
     for (let i = 0; i < quantity; i++) addToCart(variantProduct);
     toast.success(`${variantProduct.name} added to cart!`);
   };
 
   const handleBuyNow = () => {
     if (!variantProduct) return;
+    if (!product?.inStock) {
+      toast.error('This product is out of stock');
+      return;
+    }
     for (let i = 0; i < quantity; i++) addToCart(variantProduct);
     navigate('/checkout');
   };
@@ -524,13 +532,18 @@ const ProductDetailPage = () => {
             </div>
 
             {/* Price */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="text-3xl font-bold text-saffron">{formatPrice(computedPrice)}</span>
               {product.originalPrice && (
                 <>
                   <span className="text-lg text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>
                   <span className="px-2 py-0.5 bg-tulsi/10 text-tulsi text-sm font-semibold rounded">Save {formatPrice(product.originalPrice - computedPrice)}</span>
                 </>
+              )}
+              {!product.inStock && (
+                <span className="px-3 py-1 rounded-full bg-destructive text-primary-foreground text-sm font-extrabold tracking-wide">
+                  OUT OF STOCK
+                </span>
               )}
             </div>
 
@@ -680,20 +693,37 @@ const ProductDetailPage = () => {
             <div className="flex items-center gap-4">
               <span className="text-sm font-medium">Quantity:</span>
               <div className="flex items-center border border-border rounded-xl">
-                <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="p-2 hover:bg-muted transition-colors rounded-l-xl"><Minus size={16} /></button>
+                <button
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={!product.inStock}
+                  className={`p-2 rounded-l-xl ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                >
+                  <Minus size={16} />
+                </button>
                 <span className="px-4 font-semibold">{quantity}</span>
-                <button onClick={() => setQuantity(quantity + 1)} className="p-2 hover:bg-muted transition-colors rounded-r-xl"><Plus size={16} /></button>
+                <button
+                  onClick={() => setQuantity(quantity + 1)}
+                  disabled={!product.inStock}
+                  className={`p-2 rounded-r-xl ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                >
+                  <Plus size={16} />
+                </button>
               </div>
             </div>
 
             {/* Action buttons */}
             <div className="flex gap-3">
-              <button onClick={handleAddToCart} className="flex-1 py-3.5 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-base shimmer active:scale-[0.97] transition-transform">
+              <button
+                onClick={handleAddToCart}
+                disabled={!product.inStock}
+                className={`flex-1 py-3.5 rounded-xl font-bold text-base transition ${product.inStock ? 'bg-gold-gradient text-maroon-dark shimmer active:scale-[0.97] transition-transform' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
+              >
                 <ShoppingCart size={18} className="inline mr-2 -mt-0.5" />Add to Cart
               </button>
               <button
                 onClick={handleBuyNow}
-                className="flex-1 py-3.5 rounded-xl bg-saffron text-primary-foreground font-bold text-base hover:brightness-95 active:scale-[0.97] transition-transform"
+                disabled={!product.inStock}
+                className={`flex-1 py-3.5 rounded-xl font-bold text-base transition ${product.inStock ? 'bg-saffron text-primary-foreground hover:brightness-95 active:scale-[0.97] transition-transform' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
               >
                 Buy Now
               </button>

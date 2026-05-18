@@ -4,6 +4,7 @@ import { sendOrderConfirmation, sendShippingUpdate } from '../lib/email';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
+import { computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
 
 const router = Router();
 
@@ -88,6 +89,22 @@ router.post('/', auth, async (req: AuthRequest, res) => {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const data = req.body || {};
+
+    const priced = await priceAndValidateOrderItems(data.items || []);
+    if (!priced.ok) return res.status(400).json({ message: priced.message });
+
+    const settings = await getCheckoutSettings();
+    const totals = computeTotals(priced.itemsSubtotal, settings);
+    if (settings.minOrderAmount && totals.total < settings.minOrderAmount) {
+      return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
+    }
+    if (settings.maxOrderQuantity) {
+      const totalQty = priced.items.reduce((acc, i) => acc + (Number(i.quantity) || 0), 0);
+      if (totalQty > settings.maxOrderQuantity) {
+        return res.status(400).json({ message: `Maximum order quantity is ${settings.maxOrderQuantity}` });
+      }
+    }
+
     const status = data.status || 'confirmed';
     const statusHistory = Array.isArray(data.statusHistory) && data.statusHistory.length
       ? data.statusHistory
@@ -97,8 +114,8 @@ router.post('/', auth, async (req: AuthRequest, res) => {
       'INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         data.userId || req.user?.id || null,
-        JSON.stringify(data.items || []),
-        data.total,
+        JSON.stringify(priced.items),
+        totals.total,
         status,
         data.customerName || null,
         data.customerEmail || null,

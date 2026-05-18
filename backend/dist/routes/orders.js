@@ -6,6 +6,7 @@ const email_1 = require("../lib/email");
 const eta_1 = require("../lib/eta");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
+const orderPricing_1 = require("../lib/orderPricing");
 const router = (0, express_1.Router)();
 const mapOrderRow = (row) => ({
     _id: String(row.id),
@@ -89,14 +90,28 @@ router.post('/', auth_1.auth, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         const data = req.body || {};
+        const priced = await (0, orderPricing_1.priceAndValidateOrderItems)(data.items || []);
+        if (!priced.ok)
+            return res.status(400).json({ message: priced.message });
+        const settings = await (0, orderPricing_1.getCheckoutSettings)();
+        const totals = (0, orderPricing_1.computeTotals)(priced.itemsSubtotal, settings);
+        if (settings.minOrderAmount && totals.total < settings.minOrderAmount) {
+            return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
+        }
+        if (settings.maxOrderQuantity) {
+            const totalQty = priced.items.reduce((acc, i) => acc + (Number(i.quantity) || 0), 0);
+            if (totalQty > settings.maxOrderQuantity) {
+                return res.status(400).json({ message: `Maximum order quantity is ${settings.maxOrderQuantity}` });
+            }
+        }
         const status = data.status || 'confirmed';
         const statusHistory = Array.isArray(data.statusHistory) && data.statusHistory.length
             ? data.statusHistory
             : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
         const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.userId || req.user?.id || null,
-            JSON.stringify(data.items || []),
-            data.total,
+            JSON.stringify(priced.items),
+            totals.total,
             status,
             data.customerName || null,
             data.customerEmail || null,

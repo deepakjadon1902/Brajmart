@@ -83,6 +83,11 @@ const AdminProducts = () => {
         toast.error('Description is required');
         return;
       }
+      const price = Number((product as any).price);
+      if (!Number.isFinite(price) || price <= 0) {
+        toast.error('Price must be greater than 0');
+        return;
+      }
 
       const normalizedColorVariants = Array.isArray((product as any).colorVariants) ? (product as any).colorVariants : [];
       const normalizedColorNames = normalizedColorVariants
@@ -122,6 +127,14 @@ const AdminProducts = () => {
 
       const normalized = {
         ...product,
+        price,
+        originalPrice: (() => {
+          const mrp = (product as any).originalPrice;
+          if (mrp === undefined || mrp === null || mrp === '') return undefined;
+          const n = Number(mrp);
+          if (!Number.isFinite(n) || n <= 0) return undefined;
+          return n;
+        })(),
         tags: Array.isArray(product.tags) ? product.tags : (product.badge ? [product.badge] : []),
         // Always send these keys so backend always persists them (never reverts to NULL).
         attributes: normalizedAttributes,
@@ -134,22 +147,23 @@ const AdminProducts = () => {
       if (isCreating) {
         const created: any = await createProduct(normalized as any);
         addProduct({ ...created, id: created.id || created._id, tags: normalized.tags });
-        toast.success('Product created');
       } else {
         const updated: any = await updateProductApi(product.id, normalized as any);
         updateProduct(product.id, { ...updated, tags: normalized.tags });
-        toast.success('Product updated');
       }
 
       // Force re-fetch from DB so Admin + Store always reflect what was actually saved.
       await loadFromApi({ force: true });
 
-      // Notify other open tabs (main store) to refresh immediately.
+      // Notify other open tabs (main store) + force next load to refresh.
+      // Important: write this AFTER the DB refresh so `syncAt > lastFetchedAt` is guaranteed.
       try {
         localStorage.setItem(PRODUCT_SYNC_KEY, String(Date.now()));
       } catch {
         // ignore storage permission errors
       }
+
+      toast.success(isCreating ? 'Product created' : 'Product updated');
       setEditProduct(null);
       setIsCreating(false);
     } catch (err: any) {
@@ -1112,7 +1126,18 @@ const Field = ({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+        onWheelCapture={(e) => {
+          // Prevent mouse-wheel from changing number inputs (causes accidental price changes)
+          if (type !== 'number') return;
+          (e.target as HTMLInputElement).blur();
+        }}
+        className={[
+          'w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50',
+          // Hide number steppers (up/down) for exact manual entry.
+          type === 'number'
+            ? '[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+            : '',
+        ].join(' ')}
       />
     )}
   </div>

@@ -14,6 +14,10 @@ const WishlistPage = () => {
   const addToCart = useCartStore(s => s.addItem);
 
   const handleAddToCart = (product: typeof items[0]) => {
+    if (!product.inStock) {
+      toast.error('This product is out of stock');
+      return;
+    }
     addToCart(product);
     toast.success(`${product.name} added to cart!`);
   };
@@ -60,6 +64,11 @@ const WishlistPage = () => {
                 <button onClick={() => removeItem(product.id)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-card/90 shadow flex items-center justify-center text-destructive hover:bg-destructive hover:text-primary-foreground transition-colors">
                   <Trash2 size={14} />
                 </button>
+                {!product.inStock && (
+                  <span className="absolute bottom-3 right-3 px-2.5 py-1 text-[0.65rem] font-extrabold rounded-full bg-destructive text-primary-foreground tracking-wide">
+                    OUT OF STOCK
+                  </span>
+                )}
               </div>
               <div className="p-4">
                 <Link to={`/product/${product.slug}`}>
@@ -71,7 +80,8 @@ const WishlistPage = () => {
                 </div>
                 <button
                   onClick={() => handleAddToCart(product)}
-                  className="w-full mt-3 py-2 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer active:scale-[0.97] transition-transform"
+                  disabled={!product.inStock}
+                  className={`w-full mt-3 py-2 rounded-xl text-sm font-bold transition ${product.inStock ? 'bg-gold-gradient text-maroon-dark shimmer active:scale-[0.97] transition-transform' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
                 >
                   <ShoppingCart size={14} className="inline mr-1 -mt-0.5" /> Add to Cart
                 </button>

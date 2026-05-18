@@ -5,6 +5,7 @@ import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { sendOrderConfirmation, sendPaymentFailed, sendPaymentReceipt, sendAdminPaymentNotice } from '../lib/email';
 import { parseJson } from '../lib/dbHelpers';
+import { computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
 
 type PayuDraft = {
   txnid: string;
@@ -172,12 +173,33 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
     if (!key || !salt) return res.status(500).json({ message: 'PayU credentials are not configured' });
 
     const { amount, method, order, customer } = req.body || {};
-    if (!amount || amount <= 0) return res.status(400).json({ message: 'Invalid amount' });
     if (!order || !customer?.email || !customer?.name) return res.status(400).json({ message: 'Missing order details' });
 
+    const priced = await priceAndValidateOrderItems(order.items || []);
+    if (!priced.ok) return res.status(400).json({ message: priced.message });
+
+    const settings = await getCheckoutSettings();
+    const totals = computeTotals(priced.itemsSubtotal, settings);
+    if (settings.minOrderAmount && totals.total < settings.minOrderAmount) {
+      return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
+    }
+    if (settings.maxOrderQuantity) {
+      const totalQty = priced.items.reduce((acc, i) => acc + (Number(i.quantity) || 0), 0);
+      if (totalQty > settings.maxOrderQuantity) {
+        return res.status(400).json({ message: `Maximum order quantity is ${settings.maxOrderQuantity}` });
+      }
+    }
+
+    if (amount !== undefined) {
+      const clientAmount = Number(amount);
+      if (Number.isFinite(clientAmount) && Math.abs(clientAmount - totals.total) > 0.01) {
+        return res.status(400).json({ message: 'Cart total changed. Please refresh and try again.' });
+      }
+    }
+
     const txnid = `PAYU-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const productinfo = `BrajMart Order (${Array.isArray(order.items) ? order.items.length : 0} items)`;
-    const formattedAmount = Number(amount).toFixed(2);
+    const productinfo = `BrajMart Order (${priced.items.length} items)`;
+    const formattedAmount = Number(totals.total).toFixed(2);
 
     const { max } = await getEtaConfig();
     const estimatedDelivery = getEstimatedDeliveryDate(max);
@@ -186,6 +208,8 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
     const orderRow = await insertOrder({
       ...order,
       userId: numericUserId ?? null,
+      items: priced.items,
+      total: totals.total,
       status: 'processing',
       statusHistory: [{ status: 'processing', date: new Date().toISOString(), note: 'Payment initiated via PayU' }],
     }, estimatedDelivery);
@@ -195,21 +219,21 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
 
     await dbExecute(
       'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [orderId, customer.name, customer.email, methodLabel, Number(amount), 'pending', txnid]
+      [orderId, customer.name, customer.email, methodLabel, Number(totals.total), 'pending', txnid]
     );
 
     await dbExecute(
       'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
-      [txnid, 'pending', orderId, Number(amount), methodLabel, null]
+      [txnid, 'pending', orderId, Number(totals.total), methodLabel, null]
     );
 
     createDraft({
       txnid,
       createdAt: new Date().toISOString(),
-      amount: Number(amount),
+      amount: Number(totals.total),
       method: method === 'card' ? 'card' : 'upi',
       customer: { name: customer.name, email: customer.email, phone: customer.phone },
-      order,
+      order: { ...order, items: priced.items, total: totals.total },
       orderId,
     });
 

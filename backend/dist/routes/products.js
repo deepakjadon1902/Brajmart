@@ -5,6 +5,29 @@ const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const router = (0, express_1.Router)();
+const asFiniteNumber = (value) => {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? n : null;
+};
+const normalizeMoneyOrNull = (value) => {
+    if (value === null || value === undefined)
+        return null;
+    if (value === '')
+        return null;
+    const n = asFiniteNumber(value);
+    if (n === null)
+        return null;
+    // Treat <= 0 as "unset" for optional fields like MRP.
+    if (n <= 0)
+        return null;
+    return n;
+};
+const normalizeRequiredMoney = (value) => {
+    const n = asFiniteNumber(value);
+    if (n === null || n <= 0)
+        return null;
+    return n;
+};
 const isColorSelectionKey = (key) => String(key || '').toLowerCase().includes('color');
 const sanitizeColorVariants = (input) => {
     const list = Array.isArray(input) ? input : [];
@@ -42,9 +65,8 @@ const sanitizeVariantPricing = (input) => {
     })
         .filter(Boolean);
 };
-const LIST_CACHE_TTL_MS = 60000;
-const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
-let listCache = null;
+// Pricing + stock must reflect immediately (no client/proxy caching).
+const LIST_CACHE_CONTROL = 'no-store';
 const getMissingProductColumns = async (cols) => {
     const rows = await (0, db_1.dbQuery)(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND COLUMN_NAME IN (${cols.map(() => '?').join(',')})`, cols);
     const existing = new Set((rows || []).map((r) => String(r.COLUMN_NAME || r.column_name || '').toLowerCase()).filter(Boolean));
@@ -185,13 +207,8 @@ router.get('/', async (_req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         res.setHeader('Cache-Control', LIST_CACHE_CONTROL);
-        if (listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
-            return res.json(listCache.data);
-        }
         const rows = await (0, db_1.dbQuery)('SELECT * FROM products ORDER BY created_at DESC');
-        const data = rows.map(mapProductRow);
-        listCache = { at: Date.now(), data };
-        res.json(data);
+        res.json(rows.map(mapProductRow));
     }
     catch (err) {
         res.status(500).json({ message: err.message });
@@ -223,6 +240,7 @@ router.get('/:slug', async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        res.setHeader('Cache-Control', 'no-store');
         const rows = await (0, db_1.dbQuery)('SELECT * FROM products WHERE slug = ? LIMIT 1', [req.params.slug]);
         const row = rows[0];
         if (!row)
@@ -238,6 +256,11 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         const data = req.body || {};
+        const normalizedPrice = normalizeRequiredMoney(data.price);
+        if (normalizedPrice === null)
+            return res.status(400).json({ message: 'Price must be greater than 0' });
+        data.price = normalizedPrice;
+        data.originalPrice = normalizeMoneyOrNull(data.originalPrice);
         if (process.env.NODE_ENV !== 'production') {
             console.log('POST /products payload keys:', Object.keys(data));
             console.log('POST /products attributes count:', Array.isArray(data.attributes) ? data.attributes.length : 'n/a');
@@ -331,7 +354,6 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             }
         }
         const rows = await (0, db_1.dbQuery)('SELECT * FROM products WHERE id = ? LIMIT 1', [result.insertId]);
-        listCache = null;
         res.status(201).json(mapProductRow(rows[0]));
     }
     catch (err) {
@@ -343,6 +365,15 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         const body = req.body || {};
+        if (body.price !== undefined) {
+            const normalizedPrice = normalizeRequiredMoney(body.price);
+            if (normalizedPrice === null)
+                return res.status(400).json({ message: 'Price must be greater than 0' });
+            body.price = normalizedPrice;
+        }
+        if (body.originalPrice !== undefined) {
+            body.originalPrice = normalizeMoneyOrNull(body.originalPrice);
+        }
         if (process.env.NODE_ENV !== 'production') {
             console.log('PUT /products payload keys:', Object.keys(body));
             console.log('PUT /products attributes count:', Array.isArray(body.attributes) ? body.attributes.length : 'n/a');
@@ -422,7 +453,6 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         const rows = await (0, db_1.dbQuery)('SELECT * FROM products WHERE id = ? LIMIT 1', [req.params.id]);
         if (!rows[0])
             return res.status(404).json({ message: 'Product not found' });
-        listCache = null;
         // Diagnostic: if client attempted to save attributes but DB still returns NULL, surface a clear error.
         // This prevents "success" toasts when the DB schema/permissions/connection is wrong.
         const saved = rows[0];
@@ -447,7 +477,6 @@ router.delete('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         await (0, db_1.dbExecute)('DELETE FROM products WHERE id = ?', [req.params.id]);
-        listCache = null;
         res.json({ message: 'Product deleted' });
     }
     catch (err) {

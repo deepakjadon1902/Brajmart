@@ -50,7 +50,22 @@ export const useProductStore = create<ProductStore>()(
         const state = get();
         const hasData = state.products.length > 0 || state.categories.length > 0;
         const isFresh = state.lastFetchedAt > 0 && (Date.now() - state.lastFetchedAt) < STALE_AFTER_MS;
-        if (!force && hasData && isFresh) return;
+
+        // If admin updated products in another tab/session, refresh even if our cache is "fresh".
+        let shouldSync = false;
+        if (typeof window !== 'undefined') {
+          try {
+            const syncAt = Number(localStorage.getItem(PRODUCT_SYNC_KEY) || '0');
+            shouldSync = Number.isFinite(syncAt) && syncAt > state.lastFetchedAt;
+          } catch {
+            // ignore
+          }
+        }
+
+        // On hard refresh / new tab, always fetch once to avoid showing stale persisted stock/price.
+        const isFirstLoad = state.lastFetchedAt === 0;
+
+        if (!force && !shouldSync && !isFirstLoad && hasData && isFresh) return;
 
         if (!get().loading) set({ loading: true, error: null });
         try {
