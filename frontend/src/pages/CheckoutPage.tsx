@@ -202,7 +202,7 @@ const CheckoutPage = () => {
   const addressFields = [
     { key: 'fullName', label: 'Full Name', type: 'text', full: false },
     { key: 'mobile', label: 'Mobile Number', type: 'tel', full: false },
-    { key: 'street', label: 'Street Address', type: 'text', full: true },
+    { key: 'street', label: 'Full Address', type: 'text', full: true, multiline: true },
     { key: 'city', label: 'City', type: 'text', full: false },
     { key: 'state', label: 'State', type: 'text', full: false },
     { key: 'pincode', label: 'Pincode', type: 'text', full: false },
@@ -238,12 +238,22 @@ const CheckoutPage = () => {
         {addressFields.map((f) => (
           <div key={f.key} className={f.full ? 'md:col-span-2' : ''}>
             <label className="block text-sm font-medium mb-1">{f.label}</label>
-            <input
-              type={f.type}
-              value={addr[f.key as keyof Address]}
-              onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
-              className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors"
-            />
+            {f.multiline ? (
+              <textarea
+                rows={3}
+                value={addr[f.key as keyof Address]}
+                onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
+                placeholder="House/Flat no, Building, Area, Landmark"
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors resize-none"
+              />
+            ) : (
+              <input
+                type={f.type}
+                value={addr[f.key as keyof Address]}
+                onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors"
+              />
+            )}
           </div>
         ))}
       </div>

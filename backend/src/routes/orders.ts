@@ -5,6 +5,7 @@ import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
 import { computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
+import { upsertUserDefaultAddress } from '../lib/userAddress';
 
 const router = Router();
 
@@ -130,6 +131,13 @@ router.post('/', auth, async (req: AuthRequest, res) => {
     );
 
     const orderId = result.insertId;
+
+    // Persist latest checkout address as the user's default address (best-effort).
+    const numericUserId = Number(req.user?.id);
+    if (Number.isFinite(numericUserId)) {
+      const addrToSave = data.shippingAddress || data.billingAddress;
+      upsertUserDefaultAddress(numericUserId, addrToSave).catch(() => {});
+    }
 
     const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
     const order = mapOrderRow(rows[0]);

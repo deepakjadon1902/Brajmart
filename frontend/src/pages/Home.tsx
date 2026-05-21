@@ -8,7 +8,7 @@ import ExclusiveShop from '@/components/sections/ExclusiveShop';
 import BrajYatra from '@/components/sections/BrajYatra';
 import Testimonials from '@/components/sections/Testimonials';
 import Footer from '@/components/layout/Footer';
-import { useProductStore } from '@/store/productStore';
+import { useProductStore, categoryToSlug } from '@/store/productStore';
 
 const ICONS = {
   ornament: 'https://unpkg.com/lucide-static@latest/icons/flower-2.svg',
@@ -21,12 +21,17 @@ const ICONS = {
 };
 
 const Home = () => {
-  const { products, getLatestProducts, getBestSellers, getNewArrivals, getByTag } = useProductStore();
+  const { products, categories, getLatestProducts, getBestSellers, getNewArrivals, getByTag, getProductsByCategory } = useProductStore();
   const latestProducts = getLatestProducts();
   const newArrivals = getNewArrivals();
   const bestSellingProducts = getBestSellers();
   const devotionalAccessories = getByTag('accessories');
   const sacredPrasadam = getByTag('prasadam');
+  // Show every category as a home-page section (even if a category currently has 0 products).
+  // This matches the "all categories on home" requirement and avoids hiding categories due to naming mismatches.
+  const categorySections = categories || [];
+  const isBrajmartSpecial = (name: string) => (name || '').trim().toLowerCase() === 'brajmart special';
+  const brajmartSpecialCategory = categorySections.find((c) => isBrajmartSpecial(c.name));
 
   return (
     <div className="min-h-screen bg-background">
@@ -69,6 +74,21 @@ const Home = () => {
         ornamentIconUrl={ICONS.ornament}
       />
 
+      {categorySections.filter((c) => !isBrajmartSpecial(c.name)).map((cat, idx) => (
+        <CollectionSection
+          key={cat.id}
+          tag="CATEGORY"
+          title={cat.name}
+          subtitle={`Explore ${cat.name} collection`}
+          products={getProductsByCategory(cat.name).slice(0, 10)}
+          bgClass={idx % 2 === 0 ? 'bg-pearl' : ''}
+          viewAllLink={`/category/${categoryToSlug(cat.name)}`}
+          titleIconUrl={undefined}
+          viewAllIconUrl={ICONS.viewAll}
+          ornamentIconUrl={ICONS.ornament}
+        />
+      ))}
+
       <ExclusiveBooks />
 
       <CollectionSection
@@ -95,6 +115,20 @@ const Home = () => {
         viewAllIconUrl={ICONS.viewAll}
         ornamentIconUrl={ICONS.ornament}
       />
+
+      {brajmartSpecialCategory && (
+        <CollectionSection
+          tag="CATEGORY"
+          title={brajmartSpecialCategory.name}
+          subtitle={`Explore ${brajmartSpecialCategory.name} collection`}
+          products={getProductsByCategory(brajmartSpecialCategory.name).slice(0, 10)}
+          bgClass="bg-pearl"
+          viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
+          titleIconUrl={undefined}
+          viewAllIconUrl={ICONS.viewAll}
+          ornamentIconUrl={ICONS.ornament}
+        />
+      )}
 
       <BrajYatra />
       <Testimonials />

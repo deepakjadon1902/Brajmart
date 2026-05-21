@@ -6,6 +6,7 @@ import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { sendOrderConfirmation, sendPaymentFailed, sendPaymentReceipt, sendAdminPaymentNotice } from '../lib/email';
 import { parseJson } from '../lib/dbHelpers';
 import { computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
+import { upsertUserDefaultAddress } from '../lib/userAddress';
 
 type PayuDraft = {
   txnid: string;
@@ -216,6 +217,12 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
 
     const orderId = orderRow.id;
     const methodLabel = method === 'card' ? 'PayU Card' : 'PayU UPI';
+
+    // Persist latest checkout address as the user's default address (best-effort).
+    if (numericUserId) {
+      const addrToSave = order?.shippingAddress || order?.billingAddress;
+      upsertUserDefaultAddress(numericUserId, addrToSave).catch(() => {});
+    }
 
     await dbExecute(
       'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',

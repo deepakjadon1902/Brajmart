@@ -7,6 +7,7 @@ const eta_1 = require("../lib/eta");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const orderPricing_1 = require("../lib/orderPricing");
+const userAddress_1 = require("../lib/userAddress");
 const router = (0, express_1.Router)();
 const mapOrderRow = (row) => ({
     _id: String(row.id),
@@ -124,6 +125,12 @@ router.post('/', auth_1.auth, async (req, res) => {
             JSON.stringify(statusHistory),
         ]);
         const orderId = result.insertId;
+        // Persist latest checkout address as the user's default address (best-effort).
+        const numericUserId = Number(req.user?.id);
+        if (Number.isFinite(numericUserId)) {
+            const addrToSave = data.shippingAddress || data.billingAddress;
+            (0, userAddress_1.upsertUserDefaultAddress)(numericUserId, addrToSave).catch(() => { });
+        }
         const rows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
         const order = mapOrderRow(rows[0]);
         if (order.customerEmail) {

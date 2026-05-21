@@ -11,6 +11,7 @@ const eta_1 = require("../lib/eta");
 const email_1 = require("../lib/email");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const orderPricing_1 = require("../lib/orderPricing");
+const userAddress_1 = require("../lib/userAddress");
 const payuDrafts = new Map();
 const createDraft = (draft) => {
     payuDrafts.set(draft.txnid, draft);
@@ -151,6 +152,11 @@ router.post('/create-order', auth_1.auth, async (req, res) => {
         }, estimatedDelivery);
         const orderId = orderRow.id;
         const methodLabel = method === 'card' ? 'PayU Card' : 'PayU UPI';
+        // Persist latest checkout address as the user's default address (best-effort).
+        if (numericUserId) {
+            const addrToSave = order?.shippingAddress || order?.billingAddress;
+            (0, userAddress_1.upsertUserDefaultAddress)(numericUserId, addrToSave).catch(() => { });
+        }
         await (0, db_1.dbExecute)('INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [orderId, customer.name, customer.email, methodLabel, Number(totals.total), 'pending', txnid]);
         await (0, db_1.dbExecute)('INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()', [txnid, 'pending', orderId, Number(totals.total), methodLabel, null]);
         createDraft({
