@@ -140,6 +140,7 @@ const CheckoutPage = () => {
         const orderPayload = {
           userId: user?.id || undefined,
           items: items.map((i) => ({
+            productId: i.product.id,
             name: i.product.name,
             image: i.product.image,
             quantity: i.quantity,
