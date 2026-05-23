@@ -75,6 +75,18 @@ router.get('/', async (_req, res) => {
     const rows = await dbQuery<any>('SELECT * FROM categories ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
     const subRows = await dbQuery<any>('SELECT * FROM subcategories ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
 
+    // If "Deity Shringar Collection" is modeled as a subcategory under "Idols & Shringar",
+    // hide the legacy category row from the public list (storefront navbar).
+    const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+    const hasDeityAsSub = (() => {
+      const idolRow = rows.find((r) => norm(r.name) === norm('Idols & Shringar'));
+      if (!idolRow) return false;
+      return subRows.some((s) => Number(s.category_id) === Number(idolRow.id) && norm(s.name) === norm('Deity Shringar Collection'));
+    })();
+    const filteredRows = hasDeityAsSub
+      ? rows.filter((r) => norm(r.name) !== norm('Deity Shringar Collection'))
+      : rows;
+
     const subsByCat = new Map<string, any[]>();
     for (const r of subRows) {
       const key = String(r.category_id);
@@ -83,7 +95,7 @@ router.get('/', async (_req, res) => {
       subsByCat.set(key, list);
     }
 
-    const data = rows.map((r) => {
+    const data = filteredRows.map((r) => {
       const cat = mapCategoryRow(r);
       return {
         ...cat,

@@ -105,7 +105,7 @@ const ensureProductCategorySchema = async () => {
     // Backfill category_id for existing products that only have legacy `category` name.
     try {
         await (0, db_1.dbExecute)(`UPDATE products p
-       JOIN categories c ON p.category = c.name
+       JOIN categories c ON LOWER(TRIM(p.category)) = LOWER(TRIM(c.name))
        SET p.category_id = c.id
        WHERE (p.category_id IS NULL OR p.category_id = 0) AND p.category IS NOT NULL AND p.category <> ''`);
     }
@@ -166,8 +166,8 @@ const mapProductRow = (row) => ({
     })(),
     categoryId: row.category_id !== undefined && row.category_id !== null ? Number(row.category_id) : undefined,
     subcategoryId: row.subcategory_id !== undefined && row.subcategory_id !== null ? Number(row.subcategory_id) : undefined,
-    category: row.category_name ?? row.category,
-    subcategory: row.subcategory_name ?? null,
+    category: String(row.category_name ?? row.category ?? ''),
+    subcategory: row.subcategory_name !== undefined && row.subcategory_name !== null ? String(row.subcategory_name) : (row.subcategory ?? null),
     rating: Number(row.rating ?? 0),
     reviewCount: Number(row.review_count ?? 0),
     badge: row.badge ?? null,

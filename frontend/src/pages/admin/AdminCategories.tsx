@@ -8,11 +8,11 @@ import { toast } from 'sonner';
 const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
 
 const AdminCategories = () => {
-  const { categories, products, addCategory, updateCategory, deleteCategory, loadFromApi } = useProductStore();
+  const { categories, addCategory, updateCategory, deleteCategory, loadFromApi, getProductsByCategory } = useProductStore();
   const [editing, setEditing] = useState<Category | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
-  const getCatCount = (name: string) => products.filter((p) => p.category === name).length;
+  const getCatCount = (name: string) => getProductsByCategory(name).length;
 
   useEffect(() => {
     loadFromApi();
@@ -95,7 +95,7 @@ const AdminCategories = () => {
 
       {editing && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => { setEditing(null); setIsCreating(false); }}>
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b border-slate-800">
               <h2 className="text-lg font-semibold text-white">{isCreating ? 'Add Category' : 'Edit Category'}</h2>
               <button onClick={() => { setEditing(null); setIsCreating(false); }} className="text-slate-400 hover:text-white"><X size={20} /></button>
@@ -136,7 +136,8 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
   }, [cat]);
 
   return (
-    <div className="p-5 space-y-4">
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
       <div>
         <label className="block text-sm text-slate-300 mb-1">Name</label>
         <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
@@ -341,9 +342,12 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
           </>
         )}
       </div>
-      <div className="flex flex-col sm:flex-row gap-3 pt-2">
-        <button onClick={onClose} className="flex-1 py-2.5 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-800 transition">Cancel</button>
-        <button onClick={() => onSave(form)} className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">{isCreating ? 'Create' : 'Save'}</button>
+      </div>
+      <div className="p-5 pt-3 border-t border-slate-800 bg-slate-900">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-800 transition">Cancel</button>
+          <button onClick={() => onSave(form)} className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition">{isCreating ? 'Create' : 'Save'}</button>
+        </div>
       </div>
     </div>
   );

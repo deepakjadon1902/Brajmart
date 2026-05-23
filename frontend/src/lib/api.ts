@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' ? `${window.location.origin}/api` : 'http://localhost:5000/api');
 let memoryToken = '';
 
 type RequestOptions = {
@@ -44,9 +46,15 @@ const getJson = async <T>(path: string, options: RequestOptions = {}): Promise<T
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
-  const data = await res.json().catch(() => ({}));
+  const resClone = res.clone();
+  const data = await res.json().catch(async () => {
+    const text = await resClone.text().catch(() => '');
+    return { message: text || '' };
+  });
   if (!res.ok) {
-    const message = typeof data?.message === 'string' ? data.message : 'Request failed';
+    const maybe = data as { message?: unknown } | null | undefined;
+    const rawMessage = typeof maybe?.message === 'string' ? maybe.message : '';
+    const message = rawMessage.trim() ? rawMessage.trim() : `Request failed (${res.status})`;
     throw new Error(message);
   }
   return data as T;

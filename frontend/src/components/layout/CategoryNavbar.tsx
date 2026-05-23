@@ -110,19 +110,20 @@ const CategoryNavbar = () => {
                   View all
                 </RouterLink>
               </div>
-              <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              <ul className="p-4 space-y-2 list-disc pl-6">
                 {(openCat.subcategories || []).map((s) => (
-                  <RouterLink
-                    key={s.id}
-                    to={`/category/${categoryToSlug(openCat.name)}/${categoryToSlug(s.name)}`}
-                    className="px-3 py-2 rounded-xl border border-border bg-card hover:bg-muted/30 transition text-sm text-foreground"
-                    onClick={() => setOpenCatId(null)}
-                    role="menuitem"
-                  >
-                    {s.name}
-                  </RouterLink>
+                  <li key={s.id} className="text-sm text-foreground">
+                    <RouterLink
+                      to={`/category/${categoryToSlug(openCat.name)}/${categoryToSlug(s.name)}`}
+                      className="hover:text-saffron hover:underline transition-colors"
+                      onClick={() => setOpenCatId(null)}
+                      role="menuitem"
+                    >
+                      {s.name}
+                    </RouterLink>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           </div>
         )}
