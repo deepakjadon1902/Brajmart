@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
-import { Category } from '@/types/product';
+import { Category, Subcategory } from '@/types/product';
 import { Plus, Edit2, Trash2, X, Upload, Image } from 'lucide-react';
-import { createCategory, deleteCategory as deleteCategoryApi, updateCategory as updateCategoryApi, uploadImage } from '@/lib/api';
+import { createCategory, deleteCategory as deleteCategoryApi, updateCategory as updateCategoryApi, uploadImage, createSubcategory, updateSubcategory, deleteSubcategory as deleteSubcategoryApi } from '@/lib/api';
 import { toast } from 'sonner';
+
+const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
 
 const AdminCategories = () => {
   const { categories, products, addCategory, updateCategory, deleteCategory, loadFromApi } = useProductStore();
@@ -38,6 +40,15 @@ const AdminCategories = () => {
         updateCategory(cat.id, updated);
         toast.success('Category updated');
       }
+
+      // Refresh products + categories so storefront reflects category renames immediately.
+      await loadFromApi({ force: true });
+      try {
+        localStorage.setItem(PRODUCT_SYNC_KEY, String(Date.now()));
+      } catch {
+        // ignore storage permission errors
+      }
+
       setEditing(null);
       setIsCreating(false);
     } catch (err: any) {
@@ -101,6 +112,11 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
   const [form, setForm] = useState(cat);
   const [imageError, setImageError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const [subName, setSubName] = useState('');
+  const [subOrder, setSubOrder] = useState<number>(0);
+  const [subSaving, setSubSaving] = useState(false);
+  const [subEdits, setSubEdits] = useState<Record<string, { name: string; displayOrder: number }>>({});
+  const loadFromApi = useProductStore((s) => s.loadFromApi);
 
   const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -113,6 +129,11 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
       setImageError(err?.message || 'Upload failed');
     }
   };
+
+  useEffect(() => {
+    setForm(cat);
+    setSubEdits({});
+  }, [cat]);
 
   return (
     <div className="p-5 space-y-4">
@@ -156,6 +177,169 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
       <div>
         <label className="block text-sm text-slate-300 mb-1">Color</label>
         <input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} className="w-16 h-10 rounded-lg border border-slate-700 bg-slate-800 cursor-pointer" />
+      </div>
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/30 p-4 space-y-3">
+        <div>
+          <p className="text-sm font-semibold text-white">Subcategories</p>
+          <p className="text-xs text-slate-500">Create and manage subcategories under this category.</p>
+        </div>
+
+        {isCreating ? (
+          <div className="text-xs text-slate-400">
+            Save this category first to add subcategories.
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end">
+              <div className="sm:col-span-3">
+                <label className="block text-xs text-slate-400 mb-1">Subcategory name</label>
+                <input
+                  value={subName}
+                  onChange={(e) => setSubName(e.target.value)}
+                  placeholder="e.g. Kurtis"
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                />
+              </div>
+              <div className="sm:col-span-1">
+                <label className="block text-xs text-slate-400 mb-1">Order</label>
+                <input
+                  type="number"
+                  value={subOrder}
+                  onChange={(e) => setSubOrder(Number(e.target.value))}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  min={0}
+                />
+              </div>
+              <button
+                type="button"
+                disabled={subSaving || !subName.trim()}
+                onClick={async () => {
+                  try {
+                    setSubSaving(true);
+                    const created: any = await createSubcategory(form.id, { name: subName.trim(), displayOrder: subOrder || 0 });
+                    const mapped: Subcategory = {
+                      ...(created || {}),
+                      id: created?.id || created?._id,
+                      categoryId: String(created?.categoryId ?? created?.category_id ?? form.id),
+                      name: String(created?.name ?? subName.trim()),
+                      displayOrder: Number(created?.displayOrder ?? created?.display_order ?? subOrder ?? 0),
+                    };
+                    setForm((prev) => {
+                      const current = (prev.subcategories || []) as Subcategory[];
+                      const next = [...current, mapped].sort((a, b) => Number(a.displayOrder ?? 0) - Number(b.displayOrder ?? 0) || String(a.name).localeCompare(String(b.name)));
+                      return { ...prev, subcategories: next };
+                    });
+                    await loadFromApi({ force: true });
+                    try {
+                      localStorage.setItem(PRODUCT_SYNC_KEY, String(Date.now()));
+                    } catch {
+                      // ignore storage permission errors
+                    }
+                    toast.success('Subcategory created');
+                    setSubName('');
+                    setSubOrder(0);
+                  } catch (err: any) {
+                    toast.error(err?.message || 'Failed to create subcategory');
+                  } finally {
+                    setSubSaving(false);
+                  }
+                }}
+                className="sm:col-span-1 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition disabled:opacity-60 disabled:hover:bg-amber-500"
+              >
+                Add
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {((form.subcategories || []) as Subcategory[]).length === 0 ? (
+                <div className="text-xs text-slate-500">No subcategories yet.</div>
+              ) : (
+                ((form.subcategories || []) as Subcategory[]).map((s) => {
+                  const edit = subEdits[s.id] || { name: s.name, displayOrder: Number(s.displayOrder ?? 0) };
+                  return (
+                    <div key={s.id} className="flex flex-col sm:flex-row gap-2 sm:items-center rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                      <input
+                        value={edit.name}
+                        onChange={(e) => setSubEdits((prev) => ({ ...prev, [s.id]: { ...edit, name: e.target.value } }))}
+                        className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+                      />
+                      <input
+                        type="number"
+                        value={edit.displayOrder}
+                        onChange={(e) => setSubEdits((prev) => ({ ...prev, [s.id]: { ...edit, displayOrder: Number(e.target.value) } }))}
+                        className="w-full sm:w-28 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+                        min={0}
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="button"
+                          disabled={subSaving || !edit.name.trim()}
+                          onClick={async () => {
+                            try {
+                              setSubSaving(true);
+                              const updated: any = await updateSubcategory(s.id, { name: edit.name.trim(), displayOrder: edit.displayOrder || 0 });
+                              setForm((prev) => {
+                                const current = (prev.subcategories || []) as Subcategory[];
+                                const next = current
+                                  .map((x) => (x.id === s.id ? { ...x, ...(updated || {}), id: updated?.id || updated?._id || x.id } : x))
+                                  .sort((a, b) => Number(a.displayOrder ?? 0) - Number(b.displayOrder ?? 0) || String(a.name).localeCompare(String(b.name)));
+                                return { ...prev, subcategories: next };
+                              });
+                              await loadFromApi({ force: true });
+                              try {
+                                localStorage.setItem(PRODUCT_SYNC_KEY, String(Date.now()));
+                              } catch {
+                                // ignore
+                              }
+                              toast.success('Subcategory updated');
+                            } catch (err: any) {
+                              toast.error(err?.message || 'Failed to update subcategory');
+                            } finally {
+                              setSubSaving(false);
+                            }
+                          }}
+                          className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm hover:bg-slate-700 transition disabled:opacity-60"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          disabled={subSaving}
+                          onClick={async () => {
+                            if (!confirm('Delete this subcategory?')) return;
+                            try {
+                              setSubSaving(true);
+                              await deleteSubcategoryApi(s.id);
+                              setForm((prev) => {
+                                const current = (prev.subcategories || []) as Subcategory[];
+                                return { ...prev, subcategories: current.filter((x) => x.id !== s.id) };
+                              });
+                              await loadFromApi({ force: true });
+                              try {
+                                localStorage.setItem(PRODUCT_SYNC_KEY, String(Date.now()));
+                              } catch {
+                                // ignore
+                              }
+                              toast.success('Subcategory deleted');
+                            } catch (err: any) {
+                              toast.error(err?.message || 'Failed to delete subcategory');
+                            } finally {
+                              setSubSaving(false);
+                            }
+                          }}
+                          className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm hover:bg-red-500/20 transition disabled:opacity-60"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
       </div>
       <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <button onClick={onClose} className="flex-1 py-2.5 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-800 transition">Cancel</button>

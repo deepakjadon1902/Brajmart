@@ -1,13 +1,28 @@
-import { Link } from 'react-router-dom';
 import { ScrollReveal } from '../ui/ScrollReveal';
 import { Link as RouterLink } from 'react-router-dom';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const CategoryNavbar = () => {
   const categories = useProductStore((s) => s.categories);
+  const [openCatId, setOpenCatId] = useState<string | null>(null);
+  const openCat = useMemo(() => categories.find((c) => c.id === openCatId) || null, [categories, openCatId]);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const el = rootRef.current;
+      if (!el) return;
+      if (e.target && el.contains(e.target as Node)) return;
+      setOpenCatId(null);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
   return (
   <ScrollReveal>
-    <section className="py-3 bg-card border-b border-border">
+    <section className="py-3 bg-card border-b border-border" ref={rootRef}>
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-semibold text-maroon">Categories</span>
@@ -18,21 +33,59 @@ const CategoryNavbar = () => {
             <RouterLink
               key={cat.id}
               to={`/category/${categoryToSlug(cat.name)}`}
-              className="flex flex-col items-center gap-2 min-w-[64px] sm:min-w-[72px] group snap-start"
+              className="flex flex-col items-center gap-2 min-w-[84px] sm:min-w-[96px] md:min-w-[108px] group snap-start"
+              onClick={(e) => {
+                const subs = Array.isArray(cat.subcategories) ? cat.subcategories : [];
+                if (subs.length === 0) {
+                  setOpenCatId(null);
+                  return;
+                }
+                e.preventDefault();
+                setOpenCatId((prev) => (prev === cat.id ? null : cat.id));
+              }}
             >
-              <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full border-2 border-gold/30 bg-pearl flex items-center justify-center text-xl sm:text-2xl transition-all duration-300 group-hover:border-gold group-hover:shadow-[0_0_16px_rgba(212,175,55,0.25)] group-hover:scale-110 overflow-hidden">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 md:w-[72px] md:h-[72px] rounded-full border-2 border-gold/30 bg-pearl flex items-center justify-center text-2xl sm:text-[1.65rem] transition-all duration-300 group-hover:border-gold group-hover:shadow-[0_0_16px_rgba(212,175,55,0.25)] group-hover:scale-110 overflow-hidden">
                 {cat.icon && (cat.icon.startsWith('data:') || cat.icon.startsWith('http') || cat.icon.startsWith('/uploads')) ? (
                   <img src={cat.icon} alt={cat.name} className="w-full h-full object-cover" />
                 ) : (
                   cat.icon
                 )}
               </div>
-              <span className="text-[0.65rem] sm:text-xs font-semibold font-cinzel text-foreground group-hover:text-saffron transition-colors text-center max-w-[72px] truncate">
+              <span className="text-[0.65rem] sm:text-xs font-semibold font-cinzel text-foreground group-hover:text-saffron transition-colors text-center leading-tight whitespace-normal break-words w-[92px] sm:w-[108px]">
                 {cat.name}
               </span>
             </RouterLink>
           ))}
         </div>
+
+        {openCat && (
+          <div className="relative mt-3">
+            <div className="rounded-2xl border border-border bg-background shadow-lg overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-pearl border-b border-border">
+                <div className="text-sm font-semibold text-foreground">{openCat.name}</div>
+                <RouterLink
+                  to={`/category/${categoryToSlug(openCat.name)}`}
+                  className="text-xs font-semibold text-saffron hover:underline"
+                  onClick={() => setOpenCatId(null)}
+                >
+                  View all
+                </RouterLink>
+              </div>
+              <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {(openCat.subcategories || []).map((s) => (
+                  <RouterLink
+                    key={s.id}
+                    to={`/category/${categoryToSlug(openCat.name)}/${categoryToSlug(s.name)}`}
+                    className="px-3 py-2 rounded-xl border border-border bg-card hover:bg-muted/30 transition text-sm text-foreground"
+                    onClick={() => setOpenCatId(null)}
+                  >
+                    {s.name}
+                  </RouterLink>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   </ScrollReveal>

@@ -174,6 +174,7 @@ const App = () => {
           <Route path="/track-orders" element={<UserOrderTracking />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/category/:slug" element={<CategoryPage />} />
+          <Route path="/category/:slug/:subSlug" element={<CategoryPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/product/:slug" element={<ProductDetailPage />} />
           <Route path="/products" element={<ProductsPage />} />

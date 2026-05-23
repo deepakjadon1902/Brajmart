@@ -25,6 +25,7 @@ interface ProductStore {
   deleteCategory: (id: string) => void;
 
   getProductsByCategory: (category: string) => Product[];
+  getProductsBySubcategory: (category: string, subcategory: string) => Product[];
   getProductBySlug: (slug: string) => Product | undefined;
   getProductById: (id: string) => Product | undefined;
   searchProducts: (query: string) => Product[];
@@ -65,7 +66,9 @@ export const useProductStore = create<ProductStore>()(
         // On hard refresh / new tab, always fetch once to avoid showing stale persisted stock/price.
         const isFirstLoad = state.lastFetchedAt === 0;
 
-        if (!force && !shouldSync && !isFirstLoad && hasData && isFresh) return;
+        // Admin must always see the latest category names (avoid "refresh shows old name" due to persisted cache).
+        const isAdminPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
+        if (!force && !shouldSync && !isAdminPath && !isFirstLoad && hasData && isFresh) return;
 
         if (!get().loading) set({ loading: true, error: null });
         try {
@@ -83,6 +86,14 @@ export const useProductStore = create<ProductStore>()(
               ...c,
               id: c.id || c._id,
               displayOrder: typeof c.displayOrder === 'number' ? c.displayOrder : Number(c.displayOrder ?? 0),
+              subcategories: (Array.isArray(c.subcategories) ? c.subcategories : [])
+                .map((s: any) => ({
+                  ...s,
+                  id: s.id || s._id,
+                  categoryId: String(s.categoryId ?? s.category_id ?? ''),
+                  displayOrder: typeof s.displayOrder === 'number' ? s.displayOrder : Number(s.displayOrder ?? 0),
+                }))
+                .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name))),
             }))
             .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name)));
 
@@ -127,6 +138,17 @@ export const useProductStore = create<ProductStore>()(
             .replace(/(^-|-$)+/g, '');
         const target = normalize(category || '');
         return get().products.filter((p) => normalize(p.category || '') === target);
+      },
+      getProductsBySubcategory: (category, subcategory) => {
+        const normalize = (value: string) =>
+          value
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)+/g, '');
+        const catTarget = normalize(category || '');
+        const subTarget = normalize(subcategory || '');
+        return get().products.filter((p) => normalize(p.category || '') === catTarget && normalize(String(p.subcategory || '')) === subTarget);
       },
       getProductBySlug: (slug) => {
         const normalize = (value: string) =>

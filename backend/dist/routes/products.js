@@ -75,6 +75,45 @@ const getMissingProductColumns = async (cols) => {
         missing[c] = !existing.has(String(c).toLowerCase());
     return missing;
 };
+let ensuredCategorySchema = false;
+const ensureSubcategoriesTable = async () => {
+    await (0, db_1.dbExecute)(`
+    CREATE TABLE IF NOT EXISTS subcategories (
+      id INT NOT NULL AUTO_INCREMENT,
+      category_id INT NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      display_order INT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_subcategories_category_id (category_id),
+      UNIQUE KEY uq_subcategories_category_name (category_id, name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+};
+const ensureProductCategorySchema = async () => {
+    if (ensuredCategorySchema)
+        return;
+    const missing = await getMissingProductColumns(['category_id', 'subcategory_id']);
+    if (missing.category_id) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN category_id INT NULL AFTER category');
+    }
+    if (missing.subcategory_id) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN subcategory_id INT NULL AFTER category_id');
+    }
+    await ensureSubcategoriesTable();
+    // Backfill category_id for existing products that only have legacy `category` name.
+    try {
+        await (0, db_1.dbExecute)(`UPDATE products p
+       JOIN categories c ON p.category = c.name
+       SET p.category_id = c.id
+       WHERE (p.category_id IS NULL OR p.category_id = 0) AND p.category IS NOT NULL AND p.category <> ''`);
+    }
+    catch {
+        // ignore best-effort backfill errors
+    }
+    ensuredCategorySchema = true;
+};
 const ensureProductVariantColumns = async () => {
     const missing = await getMissingProductColumns(['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants']);
     if (!missing.sizes && !missing.size_pricing && !missing.piece_pricing && !missing.attributes && !missing.variant_pricing && !missing.color_variants)
@@ -125,7 +164,10 @@ const mapProductRow = (row) => ({
             return parsed;
         return row.image ? [row.image] : [];
     })(),
-    category: row.category,
+    categoryId: row.category_id !== undefined && row.category_id !== null ? Number(row.category_id) : undefined,
+    subcategoryId: row.subcategory_id !== undefined && row.subcategory_id !== null ? Number(row.subcategory_id) : undefined,
+    category: row.category_name ?? row.category,
+    subcategory: row.subcategory_name ?? null,
     rating: Number(row.rating ?? 0),
     reviewCount: Number(row.review_count ?? 0),
     badge: row.badge ?? null,
@@ -163,6 +205,16 @@ const buildUpdate = (data) => {
         set('images', JSON.stringify(data.images || []));
     if (data.category !== undefined)
         set('category', data.category);
+    if (data.categoryId !== undefined || data.category_id !== undefined) {
+        const raw = data.categoryId ?? data.category_id;
+        const n = raw === null || raw === '' ? null : Number(raw);
+        set('category_id', Number.isFinite(n) && n > 0 ? n : null);
+    }
+    if (data.subcategoryId !== undefined || data.subcategory_id !== undefined) {
+        const raw = data.subcategoryId ?? data.subcategory_id;
+        const n = raw === null || raw === '' ? null : Number(raw);
+        set('subcategory_id', Number.isFinite(n) && n > 0 ? n : null);
+    }
     if (data.rating !== undefined)
         set('rating', data.rating);
     if (data.reviewCount !== undefined)
@@ -207,7 +259,12 @@ router.get('/', async (_req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         res.setHeader('Cache-Control', LIST_CACHE_CONTROL);
-        const rows = await (0, db_1.dbQuery)('SELECT * FROM products ORDER BY created_at DESC');
+        await ensureProductCategorySchema();
+        const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, s.name AS subcategory_name
+       FROM products p
+       LEFT JOIN categories c ON p.category_id = c.id
+       LEFT JOIN subcategories s ON p.subcategory_id = s.id
+       ORDER BY p.created_at DESC`);
         res.json(rows.map(mapProductRow));
     }
     catch (err) {
@@ -241,7 +298,13 @@ router.get('/:slug', async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         res.setHeader('Cache-Control', 'no-store');
-        const rows = await (0, db_1.dbQuery)('SELECT * FROM products WHERE slug = ? LIMIT 1', [req.params.slug]);
+        await ensureProductCategorySchema();
+        const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, s.name AS subcategory_name
+       FROM products p
+       LEFT JOIN categories c ON p.category_id = c.id
+       LEFT JOIN subcategories s ON p.subcategory_id = s.id
+       WHERE p.slug = ?
+       LIMIT 1`, [req.params.slug]);
         const row = rows[0];
         if (!row)
             return res.status(404).json({ message: 'Product not found' });
@@ -255,6 +318,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        await ensureProductCategorySchema();
         const data = req.body || {};
         const normalizedPrice = normalizeRequiredMoney(data.price);
         if (normalizedPrice === null)
@@ -292,7 +356,29 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.variantPricing = [];
         if (data.colorVariants === undefined)
             data.colorVariants = [];
-        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        // Normalize category/subcategory IDs (supports both legacy name-based payloads and new IDs).
+        const normalizedCategoryId = (() => {
+            const raw = (data.categoryId ?? data.category_id);
+            if (raw === undefined || raw === null || raw === '')
+                return null;
+            const n = Number(raw);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        })();
+        const normalizedSubcategoryId = (() => {
+            const raw = (data.subcategoryId ?? data.subcategory_id);
+            if (raw === undefined || raw === null || raw === '')
+                return null;
+            const n = Number(raw);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        })();
+        let categoryIdToSave = normalizedCategoryId;
+        if (!categoryIdToSave && typeof data.category === 'string' && data.category.trim()) {
+            const rows = await (0, db_1.dbQuery)('SELECT id FROM categories WHERE name = ? LIMIT 1', [data.category.trim()]);
+            const found = rows?.[0]?.id;
+            if (found)
+                categoryIdToSave = Number(found);
+        }
+        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.price,
@@ -300,6 +386,8 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.image,
             JSON.stringify(images || []),
             data.category,
+            categoryIdToSave,
+            normalizedSubcategoryId,
             data.rating ?? 0,
             data.reviewCount ?? 0,
             data.badge ?? null,
@@ -314,7 +402,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             JSON.stringify(sanitizeVariantPricing(data.variantPricing || [])),
             JSON.stringify(sanitizeColorVariants(data.colorVariants || [])),
         ]);
-        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.price,
@@ -322,6 +410,8 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.image,
             JSON.stringify(images || []),
             data.category,
+            categoryIdToSave,
+            normalizedSubcategoryId,
             data.rating ?? 0,
             data.reviewCount ?? 0,
             data.badge ?? null,
@@ -353,7 +443,12 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 throw err;
             }
         }
-        const rows = await (0, db_1.dbQuery)('SELECT * FROM products WHERE id = ? LIMIT 1', [result.insertId]);
+        const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, s.name AS subcategory_name
+       FROM products p
+       LEFT JOIN categories c ON p.category_id = c.id
+       LEFT JOIN subcategories s ON p.subcategory_id = s.id
+       WHERE p.id = ?
+       LIMIT 1`, [result.insertId]);
         res.status(201).json(mapProductRow(rows[0]));
     }
     catch (err) {
@@ -364,7 +459,32 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        await ensureProductCategorySchema();
         const body = req.body || {};
+        const normalizedCategoryId = (() => {
+            const raw = (body.categoryId ?? body.category_id);
+            if (raw === undefined || raw === null || raw === '')
+                return null;
+            const n = Number(raw);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        })();
+        if (normalizedCategoryId !== null)
+            body.categoryId = normalizedCategoryId;
+        const normalizedSubcategoryId = (() => {
+            const raw = (body.subcategoryId ?? body.subcategory_id);
+            if (raw === undefined || raw === null || raw === '')
+                return null;
+            const n = Number(raw);
+            return Number.isFinite(n) && n > 0 ? n : null;
+        })();
+        if (normalizedSubcategoryId !== null)
+            body.subcategoryId = normalizedSubcategoryId;
+        if (body.category !== undefined && normalizedCategoryId === null && typeof body.category === 'string' && body.category.trim()) {
+            const rows = await (0, db_1.dbQuery)('SELECT id FROM categories WHERE name = ? LIMIT 1', [body.category.trim()]);
+            const found = rows?.[0]?.id;
+            if (found)
+                body.categoryId = Number(found);
+        }
         if (body.price !== undefined) {
             const normalizedPrice = normalizeRequiredMoney(body.price);
             if (normalizedPrice === null)
@@ -450,7 +570,12 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 throw err;
             }
         }
-        const rows = await (0, db_1.dbQuery)('SELECT * FROM products WHERE id = ? LIMIT 1', [req.params.id]);
+        const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, s.name AS subcategory_name
+       FROM products p
+       LEFT JOIN categories c ON p.category_id = c.id
+       LEFT JOIN subcategories s ON p.subcategory_id = s.id
+       WHERE p.id = ?
+       LIMIT 1`, [req.params.id]);
         if (!rows[0])
             return res.status(404).json({ message: 'Product not found' });
         // Diagnostic: if client attempted to save attributes but DB still returns NULL, surface a clear error.

@@ -9,11 +9,19 @@ import CategoryNavbar from '@/components/layout/CategoryNavbar';
 import Footer from '@/components/layout/Footer';
 
 const CategoryPage = () => {
-  const { slug } = useParams();
-  const { getProductsByCategory, categories } = useProductStore();
+  const { slug, subSlug } = useParams();
+  const { getProductsByCategory, getProductsBySubcategory, categories } = useProductStore();
   const catMeta = categories.find(c => categoryToSlug(c.name) === slug);
   const categoryName = catMeta?.name || (slug && categorySlugMap[slug]) || (slug ? slug.replace(/-/g, ' ') : '');
-  const products = getProductsByCategory(categoryName);
+
+  const subMeta = subSlug
+    ? (catMeta?.subcategories || []).find((s) => categoryToSlug(s.name) === subSlug)
+    : undefined;
+  const subcategoryName = subMeta?.name || (subSlug ? subSlug.replace(/-/g, ' ') : '');
+
+  const products = subSlug
+    ? getProductsBySubcategory(categoryName, subcategoryName)
+    : getProductsByCategory(categoryName);
 
   return (
     <div className="min-h-screen bg-background">
@@ -28,6 +36,12 @@ const CategoryPage = () => {
               <Link to="/" className="hover:text-saffron">Home</Link>
               <span>/</span>
               <span className="text-foreground">{categoryName || 'Category'}</span>
+              {subSlug && (
+                <>
+                  <span>/</span>
+                  <span className="text-foreground">{subcategoryName || 'Subcategory'}</span>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-3">
               {catMeta && (catMeta.icon?.startsWith('data:') || catMeta.icon?.startsWith('http') || catMeta.icon?.startsWith('/uploads')) ? (
@@ -36,7 +50,9 @@ const CategoryPage = () => {
                 catMeta && <span className="text-4xl">{catMeta.icon}</span>
               )}
               <div>
-                <h1 className="font-cinzel text-2xl md:text-3xl font-bold text-maroon">{categoryName || 'All Products'}</h1>
+                <h1 className="font-cinzel text-2xl md:text-3xl font-bold text-maroon">
+                  {subcategoryName ? `${categoryName} • ${subcategoryName}` : (categoryName || 'All Products')}
+                </h1>
                 <p className="text-muted-foreground text-sm">{products.length} products available</p>
               </div>
             </div>

@@ -137,6 +137,14 @@ export const updateCategory = (id: string, payload: Record<string, unknown>) =>
 export const deleteCategory = (id: string) =>
   getJson(`/categories/${id}`, { method: 'DELETE' });
 
+// Subcategories
+export const createSubcategory = (categoryId: string, payload: Record<string, unknown>) =>
+  getJson(`/categories/${categoryId}/subcategories`, { method: 'POST', body: payload });
+export const updateSubcategory = (subId: string, payload: Record<string, unknown>) =>
+  getJson(`/categories/subcategories/${subId}`, { method: 'PUT', body: payload });
+export const deleteSubcategory = (subId: string) =>
+  getJson(`/categories/subcategories/${subId}`, { method: 'DELETE' });
+
 // Orders
 export const fetchOrders = () => getJson<any[]>('/orders');
 export const fetchMyOrders = () => getJson<any[]>('/orders/my');

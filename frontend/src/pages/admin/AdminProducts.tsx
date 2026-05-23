@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
-import { Product } from '@/types/product';
+import { Product, Category, Subcategory } from '@/types/product';
 import { Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
 import { createProduct, deleteProduct as deleteProductApi, updateProduct as updateProductApi, uploadImage, uploadImages, fetchProductsSchema } from '@/lib/api';
 import { toast } from 'sonner';
@@ -29,8 +29,7 @@ const AdminProducts = () => {
   const [filterCat, setFilterCat] = useState('all');
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-
-  const categoryNames = categories.map((c) => c.name);
+  const firstCategory = categories[0];
 
   useEffect(() => {
     loadFromApi();
@@ -175,7 +174,33 @@ const AdminProducts = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Products</h1>
-        <button onClick={() => { setIsCreating(true); setEditProduct({ id: '', name: '', slug: '', price: 0, image: '', images: [], colorVariants: [], description: '', category: categoryNames[0] || '', rating: 4.5, reviewCount: 0, inStock: true, tags: [], sizes: [], sizePricing: [], piecePricing: [], attributes: [], variantPricing: [] }); }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
+        <button onClick={() => {
+          setIsCreating(true);
+          setEditProduct({
+            id: '',
+            name: '',
+            slug: '',
+            price: 0,
+            originalPrice: undefined,
+            image: '',
+            images: [],
+            colorVariants: [],
+            description: '',
+            categoryId: firstCategory ? Number(firstCategory.id) : undefined,
+            category: firstCategory?.name || '',
+            subcategoryId: undefined,
+            subcategory: null,
+            rating: 4.5,
+            reviewCount: 0,
+            inStock: true,
+            tags: [],
+            sizes: [],
+            sizePricing: [],
+            piecePricing: [],
+            attributes: [],
+            variantPricing: [],
+          });
+        }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
           <Plus size={16} /> Add Product
         </button>
       </div>
@@ -187,7 +212,7 @@ const AdminProducts = () => {
         </div>
         <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none">
           <option value="all">All Categories</option>
-          {categoryNames.map((c) => <option key={c} value={c}>{c}</option>)}
+          {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
       </div>
 
@@ -229,13 +254,13 @@ const AdminProducts = () => {
       </div>
 
       {editProduct && (
-        <ProductModal product={editProduct} categories={categoryNames} isCreating={isCreating} onClose={() => { setEditProduct(null); setIsCreating(false); }} onSave={handleSave} />
+        <ProductModal product={editProduct} categories={categories} isCreating={isCreating} onClose={() => { setEditProduct(null); setIsCreating(false); }} onSave={handleSave} />
       )}
     </div>
   );
 };
 
-const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { product: Product; categories: string[]; isCreating: boolean; onClose: () => void; onSave: (p: Product) => void }) => {
+const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { product: Product; categories: Category[]; isCreating: boolean; onClose: () => void; onSave: (p: Product) => void }) => {
   const [form, setForm] = useState(product);
   const [imageError, setImageError] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -260,6 +285,16 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
       .trim()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)+/g, '');
+
+  const selectedCategory = (() => {
+    const byId = form.categoryId !== undefined && form.categoryId !== null
+      ? categories.find((c) => String(c.id) === String(form.categoryId))
+      : undefined;
+    if (byId) return byId;
+    return categories.find((c) => String(c.name) === String(form.category || '')) || null;
+  })();
+
+  const availableSubcategories = (selectedCategory?.subcategories || []) as Subcategory[];
 
   const supportsVariants = (() => {
     const cat = normalize(form.category || '');
@@ -445,8 +480,38 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
           </div>
           <div>
             <label className="block text-sm text-slate-300 mb-1">Category</label>
-            <select value={form.category} onChange={(e) => update('category', e.target.value)} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none">
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            <select
+              value={selectedCategory ? String(selectedCategory.id) : ''}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                const nextCat = categories.find((c) => String(c.id) === String(nextId));
+                update('categoryId', nextCat ? Number(nextCat.id) : undefined);
+                update('category', nextCat?.name || '');
+                update('subcategoryId', undefined);
+                update('subcategory', null);
+              }}
+              className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+            >
+              <option value="" disabled>Select category</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-300 mb-1">Subcategory</label>
+            <select
+              value={form.subcategoryId !== undefined && form.subcategoryId !== null ? String(form.subcategoryId) : ''}
+              disabled={!selectedCategory || availableSubcategories.length === 0}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                const nextSub = availableSubcategories.find((s) => String(s.id) === String(nextId));
+                update('subcategoryId', nextSub ? Number(nextSub.id) : undefined);
+                update('subcategory', nextSub?.name || null);
+              }}
+              className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none disabled:opacity-60"
+            >
+              <option value="">{availableSubcategories.length ? 'Select subcategory (optional)' : 'No subcategories'}</option>
+              {availableSubcategories.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
 

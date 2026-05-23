@@ -18,6 +18,45 @@ const steps = ['Delivery Details', 'Payment', 'Confirmation'];
 
 const emptyAddress: Address = { fullName: '', mobile: '', street: '', city: '', state: '', pincode: '' };
 
+const INDIA_STATES = [
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+  'Andaman and Nicobar Islands',
+  'Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi',
+  'Jammu and Kashmir',
+  'Ladakh',
+  'Lakshadweep',
+  'Puducherry',
+] as const;
+
 const CheckoutPage = () => {
   const [step, setStep] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('upi');
@@ -247,6 +286,17 @@ const CheckoutPage = () => {
                 placeholder="House/Flat no, Building, Area, Landmark"
                 className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors resize-none"
               />
+            ) : f.key === 'state' ? (
+              <select
+                value={String(addr.state || '')}
+                onChange={(e) => setAddr((a) => ({ ...a, state: e.target.value }))}
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors"
+              >
+                <option value="" disabled>Select state</option>
+                {INDIA_STATES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
             ) : (
               <input
                 type={f.type}

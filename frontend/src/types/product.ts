@@ -7,7 +7,10 @@ export interface Product {
   image: string;
   images?: string[];
   colorVariants?: Array<{ color: string; images: string[] }>;
+  categoryId?: number;
   category: string;
+  subcategoryId?: number;
+  subcategory?: string | null;
   description?: string;
   rating: number;
   reviewCount: number;
@@ -25,6 +28,13 @@ export interface Product {
   selectedAttributes?: Record<string, string>;
 }
 
+export interface Subcategory {
+  id: string;
+  categoryId: string;
+  name: string;
+  displayOrder?: number;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -32,4 +42,5 @@ export interface Category {
   color: string;
   productCount: number;
   displayOrder?: number;
+  subcategories?: Subcategory[];
 }

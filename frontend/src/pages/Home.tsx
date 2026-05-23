@@ -13,7 +13,6 @@ import { useProductStore, categoryToSlug } from '@/store/productStore';
 const ICONS = {
   ornament: 'https://unpkg.com/lucide-static@latest/icons/flower-2.svg',
   latest: 'https://unpkg.com/lucide-static@latest/icons/sparkles.svg',
-  newArrivals: 'https://unpkg.com/lucide-static@latest/icons/sparkle.svg',
   bestSellers: 'https://unpkg.com/lucide-static@latest/icons/trophy.svg',
   accessories: 'https://unpkg.com/lucide-static@latest/icons/gem.svg',
   prasadam: 'https://unpkg.com/lucide-static@latest/icons/leaf.svg',
@@ -21,9 +20,8 @@ const ICONS = {
 };
 
 const Home = () => {
-  const { products, categories, getLatestProducts, getBestSellers, getNewArrivals, getByTag, getProductsByCategory } = useProductStore();
+  const { products, categories, getLatestProducts, getBestSellers, getByTag, getProductsByCategory } = useProductStore();
   const latestProducts = getLatestProducts();
-  const newArrivals = getNewArrivals();
   const bestSellingProducts = getBestSellers();
   const devotionalAccessories = getByTag('accessories');
   const sacredPrasadam = getByTag('prasadam');
@@ -47,18 +45,6 @@ const Home = () => {
         products={latestProducts}
         viewAllLink="/products?tag=latest"
         titleIconUrl={ICONS.latest}
-        viewAllIconUrl={ICONS.viewAll}
-        ornamentIconUrl={ICONS.ornament}
-      />
-
-      <CollectionSection
-        tag="JUST IN"
-        title="New Arrivals"
-        subtitle="Discover what's new at BrajMart"
-        products={newArrivals}
-        bgClass="bg-pearl"
-        viewAllLink="/products?tag=new"
-        titleIconUrl={ICONS.newArrivals}
         viewAllIconUrl={ICONS.viewAll}
         ornamentIconUrl={ICONS.ornament}
       />
