@@ -25,9 +25,9 @@ const CategoryNavbar = () => {
     <section className="py-3 bg-card border-b border-border" ref={rootRef}>
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-semibold text-maroon">Categories</span>
-          <RouterLink to="/categories" className="text-xs font-semibold text-saffron hover:underline">View All →</RouterLink>
-        </div>
+  <span className="text-base font-semibold text-maroon">Categories</span>
+  <RouterLink to="/categories" className="text-xs font-semibold text-saffron hover:underline">View All →</RouterLink>
+</div>
         <div className="flex gap-3 sm:gap-4 md:gap-6 overflow-x-auto scrollbar-hide pb-2 justify-start md:justify-center snap-x snap-mandatory">
           {categories.map((cat) => (
             <RouterLink
