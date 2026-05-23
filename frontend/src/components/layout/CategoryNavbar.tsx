@@ -5,10 +5,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 const CategoryNavbar = () => {
   const categories = useProductStore((s) => s.categories);
+  const loadFromApi = useProductStore((s) => s.loadFromApi);
   const [openCatId, setOpenCatId] = useState<string | null>(null);
   const openCat = useMemo(() => categories.find((c) => c.id === openCatId) || null, [categories, openCatId]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const closeTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // Ensure dropdown subcategories exist even if the persisted store is stale (common on deployed).
+    loadFromApi({ force: true }).catch(() => undefined);
+  }, [loadFromApi]);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -63,6 +69,14 @@ const CategoryNavbar = () => {
                   to={`/category/${categoryToSlug(cat.name)}`}
                   className="flex flex-col items-center gap-2 min-w-[84px] sm:min-w-[96px] md:min-w-[108px]"
                   onClick={() => setOpenCatId(null)}
+                  onPointerDown={(e) => {
+                    // On some deployed/mobile environments hover doesn't fire reliably.
+                    // If the category has subcategories, treat pointer-down as a toggle for the dropdown.
+                    if (!hasSubs) return;
+                    e.preventDefault();
+                    clearCloseTimer();
+                    setOpenCatId((prev) => (prev === cat.id ? null : cat.id));
+                  }}
                   onFocus={() => {
                     if (!hasSubs) return;
                     clearCloseTimer();

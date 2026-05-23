@@ -122,14 +122,39 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         await ensureSubcategoriesTable();
+        const before = await (0, db_1.dbQuery)('SELECT * FROM categories WHERE id = ? LIMIT 1', [req.params.id]);
+        const prev = before?.[0];
+        if (!prev)
+            return res.status(404).json({ message: 'Category not found' });
         const update = buildUpdate(req.body || {});
         if (!update)
             return res.status(400).json({ message: 'No fields to update' });
         await (0, db_1.dbExecute)(`UPDATE categories SET ${update.sql} WHERE id = ?`, [...update.values, req.params.id]);
         const rows = await (0, db_1.dbQuery)('SELECT * FROM categories WHERE id = ? LIMIT 1', [req.params.id]);
-        if (!rows[0])
+        const next = rows?.[0];
+        if (!next)
             return res.status(404).json({ message: 'Category not found' });
-        res.json(mapCategoryRow(rows[0]));
+        // Keep products consistent when a category name changes.
+        // Some older products may still rely on legacy `products.category` string.
+        const prevName = String(prev.name ?? '').trim();
+        const nextName = String(next.name ?? '').trim();
+        if (prevName && nextName && prevName !== nextName) {
+            try {
+                await (0, db_1.dbExecute)('UPDATE products SET category = ? WHERE category_id = ?', [nextName, req.params.id]);
+            }
+            catch {
+                // ignore (column permissions/shape may differ in some environments)
+            }
+            try {
+                await (0, db_1.dbExecute)(`UPDATE products
+           SET category = ?, category_id = ?
+           WHERE (category_id IS NULL OR category_id = 0) AND LOWER(TRIM(category)) = LOWER(TRIM(?))`, [nextName, req.params.id, prevName]);
+            }
+            catch {
+                // ignore best-effort update errors
+            }
+        }
+        res.json(mapCategoryRow(next));
     }
     catch (err) {
         res.status(500).json({ message: err.message });
