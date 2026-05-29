@@ -1,10 +1,12 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useProductStore } from '@/store/productStore';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { formatPrice, calculateDiscount } from '@/utils/formatPrice';
 import { toSquareImageUrl } from '@/utils/image';
 import { toast } from 'sonner';
@@ -14,9 +16,32 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
+const absoluteUrl = (value: string) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (typeof window === 'undefined') return raw;
+  return new URL(raw.startsWith('/') ? raw : `/${raw}`, window.location.origin).toString();
+};
+
+const toSchemaPrice = (value: number) => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return '0.00';
+  return amount.toFixed(2);
+};
+
+const cleanText = (value?: string) =>
+  String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const safeJsonLd = (value: unknown) =>
+  JSON.stringify(value).replace(/</g, '\\u003c');
+
 const ProductDetailPage = () => {
   const { slug } = useParams();
   const { getProductBySlug, products, loading } = useProductStore();
+  const settings = useSettingsStore((s) => s.settings);
   const product = getProductBySlug(slug || '');
   const [quantity, setQuantity] = useState(1);
   const baseGalleryImages = product?.images && product.images.length
@@ -42,7 +67,7 @@ const ProductDetailPage = () => {
     const seen = new Set<number>([1]);
     const rest = normalized.filter((t) => (seen.has(t.pieces) ? false : (seen.add(t.pieces), true)));
     return [...base, ...rest];
-  }, [product?.id]);
+  }, [product?.id, product?.price, product?.piecePricing]);
 
   const sizeOptions = useMemo(() => {
     if (!product) return [];
@@ -82,7 +107,7 @@ const ProductDetailPage = () => {
     }
 
     return cleaned;
-  }, [product?.id]);
+  }, [product?.id, product?.sizes]);
 
   const sizePricingMap = useMemo(() => {
     if (!product) return new Map<string, number>();
@@ -96,7 +121,7 @@ const ProductDetailPage = () => {
       map.set(key, price);
     }
     return map;
-  }, [product?.id]);
+  }, [product?.id, product?.sizePricing]);
 
   const [selectedPieces, setSelectedPieces] = useState<number>(1);
   const [selectedSize, setSelectedSize] = useState<string>('');
@@ -114,7 +139,7 @@ const ProductDetailPage = () => {
         };
       })
       .filter((a) => a.slug && a.terms.length > 0);
-  }, [product?.id]);
+  }, [product?.id, product?.attributes]);
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
 
   const colorVariantImages = useMemo(() => {
@@ -179,7 +204,7 @@ const ProductDetailPage = () => {
       .filter((v) => v.selections && typeof v.selections === 'object' && Object.keys(v.selections).length > 0 && Number.isFinite(v.price) && v.price > 0)
       // Prefer the most specific match (e.g., color+size over color-only).
       .sort((a, b) => Object.keys(b.selections).length - Object.keys(a.selections).length);
-  }, [product?.id]);
+  }, [product?.id, product?.variantPricing]);
 
   useEffect(() => {
     setSelectedPieces(1);
@@ -337,6 +362,62 @@ const ProductDetailPage = () => {
     };
   }, [computedPrice, customAttributes, displayImages, product, selectedAttributes, selectedPieces, selectedSize, variantSuffix]);
 
+  const productSchema = useMemo(() => {
+    if (!product) return null;
+
+    const productUrl = typeof window !== 'undefined'
+      ? new URL(`/product/${product.slug || slug || ''}`, window.location.origin).toString()
+      : `/product/${product.slug || slug || ''}`;
+    const images = (displayImages.length ? displayImages : (product.images?.length ? product.images : [product.image]))
+      .map(absoluteUrl)
+      .filter(Boolean);
+    const schemaDescription = cleanText(product.description) || `${product.name} from ${settings.storeName || 'BrajMart'}`;
+    const price = toSchemaPrice(computedPrice || product.price);
+
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      '@id': `${productUrl}#product`,
+      name: product.name,
+      description: schemaDescription,
+      image: images,
+      sku: String(product.id),
+      category: product.category,
+      brand: {
+        '@type': 'Brand',
+        name: settings.storeName || 'BrajMart',
+      },
+      offers: {
+        '@type': 'Offer',
+        url: productUrl,
+        price,
+        priceCurrency: 'INR',
+        availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        itemCondition: 'https://schema.org/NewCondition',
+      },
+      ...(product.rating > 0 && product.reviewCount > 0
+        ? {
+            aggregateRating: {
+              '@type': 'AggregateRating',
+              ratingValue: Number(product.rating).toFixed(1),
+              reviewCount: Number(product.reviewCount),
+            },
+          }
+        : {}),
+    };
+  }, [computedPrice, displayImages, product, settings.storeName, slug]);
+
+  const productUrl = useMemo(() => {
+    if (!product) return '';
+    if (typeof window === 'undefined') return `/product/${product.slug || slug || ''}`;
+    return new URL(`/product/${product.slug || slug || ''}`, window.location.origin).toString();
+  }, [product, slug]);
+
+  const primaryImage = useMemo(() => {
+    if (!product) return '';
+    return absoluteUrl(displayImages[0] || product.image);
+  }, [displayImages, product]);
+
   const handleAddToCart = () => {
     if (!variantProduct) return;
     if (!product?.inStock) {
@@ -431,6 +512,26 @@ const ProductDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>{product.name} | {settings.storeName || 'BrajMart'}</title>
+        <meta name="description" content={cleanText(product.description) || `${product.name} - ${formatPrice(computedPrice)} at ${settings.storeName || 'BrajMart'}`} />
+        <link rel="canonical" href={productUrl} />
+        <meta property="og:type" content="product" />
+        <meta property="og:title" content={product.name} />
+        <meta property="og:description" content={cleanText(product.description) || `${product.name} - ${formatPrice(computedPrice)}`} />
+        <meta property="og:url" content={productUrl} />
+        {primaryImage ? <meta property="og:image" content={primaryImage} /> : null}
+        <meta property="product:price:amount" content={toSchemaPrice(computedPrice)} />
+        <meta property="product:price:currency" content="INR" />
+        <meta name="twitter:title" content={product.name} />
+        <meta name="twitter:description" content={cleanText(product.description) || `${product.name} - ${formatPrice(computedPrice)}`} />
+        {primaryImage ? <meta name="twitter:image" content={primaryImage} /> : null}
+        {productSchema ? (
+          <script type="application/ld+json">
+            {safeJsonLd(productSchema)}
+          </script>
+        ) : null}
+      </Helmet>
       <AnnouncementBar /><Navbar />
 
       <div className="container mx-auto px-4 py-6">
