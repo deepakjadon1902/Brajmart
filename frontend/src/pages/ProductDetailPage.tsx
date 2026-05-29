@@ -30,6 +30,11 @@ const toSchemaPrice = (value: number) => {
   return amount.toFixed(2);
 };
 
+const positiveNumber = (value: unknown, fallback: number) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+};
+
 const cleanText = (value?: string) =>
   String(value || '')
     .replace(/\s+/g, ' ')
@@ -373,6 +378,14 @@ const ProductDetailPage = () => {
       .filter(Boolean);
     const schemaDescription = cleanText(product.description) || `${product.name} from ${settings.storeName || 'BrajMart'}`;
     const price = toSchemaPrice(computedPrice || product.price);
+    const shippingFee = positiveNumber(settings.shippingFee, 49);
+    const freeShippingThreshold = positiveNumber(settings.freeShippingThreshold, 499);
+    const schemaShippingFee = freeShippingThreshold > 0 && computedPrice >= freeShippingThreshold ? 0 : shippingFee;
+    const minDeliveryDays = Math.max(1, positiveNumber(settings.deliveryEtaMinDays, 3));
+    const maxDeliveryDays = Math.max(minDeliveryDays, positiveNumber(settings.deliveryEtaMaxDays, 7));
+    const returnPolicyUrl = typeof window !== 'undefined'
+      ? new URL('/return-policy', window.location.origin).toString()
+      : '/return-policy';
 
     return {
       '@context': 'https://schema.org',
@@ -394,6 +407,42 @@ const ProductDetailPage = () => {
         priceCurrency: 'INR',
         availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
         itemCondition: 'https://schema.org/NewCondition',
+        shippingDetails: {
+          '@type': 'OfferShippingDetails',
+          shippingRate: {
+            '@type': 'MonetaryAmount',
+            value: toSchemaPrice(schemaShippingFee),
+            currency: 'INR',
+          },
+          shippingDestination: {
+            '@type': 'DefinedRegion',
+            addressCountry: 'IN',
+          },
+          deliveryTime: {
+            '@type': 'ShippingDeliveryTime',
+            handlingTime: {
+              '@type': 'QuantitativeValue',
+              minValue: 0,
+              maxValue: 1,
+              unitCode: 'd',
+            },
+            transitTime: {
+              '@type': 'QuantitativeValue',
+              minValue: minDeliveryDays,
+              maxValue: maxDeliveryDays,
+              unitCode: 'd',
+            },
+          },
+        },
+        hasMerchantReturnPolicy: {
+          '@type': 'MerchantReturnPolicy',
+          applicableCountry: 'IN',
+          returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+          merchantReturnDays: 7,
+          returnMethod: 'https://schema.org/ReturnByMail',
+          returnFees: 'https://schema.org/FreeReturn',
+          url: returnPolicyUrl,
+        },
       },
       ...(product.rating > 0 && product.reviewCount > 0
         ? {
@@ -405,7 +454,17 @@ const ProductDetailPage = () => {
           }
         : {}),
     };
-  }, [computedPrice, displayImages, product, settings.storeName, slug]);
+  }, [
+    computedPrice,
+    displayImages,
+    product,
+    settings.deliveryEtaMaxDays,
+    settings.deliveryEtaMinDays,
+    settings.freeShippingThreshold,
+    settings.shippingFee,
+    settings.storeName,
+    slug,
+  ]);
 
   const productUrl = useMemo(() => {
     if (!product) return '';
