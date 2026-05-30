@@ -29,6 +29,7 @@ const Home = () => {
   // This matches the "all categories on home" requirement and avoids hiding categories due to naming mismatches.
   const categorySections = categories || [];
   const isBrajmartSpecial = (name: string) => (name || '').trim().toLowerCase() === 'brajmart special';
+  const isPrasadam = (name: string) => (name || '').trim().toLowerCase() === 'prasadam';
   const brajmartSpecialCategory = categorySections.find((c) => isBrajmartSpecial(c.name));
 
   return (
@@ -60,7 +61,7 @@ const Home = () => {
         ornamentIconUrl={ICONS.ornament}
       />
 
-      {categorySections.filter((c) => !isBrajmartSpecial(c.name)).map((cat, idx) => (
+      {categorySections.filter((c) => !isBrajmartSpecial(c.name) && !isPrasadam(c.name)).map((cat, idx) => (
         <CollectionSection
           key={cat.id}
           tag="CATEGORY"
