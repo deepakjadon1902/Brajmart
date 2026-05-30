@@ -61,6 +61,9 @@ import { useAuthStore } from "./store/authStore";
 import { useWishlistStore } from "./store/wishlistStore";
 
 const queryClient = new QueryClient();
+const SITE_URL = "https://www.brajmart.com";
+const DEFAULT_LOGO_URL = `${SITE_URL}/logo.png`;
+const DEFAULT_FAVICON_URL = "/favicon.ico";
 
 const App = () => {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -70,6 +73,15 @@ const App = () => {
   const clearCart = useCartStore((s) => s.clearCart);
   const clearWishlist = useWishlistStore((s) => s.clear);
   const authToken = useAuthStore((s) => s.token);
+  const brandImage = settings.storeLogo || DEFAULT_LOGO_URL;
+  const favicon = settings.favicon || DEFAULT_FAVICON_URL;
+  const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "Brajmart",
+    url: SITE_URL,
+    logo: DEFAULT_LOGO_URL,
+  };
   const sanitizeBadges = (badges?: string[]) =>
     (badges || []).filter((b) => !/\bCOD\b/i.test(b) && !/cash on delivery/i.test(b));
 
@@ -138,20 +150,19 @@ const App = () => {
           <title>{settings.metaTitle || settings.storeName}</title>
           <meta name="description" content={settings.metaDescription} />
           <meta name="author" content={settings.storeName} />
+          <link rel="canonical" href={`${SITE_URL}/`} />
           <meta property="og:type" content="website" />
           <meta property="og:site_name" content={settings.storeName} />
+          <meta property="og:url" content={`${SITE_URL}/`} />
           <meta property="og:title" content={settings.metaTitle || settings.storeName} />
           <meta property="og:description" content={settings.metaDescription} />
+          <meta property="og:image" content={brandImage} />
           <meta name="twitter:card" content="summary_large_image" />
           <meta name="twitter:title" content={settings.metaTitle || settings.storeName} />
           <meta name="twitter:description" content={settings.metaDescription} />
-          {settings.storeLogo || settings.favicon ? (
-            <>
-              <meta property="og:image" content={settings.storeLogo || settings.favicon} />
-              <meta name="twitter:image" content={settings.storeLogo || settings.favicon} />
-              <link rel="icon" href={settings.favicon || settings.storeLogo} />
-            </>
-          ) : null}
+          <meta name="twitter:image" content={brandImage} />
+          <link rel="icon" href={favicon} />
+          <script type="application/ld+json">{JSON.stringify(organizationSchema)}</script>
         </Helmet>
         <Toaster />
         <Sonner />
