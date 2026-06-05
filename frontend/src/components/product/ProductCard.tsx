@@ -36,6 +36,7 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
   const cardImages = Array.isArray(product.images) && product.images.length
     ? product.images
     : (product.image ? [product.image] : []);
+  const cardImagesKey = cardImages.join('|');
   const baseImage = cardImages[0] || product.image;
   const isAboveTheFold = index < 4;
 
@@ -85,8 +86,8 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
   };
 
   const isCompact = variant === 'compact';
-  const mediaAspectClass = isCompact ? 'aspect-[4/3]' : 'aspect-square';
-  const mediaFitClass = isCompact ? 'object-contain p-2' : 'object-cover';
+  const mediaAspectClass = 'aspect-square';
+  const mediaFitClass = isCompact ? 'object-contain p-3' : 'object-cover';
 
   useEffect(() => {
     if (!isHovered) {
@@ -98,7 +99,7 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
       setHoverImageIndex((i) => (i + 1) % cardImages.length);
     }, 900);
     return () => window.clearInterval(id);
-  }, [isHovered, cardImages.length, cardImages.join('|')]);
+  }, [isHovered, cardImages.length, cardImagesKey]);
 
   const displayImage = isHovered && cardImages.length > 1 ? (cardImages[hoverImageIndex] || baseImage) : baseImage;
 
@@ -107,7 +108,7 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
       initial={{ opacity: 0, y: 20, filter: 'blur(4px)' }}
       animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
       transition={{ duration: 0.5, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative flex flex-col h-full rounded-2xl border border-border bg-card overflow-hidden gold-glow-hover cursor-pointer"
+      className={`group relative flex flex-col h-full rounded-2xl border border-border bg-card overflow-hidden gold-glow-hover cursor-pointer ${isCompact ? 'min-h-[352px] sm:min-h-[390px]' : 'min-h-[430px]'}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -117,7 +118,6 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
           alt={product.name}
           loading={isAboveTheFold ? 'eager' : 'lazy'}
           decoding="async"
-          fetchPriority={index < 2 ? 'high' : 'auto'}
           className={`w-full h-full ${mediaFitClass} transition-all duration-300 ease-out group-hover:scale-[1.02]`}
         />
 
@@ -158,7 +158,7 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
       </Link>
 
       <div className={`flex flex-col ${isCompact ? 'gap-0.5 p-2.5' : 'gap-1 p-2.5'} sm:p-3 flex-1`}>
-        <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground">{product.category}</span>
+        <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground line-clamp-1 min-h-[1rem]">{product.category}</span>
 
         <div className="flex items-center gap-1 mt-1">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -173,7 +173,7 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
           </h3>
         </Link>
 
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2 pt-1 min-h-[1.75rem]">
           <span className="text-saffron font-bold text-sm sm:text-base">{formatPrice(product.price)}</span>
           {product.originalPrice && <span className="text-muted-foreground line-through text-xs">{formatPrice(product.originalPrice)}</span>}
         </div>

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
+import { Mail, Phone } from 'lucide-react';
+import { FaFacebookF, FaInstagram, FaWhatsapp, FaYoutube } from 'react-icons/fa';
 import { useSettingsStore } from '@/store/settingsStore';
-import { Instagram, Facebook, Youtube, MessageCircle } from 'lucide-react';
 
 const footerLinks = {
   'Get to Know Us': [
@@ -27,86 +28,129 @@ const footerLinks = {
 
 const Footer = () => {
   const { settings } = useSettingsStore();
+  const hasSocialLinks = Boolean(
+    settings.socialLinks.instagram ||
+      settings.socialLinks.facebook ||
+      settings.socialLinks.youtube ||
+      settings.socialLinks.whatsapp
+  );
+
+  const socialItems = [
+    {
+      label: 'Instagram',
+      href: settings.socialLinks.instagram,
+      icon: FaInstagram,
+      className: 'bg-gradient-to-br from-[#feda75] via-[#d62976] to-[#4f5bd5] text-white',
+    },
+    {
+      label: 'Facebook',
+      href: settings.socialLinks.facebook,
+      icon: FaFacebookF,
+      className: 'bg-[#1877F2] text-white',
+    },
+    {
+      label: 'YouTube',
+      href: settings.socialLinks.youtube,
+      icon: FaYoutube,
+      className: 'bg-[#FF0000] text-white',
+    },
+    {
+      label: 'WhatsApp',
+      href: settings.socialLinks.whatsapp,
+      icon: FaWhatsapp,
+      className: 'bg-[#25D366] text-white',
+    },
+  ];
 
   return (
+    <>
+    {hasSocialLinks && (
+      <div className="fixed right-0 top-1/2 z-50 -translate-y-1/2 overflow-hidden shadow-xl" aria-label="Social media links">
+        {socialItems.filter((item) => item.href).map((item) => {
+          const Icon = item.icon;
+          return (
+            <a
+              key={item.label}
+              href={item.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={item.label}
+              className={`flex h-10 w-10 items-center justify-center transition-transform hover:-translate-x-1 md:h-11 md:w-11 ${item.className}`}
+            >
+              <Icon size={17} />
+            </a>
+          );
+        })}
+        {settings.storeEmail && (
+          <a
+            href={`mailto:${settings.storeEmail}`}
+            aria-label="Email BrajMart"
+            className="flex h-10 w-10 items-center justify-center bg-[#ff9f1c] text-white transition-transform hover:-translate-x-1 md:h-11 md:w-11"
+          >
+            <Mail size={17} />
+          </a>
+        )}
+      </div>
+    )}
+
     <footer className="bg-maroon-dark text-primary-foreground">
-      {/* Main grid */}
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-8">
-          {/* Brand col */}
-          <div className="col-span-2 md:col-span-1">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_2.6fr] gap-10 lg:gap-12 items-start">
+          <div>
             <Link to="/" className="flex items-center gap-2 mb-3">
               {settings.storeLogo ? (
-                <img src={settings.storeLogo} alt={settings.storeName} className="w-8 h-8 rounded object-contain" />
+                <img src={settings.storeLogo} alt={settings.storeName} className="w-9 h-9 rounded object-contain" />
               ) : (
-                <span className="text-2xl">🪷</span>
+                <span className="sr-only">{settings.storeName}</span>
               )}
               <span className="font-cinzel text-lg font-bold text-gold">{settings.storeName}</span>
             </Link>
-            <p className="text-primary-foreground/70 text-xs leading-relaxed mb-2">
-              {settings.tagline}
-            </p>
-            <p className="text-primary-foreground/60 text-xs leading-relaxed mb-2">
-              {settings.storeAddress}
-            </p>
-            {settings.storeEmail && <p className="text-primary-foreground/50 text-xs mb-1">📧 {settings.storeEmail}</p>}
-            {settings.storePhone && <p className="text-primary-foreground/50 text-xs mb-3">📞 {settings.storePhone}</p>}
-            <div className="flex gap-3 text-primary-foreground/60">
-              {settings.socialLinks.instagram && (
-                <a href={settings.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors" aria-label="Instagram">
-                  <Instagram size={18} />
-                </a>
+            <p className="text-primary-foreground/70 text-xs leading-relaxed mb-2">{settings.tagline}</p>
+            <p className="text-primary-foreground/60 text-xs leading-relaxed mb-3">{settings.storeAddress}</p>
+            <div className="space-y-1.5">
+              {settings.storeEmail && (
+                <p className="flex items-center gap-2 text-primary-foreground/55 text-xs">
+                  <Mail size={13} />
+                  {settings.storeEmail}
+                </p>
               )}
-              {settings.socialLinks.facebook && (
-                <a href={settings.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors" aria-label="Facebook">
-                  <Facebook size={18} />
-                </a>
-              )}
-              {settings.socialLinks.youtube && (
-                <a href={settings.socialLinks.youtube} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors" aria-label="YouTube">
-                  <Youtube size={18} />
-                </a>
-              )}
-              {settings.socialLinks.whatsapp && (
-                <a href={settings.socialLinks.whatsapp} target="_blank" rel="noopener noreferrer" className="hover:text-gold transition-colors" aria-label="WhatsApp">
-                  <MessageCircle size={18} />
-                </a>
-              )}
-              {!settings.socialLinks.instagram && !settings.socialLinks.facebook && !settings.socialLinks.youtube && !settings.socialLinks.whatsapp && (
-                <>
-                  <span className="text-primary-foreground/40"><Instagram size={18} /></span>
-                  <span className="text-primary-foreground/40"><Facebook size={18} /></span>
-                  <span className="text-primary-foreground/40"><Youtube size={18} /></span>
-                  <span className="text-primary-foreground/40"><MessageCircle size={18} /></span>
-                </>
+              {settings.storePhone && (
+                <p className="flex items-center gap-2 text-primary-foreground/55 text-xs">
+                  <Phone size={13} />
+                  {settings.storePhone}
+                </p>
               )}
             </div>
           </div>
 
-          {Object.entries(footerLinks).map(([title, links]) => (
-            <div key={title}>
-              <h4 className="font-semibold text-sm text-gold mb-3">{title}</h4>
-              <ul className="space-y-2">
-                {links.map((link) => (
-                  <li key={link.label}>
-                    <Link to={link.to} className="text-primary-foreground/60 text-xs hover:text-primary-foreground transition-colors">{link.label}</Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-7">
+            {Object.entries(footerLinks).map(([title, links]) => (
+              <div key={title}>
+                <h4 className="font-semibold text-sm text-gold mb-3">{title}</h4>
+                <ul className="space-y-2">
+                  {links.map((link) => (
+                    <li key={link.label}>
+                      <Link to={link.to} className="text-primary-foreground/60 text-xs hover:text-primary-foreground transition-colors">
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Bottom bar */}
       <div className="border-t border-primary-foreground/10">
         <div className="container mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-2 text-xs text-primary-foreground/50">
-          <span>© 2025 {settings.storeName}. Made with 🙏 in Vrindavan, India</span>
-          <span className="font-devanagari text-primary-foreground/40">हरे कृष्ण 🌸 Hare Krishna</span>
-          <span>{settings.upiEnabled && 'UPI'} {settings.cardEnabled && '• Visa • Mastercard'}</span>
+          <span>Copyright 2025 {settings.storeName}. Made in Vrindavan, India</span>
+          <span className="font-devanagari text-primary-foreground/40">Hare Krishna</span>
+          <span>{settings.upiEnabled && 'UPI'} {settings.cardEnabled && 'Visa Mastercard'}</span>
         </div>
       </div>
     </footer>
+    </>
   );
 };
 

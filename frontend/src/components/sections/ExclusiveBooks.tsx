@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ScrollReveal } from '../ui/ScrollReveal';
 import { useProductStore } from '@/store/productStore';
-import { formatPrice } from '@/utils/formatPrice';
 
 const isBookCategory = (value: string) => value.toLowerCase().includes('book');
 
@@ -10,59 +9,55 @@ const ExclusiveBooks = () => {
   const exclusiveBooks = products.filter(
     (p) => (p.tags || []).includes('exclusive') && isBookCategory(p.category || '')
   );
-  const topBooks = exclusiveBooks.slice(0, 4);
+  const bookProducts = products.filter((p) => isBookCategory(p.category || ''));
+  const heroBooks = [
+    ...exclusiveBooks,
+    ...bookProducts.filter((book) => !exclusiveBooks.some((exclusive) => exclusive.id === book.id)),
+  ].slice(0, 4);
 
   return (
-    <section className="py-12 md:py-20 bg-maroon relative overflow-hidden">
-      <div className="container mx-auto px-4">
-        <div className="grid md:grid-cols-2 gap-8 md:gap-10 items-center">
-          <ScrollReveal direction="left">
-            <span className="inline-block px-3 py-1 rounded-full bg-gold-gradient text-maroon-dark text-xs font-bold mb-4">
-              BRAJMART EXCLUSIVE
-            </span>
-            <h2 className="font-cinzel text-2xl sm:text-3xl md:text-4xl font-bold text-primary-foreground leading-tight mb-3">
-              Brajmart Exclusive Books
-            </h2>
-            <h3 className="font-playfair italic text-gold-light text-lg mb-4">
-              Read, Reflect & Realize the Divine
-            </h3>
-            <p className="text-primary-foreground/70 text-sm leading-relaxed mb-6 max-w-md">
-              Explore the complete collection of Srila Prabhupada&apos;s timeless wisdom — Bhagavad Gita As It Is,
-              Srimad Bhagavatam, and other sacred scriptures that illuminate the path of devotion.
-            </p>
+    <section className="relative py-16 md:py-28 overflow-hidden">
+      <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=1600&h=700&fit=crop')] bg-cover bg-center" />
+      <div className="absolute inset-0 bg-gradient-to-r from-maroon-dark/95 via-maroon/85 to-maroon-dark/75" />
+      <div className="absolute right-0 top-0 hidden h-full w-[48%] md:block">
+        <div className="absolute -right-20 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-gold/20 blur-2xl" />
+        <div className="absolute right-10 top-1/2 grid -translate-y-1/2 grid-cols-4 gap-3 lg:right-14 lg:gap-4">
+          {heroBooks.map((book, index) => (
             <Link
-              to="/products?tag=exclusive&category=Spiritual%20Books"
-              className="inline-flex px-6 py-2.5 rounded-full border-2 border-gold text-gold font-semibold text-sm hover:bg-gold hover:text-maroon-dark transition-colors active:scale-[0.97]"
+              key={book.id}
+              to="/category/spiritual-books"
+              className={`block h-44 w-24 overflow-hidden rounded-sm border border-gold/30 bg-card shadow-2xl transition-transform hover:-translate-y-1 lg:h-48 lg:w-28 xl:w-32 ${
+                index % 2 === 1 ? 'mt-10' : ''
+              }`}
+              aria-label={`Browse books like ${book.name}`}
             >
-              Browse All Books →
+              <img src={book.image} alt={book.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
             </Link>
-          </ScrollReveal>
-
-          <ScrollReveal direction="right">
-            <div className="grid grid-cols-2 gap-4">
-              {topBooks.map((book) => (
-                <Link
-                  key={book.id}
-                  to={`/product/${book.slug}`}
-                  className="rounded-xl border border-gold/30 bg-primary-foreground/5 p-4 text-center group hover:border-gold transition-colors"
-                >
-                  <div className="aspect-[3/4] bg-primary-foreground/10 rounded-lg mb-3 overflow-hidden">
-                    {book.image ? (
-                      <img src={book.image} alt={book.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-3xl">📖</div>
-                    )}
-                  </div>
-                  <h4 className="text-primary-foreground text-xs font-semibold line-clamp-2">{book.name}</h4>
-                  <span className="text-gold text-xs mt-1 block">From {formatPrice(book.price)}</span>
-                </Link>
-              ))}
-              {!topBooks.length && (
-                <div className="text-primary-foreground/70 text-sm">No exclusive books yet.</div>
-              )}
-            </div>
-          </ScrollReveal>
+          ))}
         </div>
+      </div>
+
+      <div className="relative container mx-auto px-4 text-center">
+        <ScrollReveal>
+          <span className="inline-block px-4 py-1.5 rounded-full bg-gold-gradient text-maroon-dark text-xs font-bold mb-4">
+              BRAJMART EXCLUSIVE
+          </span>
+          <h2 className="font-cinzel text-2xl sm:text-3xl md:text-5xl font-bold text-primary-foreground leading-tight mb-3">
+            Brajmart Exclusive Books
+          </h2>
+          <h3 className="font-playfair italic text-gold-light text-lg mb-6">
+            Read, Reflect & Realize the Divine
+          </h3>
+          <p className="text-primary-foreground/70 text-sm max-w-lg mx-auto mb-8">
+            Explore Srila Prabhupada&apos;s timeless wisdom, Bhagavad Gita As It Is, Srimad Bhagavatam, and sacred scriptures for sincere devotees.
+          </p>
+          <Link
+            to="/products?tag=exclusive&category=Books"
+            className="inline-flex px-8 py-3.5 rounded-full bg-gold-gradient text-maroon-dark font-bold shimmer active:scale-[0.97] transition-transform shadow-xl text-sm"
+          >
+            Browse All Books -&gt;
+          </Link>
+        </ScrollReveal>
       </div>
     </section>
   );

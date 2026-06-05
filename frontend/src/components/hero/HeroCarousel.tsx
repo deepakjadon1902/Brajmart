@@ -23,7 +23,7 @@ const HeroCarousel = () => {
   }, [loadSlides]);
 
   const preloadUrls = useMemo(() => {
-    const urls = (slides || []).map((s: any) => String(s?.image || '')).filter(Boolean);
+    const urls = (slides || []).map((s) => String(s?.image || '')).filter(Boolean);
     return urls.slice(0, 2);
   }, [slides]);
 
@@ -34,7 +34,7 @@ const HeroCarousel = () => {
       img.decoding = 'async';
       img.src = url;
     }
-  }, [preloadUrls.join('|')]);
+  }, [preloadUrls]);
 
   useEffect(() => {
     if (!emblaApi) return;
@@ -53,7 +53,7 @@ const HeroCarousel = () => {
             <div className="flex">
               {slides.map((slide, i) => (
                 <div key={slide.id} className="flex-none w-full">
-                  <div className="grid md:grid-cols-[1fr_2fr] md:h-[420px] lg:h-[460px] bg-white">
+                  <div className="grid md:grid-cols-[1fr_2fr] min-h-[420px] md:h-[420px] lg:h-[460px] bg-white">
                     {/* Text panel */}
                     <div className="bg-[#FBF4EC] px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center">
                       <div className="max-w-sm">
@@ -91,15 +91,14 @@ const HeroCarousel = () => {
                     </div>
 
                     {/* Image panel */}
-                    <div className="relative bg-white min-h-[190px] sm:min-h-[240px] md:min-h-0">
+                    <div className="relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
                       {slide.image ? (
                         <img
                           src={slide.image}
                           alt={slide.title}
                           loading={i === 0 ? 'eager' : 'lazy'}
                           decoding="async"
-                          fetchPriority={i === 0 ? 'high' : 'low'}
-                          className="absolute inset-0 w-full h-full object-cover"
+                          className="absolute inset-0 w-full h-full object-cover object-center"
                         />
                       ) : (
                         <div className="absolute inset-0 bg-white" />

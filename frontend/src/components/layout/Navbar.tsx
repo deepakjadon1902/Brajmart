@@ -43,16 +43,12 @@ const Navbar = () => {
           {mobileOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
 
-        <Link to="/" className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <Link to="/" className="flex items-center shrink-0" aria-label={settings.storeName || 'Brajmart home'}>
           {settings.storeLogo ? (
-            <img src={settings.storeLogo} alt={settings.storeName} className="w-9 h-9 md:w-11 md:h-11 rounded object-contain" />
+            <img src={settings.storeLogo} alt={settings.storeName} className="w-10 h-10 md:w-14 md:h-14 rounded object-contain" />
           ) : (
-            <span className="text-3xl">🪷</span>
+            <span className="sr-only">{settings.storeName}</span>
           )}
-          <div className="leading-none">
-            <span className="font-cinzel text-[1.25rem] sm:text-2xl md:text-[1.6rem] font-bold text-maroon-gold-gradient">{settings.storeName}</span>
-            <span className="hidden sm:block text-[0.65rem] md:text-xs text-foreground/80 tracking-[0.2em] font-playfair">{settings.tagline}</span>
-          </div>
         </Link>
 
         <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-xl mx-auto">

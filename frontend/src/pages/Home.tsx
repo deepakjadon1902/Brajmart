@@ -67,7 +67,7 @@ const Home = () => {
           tag="CATEGORY"
           title={cat.name}
           subtitle={`Explore ${cat.name} collection`}
-          products={getProductsByCategory(cat.name).slice(0, 10)}
+          products={getProductsByCategory(cat.name)}
           bgClass={idx % 2 === 0 ? 'bg-pearl' : ''}
           viewAllLink={`/category/${categoryToSlug(cat.name)}`}
           titleIconUrl={undefined}
@@ -82,7 +82,7 @@ const Home = () => {
         tag="BRAJMART COLLECTION"
         title="Top Devotional Accessories"
         subtitle="Malas, Rudraksha, Bracelets & More"
-        products={(devotionalAccessories.length ? devotionalAccessories : products.filter(p => p.category === 'Accessories')).slice(0, 6)}
+        products={devotionalAccessories.length ? devotionalAccessories : products.filter(p => p.category === 'Accessories')}
         bgClass="bg-pearl"
         viewAllLink="/products?tag=accessories"
         titleIconUrl={ICONS.accessories}
@@ -96,7 +96,7 @@ const Home = () => {
         tag="SACRED OFFERINGS"
         title="Sacred Prasadam Collection"
         subtitle="Taste the Blessings of Vrindavan's Sacred Temples"
-        products={(sacredPrasadam.length ? sacredPrasadam : products.filter(p => p.category === 'Prasadam')).slice(0, 5)}
+        products={sacredPrasadam.length ? sacredPrasadam : products.filter(p => p.category === 'Prasadam')}
         viewAllLink="/products?tag=prasadam"
         titleIconUrl={ICONS.prasadam}
         viewAllIconUrl={ICONS.viewAll}
@@ -108,7 +108,7 @@ const Home = () => {
           tag="CATEGORY"
           title={brajmartSpecialCategory.name}
           subtitle={`Explore ${brajmartSpecialCategory.name} collection`}
-          products={getProductsByCategory(brajmartSpecialCategory.name).slice(0, 10)}
+          products={getProductsByCategory(brajmartSpecialCategory.name)}
           bgClass="bg-pearl"
           viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
           titleIconUrl={undefined}
