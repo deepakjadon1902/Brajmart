@@ -22,7 +22,7 @@ const CategoryNavbar = () => {
   const closeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    loadFromApi({ force: true }).catch(() => undefined);
+    loadFromApi().catch(() => undefined);
   }, [loadFromApi]);
 
   useEffect(() => {

@@ -1,58 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "./pages/Home";
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import VerifyEmailPage from "./pages/VerifyEmailPage";
-import OAuthCallbackPage from "./pages/OAuthCallbackPage";
-import VerifyOtpPage from "./pages/VerifyOtpPage";
-import ForgotPasswordPage from "./pages/ForgotPasswordPage";
-import CartPage from "./pages/CartPage";
-import WishlistPage from "./pages/WishlistPage";
-import CategoryPage from "./pages/CategoryPage";
-import ProductDetailPage from "./pages/ProductDetailPage";
-import CheckoutPage from "./pages/CheckoutPage";
-import ProfilePage from "./pages/ProfilePage";
-import SearchPage from "./pages/SearchPage";
-import AboutPage from "./pages/AboutPage";
-import BlogPage from "./pages/BlogPage";
-import BlogPostPage from "./pages/BlogPostPage";
-import ContactPage from "./pages/ContactPage";
-import HelpCenterPage from "./pages/HelpCenterPage";
-import CustomerServicePage from "./pages/CustomerServicePage";
-import TrackOrderPage from "./pages/TrackOrderPage";
-import ShippingDeliveryPage from "./pages/ShippingDeliveryPage";
-import ReturnPolicyPage from "./pages/ReturnPolicyPage";
-import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
-import PaymentMethodPage from "./pages/PaymentMethodPage";
-import TermsPage from "./pages/TermsPage";
-import ComparePage from "./pages/ComparePage";
-import ProductsPage from "./pages/ProductsPage";
-import CategoriesPage from "./pages/CategoriesPage";
-import NotFound from "./pages/NotFound";
-import BrajDarshanPage from "./pages/BrajDarshanPage";
-import UserOrderTracking from "./pages/UserOrderTracking";
-import PaymentStatusPage from "./pages/PaymentStatusPage";
-import ProfileOrdersPage from "./pages/ProfileOrdersPage";
-import ProfileAddressesPage from "./pages/ProfileAddressesPage";
-import AdminLogin from "./pages/admin/AdminLogin";
-import AdminLayout from "./pages/admin/AdminLayout";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminOrders from "./pages/admin/AdminOrders";
-import AdminProducts from "./pages/admin/AdminProducts";
-import AdminCategories from "./pages/admin/AdminCategories";
-import AdminUsers from "./pages/admin/AdminUsers";
-import AdminAnalytics from "./pages/admin/AdminAnalytics";
-import AdminShipments from "./pages/admin/AdminShipments";
-import AdminPayments from "./pages/admin/AdminPayments";
-import AdminSettings from "./pages/admin/AdminSettings";
-import AdminHero from "./pages/admin/AdminHero";
-import AdminBlogs from "./pages/admin/AdminBlogs";
 import { fetchPublicSettings } from "./lib/api";
 import { useSettingsStore } from "./store/settingsStore";
 import { useProductStore } from "./store/productStore";
@@ -63,6 +16,52 @@ import { DEFAULT_DESCRIPTION, DEFAULT_IMAGE, DEFAULT_TITLE, SITE_URL } from "./l
 
 const queryClient = new QueryClient();
 const DEFAULT_FAVICON_URL = "/favicon.ico";
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
+const OAuthCallbackPage = lazy(() => import("./pages/OAuthCallbackPage"));
+const VerifyOtpPage = lazy(() => import("./pages/VerifyOtpPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const CartPage = lazy(() => import("./pages/CartPage"));
+const WishlistPage = lazy(() => import("./pages/WishlistPage"));
+const CategoryPage = lazy(() => import("./pages/CategoryPage"));
+const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
+const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const SearchPage = lazy(() => import("./pages/SearchPage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const BlogPage = lazy(() => import("./pages/BlogPage"));
+const BlogPostPage = lazy(() => import("./pages/BlogPostPage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const HelpCenterPage = lazy(() => import("./pages/HelpCenterPage"));
+const CustomerServicePage = lazy(() => import("./pages/CustomerServicePage"));
+const ShippingDeliveryPage = lazy(() => import("./pages/ShippingDeliveryPage"));
+const ReturnPolicyPage = lazy(() => import("./pages/ReturnPolicyPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
+const PaymentMethodPage = lazy(() => import("./pages/PaymentMethodPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
+const ComparePage = lazy(() => import("./pages/ComparePage"));
+const ProductsPage = lazy(() => import("./pages/ProductsPage"));
+const CategoriesPage = lazy(() => import("./pages/CategoriesPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const BrajDarshanPage = lazy(() => import("./pages/BrajDarshanPage"));
+const UserOrderTracking = lazy(() => import("./pages/UserOrderTracking"));
+const PaymentStatusPage = lazy(() => import("./pages/PaymentStatusPage"));
+const ProfileOrdersPage = lazy(() => import("./pages/ProfileOrdersPage"));
+const ProfileAddressesPage = lazy(() => import("./pages/ProfileAddressesPage"));
+const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
+const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
+const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
+const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
+const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
+const AdminShipments = lazy(() => import("./pages/admin/AdminShipments"));
+const AdminPayments = lazy(() => import("./pages/admin/AdminPayments"));
+const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
+const AdminHero = lazy(() => import("./pages/admin/AdminHero"));
+const AdminBlogs = lazy(() => import("./pages/admin/AdminBlogs"));
 
 const LegacyCategoryRedirect = () => {
   const { slug } = useParams();
@@ -130,8 +129,7 @@ const App = () => {
   }, [updateSettings]);
 
   useEffect(() => {
-    // Always refresh products on app start so Admin changes reflect quickly for all users.
-    loadProducts({ force: true });
+    loadProducts();
   }, [loadProducts]);
 
   useEffect(() => {
@@ -171,6 +169,7 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <Suspense fallback={<div className="min-h-screen bg-background" />}>
           <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<LoginPage />} />
@@ -230,6 +229,7 @@ const App = () => {
 
           <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

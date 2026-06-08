@@ -65,31 +65,37 @@ const Footer = () => {
   return (
     <>
     {hasSocialLinks && (
-      <div className="fixed right-0 top-1/2 z-50 -translate-y-1/2 overflow-hidden shadow-xl" aria-label="Social media links">
-        {socialItems.filter((item) => item.href).map((item) => {
-          const Icon = item.icon;
-          return (
+      <div
+        className="group fixed right-0 top-1/2 z-50 -translate-y-1/2 translate-x-[calc(100%-0.75rem)] overflow-hidden rounded-l-lg shadow-xl transition-transform duration-300 ease-out hover:translate-x-0 focus-within:translate-x-0"
+        aria-label="Social media links"
+      >
+        <div className="absolute inset-y-0 left-0 w-3 bg-gold" aria-hidden="true" />
+        <div className="pl-3">
+          {socialItems.filter((item) => item.href).map((item) => {
+            const Icon = item.icon;
+            return (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={item.label}
+                className={`flex h-10 w-10 items-center justify-center transition-transform hover:-translate-x-1 md:h-11 md:w-11 ${item.className}`}
+              >
+                <Icon size={17} />
+              </a>
+            );
+          })}
+          {settings.storeEmail && (
             <a
-              key={item.label}
-              href={item.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={item.label}
-              className={`flex h-10 w-10 items-center justify-center transition-transform hover:-translate-x-1 md:h-11 md:w-11 ${item.className}`}
+              href={`mailto:${settings.storeEmail}`}
+              aria-label="Email BrajMart"
+              className="flex h-10 w-10 items-center justify-center bg-[#ff9f1c] text-white transition-transform hover:-translate-x-1 md:h-11 md:w-11"
             >
-              <Icon size={17} />
+              <Mail size={17} />
             </a>
-          );
-        })}
-        {settings.storeEmail && (
-          <a
-            href={`mailto:${settings.storeEmail}`}
-            aria-label="Email BrajMart"
-            className="flex h-10 w-10 items-center justify-center bg-[#ff9f1c] text-white transition-transform hover:-translate-x-1 md:h-11 md:w-11"
-          >
-            <Mail size={17} />
-          </a>
-        )}
+          )}
+        </div>
       </div>
     )}
 

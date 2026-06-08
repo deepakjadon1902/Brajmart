@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import Autoplay from 'embla-carousel-autoplay';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useHeroStore } from '@/store/heroStore';
 
@@ -57,36 +56,28 @@ const HeroCarousel = () => {
                     {/* Text panel */}
                     <div className="bg-[#FBF4EC] px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center">
                       <div className="max-w-sm">
-                        <AnimatePresence mode="wait">
-                          {selectedIndex === i && (
-                            <motion.div
-                              key={slide.id}
-                              initial={{ opacity: 0, y: 20, filter: 'blur(6px)' }}
-                              animate={{ opacity: 1, y: 0, filter: 'blur(0)' }}
-                              exit={{ opacity: 0, y: -10 }}
-                              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                            >
-                              {slide.tag && (
-                                <span className="inline-block text-[#8A6D4E] font-semibold text-[0.65rem] uppercase tracking-[0.2em] mb-3">
-                                  {slide.tag}
-                                </span>
-                              )}
-                              <h1 className="font-cinzel text-2xl sm:text-3xl md:text-5xl lg:text-5xl font-bold text-[#3B4F66] leading-[1.12] mb-3">
-                                {slide.title}
-                              </h1>
-                              {slide.subtitle && (
-                                <p className="text-[#6B7A8E] text-sm md:text-base leading-relaxed font-playfair mb-5">
-                                  {slide.subtitle}
-                                </p>
-                              )}
-                              {slide.cta && (
-                                <button className="px-6 py-2.5 rounded-xl bg-[#3B4F66] text-white font-bold text-sm active:scale-[0.97] transition-transform shadow">
-                                  {slide.cta}
-                                </button>
-                              )}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+                        {selectedIndex === i && (
+                          <div className="animate-fade-up">
+                            {slide.tag && (
+                              <span className="inline-block text-[#8A6D4E] font-semibold text-[0.65rem] uppercase tracking-[0.2em] mb-3">
+                                {slide.tag}
+                              </span>
+                            )}
+                            <h1 className="font-cinzel text-2xl sm:text-3xl md:text-5xl lg:text-5xl font-bold text-[#3B4F66] leading-[1.12] mb-3">
+                              {slide.title}
+                            </h1>
+                            {slide.subtitle && (
+                              <p className="text-[#6B7A8E] text-sm md:text-base leading-relaxed font-playfair mb-5">
+                                {slide.subtitle}
+                              </p>
+                            )}
+                            {slide.cta && (
+                              <button className="px-6 py-2.5 rounded-xl bg-[#3B4F66] text-white font-bold text-sm active:scale-[0.97] transition-transform shadow">
+                                {slide.cta}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -98,6 +89,7 @@ const HeroCarousel = () => {
                           alt={slide.title}
                           loading={i === 0 ? 'eager' : 'lazy'}
                           decoding="async"
+                          fetchPriority={i === 0 ? 'high' : 'auto'}
                           className="absolute inset-0 w-full h-full object-cover object-center"
                         />
                       ) : (
