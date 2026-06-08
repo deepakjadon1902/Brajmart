@@ -22,12 +22,13 @@ const mapRow = (row: any) => ({
   updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
 });
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     res.setHeader('Cache-Control', LIST_CACHE_CONTROL);
 
-    if (listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
+    const fresh = req.query.fresh === '1';
+    if (!fresh && listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
       return res.json(listCache.data);
     }
     const rows = await dbQuery<any>('SELECT * FROM hero_slides WHERE is_active = 1 ORDER BY sort_order ASC, id ASC');

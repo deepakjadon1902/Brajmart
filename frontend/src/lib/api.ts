@@ -7,6 +7,7 @@ type RequestOptions = {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
+  cache?: RequestCache;
 };
 
 export const getAuthToken = () => {
@@ -38,6 +39,7 @@ const getJson = async <T>(path: string, options: RequestOptions = {}): Promise<T
   const token = getAuthToken();
   const res = await fetch(`${API_BASE}${path}`, {
     method: options.method || 'GET',
+    cache: options.cache,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -60,8 +62,8 @@ const getJson = async <T>(path: string, options: RequestOptions = {}): Promise<T
   return data as T;
 };
 
-export const fetchPublicSettings = () =>
-  getJson<Record<string, any>>('/settings');
+export const fetchPublicSettings = (opts?: { fresh?: boolean }) =>
+  getJson<Record<string, any>>(`/settings${opts?.fresh ? '?fresh=1' : ''}`, { cache: opts?.fresh ? 'no-store' : 'default' });
 
 export const updatePublicSettings = (payload: Record<string, unknown>) =>
   getJson<Record<string, any>>('/settings', { method: 'PUT', body: payload });
@@ -126,7 +128,7 @@ export const setAuthToken = (token: string) => {
 };
 
 // Products
-export const fetchProducts = () => getJson('/products');
+export const fetchProducts = (opts?: { fresh?: boolean }) => getJson(`/products${opts?.fresh ? '?fresh=1' : ''}`, { cache: opts?.fresh ? 'no-store' : 'default' });
 export const fetchProductBySlug = (slug: string) => getJson(`/products/${slug}`);
 export const fetchProductsSchema = () => getJson('/products/schema');
 export const createProduct = (payload: Record<string, unknown>) =>
@@ -137,7 +139,7 @@ export const deleteProduct = (id: string) =>
   getJson(`/products/${id}`, { method: 'DELETE' });
 
 // Categories
-export const fetchCategories = () => getJson('/categories');
+export const fetchCategories = (opts?: { fresh?: boolean }) => getJson(`/categories${opts?.fresh ? '?fresh=1' : ''}`, { cache: opts?.fresh ? 'no-store' : 'default' });
 export const createCategory = (payload: Record<string, unknown>) =>
   getJson('/categories', { method: 'POST', body: payload });
 export const updateCategory = (id: string, payload: Record<string, unknown>) =>
@@ -255,7 +257,7 @@ export const uploadImages = async (files: File[]) => {
 };
 
 // Hero slides
-export const fetchHeroSlides = () => getJson('/hero-slides');
+export const fetchHeroSlides = (opts?: { fresh?: boolean }) => getJson(`/hero-slides${opts?.fresh ? '?fresh=1' : ''}`, { cache: opts?.fresh ? 'no-store' : 'default' });
 export const createHeroSlide = (payload: Record<string, unknown>) =>
   getJson('/hero-slides', { method: 'POST', body: payload });
 export const updateHeroSlide = (id: string, payload: Record<string, unknown>) =>

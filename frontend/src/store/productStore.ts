@@ -5,6 +5,7 @@ import { fetchProducts, fetchCategories } from '@/lib/api';
 
 const STALE_AFTER_MS = 5 * 60 * 1000; // 5 minutes
 const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
+let productListRequest: Promise<void> | null = null;
 
 interface ProductStore {
   products: Product[];
@@ -70,36 +71,48 @@ export const useProductStore = create<ProductStore>()(
         const isAdminPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
         if (!force && !shouldSync && !isAdminPath && !isFirstLoad && hasData && isFresh) return;
 
-        if (!get().loading) set({ loading: true, error: null });
-        try {
-          const [products, categories] = await Promise.all([fetchProducts(), fetchCategories()]);
-          const mappedProducts = (Array.isArray(products) ? products : []).map((p: any) => {
-            const tags = Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []);
-            return { ...p, id: p.id || p._id, tags };
-          });
-          const orderValue = (value: unknown) => {
-            const n = typeof value === 'number' ? value : Number(value ?? 0);
-            return n > 0 ? n : Number.MAX_SAFE_INTEGER;
-          };
-          const mappedCategories = (Array.isArray(categories) ? categories : [])
-            .map((c: any) => ({
-              ...c,
-              id: c.id || c._id,
-              displayOrder: typeof c.displayOrder === 'number' ? c.displayOrder : Number(c.displayOrder ?? 0),
-              subcategories: (Array.isArray(c.subcategories) ? c.subcategories : [])
-                .map((s: any) => ({
-                  ...s,
-                  id: s.id || s._id,
-                  categoryId: String(s.categoryId ?? s.category_id ?? ''),
-                  displayOrder: typeof s.displayOrder === 'number' ? s.displayOrder : Number(s.displayOrder ?? 0),
-                }))
-                .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name))),
-            }))
-            .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name)));
+        if (productListRequest) return productListRequest;
+        const request = (async () => {
+          if (!get().loading) set({ loading: true, error: null });
+          try {
+            const [products, categories] = await Promise.all([
+              fetchProducts({ fresh: force || isAdminPath }),
+              fetchCategories({ fresh: force || isAdminPath }),
+            ]);
+            const mappedProducts = (Array.isArray(products) ? products : []).map((p: any) => {
+              const tags = Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []);
+              return { ...p, id: p.id || p._id, tags };
+            });
+            const orderValue = (value: unknown) => {
+              const n = typeof value === 'number' ? value : Number(value ?? 0);
+              return n > 0 ? n : Number.MAX_SAFE_INTEGER;
+            };
+            const mappedCategories = (Array.isArray(categories) ? categories : [])
+              .map((c: any) => ({
+                ...c,
+                id: c.id || c._id,
+                displayOrder: typeof c.displayOrder === 'number' ? c.displayOrder : Number(c.displayOrder ?? 0),
+                subcategories: (Array.isArray(c.subcategories) ? c.subcategories : [])
+                  .map((s: any) => ({
+                    ...s,
+                    id: s.id || s._id,
+                    categoryId: String(s.categoryId ?? s.category_id ?? ''),
+                    displayOrder: typeof s.displayOrder === 'number' ? s.displayOrder : Number(s.displayOrder ?? 0),
+                  }))
+                  .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name))),
+              }))
+              .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name)));
 
-          set({ products: mappedProducts, categories: mappedCategories, lastFetchedAt: Date.now(), loading: false, error: null });
-        } catch (err: any) {
-          set({ loading: false, error: String(err?.message || 'Failed to load products') });
+            set({ products: mappedProducts, categories: mappedCategories, lastFetchedAt: Date.now(), loading: false, error: null });
+          } catch (err: any) {
+            set({ loading: false, error: String(err?.message || 'Failed to load products') });
+          }
+        })();
+        productListRequest = request;
+        try {
+          await request;
+        } finally {
+          if (productListRequest === request) productListRequest = null;
         }
       },
 

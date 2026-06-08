@@ -89,7 +89,7 @@ const HeroCarousel = () => {
                           alt={slide.title}
                           loading={i === 0 ? 'eager' : 'lazy'}
                           decoding="async"
-                          fetchPriority={i === 0 ? 'high' : 'auto'}
+                          fetchpriority={i === 0 ? 'high' : 'auto'}
                           className="absolute inset-0 w-full h-full object-cover object-center"
                         />
                       ) : (

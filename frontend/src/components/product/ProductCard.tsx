@@ -85,6 +85,12 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
     navigate('/checkout');
   };
 
+  const handleViewProduct = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate(`/product/${product.slug}`);
+  };
+
   const isCompact = variant === 'compact';
   const mediaAspectClass = 'aspect-square';
   const mediaFitClass = isCompact ? 'object-contain p-3' : 'object-cover';
@@ -141,13 +147,14 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
           >
             <Heart size={15} className={inWishlist ? 'fill-current' : ''} />
           </button>
-          <Link
-            to={`/product/${product.slug}`}
+          <button
+            type="button"
+            onClick={handleViewProduct}
             className="w-8 h-8 rounded-full bg-card/90 shadow flex items-center justify-center hover:bg-saffron hover:text-primary-foreground transition-colors"
             aria-label="View product"
           >
             <Eye size={15} />
-          </Link>
+          </button>
         </div>
 
         {discount > 0 && (

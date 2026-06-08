@@ -101,12 +101,13 @@ const buildUpdate = (data) => {
     fields.push('updated_at = NOW()');
     return { sql: fields.join(', '), values };
 };
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         res.setHeader('Cache-Control', SETTINGS_CACHE_CONTROL);
-        if (settingsCache && (Date.now() - settingsCache.at) < SETTINGS_CACHE_TTL_MS) {
+        const fresh = req.query.fresh === '1';
+        if (!fresh && settingsCache && (Date.now() - settingsCache.at) < SETTINGS_CACHE_TTL_MS) {
             return res.json(settingsCache.data);
         }
         let rows = await (0, db_1.dbQuery)('SELECT * FROM settings LIMIT 1');

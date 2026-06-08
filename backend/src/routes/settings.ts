@@ -81,12 +81,13 @@ const buildUpdate = (data: any) => {
   return { sql: fields.join(', '), values };
 };
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     res.setHeader('Cache-Control', SETTINGS_CACHE_CONTROL);
 
-    if (settingsCache && (Date.now() - settingsCache.at) < SETTINGS_CACHE_TTL_MS) {
+    const fresh = req.query.fresh === '1';
+    if (!fresh && settingsCache && (Date.now() - settingsCache.at) < SETTINGS_CACHE_TTL_MS) {
       return res.json(settingsCache.data);
     }
     let rows = await dbQuery<any>('SELECT * FROM settings LIMIT 1');

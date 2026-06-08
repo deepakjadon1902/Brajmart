@@ -48,7 +48,7 @@ const AdminSettings = () => {
     const load = async () => {
       setLoading(true);
       try {
-        const data = await fetchPublicSettings();
+        const data = await fetchPublicSettings({ fresh: true });
         if (!active || !data) return;
         const { codEnabled: _codEnabled, ...safeData } = data || {};
         updateSettings({ ...safeData, heroBadges: sanitizeBadges(safeData.heroBadges) });

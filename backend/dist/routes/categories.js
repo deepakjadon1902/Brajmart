@@ -5,9 +5,12 @@ const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const router = (0, express_1.Router)();
-// Categories must reflect immediately in both Admin and Storefront.
-// Avoid browser/proxy caching for this endpoint.
-const LIST_CACHE_CONTROL = 'no-store';
+const LIST_CACHE_TTL_MS = 60000;
+const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
+let listCache = null;
+const clearListCache = () => {
+    listCache = null;
+};
 const ensureSubcategoriesTable = async () => {
     await (0, db_1.dbExecute)(`
     CREATE TABLE IF NOT EXISTS subcategories (
@@ -63,11 +66,15 @@ const buildUpdate = (data) => {
     fields.push('updated_at = NOW()');
     return { sql: fields.join(', '), values };
 };
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         res.setHeader('Cache-Control', LIST_CACHE_CONTROL);
+        const fresh = req.query.fresh === '1';
+        if (!fresh && listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
+            return res.json(listCache.data);
+        }
         await ensureSubcategoriesTable();
         const rows = await (0, db_1.dbQuery)('SELECT * FROM categories ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
         const subRows = await (0, db_1.dbQuery)('SELECT * FROM subcategories ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
@@ -97,6 +104,7 @@ router.get('/', async (_req, res) => {
                 subcategories: subsByCat.get(String(r.id)) || [],
             };
         });
+        listCache = { at: Date.now(), data };
         res.json(data);
     }
     catch (err) {
@@ -111,6 +119,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         const data = req.body || {};
         const result = await (0, db_1.dbExecute)('INSERT INTO categories (name, icon, color, product_count, display_order) VALUES (?, ?, ?, ?, ?)', [data.name, data.icon, data.color ?? '#f59e0b', data.productCount ?? 0, data.displayOrder ?? 0]);
         const rows = await (0, db_1.dbQuery)('SELECT * FROM categories WHERE id = ? LIMIT 1', [result.insertId]);
+        clearListCache();
         res.status(201).json(mapCategoryRow(rows[0]));
     }
     catch (err) {
@@ -154,6 +163,7 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 // ignore best-effort update errors
             }
         }
+        clearListCache();
         res.json(mapCategoryRow(next));
     }
     catch (err) {
@@ -167,6 +177,7 @@ router.delete('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         await ensureSubcategoriesTable();
         await (0, db_1.dbExecute)('DELETE FROM subcategories WHERE category_id = ?', [req.params.id]);
         await (0, db_1.dbExecute)('DELETE FROM categories WHERE id = ?', [req.params.id]);
+        clearListCache();
         res.json({ message: 'Category deleted' });
     }
     catch (err) {
@@ -197,6 +208,7 @@ router.post('/:id/subcategories', auth_1.auth, auth_1.adminOnly, async (req, res
         const displayOrder = Number(data.displayOrder ?? 0) || 0;
         const result = await (0, db_1.dbExecute)('INSERT INTO subcategories (category_id, name, display_order) VALUES (?, ?, ?)', [req.params.id, name, displayOrder]);
         const rows = await (0, db_1.dbQuery)('SELECT * FROM subcategories WHERE id = ? LIMIT 1', [result.insertId]);
+        clearListCache();
         res.status(201).json(mapSubcategoryRow(rows[0]));
     }
     catch (err) {
@@ -229,6 +241,7 @@ router.put('/subcategories/:subId', auth_1.auth, auth_1.adminOnly, async (req, r
         const rows = await (0, db_1.dbQuery)('SELECT * FROM subcategories WHERE id = ? LIMIT 1', [req.params.subId]);
         if (!rows[0])
             return res.status(404).json({ message: 'Subcategory not found' });
+        clearListCache();
         res.json(mapSubcategoryRow(rows[0]));
     }
     catch (err) {
@@ -241,6 +254,7 @@ router.delete('/subcategories/:subId', auth_1.auth, auth_1.adminOnly, async (req
             return res.status(503).json({ message: 'Database unavailable' });
         await ensureSubcategoriesTable();
         await (0, db_1.dbExecute)('DELETE FROM subcategories WHERE id = ?', [req.params.subId]);
+        clearListCache();
         res.json({ message: 'Subcategory deleted' });
     }
     catch (err) {

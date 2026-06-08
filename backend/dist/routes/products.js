@@ -65,8 +65,12 @@ const sanitizeVariantPricing = (input) => {
     })
         .filter(Boolean);
 };
-// Pricing + stock must reflect immediately (no client/proxy caching).
-const LIST_CACHE_CONTROL = 'no-store';
+const LIST_CACHE_TTL_MS = 60000;
+const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
+let listCache = null;
+const clearListCache = () => {
+    listCache = null;
+};
 const getMissingProductColumns = async (cols) => {
     const rows = await (0, db_1.dbQuery)(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND COLUMN_NAME IN (${cols.map(() => '?').join(',')})`, cols);
     const existing = new Set((rows || []).map((r) => String(r.COLUMN_NAME || r.column_name || '').toLowerCase()).filter(Boolean));
@@ -254,18 +258,24 @@ const buildUpdate = (data) => {
     fields.push('updated_at = NOW()');
     return { sql: fields.join(', '), values };
 };
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         res.setHeader('Cache-Control', LIST_CACHE_CONTROL);
+        const fresh = req.query.fresh === '1';
+        if (!fresh && listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
+            return res.json(listCache.data);
+        }
         await ensureProductCategorySchema();
         const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, s.name AS subcategory_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN subcategories s ON p.subcategory_id = s.id
        ORDER BY p.created_at DESC`);
-        res.json(rows.map(mapProductRow));
+        const data = rows.map(mapProductRow);
+        listCache = { at: Date.now(), data };
+        res.json(data);
     }
     catch (err) {
         res.status(500).json({ message: err.message });
@@ -449,6 +459,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
        LEFT JOIN subcategories s ON p.subcategory_id = s.id
        WHERE p.id = ?
        LIMIT 1`, [result.insertId]);
+        clearListCache();
         res.status(201).json(mapProductRow(rows[0]));
     }
     catch (err) {
@@ -591,6 +602,7 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 });
             }
         }
+        clearListCache();
         res.json(mapProductRow(rows[0]));
     }
     catch (err) {
@@ -602,6 +614,7 @@ router.delete('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         await (0, db_1.dbExecute)('DELETE FROM products WHERE id = ?', [req.params.id]);
+        clearListCache();
         res.json({ message: 'Product deleted' });
     }
     catch (err) {

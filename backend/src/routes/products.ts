@@ -65,8 +65,12 @@ const sanitizeVariantPricing = (input: any) => {
     .filter(Boolean);
 };
 
-// Pricing + stock must reflect immediately (no client/proxy caching).
-const LIST_CACHE_CONTROL = 'no-store';
+const LIST_CACHE_TTL_MS = 60_000;
+const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
+let listCache: { at: number; data: any[] } | null = null;
+const clearListCache = () => {
+  listCache = null;
+};
 
 const getMissingProductColumns = async (cols: string[]) => {
   const rows = await dbQuery<{ COLUMN_NAME: string }[]>(
@@ -257,10 +261,14 @@ const buildUpdate = (data: any) => {
   return { sql: fields.join(', '), values };
 };
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     res.setHeader('Cache-Control', LIST_CACHE_CONTROL);
+    const fresh = req.query.fresh === '1';
+    if (!fresh && listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
+      return res.json(listCache.data);
+    }
     await ensureProductCategorySchema();
     const rows = await dbQuery<any>(
       `SELECT p.*, c.name AS category_name, s.name AS subcategory_name
@@ -269,7 +277,9 @@ router.get('/', async (_req, res) => {
        LEFT JOIN subcategories s ON p.subcategory_id = s.id
        ORDER BY p.created_at DESC`
     );
-    res.json(rows.map(mapProductRow));
+    const data = rows.map(mapProductRow);
+    listCache = { at: Date.now(), data };
+    res.json(data);
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -461,6 +471,7 @@ router.post('/', auth, adminOnly, async (req, res) => {
        LIMIT 1`,
       [result.insertId]
     );
+    clearListCache();
     res.status(201).json(mapProductRow(rows[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -597,6 +608,7 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
         });
       }
     }
+    clearListCache();
     res.json(mapProductRow(rows[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -607,6 +619,7 @@ router.delete('/:id', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await dbExecute('DELETE FROM products WHERE id = ?', [req.params.id]);
+    clearListCache();
     res.json({ message: 'Product deleted' });
   } catch (err: any) {
     res.status(500).json({ message: err.message });

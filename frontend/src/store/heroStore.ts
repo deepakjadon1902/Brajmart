@@ -42,7 +42,7 @@ export const useHeroStore = create<HeroStore>()(
 
         if (!get().loading) set({ loading: true, error: null });
         try {
-          const data: any = await fetchHeroSlides();
+          const data: any = await fetchHeroSlides({ fresh: force });
           const slides = Array.isArray(data) ? data : [];
           set({ slides, lastFetchedAt: Date.now(), loading: false, error: null });
         } catch (err: any) {
@@ -53,4 +53,3 @@ export const useHeroStore = create<HeroStore>()(
     { name: 'brajmart-hero' }
   )
 );
-
