@@ -657,7 +657,7 @@ const ProductDetailPage = () => {
                 alt={product.name}
                 loading="eager"
                 decoding="async"
-                fetchpriority="high"
+                fetchPriority="high"
                 className="w-full h-full object-cover"
               />
               {product.badge && (
@@ -946,7 +946,7 @@ const ProductDetailPage = () => {
                 alt={product.name}
                 loading="eager"
                 decoding="async"
-                fetchpriority="high"
+                fetchPriority="high"
                 className="w-full h-full object-contain max-h-[80vh]"
               />
             </div>

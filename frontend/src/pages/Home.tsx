@@ -1,25 +1,18 @@
+import { lazy, Suspense } from 'react';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import CategoryNavbar from '@/components/layout/CategoryNavbar';
 import HeroCarousel from '@/components/hero/HeroCarousel';
-import CollectionSection from '@/components/sections/CollectionSection';
-import ExclusiveBooks from '@/components/sections/ExclusiveBooks';
-import ExclusiveShop from '@/components/sections/ExclusiveShop';
-import BrajYatra from '@/components/sections/BrajYatra';
-import Testimonials from '@/components/sections/Testimonials';
-import Footer from '@/components/layout/Footer';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
 import SEO from '@/components/seo/SEO';
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, SITE_URL, breadcrumbSchema } from '@/lib/seo';
 
-const ICONS = {
-  ornament: 'https://unpkg.com/lucide-static@latest/icons/flower-2.svg',
-  latest: 'https://unpkg.com/lucide-static@latest/icons/sparkles.svg',
-  bestSellers: 'https://unpkg.com/lucide-static@latest/icons/trophy.svg',
-  accessories: 'https://unpkg.com/lucide-static@latest/icons/gem.svg',
-  prasadam: 'https://unpkg.com/lucide-static@latest/icons/leaf.svg',
-  viewAll: 'https://unpkg.com/lucide-static@latest/icons/view.svg',
-};
+const CollectionSection = lazy(() => import('@/components/sections/CollectionSection'));
+const ExclusiveBooks = lazy(() => import('@/components/sections/ExclusiveBooks'));
+const ExclusiveShop = lazy(() => import('@/components/sections/ExclusiveShop'));
+const BrajYatra = lazy(() => import('@/components/sections/BrajYatra'));
+const Testimonials = lazy(() => import('@/components/sections/Testimonials'));
+const Footer = lazy(() => import('@/components/layout/Footer'));
 
 const Home = () => {
   const { products, categories, getLatestProducts, getBestSellers, getByTag, getProductsByCategory } = useProductStore();
@@ -64,87 +57,71 @@ const Home = () => {
       <CategoryNavbar />
       <HeroCarousel />
 
-      <CollectionSection
-        tag="BRAJMART COLLECTION"
-        title="Latest Puja Items & Devotional Products"
-        subtitle="Fresh arrivals from the divine lands of Braj"
-        products={latestProducts}
-        viewAllLink="/products?tag=latest"
-        titleIconUrl={ICONS.latest}
-        viewAllIconUrl={ICONS.viewAll}
-        ornamentIconUrl={ICONS.ornament}
-      />
-
-      <CollectionSection
-        tag="MOST LOVED"
-        title="Best-Selling Puja Items & Devotional Products"
-        subtitle="Top picks from our devotee community"
-        products={bestSellingProducts}
-        viewAllLink="/products?tag=bestseller"
-        titleIconUrl={ICONS.bestSellers}
-        viewAllIconUrl={ICONS.viewAll}
-        ornamentIconUrl={ICONS.ornament}
-      />
-
-      {categorySections.filter((c) => !isBrajmartSpecial(c.name) && !isPrasadam(c.name)).map((cat, idx) => (
+      <Suspense fallback={null}>
         <CollectionSection
-          key={cat.id}
-          tag="CATEGORY"
-          title={cat.name}
-          subtitle={`Explore ${cat.name} collection`}
-          products={getProductsByCategory(cat.name)}
-          bgClass={idx % 2 === 0 ? 'bg-pearl' : ''}
-          viewAllLink={`/category/${categoryToSlug(cat.name)}`}
-          titleIconUrl={undefined}
-          viewAllIconUrl={ICONS.viewAll}
-          ornamentIconUrl={ICONS.ornament}
+          tag="BRAJMART COLLECTION"
+          title="Latest Puja Items & Devotional Products"
+          subtitle="Fresh arrivals from the divine lands of Braj"
+          products={latestProducts}
+          viewAllLink="/products?tag=latest"
         />
-      ))}
 
-      <ExclusiveBooks />
-
-      <CollectionSection
-        tag="BRAJMART COLLECTION"
-        title="Top Devotional Accessories"
-        subtitle="Malas, Rudraksha, Bracelets & More"
-        products={devotionalAccessories.length ? devotionalAccessories : products.filter(p => p.category === 'Accessories')}
-        bgClass="bg-pearl"
-        viewAllLink="/products?tag=accessories"
-        titleIconUrl={ICONS.accessories}
-        viewAllIconUrl={ICONS.viewAll}
-        ornamentIconUrl={ICONS.ornament}
-      />
-
-      <ExclusiveShop />
-
-      <CollectionSection
-        tag="SACRED OFFERINGS"
-        title="Sacred Prasadam Collection"
-        subtitle="Taste the Blessings of Vrindavan's Sacred Temples"
-        products={sacredPrasadam.length ? sacredPrasadam : products.filter(p => p.category === 'Prasadam')}
-        viewAllLink="/products?tag=prasadam"
-        titleIconUrl={ICONS.prasadam}
-        viewAllIconUrl={ICONS.viewAll}
-        ornamentIconUrl={ICONS.ornament}
-      />
-
-      {brajmartSpecialCategory && (
         <CollectionSection
-          tag="CATEGORY"
-          title={brajmartSpecialCategory.name}
-          subtitle={`Explore ${brajmartSpecialCategory.name} collection`}
-          products={getProductsByCategory(brajmartSpecialCategory.name)}
+          tag="MOST LOVED"
+          title="Best-Selling Puja Items & Devotional Products"
+          subtitle="Top picks from our devotee community"
+          products={bestSellingProducts}
+          viewAllLink="/products?tag=bestseller"
+        />
+
+        {categorySections.filter((c) => !isBrajmartSpecial(c.name) && !isPrasadam(c.name)).map((cat, idx) => (
+          <CollectionSection
+            key={cat.id}
+            tag="CATEGORY"
+            title={cat.name}
+            subtitle={`Explore ${cat.name} collection`}
+            products={getProductsByCategory(cat.name)}
+            bgClass={idx % 2 === 0 ? 'bg-pearl' : ''}
+            viewAllLink={`/category/${categoryToSlug(cat.name)}`}
+          />
+        ))}
+
+        <ExclusiveBooks />
+
+        <CollectionSection
+          tag="BRAJMART COLLECTION"
+          title="Top Devotional Accessories"
+          subtitle="Malas, Rudraksha, Bracelets & More"
+          products={devotionalAccessories.length ? devotionalAccessories : products.filter(p => p.category === 'Accessories')}
           bgClass="bg-pearl"
-          viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
-          titleIconUrl={undefined}
-          viewAllIconUrl={ICONS.viewAll}
-          ornamentIconUrl={ICONS.ornament}
+          viewAllLink="/products?tag=accessories"
         />
-      )}
 
-      <BrajYatra />
-      <Testimonials />
-      <Footer />
+        <ExclusiveShop />
+
+        <CollectionSection
+          tag="SACRED OFFERINGS"
+          title="Sacred Prasadam Collection"
+          subtitle="Taste the Blessings of Vrindavan's Sacred Temples"
+          products={sacredPrasadam.length ? sacredPrasadam : products.filter(p => p.category === 'Prasadam')}
+          viewAllLink="/products?tag=prasadam"
+        />
+
+        {brajmartSpecialCategory && (
+          <CollectionSection
+            tag="CATEGORY"
+            title={brajmartSpecialCategory.name}
+            subtitle={`Explore ${brajmartSpecialCategory.name} collection`}
+            products={getProductsByCategory(brajmartSpecialCategory.name)}
+            bgClass="bg-pearl"
+            viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
+          />
+        )}
+
+        <BrajYatra />
+        <Testimonials />
+        <Footer />
+      </Suspense>
     </div>
   );
 };

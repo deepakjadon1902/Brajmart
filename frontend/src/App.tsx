@@ -16,6 +16,19 @@ import { DEFAULT_DESCRIPTION, DEFAULT_IMAGE, DEFAULT_TITLE, SITE_URL } from "./l
 
 const queryClient = new QueryClient();
 const DEFAULT_FAVICON_URL = "/favicon.ico";
+const runWhenIdle = (callback: () => void, timeout = 1200) => {
+  if (typeof window === 'undefined') {
+    callback();
+    return () => undefined;
+  }
+  const requestIdle = window.requestIdleCallback;
+  if (requestIdle) {
+    const id = requestIdle(callback, { timeout });
+    return () => window.cancelIdleCallback?.(id);
+  }
+  const id = window.setTimeout(callback, timeout);
+  return () => window.clearTimeout(id);
+};
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
@@ -129,7 +142,14 @@ const App = () => {
   }, [updateSettings]);
 
   useEffect(() => {
-    loadProducts();
+    const isAdminPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
+    if (isAdminPath) {
+      loadProducts();
+      return;
+    }
+    return runWhenIdle(() => {
+      loadProducts();
+    });
   }, [loadProducts]);
 
   useEffect(() => {

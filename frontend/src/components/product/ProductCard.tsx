@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart, ShoppingCart, Star, Eye } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { Product } from '@/types/product';
 import { formatPrice, calculateDiscount } from '@/utils/formatPrice';
 import { toSquareImageUrl } from '@/utils/image';
@@ -110,11 +109,8 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
   const displayImage = isHovered && cardImages.length > 1 ? (cardImages[hoverImageIndex] || baseImage) : baseImage;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20, filter: 'blur(4px)' }}
-      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-      transition={{ duration: 0.5, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
-      className={`group relative flex flex-col h-full rounded-2xl border border-border bg-card overflow-hidden gold-glow-hover cursor-pointer ${isCompact ? 'min-h-[352px] sm:min-h-[390px]' : 'min-h-[430px]'}`}
+    <div
+      className={`group relative flex flex-col h-full rounded-2xl border border-border bg-card overflow-hidden gold-glow-hover cursor-pointer content-visibility-auto ${isCompact ? 'min-h-[352px] sm:min-h-[390px]' : 'min-h-[430px]'}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -212,7 +208,7 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
           </button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 

@@ -1,5 +1,6 @@
 const API_BASE =
   import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
   (typeof window !== 'undefined' ? `${window.location.origin}/api` : 'http://localhost:5000/api');
 let memoryToken = '';
 
@@ -49,6 +50,11 @@ const getJson = async <T>(path: string, options: RequestOptions = {}): Promise<T
   });
 
   const resClone = res.clone();
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await resClone.text().catch(() => '');
+    throw new Error(text.trim() || `Expected JSON response (${res.status})`);
+  }
   const data = await res.json().catch(async () => {
     const text = await resClone.text().catch(() => '');
     return { message: text || '' };

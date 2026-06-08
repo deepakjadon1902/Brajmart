@@ -48,6 +48,11 @@ interface SettingsStore {
   updateAnnouncementMessages: (messages: string[]) => void;
 }
 
+const cleanSettingsPatch = (partial: Partial<StoreSettings>) =>
+  Object.fromEntries(
+    Object.entries(partial).filter(([, value]) => value !== undefined)
+  ) as Partial<StoreSettings>;
+
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
@@ -78,7 +83,24 @@ export const useSettingsStore = create<SettingsStore>()(
         heroBadges: ['??? Temple Authenticated', '?? 100% Organic', '?? Pan-India Delivery'],
       },
       updateSettings: (partial) =>
-        set((s) => ({ settings: { ...s.settings, ...partial } })),
+        set((s) => {
+          const clean = cleanSettingsPatch(partial);
+          return {
+            settings: {
+              ...s.settings,
+              ...clean,
+              notifications: clean.notifications
+                ? { ...s.settings.notifications, ...clean.notifications }
+                : s.settings.notifications,
+              socialLinks: clean.socialLinks
+                ? { ...s.settings.socialLinks, ...clean.socialLinks }
+                : s.settings.socialLinks,
+              announcementBar: clean.announcementBar
+                ? { ...s.settings.announcementBar, ...clean.announcementBar }
+                : s.settings.announcementBar,
+            },
+          };
+        }),
       updateNotifications: (key, value) =>
         set((s) => ({
           settings: {

@@ -1,7 +1,5 @@
-import { useState, useEffect } from 'react';
 import React from 'react';
 import { X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useSettingsStore } from '@/store/settingsStore';
 
 const AnnouncementBar = () => {
@@ -23,18 +21,12 @@ const AnnouncementBar = () => {
 
   return (
     <div className="relative bg-saffron h-9 sm:h-10 flex items-center justify-center overflow-hidden z-50">
-      <AnimatePresence mode="wait">
-        <motion.span
-          key={currentMsg}
-          initial={{ y: 14, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -14, opacity: 0 }}
-          transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="text-primary-foreground text-sm sm:text-base font-semibold tracking-wide px-8 text-center"
-        >
-          {messages[currentMsg]}
-        </motion.span>
-      </AnimatePresence>
+      <span
+        key={currentMsg}
+        className="animate-fade-up text-primary-foreground text-sm sm:text-base font-semibold tracking-wide px-8 text-center"
+      >
+        {messages[currentMsg]}
+      </span>
       <button
         onClick={() => setVisible(false)}
         className="absolute right-3 text-primary-foreground/70 hover:text-primary-foreground transition-colors"

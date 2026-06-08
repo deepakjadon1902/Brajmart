@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { ChevronRight, Grid2X2 } from 'lucide-react';
-import { ScrollReveal } from '../ui/ScrollReveal';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
 
 const isImageIcon = (icon?: string) =>
@@ -15,15 +14,10 @@ const chunkSubcategories = <T,>(items: T[], size = 4) => {
 
 const CategoryNavbar = () => {
   const categories = useProductStore((s) => s.categories);
-  const loadFromApi = useProductStore((s) => s.loadFromApi);
   const [openCatId, setOpenCatId] = useState<string | null>(null);
   const openCat = useMemo(() => categories.find((c) => c.id === openCatId) || null, [categories, openCatId]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const closeTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    loadFromApi().catch(() => undefined);
-  }, [loadFromApi]);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -48,7 +42,7 @@ const CategoryNavbar = () => {
   };
 
   return (
-    <ScrollReveal className="relative z-[45]">
+    <div className="relative z-[45]">
       <section className="relative z-[45] py-3 bg-card border-b border-border" ref={rootRef}>
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between mb-2">
@@ -170,7 +164,7 @@ const CategoryNavbar = () => {
           )}
         </div>
       </section>
-    </ScrollReveal>
+    </div>
   );
 };
 
