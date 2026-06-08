@@ -42,13 +42,13 @@ const ExclusiveBooks = () => {
           <span className="inline-block px-4 py-1.5 rounded-full bg-gold-gradient text-maroon-dark text-xs font-bold mb-4">
               BRAJMART EXCLUSIVE
           </span>
-          <h2 className="font-cinzel text-2xl sm:text-3xl md:text-5xl font-bold text-primary-foreground leading-tight mb-3">
-            Brajmart Exclusive Books
+          <h2 className="font-cinzel text-2xl sm:text-3xl md:text-5xl font-bold text-black leading-tight mb-3">
+            Spiritual Books from Vrindavan
           </h2>
-          <h3 className="font-playfair italic text-gold-light text-lg mb-6">
+          <p className="font-playfair italic text-black text-lg mb-6">
             Read, Reflect & Realize the Divine
-          </h3>
-          <p className="text-primary-foreground/70 text-sm max-w-lg mx-auto mb-8">
+          </p>
+          <p className="text-black text-sm max-w-lg mx-auto mb-8">
             Explore Srila Prabhupada&apos;s timeless wisdom, Bhagavad Gita As It Is, Srimad Bhagavatam, and sacred scriptures for sincere devotees.
           </p>
           <Link

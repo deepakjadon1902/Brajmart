@@ -1,9 +1,11 @@
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useLocation } from 'react-router-dom';
 import { useProductStore } from '@/store/productStore';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/product/ProductCard';
+import SEO from '@/components/seo/SEO';
+import { breadcrumbSchema } from '@/lib/seo';
 
 const tagLabels: Record<string, string> = {
   latest: 'Latest Products',
@@ -16,6 +18,7 @@ const tagLabels: Record<string, string> = {
 
 const ProductsPage = () => {
   const [params, setParams] = useSearchParams();
+  const location = useLocation();
   const tag = params.get('tag') || '';
   const category = params.get('category') || '';
   const minPrice = Number(params.get('min') || 0);
@@ -31,9 +34,47 @@ const ProductsPage = () => {
   if (minRating) filtered = filtered.filter((p) => Number(p.rating || 0) >= minRating);
 
   const title = tag ? (tagLabels[tag] || `Products: ${tag}`) : category ? `Category: ${category}` : 'All Products';
+  const pageTitle = tag
+    ? `${title} | Brajmart`
+    : category
+    ? `${category} Online | Brajmart`
+    : 'Shop Puja Items, Spiritual Books & Prasadam Online | Brajmart';
+  const description = tag
+    ? `Shop ${title.toLowerCase()} from Brajmart, including authentic puja items, devotional accessories, prasadam and spiritual essentials from Vrindavan.`
+    : category
+    ? `Shop authentic ${category.toLowerCase()} online from Brajmart. Curated spiritual products from Vrindavan with reliable delivery across India.`
+    : 'Shop authentic puja items, spiritual books, prasadam, deity idols and devotional accessories from Vrindavan. Delivered across India by Brajmart.';
+  const path = `${location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+  const collectionSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: title,
+    description,
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: filtered.slice(0, 24).map((product, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        url: `https://www.brajmart.com/product/${product.slug}`,
+        name: product.name,
+      })),
+    },
+  };
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={pageTitle}
+        description={description}
+        path={path}
+        schema={[
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Shop', path: '/products' },
+          ]),
+          collectionSchema,
+        ]}
+      />
       <AnnouncementBar />
       <Navbar />
 

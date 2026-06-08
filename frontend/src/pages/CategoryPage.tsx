@@ -7,6 +7,8 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import CategoryNavbar from '@/components/layout/CategoryNavbar';
 import Footer from '@/components/layout/Footer';
+import SEO from '@/components/seo/SEO';
+import { breadcrumbSchema } from '@/lib/seo';
 
 const CategoryPage = () => {
   const { slug, subSlug } = useParams();
@@ -22,9 +24,42 @@ const CategoryPage = () => {
   const products = subSlug
     ? getProductsBySubcategory(categoryName, subcategoryName)
     : getProductsByCategory(categoryName);
+  const pageName = subcategoryName ? `${categoryName} - ${subcategoryName}` : categoryName || 'All Products';
+  const path = subSlug ? `/category/${slug}/${subSlug}` : `/category/${slug || ''}`;
+  const description = subcategoryName
+    ? `Shop ${subcategoryName.toLowerCase()} in ${categoryName.toLowerCase()} from Brajmart. Authentic devotional products from Vrindavan delivered across India.`
+    : `Shop ${categoryName.toLowerCase()} online from Brajmart. Authentic devotional products, puja essentials and spiritual items sourced from Vrindavan.`;
+  const collectionSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: pageName,
+    description,
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: products.slice(0, 24).map((product, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        url: `https://www.brajmart.com/product/${product.slug}`,
+        name: product.name,
+      })),
+    },
+  };
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={`${pageName} Online | Brajmart`}
+        description={description}
+        path={path}
+        schema={[
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Categories', path: '/categories' },
+            { name: pageName, path },
+          ]),
+          collectionSchema,
+        ]}
+      />
       <AnnouncementBar />
       <Navbar />
 

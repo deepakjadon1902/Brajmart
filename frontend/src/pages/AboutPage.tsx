@@ -2,6 +2,8 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { Heart, Leaf, Shield, Truck, Users, MapPin, ShoppingBag, Package, Star, ShieldCheck } from 'lucide-react';
+import SEO from '@/components/seo/SEO';
+import { SITE_URL, breadcrumbSchema } from '@/lib/seo';
 
 const values = [
   { icon: Heart, title: 'Devotion First', desc: 'We treat every order as seva, honoring the spirit behind each product.' },
@@ -22,6 +24,23 @@ const offerings = [
 
 const AboutPage = () => (
   <div className="min-h-screen bg-background">
+    <SEO
+      title="About Brajmart | Authentic Spiritual Products from Vrindavan"
+      description="Learn about Brajmart, a Vrindavan-rooted spiritual store offering authentic puja samagri, devotional books, prasadam and sacred products across India."
+      path="/about"
+      schema={[
+        breadcrumbSchema([
+          { name: 'Home', path: '/' },
+          { name: 'About Brajmart', path: '/about' },
+        ]),
+        {
+          '@context': 'https://schema.org',
+          '@type': 'AboutPage',
+          name: 'About Brajmart',
+          url: `${SITE_URL}/about`,
+        },
+      ]}
+    />
     <Navbar />
 
     {/* Hero */}

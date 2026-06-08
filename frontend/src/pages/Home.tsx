@@ -9,6 +9,8 @@ import BrajYatra from '@/components/sections/BrajYatra';
 import Testimonials from '@/components/sections/Testimonials';
 import Footer from '@/components/layout/Footer';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
+import SEO from '@/components/seo/SEO';
+import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, SITE_URL, breadcrumbSchema } from '@/lib/seo';
 
 const ICONS = {
   ornament: 'https://unpkg.com/lucide-static@latest/icons/flower-2.svg',
@@ -31,9 +33,32 @@ const Home = () => {
   const isBrajmartSpecial = (name: string) => (name || '').trim().toLowerCase() === 'brajmart special';
   const isPrasadam = (name: string) => (name || '').trim().toLowerCase() === 'prasadam';
   const brajmartSpecialCategory = categorySections.find((c) => isBrajmartSpecial(c.name));
+  const homeSchema = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Organization',
+      name: 'Brajmart',
+      url: SITE_URL,
+      logo: `${SITE_URL}/logo.png`,
+      sameAs: [],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebSite',
+      name: 'Brajmart',
+      url: SITE_URL,
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: `${SITE_URL}/search?q={search_term_string}`,
+        'query-input': 'required name=search_term_string',
+      },
+    },
+    breadcrumbSchema([{ name: 'Home', path: '/' }]),
+  ];
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO title={DEFAULT_TITLE} description={DEFAULT_DESCRIPTION} path="/" schema={homeSchema} />
       <AnnouncementBar />
       <Navbar />
       <CategoryNavbar />
@@ -41,7 +66,7 @@ const Home = () => {
 
       <CollectionSection
         tag="BRAJMART COLLECTION"
-        title="Latest Products"
+        title="Latest Puja Items & Devotional Products"
         subtitle="Fresh arrivals from the divine lands of Braj"
         products={latestProducts}
         viewAllLink="/products?tag=latest"
@@ -52,7 +77,7 @@ const Home = () => {
 
       <CollectionSection
         tag="MOST LOVED"
-        title="Best Selling Products"
+        title="Best-Selling Puja Items & Devotional Products"
         subtitle="Top picks from our devotee community"
         products={bestSellingProducts}
         viewAllLink="/products?tag=bestseller"

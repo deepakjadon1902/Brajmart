@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendPasswordResetOtp = exports.sendVerifyOtp = exports.sendVerifyEmail = exports.sendShippingUpdate = exports.sendAdminPaymentNotice = exports.sendPaymentFailed = exports.sendPaymentReceipt = exports.sendOrderConfirmation = exports.sendEmail = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
+const db_1 = require("./db");
 let cachedTransporter = null;
 let verifiedOnce = false;
 const getResendConfig = () => {
@@ -130,25 +131,77 @@ const sendEmail = async (to, subject, html) => {
     }
 };
 exports.sendEmail = sendEmail;
-const brandWrapper = (title, body) => `
+const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+const resolveAssetUrl = (value) => {
+    const url = String(value || '').trim();
+    if (!url)
+        return '';
+    if (/^(https?:|data:)/i.test(url))
+        return url;
+    const base = String(process.env.PUBLIC_APP_URL || process.env.FRONTEND_URL || process.env.APP_URL || '').replace(/\/$/, '');
+    return base ? `${base}${url.startsWith('/') ? url : `/${url}`}` : '';
+};
+const getEmailBrand = async () => {
+    const fallback = {
+        storeName: 'BrajMart',
+        tagline: 'Authentic Vrindavan Products',
+        storeAddress: '',
+        storeEmail: process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || '',
+        storePhone: '',
+        storeLogo: resolveAssetUrl(process.env.STORE_LOGO_URL || process.env.COMPANY_LOGO_URL || ''),
+    };
+    if (!(0, db_1.isDbConnected)())
+        return fallback;
+    try {
+        const rows = await (0, db_1.dbQuery)('SELECT store_name, tagline, store_address, store_email, store_phone, store_logo FROM settings LIMIT 1');
+        const row = rows?.[0];
+        if (!row)
+            return fallback;
+        return {
+            storeName: row.store_name || fallback.storeName,
+            tagline: row.tagline || fallback.tagline,
+            storeAddress: row.store_address || fallback.storeAddress,
+            storeEmail: row.store_email || fallback.storeEmail,
+            storePhone: row.store_phone || fallback.storePhone,
+            storeLogo: resolveAssetUrl(row.store_logo) || fallback.storeLogo,
+        };
+    }
+    catch {
+        return fallback;
+    }
+};
+const brandWrapper = async (title, body) => {
+    const brand = await getEmailBrand();
+    const logoHtml = brand.storeLogo
+        ? `<img src="${escapeHtml(brand.storeLogo)}" alt="${escapeHtml(brand.storeName)}" style="height:46px;width:auto;object-fit:contain;display:block;margin-bottom:8px;" />`
+        : `<div style="font-size:18px;font-weight:700;letter-spacing:.2px;">${escapeHtml(brand.storeName)}</div>`;
+    return `
   <div style="background:#f7f4ef;padding:24px;font-family:Arial,sans-serif;">
     <div style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:16px;border:1px solid #eadfce;overflow:hidden;">
       <div style="background:linear-gradient(90deg,#d8b24d,#c58f1f);padding:18px 24px;color:#3b1c12;">
-        <div style="font-size:18px;font-weight:700;letter-spacing:.2px;">BrajMart</div>
-        <div style="font-size:12px;opacity:.85;">Authentic Vrindavan Products</div>
+        ${logoHtml}
+        <div style="font-size:12px;opacity:.85;">${escapeHtml(brand.tagline)}</div>
       </div>
       <div style="padding:24px;">
-        <h2 style="margin:0 0 12px;font-size:20px;color:#3b1c12;">${title}</h2>
+        <h2 style="margin:0 0 12px;font-size:20px;color:#3b1c12;">${escapeHtml(title)}</h2>
         <div style="color:#4b3f32;font-size:14px;line-height:1.6;">
           ${body}
         </div>
       </div>
       <div style="padding:14px 24px;border-top:1px solid #f0e6d6;color:#8a7b6a;font-size:12px;">
         Need help? Reply to this email and our team will assist you.
+        ${brand.storePhone ? `<br/>Phone: ${escapeHtml(brand.storePhone)}` : ''}
+        ${brand.storeAddress ? `<br/>${escapeHtml(brand.storeAddress)}` : ''}
       </div>
     </div>
   </div>
 `;
+};
 const formatMoney = (value) => {
     if (value === null || value === undefined || Number.isNaN(Number(value)))
         return '';
@@ -163,7 +216,7 @@ const renderItemsTable = (items) => {
         const subtotal = qty * price;
         return `
       <tr>
-        <td style="padding:8px 6px;border-bottom:1px solid #efe6d6;">${item.name || 'Item'}</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #efe6d6;">${escapeHtml(item.name || 'Item')}</td>
         <td style="padding:8px 6px;border-bottom:1px solid #efe6d6;text-align:center;">${qty || 1}</td>
         <td style="padding:8px 6px;border-bottom:1px solid #efe6d6;text-align:right;">${formatMoney(price)}</td>
         <td style="padding:8px 6px;border-bottom:1px solid #efe6d6;text-align:right;">${formatMoney(subtotal)}</td>
@@ -193,15 +246,15 @@ const renderAddress = (label, addr) => {
         return '';
     return `
     <p style="margin:8px 0 4px;"><strong>${label}</strong></p>
-    <p style="margin:0;">${addr.fullName || ''}${addr.mobile ? `, ${addr.mobile}` : ''}</p>
-    ${parts ? `<p style="margin:2px 0 0;">${parts}</p>` : ''}
+    <p style="margin:0;">${escapeHtml(addr.fullName || '')}${addr.mobile ? `, ${escapeHtml(addr.mobile)}` : ''}</p>
+    ${parts ? `<p style="margin:2px 0 0;">${escapeHtml(parts)}</p>` : ''}
   `;
 };
 const renderOrderDetails = (payload) => {
     const itemsHtml = renderItemsTable(payload.items);
     const totalHtml = payload.total !== undefined ? `<p><strong>Total:</strong> ${formatMoney(payload.total)}</p>` : '';
-    const methodHtml = payload.paymentMethod ? `<p><strong>Payment Method:</strong> ${payload.paymentMethod}</p>` : '';
-    const txnHtml = payload.transactionId ? `<p><strong>Transaction ID:</strong> ${payload.transactionId}</p>` : '';
+    const methodHtml = payload.paymentMethod ? `<p><strong>Payment Method:</strong> ${escapeHtml(payload.paymentMethod)}</p>` : '';
+    const txnHtml = payload.transactionId ? `<p><strong>Transaction ID:</strong> ${escapeHtml(payload.transactionId)}</p>` : '';
     const shipHtml = renderAddress('Shipping Address', payload.shippingAddress);
     const billHtml = renderAddress('Billing Address', payload.billingAddress);
     return `
@@ -214,10 +267,10 @@ const renderOrderDetails = (payload) => {
   `;
 };
 const sendOrderConfirmation = async (to, payload) => {
-    const html = brandWrapper('Order Confirmed', `<p>Your order <strong>${payload.orderId}</strong> has been placed successfully.</p>
+    const html = await brandWrapper('Order Confirmed', `<p>Your order <strong>${escapeHtml(payload.orderId)}</strong> has been placed successfully.</p>
      <p>Items: ${payload.itemsCount}</p>
      <p>Total: &#8377;${payload.total}</p>
-     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}
+     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${escapeHtml(payload.eta)}</p>` : ''}
      ${renderOrderDetails({
         items: payload.items,
         total: payload.total,
@@ -229,19 +282,35 @@ const sendOrderConfirmation = async (to, payload) => {
 };
 exports.sendOrderConfirmation = sendOrderConfirmation;
 const sendPaymentReceipt = async (to, payload) => {
-    const html = brandWrapper('Payment Received', `<p>Payment received for Order <strong>${payload.orderId}</strong>.</p>
-     <p>Amount: &#8377;${payload.amount}</p>
-     <p>Payment ID: ${payload.paymentId}</p>
-     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}
-     ${payload.details ? renderOrderDetails(payload.details) : ''}`);
-    await (0, exports.sendEmail)(to, 'BrajMart Payment Receipt', html);
+    const invoiceNumber = payload.invoiceNumber ? String(payload.invoiceNumber) : payload.orderId;
+    const paidAt = payload.paidAt || new Date().toISOString();
+    const html = await brandWrapper('Tax Invoice', `<div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:18px;">
+       <div>
+         <p style="margin:0;color:#8a6d4e;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;">Invoice</p>
+         <p style="margin:4px 0 0;font-size:24px;font-weight:800;color:#3b1c12;">#${escapeHtml(invoiceNumber)}</p>
+       </div>
+       <div style="text-align:right;font-size:12px;color:#6f6254;">
+         <p style="margin:0;"><strong>Order:</strong> ${escapeHtml(payload.orderId)}</p>
+         ${payload.orderDate ? `<p style="margin:3px 0 0;"><strong>Order date:</strong> ${escapeHtml(new Date(payload.orderDate).toLocaleDateString('en-IN'))}</p>` : ''}
+         <p style="margin:3px 0 0;"><strong>Paid on:</strong> ${escapeHtml(new Date(paidAt).toLocaleDateString('en-IN'))}</p>
+       </div>
+     </div>
+     <p>Thank you. Your payment has been received successfully and your invoice is ready.</p>
+     ${payload.details ? renderOrderDetails({ ...payload.details, transactionId: payload.paymentId }) : ''}
+     <div style="margin-top:14px;padding:14px;background:#fff8e6;border:1px solid #ead8a6;border-radius:10px;">
+       <p style="margin:0;"><strong>Payment Status:</strong> Paid</p>
+       <p style="margin:5px 0 0;"><strong>Amount Paid:</strong> ${formatMoney(payload.amount)}</p>
+       <p style="margin:5px 0 0;"><strong>Payment ID:</strong> ${escapeHtml(payload.paymentId)}</p>
+       ${payload.eta ? `<p style="margin:5px 0 0;"><strong>Estimated delivery:</strong> ${escapeHtml(payload.eta)}</p>` : ''}
+     </div>`);
+    await (0, exports.sendEmail)(to, `BrajMart Invoice #${invoiceNumber}`, html);
 };
 exports.sendPaymentReceipt = sendPaymentReceipt;
 const sendPaymentFailed = async (to, payload) => {
-    const html = brandWrapper('Payment Failed', `<p>Your payment for Order <strong>${payload.orderId}</strong> could not be completed.</p>
+    const html = await brandWrapper('Payment Failed', `<p>Your payment for Order <strong>${escapeHtml(payload.orderId)}</strong> could not be completed.</p>
      <p>Amount: &#8377;${payload.amount}</p>
-     ${payload.paymentId ? `<p>Payment ID: ${payload.paymentId}</p>` : ''}
-     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}
+     ${payload.paymentId ? `<p>Payment ID: ${escapeHtml(payload.paymentId)}</p>` : ''}
+     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${escapeHtml(payload.eta)}</p>` : ''}
      <p>Please try again or choose another payment method.</p>
      ${payload.details ? renderOrderDetails(payload.details) : ''}`);
     await (0, exports.sendEmail)(to, 'BrajMart Payment Failed', html);
@@ -251,25 +320,25 @@ const sendAdminPaymentNotice = async (payload) => {
     const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER;
     if (!adminEmail)
         return;
-    const html = brandWrapper(payload.status === 'paid' ? 'Payment Received' : 'Payment Failed', `<p><strong>Status:</strong> ${payload.status.toUpperCase()}</p>
-     <p><strong>Order ID:</strong> ${payload.orderId}</p>
+    const html = await brandWrapper(payload.status === 'paid' ? 'Payment Received' : 'Payment Failed', `<p><strong>Status:</strong> ${payload.status.toUpperCase()}</p>
+     <p><strong>Order ID:</strong> ${escapeHtml(payload.orderId)}</p>
      <p><strong>Amount:</strong> &#8377;${payload.amount}</p>
-     <p><strong>Method:</strong> ${payload.method}</p>
-     ${payload.paymentId ? `<p><strong>Payment ID:</strong> ${payload.paymentId}</p>` : ''}
-     ${payload.customerEmail ? `<p><strong>Customer:</strong> ${payload.customerEmail}</p>` : ''}`);
+     <p><strong>Method:</strong> ${escapeHtml(payload.method)}</p>
+     ${payload.paymentId ? `<p><strong>Payment ID:</strong> ${escapeHtml(payload.paymentId)}</p>` : ''}
+     ${payload.customerEmail ? `<p><strong>Customer:</strong> ${escapeHtml(payload.customerEmail)}</p>` : ''}`);
     await (0, exports.sendEmail)(adminEmail, `Payment ${payload.status === 'paid' ? 'Success' : 'Failed'} - ${payload.orderId}`, html);
 };
 exports.sendAdminPaymentNotice = sendAdminPaymentNotice;
 const sendShippingUpdate = async (to, payload) => {
-    const html = brandWrapper('Shipping Update', `<p>Your order <strong>${payload.orderId}</strong> status is now <strong>${payload.status}</strong>.</p>
-     ${payload.trackingId ? `<p>Tracking ID: ${payload.trackingId}</p>` : ''}
-     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${payload.eta}</p>` : ''}
+    const html = await brandWrapper('Shipping Update', `<p>Your order <strong>${escapeHtml(payload.orderId)}</strong> status is now <strong>${escapeHtml(payload.status)}</strong>.</p>
+     ${payload.trackingId ? `<p>Tracking ID: ${escapeHtml(payload.trackingId)}</p>` : ''}
+     ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${escapeHtml(payload.eta)}</p>` : ''}
      ${payload.details ? renderOrderDetails(payload.details) : ''}`);
     await (0, exports.sendEmail)(to, 'BrajMart Shipping Update', html);
 };
 exports.sendShippingUpdate = sendShippingUpdate;
 const sendVerifyEmail = async (to, payload) => {
-    const html = brandWrapper('Verify Your Email', `<p>Thanks for creating your BrajMart account.</p>
+    const html = await brandWrapper('Verify Your Email', `<p>Thanks for creating your BrajMart account.</p>
      <p>Please verify your email address by clicking the button below:</p>
      <p><a href="${payload.link}" style="display:inline-block;padding:10px 16px;background:#c58f1f;color:#fff;text-decoration:none;border-radius:8px;">Verify Email</a></p>
      <p>If the button does not work, copy and paste this link:</p>
@@ -278,14 +347,14 @@ const sendVerifyEmail = async (to, payload) => {
 };
 exports.sendVerifyEmail = sendVerifyEmail;
 const sendVerifyOtp = async (to, payload) => {
-    const html = brandWrapper('Your Verification Code', `<p>Use the verification code below to complete your sign up.</p>
+    const html = await brandWrapper('Your Verification Code', `<p>Use the verification code below to complete your sign up.</p>
      <p style="font-size:22px;letter-spacing:4px;font-weight:700;color:#3b1c12;">${payload.otp}</p>
      <p>This code expires in ${payload.minutes} minutes.</p>`);
     await (0, exports.sendEmail)(to, 'Your BrajMart verification code', html);
 };
 exports.sendVerifyOtp = sendVerifyOtp;
 const sendPasswordResetOtp = async (to, payload) => {
-    const html = brandWrapper('Password Reset Code', `<p>Use the code below to sign in and reset your password.</p>
+    const html = await brandWrapper('Password Reset Code', `<p>Use the code below to sign in and reset your password.</p>
      <p style="font-size:22px;letter-spacing:4px;font-weight:700;color:#3b1c12;">${payload.otp}</p>
      <p>This code expires in ${payload.minutes} minutes.</p>
      <p>If you didn’t request this, you can ignore this email.</p>`);

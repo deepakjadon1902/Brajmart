@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -59,11 +59,15 @@ import { useProductStore } from "./store/productStore";
 import { useCartStore } from "./store/cartStore";
 import { useAuthStore } from "./store/authStore";
 import { useWishlistStore } from "./store/wishlistStore";
+import { DEFAULT_DESCRIPTION, DEFAULT_IMAGE, DEFAULT_TITLE, SITE_URL } from "./lib/seo";
 
 const queryClient = new QueryClient();
-const SITE_URL = "https://www.brajmart.com";
-const DEFAULT_LOGO_URL = `${SITE_URL}/logo.png`;
 const DEFAULT_FAVICON_URL = "/favicon.ico";
+
+const LegacyCategoryRedirect = () => {
+  const { slug } = useParams();
+  return <Navigate to={`/category/${slug || ''}`} replace />;
+};
 
 const App = () => {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -73,14 +77,14 @@ const App = () => {
   const clearCart = useCartStore((s) => s.clearCart);
   const clearWishlist = useWishlistStore((s) => s.clear);
   const authToken = useAuthStore((s) => s.token);
-  const brandImage = settings.storeLogo || DEFAULT_LOGO_URL;
+  const brandImage = settings.storeLogo || DEFAULT_IMAGE;
   const favicon = settings.favicon || DEFAULT_FAVICON_URL;
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "Brajmart",
     url: SITE_URL,
-    logo: DEFAULT_LOGO_URL,
+    logo: DEFAULT_IMAGE,
   };
   const sanitizeBadges = (badges?: string[]) =>
     (badges || []).filter((b) => !/\bCOD\b/i.test(b) && !/cash on delivery/i.test(b));
@@ -147,19 +151,19 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Helmet>
-          <title>{settings.metaTitle || settings.storeName}</title>
-          <meta name="description" content={settings.metaDescription} />
+          <title>{settings.metaTitle || DEFAULT_TITLE}</title>
+          <meta name="description" content={settings.metaDescription || DEFAULT_DESCRIPTION} />
           <meta name="author" content={settings.storeName} />
           <link rel="canonical" href={`${SITE_URL}/`} />
           <meta property="og:type" content="website" />
           <meta property="og:site_name" content={settings.storeName} />
           <meta property="og:url" content={`${SITE_URL}/`} />
-          <meta property="og:title" content={settings.metaTitle || settings.storeName} />
-          <meta property="og:description" content={settings.metaDescription} />
+          <meta property="og:title" content={settings.metaTitle || DEFAULT_TITLE} />
+          <meta property="og:description" content={settings.metaDescription || DEFAULT_DESCRIPTION} />
           <meta property="og:image" content={brandImage} />
           <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content={settings.metaTitle || settings.storeName} />
-          <meta name="twitter:description" content={settings.metaDescription} />
+          <meta name="twitter:title" content={settings.metaTitle || DEFAULT_TITLE} />
+          <meta name="twitter:description" content={settings.metaDescription || DEFAULT_DESCRIPTION} />
           <meta name="twitter:image" content={brandImage} />
           <link rel="icon" href={favicon} />
           <script type="application/ld+json">{JSON.stringify(organizationSchema)}</script>
@@ -189,6 +193,7 @@ const App = () => {
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/product/:slug" element={<ProductDetailPage />} />
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/shop" element={<ProductsPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/blog/:slug" element={<BlogPostPage />} />
@@ -204,6 +209,7 @@ const App = () => {
           <Route path="/payment-status/:token" element={<PaymentStatusPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/braj-darshan/:slug" element={<BrajDarshanPage />} />
+          <Route path="/product-category/:slug" element={<LegacyCategoryRedirect />} />
 
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminLogin />} />

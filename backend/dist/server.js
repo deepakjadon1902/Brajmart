@@ -20,7 +20,9 @@ const payu_1 = __importDefault(require("./routes/payu"));
 const cart_1 = __importDefault(require("./routes/cart"));
 const heroSlides_1 = __importDefault(require("./routes/heroSlides"));
 const blogs_1 = __importDefault(require("./routes/blogs"));
+const db_1 = require("./lib/db");
 const app = (0, express_1.default)();
+const SITE_URL = (process.env.SITE_URL || 'https://www.brajmart.com').replace(/\/$/, '');
 const UPLOADS_DIR = path_1.default.join(__dirname, '..', 'uploads');
 if (!fs_1.default.existsSync(UPLOADS_DIR))
     fs_1.default.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -50,6 +52,92 @@ app.use('/api/cart', cart_1.default);
 app.use('/api/hero-slides', heroSlides_1.default);
 app.use('/api/blogs', blogs_1.default);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+const xmlEscape = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+const slugify = (value) => String(value ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+app.get('/robots.txt', (_req, res) => {
+    res.type('text/plain').send([
+        'User-agent: Googlebot',
+        'Allow: /',
+        '',
+        'User-agent: Bingbot',
+        'Allow: /',
+        '',
+        'User-agent: *',
+        'Allow: /',
+        '',
+        `Sitemap: ${SITE_URL}/sitemap.xml`,
+    ].join('\n'));
+});
+app.get('/sitemap.xml', async (_req, res) => {
+    const entries = [
+        { path: '/', priority: '1.0', changefreq: 'daily' },
+        { path: '/shop', priority: '0.9', changefreq: 'daily' },
+        { path: '/products', priority: '0.9', changefreq: 'daily' },
+        { path: '/categories', priority: '0.8', changefreq: 'weekly' },
+        { path: '/about', priority: '0.6', changefreq: 'monthly' },
+        { path: '/contact', priority: '0.6', changefreq: 'monthly' },
+        { path: '/blog', priority: '0.5', changefreq: 'weekly' },
+    ];
+    if ((0, db_1.isDbConnected)()) {
+        try {
+            const [products, categories, blogs] = await Promise.all([
+                (0, db_1.dbQuery)('SELECT slug, updated_at FROM products WHERE slug IS NOT NULL AND slug <> "" ORDER BY updated_at DESC'),
+                (0, db_1.dbQuery)('SELECT name, updated_at FROM categories WHERE name IS NOT NULL AND name <> "" ORDER BY updated_at DESC'),
+                (0, db_1.dbQuery)('SELECT slug, updated_at FROM blogs WHERE slug IS NOT NULL AND slug <> "" ORDER BY updated_at DESC').catch(() => []),
+            ]);
+            for (const row of categories || []) {
+                const slug = slugify(row.name);
+                if (slug)
+                    entries.push({ path: `/category/${slug}`, priority: '0.8', changefreq: 'weekly', lastmod: row.updated_at });
+            }
+            for (const row of products || []) {
+                const slug = slugify(row.slug);
+                if (slug)
+                    entries.push({ path: `/product/${slug}`, priority: '0.7', changefreq: 'weekly', lastmod: row.updated_at });
+            }
+            for (const row of blogs || []) {
+                const slug = slugify(row.slug);
+                if (slug)
+                    entries.push({ path: `/blog/${slug}`, priority: '0.5', changefreq: 'monthly', lastmod: row.updated_at });
+            }
+        }
+        catch (err) {
+            console.error('Failed to build dynamic sitemap:', err);
+        }
+    }
+    const seen = new Set();
+    const urls = entries
+        .filter((entry) => {
+        if (seen.has(entry.path))
+            return false;
+        seen.add(entry.path);
+        return true;
+    })
+        .map((entry) => {
+        const lastmod = entry.lastmod ? `\n    <lastmod>${xmlEscape(new Date(entry.lastmod).toISOString())}</lastmod>` : '';
+        return [
+            '  <url>',
+            `    <loc>${xmlEscape(`${SITE_URL}${entry.path}`)}</loc>${lastmod}`,
+            `    <changefreq>${entry.changefreq}</changefreq>`,
+            `    <priority>${entry.priority}</priority>`,
+            '  </url>',
+        ].join('\n');
+    })
+        .join('\n');
+    res
+        .type('application/xml')
+        .setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400')
+        .send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`);
+});
 app.use((err, _req, res, _next) => {
     console.error('Error:', err);
     res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
