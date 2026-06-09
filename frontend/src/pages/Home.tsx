@@ -3,6 +3,7 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import CategoryNavbar from '@/components/layout/CategoryNavbar';
 import HeroCarousel from '@/components/hero/HeroCarousel';
+import DeferredMount from '@/components/ui/DeferredMount';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
 import SEO from '@/components/seo/SEO';
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, SITE_URL, breadcrumbSchema } from '@/lib/seo';
@@ -58,69 +59,92 @@ const Home = () => {
       <HeroCarousel />
 
       <Suspense fallback={null}>
-        <CollectionSection
-          tag="BRAJMART COLLECTION"
-          title="Latest Puja Items & Devotional Products"
-          subtitle="Fresh arrivals from the divine lands of Braj"
-          products={latestProducts}
-          viewAllLink="/products?tag=latest"
-        />
+        <DeferredMount minHeight={540}>
+          <CollectionSection
+            tag="BRAJMART COLLECTION"
+            title="Latest Puja Items & Devotional Products"
+            subtitle="Fresh arrivals from the divine lands of Braj"
+            products={latestProducts}
+            viewAllLink="/products?tag=latest"
+          />
+        </DeferredMount>
 
-        <CollectionSection
-          tag="MOST LOVED"
-          title="Best-Selling Puja Items & Devotional Products"
-          subtitle="Top picks from our devotee community"
-          products={bestSellingProducts}
-          viewAllLink="/products?tag=bestseller"
-        />
+        <DeferredMount minHeight={540}>
+          <CollectionSection
+            tag="MOST LOVED"
+            title="Best-Selling Puja Items & Devotional Products"
+            subtitle="Top picks from our devotee community"
+            products={bestSellingProducts}
+            viewAllLink="/products?tag=bestseller"
+          />
+        </DeferredMount>
 
         {categorySections.filter((c) => !isBrajmartSpecial(c.name) && !isPrasadam(c.name)).map((cat, idx) => (
-          <CollectionSection
-            key={cat.id}
-            tag="CATEGORY"
-            title={cat.name}
-            subtitle={`Explore ${cat.name} collection`}
-            products={getProductsByCategory(cat.name)}
-            bgClass={idx % 2 === 0 ? 'bg-pearl' : ''}
-            viewAllLink={`/category/${categoryToSlug(cat.name)}`}
-          />
+          <DeferredMount key={cat.id} minHeight={540}>
+            <CollectionSection
+              tag="CATEGORY"
+              title={cat.name}
+              subtitle={`Explore ${cat.name} collection`}
+              products={getProductsByCategory(cat.name)}
+              bgClass={idx % 2 === 0 ? 'bg-pearl' : ''}
+              viewAllLink={`/category/${categoryToSlug(cat.name)}`}
+            />
+          </DeferredMount>
         ))}
 
-        <ExclusiveBooks />
+        <DeferredMount minHeight={420}>
+          <ExclusiveBooks />
+        </DeferredMount>
 
-        <CollectionSection
-          tag="BRAJMART COLLECTION"
-          title="Top Devotional Accessories"
-          subtitle="Malas, Rudraksha, Bracelets & More"
-          products={devotionalAccessories.length ? devotionalAccessories : products.filter(p => p.category === 'Accessories')}
-          bgClass="bg-pearl"
-          viewAllLink="/products?tag=accessories"
-        />
+        <DeferredMount minHeight={540}>
+          <CollectionSection
+            tag="BRAJMART COLLECTION"
+            title="Top Devotional Accessories"
+            subtitle="Malas, Rudraksha, Bracelets & More"
+            products={devotionalAccessories.length ? devotionalAccessories : products.filter(p => p.category === 'Accessories')}
+            bgClass="bg-pearl"
+            viewAllLink="/products?tag=accessories"
+          />
+        </DeferredMount>
 
-        <ExclusiveShop />
+        <DeferredMount minHeight={420}>
+          <ExclusiveShop />
+        </DeferredMount>
 
-        <CollectionSection
-          tag="SACRED OFFERINGS"
-          title="Sacred Prasadam Collection"
-          subtitle="Taste the Blessings of Vrindavan's Sacred Temples"
-          products={sacredPrasadam.length ? sacredPrasadam : products.filter(p => p.category === 'Prasadam')}
-          viewAllLink="/products?tag=prasadam"
-        />
+        <DeferredMount minHeight={540}>
+          <CollectionSection
+            tag="SACRED OFFERINGS"
+            title="Sacred Prasadam Collection"
+            subtitle="Taste the Blessings of Vrindavan's Sacred Temples"
+            products={sacredPrasadam.length ? sacredPrasadam : products.filter(p => p.category === 'Prasadam')}
+            viewAllLink="/products?tag=prasadam"
+          />
+        </DeferredMount>
 
         {brajmartSpecialCategory && (
-          <CollectionSection
-            tag="CATEGORY"
-            title={brajmartSpecialCategory.name}
-            subtitle={`Explore ${brajmartSpecialCategory.name} collection`}
-            products={getProductsByCategory(brajmartSpecialCategory.name)}
-            bgClass="bg-pearl"
-            viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
-          />
+          <DeferredMount minHeight={540}>
+            <CollectionSection
+              tag="CATEGORY"
+              title={brajmartSpecialCategory.name}
+              subtitle={`Explore ${brajmartSpecialCategory.name} collection`}
+              products={getProductsByCategory(brajmartSpecialCategory.name)}
+              bgClass="bg-pearl"
+              viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
+            />
+          </DeferredMount>
         )}
 
-        <BrajYatra />
-        <Testimonials />
-        <Footer />
+        <DeferredMount minHeight={520}>
+          <BrajYatra />
+        </DeferredMount>
+
+        <DeferredMount minHeight={420}>
+          <Testimonials />
+        </DeferredMount>
+
+        <DeferredMount minHeight={360}>
+          <Footer />
+        </DeferredMount>
       </Suspense>
     </div>
   );

@@ -26,6 +26,13 @@ const HeroCarousel = () => {
     return urls.slice(0, 2);
   }, [slides]);
 
+  const currentSlideIndexes = useMemo(() => {
+    if (!slides.length) return new Set<number>();
+    const nextIndex = (selectedIndex + 1) % slides.length;
+    const prevIndex = (selectedIndex - 1 + slides.length) % slides.length;
+    return new Set([selectedIndex, nextIndex, prevIndex]);
+  }, [selectedIndex, slides.length]);
+
   useEffect(() => {
     // Preload first 1-2 hero images so the carousel looks instant on reload.
     for (const url of preloadUrls) {
@@ -36,13 +43,39 @@ const HeroCarousel = () => {
   }, [preloadUrls]);
 
   useEffect(() => {
+    if (!slides.length) return;
+    const nearby = [selectedIndex, selectedIndex + 1, selectedIndex - 1]
+      .map((index) => slides[(index + slides.length) % slides.length]?.image)
+      .filter((url): url is string => Boolean(url));
+
+    for (const url of nearby) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = url;
+    }
+  }, [selectedIndex, slides]);
+
+  useEffect(() => {
     if (!emblaApi) return;
     const onSelect = () => setSelectedIndex(emblaApi.selectedScrollSnap());
     emblaApi.on('select', onSelect);
     return () => { emblaApi.off('select', onSelect); };
   }, [emblaApi]);
 
-  if (!slides || slides.length === 0) return null;
+  if (!slides || slides.length === 0) {
+    return (
+      <section className="relative bg-background">
+        <div className="container mx-auto px-4 py-6 md:py-10">
+          <div className="rounded-[22px] md:rounded-[28px] border border-border bg-[#FBF4EC] overflow-hidden min-h-[420px] md:min-h-[460px] animate-pulse" />
+        </div>
+        <div className="border-t border-gold/10 bg-card/80 backdrop-blur">
+          <div className="container mx-auto px-4 py-3 flex items-center justify-center gap-3 sm:gap-6 md:gap-10 flex-wrap text-[0.7rem] sm:text-sm font-medium text-foreground/50">
+            <span>Loading divine stories</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="relative bg-background">
@@ -83,18 +116,18 @@ const HeroCarousel = () => {
 
                     {/* Image panel */}
                     <div className="relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
-                      {slide.image ? (
+                      {slide.image && currentSlideIndexes.has(i) ? (
                         <img
                           src={slide.image}
                           alt={slide.title}
-                          loading={i === 0 ? 'eager' : 'lazy'}
+                          loading={selectedIndex === i ? 'eager' : 'lazy'}
                           decoding="async"
-                          fetchPriority={i === 0 ? 'high' : 'auto'}
+                          fetchPriority={selectedIndex === i ? 'high' : 'low'}
                           sizes="(min-width: 768px) 66vw, 100vw"
                           className="absolute inset-0 w-full h-full object-cover object-center"
                         />
                       ) : (
-                        <div className="absolute inset-0 bg-white" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-white to-[#f6efe6]" />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
                     </div>

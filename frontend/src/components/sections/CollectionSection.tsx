@@ -8,6 +8,7 @@ interface CollectionSectionProps {
   title: string;
   subtitle?: string;
   products: Product[];
+  priority?: boolean;
   viewAllLink?: string;
   titleIconUrl?: string;
   viewAllIconUrl?: string;
@@ -20,6 +21,7 @@ const CollectionSection = ({
   title,
   subtitle,
   products,
+  priority = false,
   viewAllLink,
   titleIconUrl,
   viewAllIconUrl,
@@ -47,7 +49,7 @@ const CollectionSection = ({
           </Link>
         </div>
       )}
-      <ProductCarousel products={products} />
+      <ProductCarousel products={products} priority={priority} />
     </div>
   </section>
 );

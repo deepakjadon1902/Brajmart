@@ -1,4 +1,4 @@
-export const DEFAULT_SQUARE_IMAGE_SIZE = 1500;
+export const DEFAULT_SQUARE_IMAGE_SIZE = 1080;
 
 // If the URL is a Cloudinary delivery URL, inject a square crop + optimization transform.
 // Otherwise, return the original URL.

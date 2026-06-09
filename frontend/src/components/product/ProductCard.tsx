@@ -13,6 +13,7 @@ interface ProductCardProps {
   product: Product;
   index?: number;
   variant?: 'default' | 'compact';
+  priority?: boolean;
 }
 
 const badgeStyles: Record<string, string> = {
@@ -29,7 +30,7 @@ const badgeLabels: Record<string, string> = {
   exclusive: 'Exclusive',
 };
 
-const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardProps) => {
+const ProductCard = ({ product, index = 0, variant = 'default', priority = false }: ProductCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const [hoverImageIndex, setHoverImageIndex] = useState(0);
   const cardImages = Array.isArray(product.images) && product.images.length
@@ -37,7 +38,7 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
     : (product.image ? [product.image] : []);
   const cardImagesKey = cardImages.join('|');
   const baseImage = cardImages[0] || product.image;
-  const isAboveTheFold = index < 4;
+  const isAboveTheFold = priority && index < 2;
 
   const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
   const badge = product.tags?.includes('bestseller')
@@ -120,6 +121,7 @@ const ProductCard = ({ product, index = 0, variant = 'default' }: ProductCardPro
           alt={product.name}
           loading={isAboveTheFold ? 'eager' : 'lazy'}
           decoding="async"
+          fetchPriority={isAboveTheFold ? 'high' : 'low'}
           className={`w-full h-full ${mediaFitClass} transition-all duration-300 ease-out group-hover:scale-[1.02]`}
         />
 

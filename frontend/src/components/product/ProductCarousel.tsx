@@ -7,9 +7,10 @@ import ProductCard from './ProductCard';
 
 interface ProductCarouselProps {
   products: Product[];
+  priority?: boolean;
 }
 
-const ProductCarousel = ({ products }: ProductCarouselProps) => {
+const ProductCarousel = ({ products, priority = false }: ProductCarouselProps) => {
   const [emblaRef, emblaApi] = useEmblaCarousel(
     { loop: true, align: 'start', slidesToScroll: 1, containScroll: 'trimSnaps' },
     [Autoplay({ delay: 4000, stopOnInteraction: true, stopOnMouseEnter: true })]
@@ -24,7 +25,7 @@ const ProductCarousel = ({ products }: ProductCarouselProps) => {
         <div className="flex gap-3 sm:gap-4 md:gap-5">
           {products.map((product, i) => (
             <div key={product.id} className="flex-none w-[44vw] min-w-[168px] sm:w-[232px] md:w-[252px] lg:w-[264px]">
-              <ProductCard product={product} index={i} variant="compact" />
+              <ProductCard product={product} index={i} variant="compact" priority={priority} />
             </div>
           ))}
         </div>
