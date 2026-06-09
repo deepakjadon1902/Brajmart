@@ -6,6 +6,7 @@ import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -45,7 +46,11 @@ const Navbar = () => {
 
         <Link to="/" className="flex items-center shrink-0" aria-label={settings.storeName || 'Brajmart home'}>
           {settings.storeLogo ? (
-            <img src={settings.storeLogo} alt={settings.storeName} className="w-10 h-10 md:w-14 md:h-14 rounded object-contain" />
+            <img
+              src={toResponsiveImageUrl(settings.storeLogo, { width: 128, height: 128, fit: 'contain', quality: 72 })}
+              alt={settings.storeName}
+              className="w-10 h-10 md:w-14 md:h-14 rounded object-contain"
+            />
           ) : (
             <span className="sr-only">{settings.storeName}</span>
           )}

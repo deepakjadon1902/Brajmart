@@ -16,7 +16,7 @@ export default {
       fontFamily: {
         cinzel: ['Cinzel', 'serif'],
         playfair: ['Playfair Display', 'Georgia', 'serif'],
-        sans: ['Roboto', 'Inter', 'DM Sans', 'sans-serif'],
+        sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
         devanagari: ['Noto Serif Devanagari', 'serif'],
       },
       colors: {

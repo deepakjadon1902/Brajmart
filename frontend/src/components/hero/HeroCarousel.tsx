@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useHeroStore } from '@/store/heroStore';
+import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 
 const HeroCarousel = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -70,7 +71,7 @@ const HeroCarousel = () => {
               <div className="relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
                 {visibleSlide?.image ? (
                   <img
-                    src={visibleSlide.image}
+                    src={toResponsiveImageUrl(visibleSlide.image, { width: 1280, height: 720, quality: 76 })}
                     alt={visibleSlide.title}
                     loading="eager"
                     decoding="async"

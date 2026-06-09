@@ -8,6 +8,7 @@ const compression_1 = __importDefault(require("compression"));
 const cors_1 = __importDefault(require("cors"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const sharp_1 = __importDefault(require("sharp"));
 const auth_1 = __importDefault(require("./routes/auth"));
 const users_1 = __importDefault(require("./routes/users"));
 const products_1 = __importDefault(require("./routes/products"));
@@ -26,6 +27,45 @@ const SITE_URL = (process.env.SITE_URL || 'https://www.brajmart.com').replace(/\
 const UPLOADS_DIR = path_1.default.join(__dirname, '..', 'uploads');
 if (!fs_1.default.existsSync(UPLOADS_DIR))
     fs_1.default.mkdirSync(UPLOADS_DIR, { recursive: true });
+const toPositiveInt = (value, fallback) => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? Math.min(Math.round(n), 4096) : fallback;
+};
+app.get('/uploads/:filename', async (req, res, next) => {
+    const width = toPositiveInt(req.query.width, 0);
+    const height = toPositiveInt(req.query.height, 0);
+    const quality = toPositiveInt(req.query.quality ?? req.query.q, 78);
+    const fitRaw = String(req.query.fit || '').toLowerCase();
+    const fit = fitRaw === 'contain' ? 'contain' : 'cover';
+    const wantsResize = width > 0 || height > 0 || req.query.format || req.query.fmt;
+    if (!wantsResize)
+        return next();
+    const filename = path_1.default.basename(String(req.params.filename || ''));
+    const filePath = path_1.default.join(UPLOADS_DIR, filename);
+    if (!fs_1.default.existsSync(filePath))
+        return res.status(404).send('Not found');
+    try {
+        let image = (0, sharp_1.default)(filePath, { failOn: 'none' });
+        if (width > 0 || height > 0) {
+            image = image.resize({
+                width: width > 0 ? width : undefined,
+                height: height > 0 ? height : undefined,
+                fit,
+                withoutEnlargement: true,
+            });
+        }
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        res.type('image/webp');
+        const stream = image.webp({ quality: Math.max(35, Math.min(quality, 85)) }).pipe(res);
+        stream.on?.('error', (err) => {
+            if (!res.headersSent)
+                res.status(500).end(err?.message || 'Image processing failed');
+        });
+    }
+    catch (err) {
+        return res.status(500).send(err?.message || 'Image processing failed');
+    }
+});
 app.use((0, compression_1.default)());
 app.use((0, cors_1.default)({
     origin: process.env.CORS_ORIGIN || '*',

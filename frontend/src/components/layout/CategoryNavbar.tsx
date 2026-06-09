@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { ChevronRight, Grid2X2 } from 'lucide-react';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
-import { toSquareImageUrl } from '@/utils/image';
+import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 
 const isImageIcon = (icon?: string) =>
   Boolean(icon && (icon.startsWith('data:') || icon.startsWith('http') || icon.startsWith('/uploads')));
@@ -96,7 +96,7 @@ const CategoryNavbar = () => {
                     <div className="w-14 h-14 sm:w-16 sm:h-16 md:w-[72px] md:h-[72px] rounded-full border-2 border-gold/30 bg-pearl flex items-center justify-center text-2xl sm:text-[1.65rem] transition-all duration-300 group-hover:border-gold group-hover:shadow-[0_0_16px_rgba(212,175,55,0.25)] group-hover:scale-110 overflow-hidden">
                       {isImageIcon(cat.icon) ? (
                         <img
-                          src={toSquareImageUrl(cat.icon, 160)}
+                          src={toResponsiveImageUrl(cat.icon, { width: 128, height: 128, fit: 'cover', quality: 70 })}
                           alt={cat.name}
                           loading="lazy"
                           decoding="async"

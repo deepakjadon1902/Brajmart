@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Mail, Phone } from 'lucide-react';
 import { FaFacebookF, FaInstagram, FaWhatsapp, FaYoutube } from 'react-icons/fa';
 import { useSettingsStore } from '@/store/settingsStore';
+import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 
 const footerLinks = {
   'Get to Know Us': [
@@ -105,7 +106,11 @@ const Footer = () => {
           <div>
             <Link to="/" className="flex items-center gap-2 mb-3">
               {settings.storeLogo ? (
-                <img src={settings.storeLogo} alt={settings.storeName} className="w-9 h-9 rounded object-contain" />
+                <img
+                  src={toResponsiveImageUrl(settings.storeLogo, { width: 96, height: 96, fit: 'contain', quality: 72 })}
+                  alt={settings.storeName}
+                  className="w-9 h-9 rounded object-contain"
+                />
               ) : (
                 <span className="sr-only">{settings.storeName}</span>
               )}

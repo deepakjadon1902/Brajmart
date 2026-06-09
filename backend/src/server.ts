@@ -3,6 +3,7 @@ import compression from 'compression';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -23,6 +24,47 @@ const SITE_URL = (process.env.SITE_URL || 'https://www.brajmart.com').replace(/\
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const toPositiveInt = (value: unknown, fallback: number) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.round(n), 4096) : fallback;
+};
+
+app.get('/uploads/:filename', async (req, res, next) => {
+  const width = toPositiveInt(req.query.width, 0);
+  const height = toPositiveInt(req.query.height, 0);
+  const quality = toPositiveInt(req.query.quality ?? req.query.q, 78);
+  const fitRaw = String(req.query.fit || '').toLowerCase();
+  const fit = fitRaw === 'contain' ? 'contain' : 'cover';
+  const wantsResize = width > 0 || height > 0 || req.query.format || req.query.fmt;
+
+  if (!wantsResize) return next();
+
+  const filename = path.basename(String(req.params.filename || ''));
+  const filePath = path.join(UPLOADS_DIR, filename);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
+
+  try {
+    let image = sharp(filePath, { failOn: 'none' });
+    if (width > 0 || height > 0) {
+      image = image.resize({
+        width: width > 0 ? width : undefined,
+        height: height > 0 ? height : undefined,
+        fit,
+        withoutEnlargement: true,
+      });
+    }
+
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.type('image/webp');
+    const stream = image.webp({ quality: Math.max(35, Math.min(quality, 85)) }).pipe(res);
+    stream.on?.('error', (err: any) => {
+      if (!res.headersSent) res.status(500).end(err?.message || 'Image processing failed');
+    });
+  } catch (err: any) {
+    return res.status(500).send(err?.message || 'Image processing failed');
+  }
+});
 
 app.use(compression());
 app.use(cors({
