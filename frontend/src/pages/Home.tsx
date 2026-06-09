@@ -138,9 +138,7 @@ const Home = () => {
           <BrajYatra />
         </DeferredMount>
 
-        <DeferredMount minHeight={420}>
-          <Testimonials />
-        </DeferredMount>
+        
 
         <DeferredMount minHeight={360}>
           <Footer />

@@ -233,14 +233,28 @@ router.post('/forgot-password/verify', async (req, res) => {
 
 // Admin login with env credentials
 router.post('/admin-login', async (req, res) => {
-  const { email, password } = req.body;
+  const rawIdentifier = String(req.body?.email ?? req.body?.username ?? req.body?.identifier ?? '').trim();
+  const identifier = rawIdentifier.toLowerCase();
+  const password = String(req.body?.password ?? '');
 
   if (isDbConnected()) {
     try {
-      const rows = await dbQuery<any>('SELECT * FROM admins WHERE email = ? AND status = ? LIMIT 1', [email, 'active']);
+      const rows = await dbQuery<any>(
+        'SELECT * FROM admins WHERE status = ? AND (LOWER(email) = ? OR LOWER(name) = ?) LIMIT 1',
+        ['active', identifier, identifier]
+      );
       const row = rows[0];
       if (!row || !(await bcrypt.compare(password, row.password))) {
-        return res.status(401).json({ message: 'Invalid admin credentials' });
+        const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+        const adminName = String(process.env.ADMIN_NAME || '').trim().toLowerCase();
+        const adminPassword = String(process.env.ADMIN_PASSWORD || '');
+        if (!adminPassword || !identifier || (identifier !== adminEmail && identifier !== adminName) || password !== adminPassword) {
+          return res.status(401).json({ message: 'Invalid admin credentials' });
+        }
+        return res.json({
+          token: signToken({ id: 'admin', email: adminEmail || rawIdentifier, role: 'admin' }),
+          user: { id: 'admin', name: process.env.ADMIN_NAME || 'Admin', email: process.env.ADMIN_EMAIL || rawIdentifier, role: 'admin' },
+        });
       }
       await dbExecute('UPDATE admins SET last_login = NOW() WHERE id = ?', [row.id]);
       return res.json({
@@ -255,9 +269,12 @@ router.post('/admin-login', async (req, res) => {
   // Fallback to env-based admin for local/dev
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
+  const adminName = process.env.ADMIN_NAME || 'Admin';
+  const normalizedEmail = String(adminEmail || '').trim().toLowerCase();
+  const normalizedName = String(adminName || '').trim().toLowerCase();
   if (!adminEmail || !adminPassword) return res.status(500).json({ message: 'Admin credentials not configured' });
-  if (email !== adminEmail || password !== adminPassword) return res.status(401).json({ message: 'Invalid admin credentials' });
-  res.json({ token: signToken({ id: 'admin', email, role: 'admin' }), user: { id: 'admin', name: 'Admin', email, role: 'admin' } });
+  if (password !== adminPassword || (identifier !== normalizedEmail && identifier !== normalizedName)) return res.status(401).json({ message: 'Invalid admin credentials' });
+  res.json({ token: signToken({ id: 'admin', email: adminEmail, role: 'admin' }), user: { id: 'admin', name: adminName, email: adminEmail, role: 'admin' } });
 });
 
 router.get('/google/start', async (_req, res) => {

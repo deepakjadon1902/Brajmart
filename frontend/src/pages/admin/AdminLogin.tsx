@@ -5,7 +5,7 @@ import { useAdminStore } from '@/store/adminStore';
 import { Shield, Eye, EyeOff } from 'lucide-react';
 
 const AdminLogin = () => {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
@@ -19,7 +19,7 @@ const AdminLogin = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const success = await adminLogin(email, password);
+    const success = await adminLogin(identifier, password);
     if (success) {
       navigate('/admin/dashboard');
     } else {
@@ -44,13 +44,13 @@ const AdminLogin = () => {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Admin Username</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Admin Email or Username</label>
             <input
               type="text"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition"
-              placeholder="••••••••"
+              placeholder="Email or username"
               required
             />
           </div>
