@@ -44,7 +44,7 @@ const HeroCarousel = () => {
               <div className="bg-[#FBF4EC] px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center">
                 <div className="max-w-sm">
                   {visibleSlide && (
-                    <div className="animate-fade-up">
+                    <div>
                       {visibleSlide.tag && (
                         <span className="inline-block text-[#8A6D4E] font-semibold text-[0.65rem] uppercase tracking-[0.2em] mb-3">
                           {visibleSlide.tag}
@@ -71,12 +71,12 @@ const HeroCarousel = () => {
               <div className="relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
                 {visibleSlide?.image ? (
                   <img
-                    src={toResponsiveImageUrl(visibleSlide.image, { width: 1280, height: 720, quality: 76 })}
+                    src={toResponsiveImageUrl(visibleSlide.image, { width: 900, height: 506, quality: 74 })}
                     alt={visibleSlide.title}
                     loading="eager"
                     decoding="async"
                     fetchPriority="high"
-                    sizes="(min-width: 768px) 66vw, 100vw"
+                    sizes="(max-width: 767px) 100vw, 66vw"
                     className="absolute inset-0 w-full h-full object-cover object-center"
                   />
                 ) : (
