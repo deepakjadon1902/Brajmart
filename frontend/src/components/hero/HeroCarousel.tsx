@@ -6,6 +6,7 @@ import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 
 const HeroCarousel = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isDesktop, setIsDesktop] = useState(false);
   const slides = useHeroStore((s) => s.slides);
   const loadSlides = useHeroStore((s) => s.loadFromApi);
   const heroBadges = useSettingsStore((s) => s.settings.heroBadges);
@@ -21,28 +22,43 @@ const HeroCarousel = () => {
   );
 
   useEffect(() => {
-    loadSlides();
-  }, [loadSlides]);
-
-  const visibleSlide = useMemo(() => slides[selectedIndex] || slides[0] || fallbackSlide, [slides, selectedIndex, fallbackSlide]);
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(min-width: 768px)');
+    const update = () => setIsDesktop(media.matches);
+    update();
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
 
   useEffect(() => {
+    if (!isDesktop) return;
+    loadSlides();
+  }, [isDesktop, loadSlides]);
+
+  const visibleSlide = useMemo(() => (isDesktop ? (slides[selectedIndex] || slides[0] || fallbackSlide) : fallbackSlide), [isDesktop, slides, selectedIndex, fallbackSlide]);
+
+  useEffect(() => {
+    if (!isDesktop) return;
     const preload = slides.slice(0, 2).map((slide) => slide.image).filter((url): url is string => Boolean(url));
     for (const url of preload) {
       const img = new Image();
       img.decoding = 'async';
       img.src = url;
     }
-  }, [slides]);
+  }, [isDesktop, slides]);
 
   return (
     <section className="relative bg-background">
       <div className="container mx-auto px-4 py-6 md:py-10">
         <div className="relative">
           <div className="overflow-hidden rounded-[22px] md:rounded-[28px] border border-border shadow-lg bg-white">
-            <div className="grid md:grid-cols-[1fr_2fr] min-h-[420px] md:h-[420px] lg:h-[460px] bg-white">
-              <div className="bg-[#FBF4EC] px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center">
-                <div className="max-w-sm">
+            <div className="grid md:grid-cols-[1fr_2fr] min-h-[320px] md:min-h-[420px] lg:h-[460px] bg-white">
+              <div className="bg-[#FBF4EC] px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center justify-center md:justify-start">
+                <div className="max-w-sm text-center md:text-left">
                   {visibleSlide && (
                     <div>
                       {visibleSlide.tag && (
@@ -54,7 +70,7 @@ const HeroCarousel = () => {
                         {visibleSlide.title}
                       </h1>
                       {visibleSlide.subtitle && (
-                        <p className="text-[#6B7A8E] text-sm md:text-base leading-relaxed font-playfair mb-5">
+                        <p className="text-[#6B7A8E] text-sm md:text-base leading-relaxed font-playfair mb-5 max-w-md mx-auto md:mx-0">
                           {visibleSlide.subtitle}
                         </p>
                       )}
@@ -68,10 +84,23 @@ const HeroCarousel = () => {
                 </div>
               </div>
 
+              {isDesktop && visibleSlide?.image ? (
               <div className="relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
-                {visibleSlide?.image ? (
+                <img
+                  src={toResponsiveImageUrl(visibleSlide.image, { width: 900, height: 506, quality: 72 })}
+                  alt={visibleSlide.title}
+                  loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
+                  sizes="(max-width: 767px) 100vw, 66vw"
+                  className="absolute inset-0 w-full h-full object-cover object-center"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
+              </div>
+              ) : (
+                <div className="hidden md:block relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
                   <img
-                    src={toResponsiveImageUrl(visibleSlide.image, { width: 900, height: 506, quality: 74 })}
+                    src={toResponsiveImageUrl(visibleSlide.image, { width: 900, height: 506, quality: 72 })}
                     alt={visibleSlide.title}
                     loading="eager"
                     decoding="async"
@@ -79,25 +108,9 @@ const HeroCarousel = () => {
                     sizes="(max-width: 767px) 100vw, 66vw"
                     className="absolute inset-0 w-full h-full object-cover object-center"
                   />
-                ) : (
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(212,175,55,0.2),_transparent_30%),linear-gradient(135deg,_#fffaf1_0%,_#f7efe2_45%,_#efe0c3_100%)]">
-                    <div className="absolute inset-0 flex items-center justify-center p-6">
-                      <div className="max-w-xs rounded-[28px] border border-gold/20 bg-white/70 backdrop-blur px-6 py-8 text-center shadow-[0_12px_40px_rgba(88,46,6,0.08)]">
-                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gold-gradient text-maroon-dark font-cinzel text-2xl font-bold">
-                          B
-                        </div>
-                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.24em] text-saffron mb-2">
-                          Vrindavan Inspired
-                        </p>
-                        <p className="text-sm text-foreground/70 leading-relaxed">
-                          Authentic devotional essentials, curated for a calmer and faster browsing experience.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
-              </div>
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
+                </div>
+              )}
             </div>
           </div>
 
