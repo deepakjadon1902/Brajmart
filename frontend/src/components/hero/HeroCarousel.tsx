@@ -1,6 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
-import useEmblaCarousel from 'embla-carousel-react';
-import Autoplay from 'embla-carousel-autoplay';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useHeroStore } from '@/store/heroStore';
@@ -10,145 +8,122 @@ const HeroCarousel = () => {
   const slides = useHeroStore((s) => s.slides);
   const loadSlides = useHeroStore((s) => s.loadFromApi);
   const heroBadges = useSettingsStore((s) => s.settings.heroBadges);
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true }, [
-    Autoplay({ delay: 5000, stopOnInteraction: false, stopOnMouseEnter: true }),
-  ]);
-
-  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
-  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+  const fallbackSlide = useMemo(
+    () => ({
+      id: 'fallback-hero',
+      tag: 'BRAJMART COLLECTION',
+      title: 'Spiritual Books, Puja Items & Sacred Goods from Vrindavan',
+      subtitle: 'A faster, cleaner home experience for devotees discovering authentic BrajMart offerings.',
+      cta: 'Shop Now',
+    }),
+    []
+  );
 
   useEffect(() => {
     loadSlides();
   }, [loadSlides]);
 
-  const preloadUrls = useMemo(() => {
-    const urls = (slides || []).map((s) => String(s?.image || '')).filter(Boolean);
-    return urls.slice(0, 2);
+  const visibleSlide = useMemo(() => slides[selectedIndex] || slides[0] || fallbackSlide, [slides, selectedIndex, fallbackSlide]);
+
+  useEffect(() => {
+    const preload = slides.slice(0, 2).map((slide) => slide.image).filter((url): url is string => Boolean(url));
+    for (const url of preload) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = url;
+    }
   }, [slides]);
-
-  const currentSlideIndexes = useMemo(() => {
-    if (!slides.length) return new Set<number>();
-    const nextIndex = (selectedIndex + 1) % slides.length;
-    const prevIndex = (selectedIndex - 1 + slides.length) % slides.length;
-    return new Set([selectedIndex, nextIndex, prevIndex]);
-  }, [selectedIndex, slides.length]);
-
-  useEffect(() => {
-    // Preload first 1-2 hero images so the carousel looks instant on reload.
-    for (const url of preloadUrls) {
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = url;
-    }
-  }, [preloadUrls]);
-
-  useEffect(() => {
-    if (!slides.length) return;
-    const nearby = [selectedIndex, selectedIndex + 1, selectedIndex - 1]
-      .map((index) => slides[(index + slides.length) % slides.length]?.image)
-      .filter((url): url is string => Boolean(url));
-
-    for (const url of nearby) {
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = url;
-    }
-  }, [selectedIndex, slides]);
-
-  useEffect(() => {
-    if (!emblaApi) return;
-    const onSelect = () => setSelectedIndex(emblaApi.selectedScrollSnap());
-    emblaApi.on('select', onSelect);
-    return () => { emblaApi.off('select', onSelect); };
-  }, [emblaApi]);
-
-  if (!slides || slides.length === 0) {
-    return (
-      <section className="relative bg-background">
-        <div className="container mx-auto px-4 py-6 md:py-10">
-          <div className="rounded-[22px] md:rounded-[28px] border border-border bg-[#FBF4EC] overflow-hidden min-h-[420px] md:min-h-[460px] animate-pulse" />
-        </div>
-        <div className="border-t border-gold/10 bg-card/80 backdrop-blur">
-          <div className="container mx-auto px-4 py-3 flex items-center justify-center gap-3 sm:gap-6 md:gap-10 flex-wrap text-[0.7rem] sm:text-sm font-medium text-foreground/50">
-            <span>Loading divine stories</span>
-          </div>
-        </div>
-      </section>
-    );
-  }
 
   return (
     <section className="relative bg-background">
       <div className="container mx-auto px-4 py-6 md:py-10">
         <div className="relative">
-          <div className="overflow-hidden rounded-[22px] md:rounded-[28px] border border-border shadow-lg bg-white" ref={emblaRef}>
-            <div className="flex">
-              {slides.map((slide, i) => (
-                <div key={slide.id} className="flex-none w-full">
-                  <div className="grid md:grid-cols-[1fr_2fr] min-h-[420px] md:h-[420px] lg:h-[460px] bg-white">
-                    {/* Text panel */}
-                    <div className="bg-[#FBF4EC] px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center">
-                      <div className="max-w-sm">
-                        {selectedIndex === i && (
-                          <div className="animate-fade-up">
-                            {slide.tag && (
-                              <span className="inline-block text-[#8A6D4E] font-semibold text-[0.65rem] uppercase tracking-[0.2em] mb-3">
-                                {slide.tag}
-                              </span>
-                            )}
-                            <h1 className="font-cinzel text-2xl sm:text-3xl md:text-5xl lg:text-5xl font-bold text-[#3B4F66] leading-[1.12] mb-3">
-                              {slide.title}
-                            </h1>
-                            {slide.subtitle && (
-                              <p className="text-[#6B7A8E] text-sm md:text-base leading-relaxed font-playfair mb-5">
-                                {slide.subtitle}
-                              </p>
-                            )}
-                            {slide.cta && (
-                              <button className="px-6 py-2.5 rounded-xl bg-[#3B4F66] text-white font-bold text-sm active:scale-[0.97] transition-transform shadow">
-                                {slide.cta}
-                              </button>
-                            )}
-                          </div>
-                        )}
+          <div className="overflow-hidden rounded-[22px] md:rounded-[28px] border border-border shadow-lg bg-white">
+            <div className="grid md:grid-cols-[1fr_2fr] min-h-[420px] md:h-[420px] lg:h-[460px] bg-white">
+              <div className="bg-[#FBF4EC] px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center">
+                <div className="max-w-sm">
+                  {visibleSlide && (
+                    <div className="animate-fade-up">
+                      {visibleSlide.tag && (
+                        <span className="inline-block text-[#8A6D4E] font-semibold text-[0.65rem] uppercase tracking-[0.2em] mb-3">
+                          {visibleSlide.tag}
+                        </span>
+                      )}
+                      <h1 className="font-cinzel text-2xl sm:text-3xl md:text-5xl lg:text-5xl font-bold text-[#3B4F66] leading-[1.12] mb-3">
+                        {visibleSlide.title}
+                      </h1>
+                      {visibleSlide.subtitle && (
+                        <p className="text-[#6B7A8E] text-sm md:text-base leading-relaxed font-playfair mb-5">
+                          {visibleSlide.subtitle}
+                        </p>
+                      )}
+                      {visibleSlide.cta && (
+                        <button className="px-6 py-2.5 rounded-xl bg-[#3B4F66] text-white font-bold text-sm active:scale-[0.97] transition-transform shadow">
+                          {visibleSlide.cta}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
+                {visibleSlide?.image ? (
+                  <img
+                    src={visibleSlide.image}
+                    alt={visibleSlide.title}
+                    loading="eager"
+                    decoding="async"
+                    fetchPriority="high"
+                    sizes="(min-width: 768px) 66vw, 100vw"
+                    className="absolute inset-0 w-full h-full object-cover object-center"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(212,175,55,0.2),_transparent_30%),linear-gradient(135deg,_#fffaf1_0%,_#f7efe2_45%,_#efe0c3_100%)]">
+                    <div className="absolute inset-0 flex items-center justify-center p-6">
+                      <div className="max-w-xs rounded-[28px] border border-gold/20 bg-white/70 backdrop-blur px-6 py-8 text-center shadow-[0_12px_40px_rgba(88,46,6,0.08)]">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gold-gradient text-maroon-dark font-cinzel text-2xl font-bold">
+                          B
+                        </div>
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.24em] text-saffron mb-2">
+                          Vrindavan Inspired
+                        </p>
+                        <p className="text-sm text-foreground/70 leading-relaxed">
+                          Authentic devotional essentials, curated for a calmer and faster browsing experience.
+                        </p>
                       </div>
                     </div>
-
-                    {/* Image panel */}
-                    <div className="relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
-                      {slide.image && currentSlideIndexes.has(i) ? (
-                        <img
-                          src={slide.image}
-                          alt={slide.title}
-                          loading={selectedIndex === i ? 'eager' : 'lazy'}
-                          decoding="async"
-                          fetchPriority={selectedIndex === i ? 'high' : 'low'}
-                          sizes="(min-width: 768px) 66vw, 100vw"
-                          className="absolute inset-0 w-full h-full object-cover object-center"
-                        />
-                      ) : (
-                        <div className="absolute inset-0 bg-gradient-to-br from-white to-[#f6efe6]" />
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
-                    </div>
                   </div>
-                </div>
-              ))}
+                )}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
+              </div>
             </div>
           </div>
 
-          <button onClick={scrollPrev} className="hidden sm:flex absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-white border border-border items-center justify-center hover:bg-pearl active:scale-95 transition-all" aria-label="Previous slide">
-            <ChevronLeft size={18} className="text-[#3B4F66]" />
-          </button>
-          <button onClick={scrollNext} className="hidden sm:flex absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-white border border-border items-center justify-center hover:bg-pearl active:scale-95 transition-all" aria-label="Next slide">
-            <ChevronRight size={18} className="text-[#3B4F66]" />
-          </button>
+          {slides.length > 1 && (
+            <>
+              <button
+                onClick={() => setSelectedIndex((current) => (current - 1 + slides.length) % slides.length)}
+                className="hidden sm:flex absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-white border border-border items-center justify-center hover:bg-pearl active:scale-95 transition-all"
+                aria-label="Previous slide"
+              >
+                <ChevronLeft size={18} className="text-[#3B4F66]" />
+              </button>
+              <button
+                onClick={() => setSelectedIndex((current) => (current + 1) % slides.length)}
+                className="hidden sm:flex absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-white border border-border items-center justify-center hover:bg-pearl active:scale-95 transition-all"
+                aria-label="Next slide"
+              >
+                <ChevronRight size={18} className="text-[#3B4F66]" />
+              </button>
+            </>
+          )}
 
           <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-white/80 backdrop-blur px-3 py-2 rounded-full border border-border">
             {slides.map((_, i) => (
               <button
                 key={i}
-                onClick={() => emblaApi?.scrollTo(i)}
+                onClick={() => setSelectedIndex(i)}
                 className={`h-2 rounded-full transition-all duration-300 ${selectedIndex === i ? 'w-8 bg-gold' : 'w-2 bg-[#3B4F66]/30'}`}
                 aria-label={`Go to slide ${i + 1}`}
               />
