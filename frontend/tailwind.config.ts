@@ -14,10 +14,10 @@ export default {
     },
     extend: {
       fontFamily: {
-        cinzel: ['Cinzel', 'serif'],
-        playfair: ['Playfair Display', 'Georgia', 'serif'],
+        cinzel: ['ui-serif', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
+        playfair: ['ui-serif', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
         sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
-        devanagari: ['Noto Serif Devanagari', 'serif'],
+        devanagari: ['ui-serif', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
       },
       colors: {
         border: "hsl(var(--border))",

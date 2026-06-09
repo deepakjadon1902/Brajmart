@@ -85,20 +85,7 @@ const HeroCarousel = () => {
               </div>
 
               {isDesktop && visibleSlide?.image ? (
-              <div className="relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
-                <img
-                  src={toResponsiveImageUrl(visibleSlide.image, { width: 900, height: 506, quality: 72 })}
-                  alt={visibleSlide.title}
-                  loading="eager"
-                  decoding="async"
-                  fetchPriority="high"
-                  sizes="(max-width: 767px) 100vw, 66vw"
-                  className="absolute inset-0 w-full h-full object-cover object-center"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
-              </div>
-              ) : (
-                <div className="hidden md:block relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
+                <div className="relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
                   <img
                     src={toResponsiveImageUrl(visibleSlide.image, { width: 900, height: 506, quality: 72 })}
                     alt={visibleSlide.title}
@@ -110,6 +97,8 @@ const HeroCarousel = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
                 </div>
+              ) : (
+                <div className="hidden md:block relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden" aria-hidden="true" />
               )}
             </div>
           </div>

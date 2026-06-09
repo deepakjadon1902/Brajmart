@@ -139,7 +139,7 @@ const Navbar = () => {
       </form>
 
       {mobileOpen && (
-        <div className="md:hidden border-t border-border bg-card px-4 py-4 space-y-3 animate-fade-up">
+        <div className="md:hidden border-t border-border bg-card px-4 py-4 space-y-3">
           <Link to="/" onClick={() => setMobileOpen(false)} className="block py-2 text-sm font-medium text-foreground hover:text-saffron">Home</Link>
           <Link to="/search" onClick={() => setMobileOpen(false)} className="block py-2 text-sm font-medium text-foreground hover:text-saffron">All Products</Link>
           <Link to="/wishlist" onClick={() => setMobileOpen(false)} className="block py-2 text-sm font-medium text-foreground hover:text-saffron">Wishlist</Link>
