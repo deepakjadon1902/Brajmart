@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import SEO from '@/components/seo/SEO';
+import { breadcrumbSchema } from '@/lib/seo';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
 
 const CategoriesPage = () => {
@@ -9,6 +11,17 @@ const CategoriesPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title="All Categories | Brajmart"
+        description="Browse all Brajmart categories including spiritual books, puja items, prasadam, idols, incense, accessories and Braj Yatra essentials."
+        path="/categories"
+        schema={[
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Categories', path: '/categories' },
+          ]),
+        ]}
+      />
       <AnnouncementBar />
       <Navbar />
       <div className="container mx-auto px-4 py-8">

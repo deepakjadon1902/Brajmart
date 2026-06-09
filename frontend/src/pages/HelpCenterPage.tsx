@@ -5,6 +5,8 @@ import { Search, ShoppingCart, Truck, RotateCcw, CreditCard, User, HelpCircle, C
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
+import SEO from '@/components/seo/SEO';
+import { breadcrumbSchema } from '@/lib/seo';
 
 const topics = [
   { icon: ShoppingCart, title: 'Orders & Purchases', desc: 'Place, modify, or cancel orders', link: '/track-order' },
@@ -32,6 +34,17 @@ const HelpCenterPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title="Help Center | BrajMart Support & FAQs"
+        description="Find answers about orders, shipping, returns, payments and account support at BrajMart. Search FAQs or browse help topics."
+        path="/help-center"
+        schema={[
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Help Center', path: '/help-center' },
+          ]),
+        ]}
+      />
       <Navbar />
 
       <section className="relative bg-maroon-dark text-primary-foreground py-16 md:py-24">

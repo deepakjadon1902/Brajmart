@@ -7,6 +7,8 @@ import { Link } from 'react-router-dom';
 import { fetchAdminBlogs, fetchBlogs } from '@/lib/api';
 import type { BlogPost } from '@/types/blog';
 import { useAdminStore } from '@/store/adminStore';
+import SEO from '@/components/seo/SEO';
+import { breadcrumbSchema } from '@/lib/seo';
 
 const formatDate = (value?: string | null) => {
   if (!value) return '';
@@ -66,6 +68,17 @@ const BlogPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title="BrajMart Blog | Spiritual Guides, Stories & Vrindavan Wisdom"
+        description="Read devotional stories, shopping guides and spiritual insights from BrajMart. Explore articles inspired by Vrindavan and Braj culture."
+        path="/blog"
+        schema={[
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Blog', path: '/blog' },
+          ]),
+        ]}
+      />
       <Navbar />
 
       <section className="relative bg-maroon-dark text-primary-foreground py-16 md:py-24">

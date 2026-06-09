@@ -141,6 +141,13 @@ app.get('/sitemap.xml', async (_req, res) => {
     { path: '/about', priority: '0.6', changefreq: 'monthly' },
     { path: '/contact', priority: '0.6', changefreq: 'monthly' },
     { path: '/blog', priority: '0.5', changefreq: 'weekly' },
+    { path: '/help-center', priority: '0.5', changefreq: 'monthly' },
+    { path: '/customer-service', priority: '0.5', changefreq: 'monthly' },
+    { path: '/privacy-policy', priority: '0.3', changefreq: 'yearly' },
+    { path: '/terms', priority: '0.3', changefreq: 'yearly' },
+    { path: '/shipping-delivery', priority: '0.3', changefreq: 'yearly' },
+    { path: '/return-policy', priority: '0.3', changefreq: 'yearly' },
+    { path: '/payment-method', priority: '0.3', changefreq: 'yearly' },
   ];
 
   if (isDbConnected()) {

@@ -7,6 +7,8 @@ import { Calendar, Clock, ArrowLeft } from 'lucide-react';
 import { fetchAdminBlogBySlug, fetchBlogBySlug } from '@/lib/api';
 import type { BlogPost } from '@/types/blog';
 import { useAdminStore } from '@/store/adminStore';
+import SEO from '@/components/seo/SEO';
+import { breadcrumbSchema } from '@/lib/seo';
 
 const formatDate = (value?: string | null) => {
   if (!value) return '';
@@ -63,8 +65,23 @@ const BlogPostPage = () => {
       .filter(Boolean);
   }, [post?.content]);
 
+  const description = post?.excerpt || post?.content?.split(/\n\s*\n/g).find(Boolean)?.slice(0, 160) || 'Read devotional stories, guides and spiritual insights from BrajMart.';
+  const path = slug ? `/blog/${slug}` : '/blog';
+
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={`${post?.title || 'Blog Post'} | BrajMart`}
+        description={description}
+        path={path}
+        schema={post ? [
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Blog', path: '/blog' },
+            { name: post.title, path },
+          ]),
+        ] : undefined}
+      />
       <Navbar />
 
       <section className="relative bg-maroon-dark text-primary-foreground py-14 md:py-20">

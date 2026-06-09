@@ -5,6 +5,8 @@ import Footer from '@/components/layout/Footer';
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { MapPin, Phone, Mail, Clock, Send, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import SEO from '@/components/seo/SEO';
+import { breadcrumbSchema } from '@/lib/seo';
 
 const contactInfo = [
   { icon: MapPin, title: 'Visit Us', lines: ['BrajMart Headquarters', 'Near ISKCON Temple, Raman Reti', 'Vrindavan, Mathura — 281121', 'Uttar Pradesh, India'] },
@@ -25,6 +27,17 @@ const ContactPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title="Contact Brajmart | Spiritual Store in Vrindavan"
+        description="Contact Brajmart for orders, product questions and support. Reach our Vrindavan-based team by phone, email or visit details."
+        path="/contact"
+        schema={[
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Contact', path: '/contact' },
+          ]),
+        ]}
+      />
       <Navbar />
 
       <section className="relative bg-maroon-dark text-primary-foreground py-16 md:py-24">

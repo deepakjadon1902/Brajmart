@@ -12,7 +12,7 @@ import { useProductStore } from "./store/productStore";
 import { useCartStore } from "./store/cartStore";
 import { useAuthStore } from "./store/authStore";
 import { useWishlistStore } from "./store/wishlistStore";
-import { DEFAULT_DESCRIPTION, DEFAULT_IMAGE, DEFAULT_TITLE, SITE_URL } from "./lib/seo";
+import { DEFAULT_IMAGE, SITE_URL } from "./lib/seo";
 
 const queryClient = new QueryClient();
 const DEFAULT_FAVICON_URL = "/favicon.ico";
@@ -169,19 +169,8 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Helmet>
-          <title>{settings.metaTitle || DEFAULT_TITLE}</title>
-          <meta name="description" content={settings.metaDescription || DEFAULT_DESCRIPTION} />
           <meta name="author" content={settings.storeName} />
-          <link rel="canonical" href={`${SITE_URL}/`} />
-          <meta property="og:type" content="website" />
-          <meta property="og:site_name" content={settings.storeName} />
-          <meta property="og:url" content={`${SITE_URL}/`} />
-          <meta property="og:title" content={settings.metaTitle || DEFAULT_TITLE} />
-          <meta property="og:description" content={settings.metaDescription || DEFAULT_DESCRIPTION} />
           <meta property="og:image" content={brandImage} />
-          <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content={settings.metaTitle || DEFAULT_TITLE} />
-          <meta name="twitter:description" content={settings.metaDescription || DEFAULT_DESCRIPTION} />
           <meta name="twitter:image" content={brandImage} />
           <link rel="icon" href={favicon} />
           <script type="application/ld+json">{JSON.stringify(organizationSchema)}</script>
