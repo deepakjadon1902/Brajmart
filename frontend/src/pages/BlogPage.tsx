@@ -122,7 +122,7 @@ const BlogPage = () => {
                   {item.label}
                 </button>
               ))}
-              <span className="text-xs text-muted-foreground">Admin view: drafts visible</span>
+              
             </div>
           )}
 
