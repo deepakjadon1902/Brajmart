@@ -57,8 +57,8 @@ const UserOrderTracking = () => {
         <div className="container mx-auto px-4 text-center">
           <ScrollReveal>
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">ORDER TRACKING</p>
-            <h1 className="font-cinzel text-3xl md:text-4xl font-bold mb-6">Track Your Order</h1>
-            <p className="text-primary-foreground/60 text-sm mb-6">Enter your Order ID to track your delivery</p>
+            <h1 className="font-cinzel text-3xl md:text-4xl font-bold mb-6 text-white">Track Your Order</h1>
+            <p className="text-primary-foreground/60 text-sm mb-6 text-white">Enter your Order ID to track your delivery</p>
             <form onSubmit={handleSearch} className="max-w-md mx-auto flex rounded-full border border-primary-foreground/20 overflow-hidden bg-primary-foreground/5">
               <input
                 value={searchId}

@@ -31,7 +31,7 @@ const ComparePage = () => {
         <div className="container mx-auto px-4 text-center">
           <ScrollReveal>
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">SIDE BY SIDE</p>
-            <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4">Compare Products</h1>
+            <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4 text-white">Compare Products</h1>
             <p className="text-primary-foreground/70 max-w-xl mx-auto">Select up to 4 products to compare features, prices, and ratings.</p>
           </ScrollReveal>
         </div>

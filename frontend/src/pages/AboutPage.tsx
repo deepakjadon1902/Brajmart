@@ -49,7 +49,7 @@ const AboutPage = () => (
       <div className="container mx-auto px-4 text-center relative z-10">
         <ScrollReveal>
           <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">OUR STORY</p>
-          <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-6 leading-tight">About BrajMart</h1>
+          <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-6 leading-tight text-white">About BrajMart</h1>
           <p className="max-w-2xl mx-auto text-primary-foreground/70 text-lg leading-relaxed">
             Brajmart is a bridge between devotion and daily life, bringing the sacred culture of Vrindavan to homes everywhere through authentic, meaningful spiritual essentials.
           </p>
@@ -153,7 +153,7 @@ const AboutPage = () => (
     <section className="py-10 md:py-12 bg-maroon-dark text-primary-foreground">
       <div className="container mx-auto px-4">
         <ScrollReveal>
-          <div className="grid md:grid-cols-4 gap-4">
+          <div className="grid md:grid-cols-4 gap-4 ">
             {[
               { icon: ShieldCheck, title: 'Authenticity You Can Trust', desc: 'Verified sources and sacred provenance.' },
               { icon: Truck, title: 'Reliable Delivery', desc: 'Secure packaging and timely dispatch.' },
@@ -164,7 +164,7 @@ const AboutPage = () => (
                 <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center mb-3">
                   <item.icon size={18} className="text-gold" />
                 </div>
-                <h3 className="font-cinzel text-base font-bold">{item.title}</h3>
+                <h3 className="font-cinzel text-base font-bold text-white">{item.title}</h3>
                 <p className="text-primary-foreground/70 text-sm mt-1">{item.desc}</p>
               </div>
             ))}

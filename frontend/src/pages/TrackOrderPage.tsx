@@ -82,7 +82,7 @@ const TrackOrderPage = () => {
         <div className="container mx-auto px-4 text-center">
           <ScrollReveal>
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">ORDER TRACKING</p>
-            <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-6">Track Your Order</h1>
+            <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-6 text-white">Track Your Order</h1>
             <form onSubmit={handleTrack} className="max-w-lg mx-auto flex rounded-full border border-primary-foreground/20 overflow-hidden bg-primary-foreground/5">
               <input value={orderId} onChange={e => setOrderId(e.target.value)} placeholder="Enter Order ID or Tracking ID" className="flex-1 px-5 py-3 bg-transparent text-sm outline-none placeholder:text-primary-foreground/40" />
               <button type="submit" className="px-6 bg-gold-gradient text-maroon-dark font-bold text-sm shimmer" disabled={loading}>

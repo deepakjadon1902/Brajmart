@@ -16,7 +16,7 @@ const BrajYatra = () => (
           <h2 className="font-cinzel text-2xl md:text-3xl font-bold text-primary-foreground mb-2">
             Braj Darshan — Enter the Realm of the Divine
           </h2>
-          <p className="text-primary-foreground/60 text-sm max-w-xl mx-auto">
+          <p className="text-primary-foreground/60 text-sm max-w-xl mx-auto text-white">
             Explore the sacred Yatra circuits of Braj Bhumi — from the birthplace of Lord Krishna to the land of Radha Rani
           </p>
         </div>

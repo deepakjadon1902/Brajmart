@@ -11,7 +11,7 @@ const ReturnPolicyPage = () => (
       <div className="container mx-auto px-4 text-center">
         <ScrollReveal>
           <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">HASSLE-FREE RETURNS</p>
-          <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4">Return Policy</h1>
+          <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4 text-white ">Return Policy</h1>
           <p className="text-primary-foreground/70 max-w-xl mx-auto">Your satisfaction is our seva. We make returns simple and fair.</p>
         </ScrollReveal>
       </div>

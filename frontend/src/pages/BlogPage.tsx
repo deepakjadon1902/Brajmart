@@ -85,7 +85,7 @@ const BlogPage = () => {
         <div className="container mx-auto px-4 text-center">
           <ScrollReveal>
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">DIVINE WISDOM</p>
-            <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4">BrajMart Blog</h1>
+            <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4 text-white">BrajMart Blog</h1>
             <p className="text-primary-foreground/70 max-w-xl mx-auto font-playfair">
               Stories, guides, and spiritual wisdom from the heart of Vrindavan.
             </p>

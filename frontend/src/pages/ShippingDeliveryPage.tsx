@@ -20,7 +20,7 @@ const ShippingDeliveryPage = () => (
       <div className="container mx-auto px-4 text-center">
         <ScrollReveal>
           <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">DELIVERY INFORMATION</p>
-          <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4">Shipping & Delivery</h1>
+          <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4  text-white">Shipping & Delivery</h1>
           <p className="text-primary-foreground/70 max-w-xl mx-auto">We bring the blessings of Vrindavan to your doorstep — with speed, care, and devotion.</p>
         </ScrollReveal>
       </div>

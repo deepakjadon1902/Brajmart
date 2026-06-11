@@ -29,7 +29,7 @@ const CustomerServicePage = () => (
           <div className="w-16 h-16 rounded-full bg-gold/10 flex items-center justify-center mx-auto mb-6">
             <Headphones size={28} className="text-gold" />
           </div>
-          <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4">Customer Service</h1>
+          <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4 text-white">Customer Service</h1>
           <p className="text-primary-foreground/70 max-w-xl mx-auto">We're here to ensure your divine shopping experience is seamless. Reach out anytime!</p>
         </ScrollReveal>
       </div>

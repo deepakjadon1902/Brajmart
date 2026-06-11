@@ -44,7 +44,7 @@ const ContactPage = () => {
         <div className="container mx-auto px-4 text-center">
           <ScrollReveal>
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">GET IN TOUCH</p>
-            <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4">Contact Us</h1>
+            <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4 text-white">Contact Us</h1>
             <p className="text-primary-foreground/70 max-w-xl mx-auto">We'd love to hear from you. Reach out for orders, queries, or just to say Hare Krishna!</p>
           </ScrollReveal>
         </div>

@@ -51,7 +51,7 @@ const HelpCenterPage = () => {
         <div className="container mx-auto px-4 text-center">
           <ScrollReveal>
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">WE'RE HERE TO HELP</p>
-            <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-6">Help Center</h1>
+            <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-6 text-white">Help Center</h1>
             <div className="max-w-lg mx-auto flex rounded-full border border-primary-foreground/20 overflow-hidden bg-primary-foreground/5">
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search for help..." className="flex-1 px-5 py-3 bg-transparent text-sm outline-none placeholder:text-primary-foreground/40" />
               <button className="px-5 text-gold"><Search size={18} /></button>

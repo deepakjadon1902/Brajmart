@@ -154,7 +154,7 @@ const Footer = () => {
       </div>
 
      <div className="border-t border-primary-foreground/10">
-  <div className="container mx-auto px-4 py-4 flex items-center justify-center gap-2 text-xs text-primary-foreground/50">
+  <div className="container mx-auto px-4 py-4 flex items-center justify-center gap-2 text-xs text-primary-foreground/50 text-white">
     <span>© 2026 BrajMart EcomTech LLP. All Rights Reserved.</span>
   </div>
 </div>
