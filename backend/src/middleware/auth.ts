@@ -18,6 +18,19 @@ export const auth = (req: AuthRequest, res: Response, next: NextFunction) => {
   }
 };
 
+export const optionalAuth = (req: AuthRequest, _res: Response, next: NextFunction) => {
+  const token = req.header('Authorization')?.replace('Bearer ', '');
+  if (!token) return next();
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any;
+    req.user = decoded as AuthRequest['user'];
+  } catch {
+    req.user = undefined;
+  }
+  next();
+};
+
 export const adminOnly = (req: AuthRequest, res: Response, next: NextFunction) => {
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ message: 'Admin access required' });

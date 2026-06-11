@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { sendOrderConfirmation, sendShippingUpdate } from '../lib/email';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
-import { auth, adminOnly, AuthRequest } from '../middleware/auth';
+import { auth, adminOnly, optionalAuth, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
 import { computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { upsertUserDefaultAddress } from '../lib/userAddress';
@@ -81,7 +81,7 @@ router.get('/track-by-id/:trackingId', async (req, res) => {
   }
 });
 
-router.post('/', auth, async (req: AuthRequest, res) => {
+router.post('/', optionalAuth, async (req: AuthRequest, res) => {
   try {
     const { min, max } = await getEtaConfig();
     const etaText = getEtaText(min, max);
@@ -90,6 +90,10 @@ router.post('/', auth, async (req: AuthRequest, res) => {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const data = req.body || {};
+    const customerEmail = String(data.customerEmail || '').trim().toLowerCase();
+    if (!customerEmail) return res.status(400).json({ message: 'Customer email is required' });
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
+    if (!emailValid) return res.status(400).json({ message: 'Enter a valid customer email' });
 
     const priced = await priceAndValidateOrderItems(data.items || []);
     if (!priced.ok) return res.status(400).json({ message: priced.message });
@@ -114,12 +118,12 @@ router.post('/', auth, async (req: AuthRequest, res) => {
     const result: any = await dbExecute(
       'INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        data.userId || req.user?.id || null,
+        req.user?.id || null,
         JSON.stringify(priced.items),
         totals.total,
         status,
         data.customerName || null,
-        data.customerEmail || null,
+        customerEmail,
         JSON.stringify(data.shippingAddress || {}),
         JSON.stringify(data.billingAddress || {}),
         data.paymentMethod,

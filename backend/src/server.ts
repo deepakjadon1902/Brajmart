@@ -73,6 +73,41 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+const normalizeLegacySlug = (value: unknown) =>
+  String(value ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+
+const legacyProductTagRedirects: Record<string, string> = {
+  'best-selling-product': 'bestseller',
+  'best-selling-products': 'bestseller',
+  'best-seller': 'bestseller',
+  'best-sellers': 'bestseller',
+  bestseller: 'bestseller',
+  latest: 'latest',
+  'latest-product': 'latest',
+  'latest-products': 'latest',
+  'new-arrival': 'new',
+  'new-arrivals': 'new',
+  new: 'new',
+  accessories: 'accessories',
+  prasadam: 'prasadam',
+  exclusive: 'exclusive',
+};
+
+app.get(['/product-tag/:slug', '/product-tag/:slug/'], (req, res) => {
+  const tag = legacyProductTagRedirects[normalizeLegacySlug(req.params.slug)];
+  res.redirect(301, tag ? `/products?tag=${encodeURIComponent(tag)}` : '/products');
+});
+
+app.get(['/product-category/:slug', '/product-category/:slug/'], (req, res) => {
+  const slug = normalizeLegacySlug(req.params.slug);
+  res.redirect(301, slug ? `/category/${slug}` : '/categories');
+});
+
 app.use('/uploads', express.static(UPLOADS_DIR, {
   maxAge: '7d',
   setHeaders: (res) => {
@@ -130,6 +165,20 @@ app.get('/robots.txt', (_req, res) => {
     '',
     `Sitemap: ${SITE_URL}/sitemap.xml`,
   ].join('\n'));
+});
+
+app.get('/sitemap_index.xml', (_req, res) => {
+  res
+    .type('application/xml')
+    .setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400')
+    .send([
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+      '  <sitemap>',
+      `    <loc>${xmlEscape(`${SITE_URL}/sitemap.xml`)}</loc>`,
+      '  </sitemap>',
+      '</sitemapindex>',
+    ].join('\n'));
 });
 
 app.get('/sitemap.xml', async (_req, res) => {

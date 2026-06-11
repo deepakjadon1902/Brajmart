@@ -17,8 +17,50 @@ const getOauthClient = () => {
   const clientId = process.env.GOOGLE_CLIENT_ID || '';
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
   const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
-  const redirectUri = `${backendUrl.replace(/\/$/, '')}/api/auth/google/callback`;
+  const redirectUri =
+    process.env.GOOGLE_REDIRECT_URI ||
+    `${backendUrl.replace(/\/$/, '')}/api/auth/google/callback`;
   return new OAuth2Client(clientId, clientSecret, redirectUri);
+};
+
+const isBcryptHash = (value: unknown) =>
+  typeof value === 'string' && /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(value);
+
+const signInWithGooglePayload = async (payload: any) => {
+  if (!payload?.email || !payload?.name || !payload?.sub) {
+    throw Object.assign(new Error('Invalid Google profile'), { status: 400 });
+  }
+  if (!payload.email_verified) {
+    throw Object.assign(new Error('Google email not verified'), { status: 403 });
+  }
+
+  const email = String(payload.email).trim().toLowerCase();
+  const name = String(payload.name || email);
+  const googleId = String(payload.sub);
+  const avatar = String(payload.picture || '');
+
+  const rows = await dbQuery<any>('SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1', [email]);
+  let row = rows[0];
+  if (!row) {
+    const passwordHash = await bcrypt.hash(googleId + (process.env.JWT_SECRET || 'secret'), 12);
+    const result: any = await dbExecute(
+      'INSERT INTO users (name, email, password, phone, role, status, google_id, avatar, is_verified, verification_token, verification_token_expires, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, email, passwordHash, '', 'user', 'active', googleId, avatar, 1, null, null, JSON.stringify([])]
+    );
+    row = { id: result.insertId, name, email, role: 'user', status: 'active', google_id: googleId, avatar };
+  } else {
+    if (row.status && row.status !== 'active') {
+      throw Object.assign(new Error('Account is blocked'), { status: 403 });
+    }
+    await dbExecute(
+      'UPDATE users SET google_id = ?, avatar = ?, is_verified = ?, verification_token = NULL, verification_token_expires = NULL WHERE id = ?',
+      [row.google_id || googleId, avatar || row.avatar || '', 1, row.id]
+    );
+    row = { ...row, google_id: row.google_id || googleId, avatar: avatar || row.avatar || '', is_verified: 1 };
+  }
+
+  const token = signToken({ id: String(row.id), email, role: row.role || 'user' });
+  return { token, user: mapUserRow(row) };
 };
 
 const buildVerifyLink = (token: string) => {
@@ -116,9 +158,12 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
-    const rows = await dbQuery<any>('SELECT * FROM users WHERE email = ? LIMIT 1', [email]);
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!normalizedEmail || !password) return res.status(400).json({ message: 'Email and password are required' });
+
+    const rows = await dbQuery<any>('SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1', [normalizedEmail]);
     const row = rows[0];
-    if (!row || !(await bcrypt.compare(password, row.password))) {
+    if (!row || !isBcryptHash(row.password) || !(await bcrypt.compare(String(password), row.password))) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
     if (row.status && row.status !== 'active') {
@@ -145,7 +190,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ message: 'Please verify your email. A new verification code has been sent.', code: 'EMAIL_NOT_VERIFIED', email: row.email });
     }
 
-    res.json({ token: signToken({ id: String(row.id), email, role: row.role }), user: { id: String(row.id), name: row.name, email, role: row.role } });
+    res.json({ token: signToken({ id: String(row.id), email: row.email, role: row.role }), user: { id: String(row.id), name: row.name, email: row.email, role: row.role } });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -295,8 +340,35 @@ router.get('/google/start', async (_req, res) => {
   }
 });
 
+router.post('/google/token', async (req, res) => {
+  try {
+    const credential = String(req.body?.credential || '');
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) return res.status(500).json({ message: 'Google OAuth not configured' });
+    if (!credential) return res.status(400).json({ message: 'Missing Google credential' });
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+
+    const client = new OAuth2Client(clientId);
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: clientId,
+    });
+    const payload = ticket.getPayload();
+    const result = await signInWithGooglePayload(payload);
+    res.json(result);
+  } catch (err: any) {
+    res.status(err?.status || 500).json({ message: err?.message || 'Google login failed' });
+  }
+});
+
 router.get('/google/callback', async (req, res) => {
   try {
+    const oauthError = String(req.query.error || '');
+    if (oauthError) {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
+      const message = String(req.query.error_description || oauthError || 'Google OAuth failed');
+      return res.redirect(`${frontendUrl.replace(/\/$/, '')}/login?googleError=${encodeURIComponent(message)}`);
+    }
     const code = String(req.query.code || '');
     if (!code) return res.status(400).send('Missing Google code');
     if (!isDbConnected()) return res.status(503).send('Database unavailable');
@@ -310,33 +382,7 @@ router.get('/google/callback', async (req, res) => {
       idToken,
       audience: process.env.GOOGLE_CLIENT_ID,
     });
-    const payload = ticket.getPayload();
-    if (!payload?.email || !payload?.name || !payload?.sub) return res.status(400).send('Invalid Google profile');
-    if (!payload.email_verified) return res.status(403).send('Google email not verified');
-
-    const email = payload.email;
-    const name = payload.name;
-    const googleId = payload.sub;
-    const avatar = payload.picture || '';
-
-    const rows = await dbQuery<any>('SELECT * FROM users WHERE email = ? LIMIT 1', [email]);
-    let row = rows[0];
-    if (!row) {
-      const passwordHash = await bcrypt.hash(googleId + (process.env.JWT_SECRET || 'secret'), 12);
-      const result: any = await dbExecute(
-        'INSERT INTO users (name, email, password, phone, role, status, google_id, avatar, is_verified, verification_token, verification_token_expires, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [name, email, passwordHash, '', 'user', 'active', googleId, avatar, 1, null, null, JSON.stringify([])]
-      );
-      row = { id: result.insertId, name, email, role: 'user', status: 'active' };
-    } else {
-      if (row.status && row.status !== 'active') return res.status(403).send('Account is blocked');
-      await dbExecute(
-        'UPDATE users SET google_id = ?, avatar = ?, is_verified = ?, verification_token = NULL, verification_token_expires = NULL WHERE id = ?',
-        [row.google_id || googleId, avatar || row.avatar || '', 1, row.id]
-      );
-    }
-
-    const token = signToken({ id: String(row.id), email, role: row.role || 'user' });
+    const { token } = await signInWithGooglePayload(ticket.getPayload());
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
     const redirectUrl = `${frontendUrl.replace(/\/$/, '')}/oauth-callback?token=${encodeURIComponent(token)}`;
     res.redirect(redirectUrl);

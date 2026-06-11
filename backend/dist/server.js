@@ -73,6 +73,35 @@ app.use((0, cors_1.default)({
 }));
 app.use(express_1.default.json({ limit: '50mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
+const normalizeLegacySlug = (value) => String(value ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+const legacyProductTagRedirects = {
+    'best-selling-product': 'bestseller',
+    'best-selling-products': 'bestseller',
+    'best-seller': 'bestseller',
+    'best-sellers': 'bestseller',
+    bestseller: 'bestseller',
+    latest: 'latest',
+    'latest-product': 'latest',
+    'latest-products': 'latest',
+    'new-arrival': 'new',
+    'new-arrivals': 'new',
+    new: 'new',
+    accessories: 'accessories',
+    prasadam: 'prasadam',
+    exclusive: 'exclusive',
+};
+app.get(['/product-tag/:slug', '/product-tag/:slug/'], (req, res) => {
+    const tag = legacyProductTagRedirects[normalizeLegacySlug(req.params.slug)];
+    res.redirect(301, tag ? `/products?tag=${encodeURIComponent(tag)}` : '/products');
+});
+app.get(['/product-category/:slug', '/product-category/:slug/'], (req, res) => {
+    const slug = normalizeLegacySlug(req.params.slug);
+    res.redirect(301, slug ? `/category/${slug}` : '/categories');
+});
 app.use('/uploads', express_1.default.static(UPLOADS_DIR, {
     maxAge: '7d',
     setHeaders: (res) => {
@@ -117,6 +146,19 @@ app.get('/robots.txt', (_req, res) => {
         `Sitemap: ${SITE_URL}/sitemap.xml`,
     ].join('\n'));
 });
+app.get('/sitemap_index.xml', (_req, res) => {
+    res
+        .type('application/xml')
+        .setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400')
+        .send([
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        '  <sitemap>',
+        `    <loc>${xmlEscape(`${SITE_URL}/sitemap.xml`)}</loc>`,
+        '  </sitemap>',
+        '</sitemapindex>',
+    ].join('\n'));
+});
 app.get('/sitemap.xml', async (_req, res) => {
     const entries = [
         { path: '/', priority: '1.0', changefreq: 'daily' },
@@ -126,6 +168,13 @@ app.get('/sitemap.xml', async (_req, res) => {
         { path: '/about', priority: '0.6', changefreq: 'monthly' },
         { path: '/contact', priority: '0.6', changefreq: 'monthly' },
         { path: '/blog', priority: '0.5', changefreq: 'weekly' },
+        { path: '/help-center', priority: '0.5', changefreq: 'monthly' },
+        { path: '/customer-service', priority: '0.5', changefreq: 'monthly' },
+        { path: '/privacy-policy', priority: '0.3', changefreq: 'yearly' },
+        { path: '/terms', priority: '0.3', changefreq: 'yearly' },
+        { path: '/shipping-delivery', priority: '0.3', changefreq: 'yearly' },
+        { path: '/return-policy', priority: '0.3', changefreq: 'yearly' },
+        { path: '/payment-method', priority: '0.3', changefreq: 'yearly' },
     ];
     if ((0, db_1.isDbConnected)()) {
         try {

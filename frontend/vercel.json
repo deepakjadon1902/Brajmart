@@ -10,13 +10,75 @@
       ]
     },
     {
-      "source": "/(favicon.ico|logo.png|robots.txt|sitemap.xml)",
+      "source": "/(favicon.ico|logo.png|robots.txt|sitemap.xml|sitemap_index.xml)",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=3600, stale-while-revalidate=86400"
         }
       ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/product-tag/best-selling-product",
+      "destination": "/products?tag=bestseller",
+      "permanent": true
+    },
+    {
+      "source": "/product-tag/best-selling-products",
+      "destination": "/products?tag=bestseller",
+      "permanent": true
+    },
+    {
+      "source": "/product-tag/best-seller",
+      "destination": "/products?tag=bestseller",
+      "permanent": true
+    },
+    {
+      "source": "/product-tag/best-sellers",
+      "destination": "/products?tag=bestseller",
+      "permanent": true
+    },
+    {
+      "source": "/product-tag/latest-products",
+      "destination": "/products?tag=latest",
+      "permanent": true
+    },
+    {
+      "source": "/product-tag/new-arrivals",
+      "destination": "/products?tag=new",
+      "permanent": true
+    },
+    {
+      "source": "/product-tag/prasadam",
+      "destination": "/products?tag=prasadam",
+      "permanent": true
+    },
+    {
+      "source": "/product-tag/accessories",
+      "destination": "/products?tag=accessories",
+      "permanent": true
+    },
+    {
+      "source": "/product-tag/exclusive",
+      "destination": "/products?tag=exclusive",
+      "permanent": true
+    },
+    {
+      "source": "/product-tag/:slug",
+      "destination": "/products",
+      "permanent": true
+    },
+    {
+      "source": "/product-category/:slug",
+      "destination": "/category/:slug",
+      "permanent": true
+    },
+    {
+      "source": "/sitemap_index.xml",
+      "destination": "/sitemap.xml",
+      "permanent": true
     }
   ],
   "rewrites": [

@@ -81,12 +81,10 @@ export const registerUser = (payload: { name: string; email: string; password: s
   getJson('/auth/register', { method: 'POST', body: payload });
 export const loginUser = (payload: { email: string; password: string }) =>
   getJson('/auth/login', { method: 'POST', body: payload });
+export const loginWithGoogleCredential = (credential: string) =>
+  getJson('/auth/google/token', { method: 'POST', body: { credential } });
 export const adminLogin = (payload: { email: string; password: string }) =>
   getJson('/auth/admin-login', { method: 'POST', body: payload });
-export const startGoogleAuth = () => {
-  if (typeof window === 'undefined') return;
-  window.location.href = `${API_BASE}/auth/google/start`;
-};
 export const verifyEmail = (token: string) =>
   getJson(`/auth/verify?token=${encodeURIComponent(token)}`);
 

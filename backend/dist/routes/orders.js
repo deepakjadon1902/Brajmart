@@ -83,7 +83,7 @@ router.get('/track-by-id/:trackingId', async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
-router.post('/', auth_1.auth, async (req, res) => {
+router.post('/', auth_1.optionalAuth, async (req, res) => {
     try {
         const { min, max } = await (0, eta_1.getEtaConfig)();
         const etaText = (0, eta_1.getEtaText)(min, max);
@@ -91,6 +91,12 @@ router.post('/', auth_1.auth, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         const data = req.body || {};
+        const customerEmail = String(data.customerEmail || '').trim().toLowerCase();
+        if (!customerEmail)
+            return res.status(400).json({ message: 'Customer email is required' });
+        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
+        if (!emailValid)
+            return res.status(400).json({ message: 'Enter a valid customer email' });
         const priced = await (0, orderPricing_1.priceAndValidateOrderItems)(data.items || []);
         if (!priced.ok)
             return res.status(400).json({ message: priced.message });
@@ -110,12 +116,12 @@ router.post('/', auth_1.auth, async (req, res) => {
             ? data.statusHistory
             : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
         const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
-            data.userId || req.user?.id || null,
+            req.user?.id || null,
             JSON.stringify(priced.items),
             totals.total,
             status,
             data.customerName || null,
-            data.customerEmail || null,
+            customerEmail,
             JSON.stringify(data.shippingAddress || {}),
             JSON.stringify(data.billingAddress || {}),
             data.paymentMethod,

@@ -9,9 +9,9 @@ import SEO from '@/components/seo/SEO';
 import { breadcrumbSchema } from '@/lib/seo';
 
 const contactInfo = [
-  { icon: MapPin, title: 'Visit Us', lines: ['BrajMart Headquarters', 'Near ISKCON Temple, Raman Reti', 'Vrindavan, Mathura — 281121', 'Uttar Pradesh, India'] },
-  { icon: Phone, title: 'Call Us', lines: ['+91 98765 43210', '+91 87654 32109', 'Mon–Sat, 9 AM – 7 PM IST'] },
-  { icon: Mail, title: 'Email Us', lines: ['support@brajmart.com', 'orders@brajmart.com', 'business@brajmart.com'] },
+  { icon: MapPin, title: 'Visit Us', lines: ['BrajMart EcomTech LLP', 'Keshav Kunj, Near ISKCON Temple, Raman Reti', 'Vrindavan, Mathura ', 'Uttar Pradesh — 281121, India'] },
+  { icon: Phone, title: 'Call Us', lines: ['+91 98765 43210', '+91 87654 32109', 'Mon–Sat, 9:00 AM – 7:00 PM IST'] },
+  { icon: Mail, title: 'Email Us', lines: ['Orders Related Queries - orders@brajmart.com', 'Product Support & Assistance - support@brajmart.com', 'Business & Partnership Inquiries - business@brajmart.com'] },
   { icon: Clock, title: 'Working Hours', lines: ['Monday – Saturday', '9:00 AM – 7:00 PM IST', 'Sunday: Closed (Ekadashi seva)'] },
 ];
 

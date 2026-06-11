@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adminOnly = exports.auth = void 0;
+exports.adminOnly = exports.optionalAuth = exports.auth = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const auth = (req, res, next) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -19,6 +19,20 @@ const auth = (req, res, next) => {
     }
 };
 exports.auth = auth;
+const optionalAuth = (req, _res, next) => {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token)
+        return next();
+    try {
+        const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET || 'secret');
+        req.user = decoded;
+    }
+    catch {
+        req.user = undefined;
+    }
+    next();
+};
+exports.optionalAuth = optionalAuth;
 const adminOnly = (req, res, next) => {
     if (req.user?.role !== 'admin') {
         return res.status(403).json({ message: 'Admin access required' });

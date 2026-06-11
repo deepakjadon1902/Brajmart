@@ -5,9 +5,9 @@ import { Headphones, MessageSquare, Phone, Mail, Clock, ArrowRight } from 'lucid
 import { Link } from 'react-router-dom';
 
 const channels = [
-  { icon: Phone, title: 'Phone Support', desc: 'Speak directly with our support team', detail: '+91 98765 43210', sub: 'Mon–Sat, 9 AM – 7 PM IST', action: 'Call Now' },
+  { icon: Phone, title: 'Phone Support', desc: 'Speak directly with our support team', detail: '+91 96343 59003', sub: 'Mon–Sat, 9 AM – 7 PM IST', action: 'Call Now' },
   { icon: Mail, title: 'Email Support', desc: 'Get a response within 24 hours', detail: 'support@brajmart.com', sub: 'We reply within 24 hours', action: 'Send Email' },
-  { icon: MessageSquare, title: 'WhatsApp', desc: 'Quick chat support on WhatsApp', detail: '+91 87654 32109', sub: 'Available 9 AM – 9 PM IST', action: 'Chat Now' },
+  { icon: MessageSquare, title: 'WhatsApp', desc: 'Quick chat support on WhatsApp', detail: '+91 96343 59003', sub: 'Available 9 AM – 9 PM IST', action: 'Chat Now' },
 ];
 
 const commonIssues = [

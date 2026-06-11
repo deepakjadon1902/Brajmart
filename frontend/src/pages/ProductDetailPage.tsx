@@ -40,6 +40,14 @@ const cleanText = (value?: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const truncateMeta = (value: string, maxLength: number) => {
+  const clean = cleanText(value);
+  if (clean.length <= maxLength) return clean;
+  const clipped = clean.slice(0, maxLength - 3).trimEnd();
+  const lastSpace = clipped.lastIndexOf(' ');
+  return `${(lastSpace > 40 ? clipped.slice(0, lastSpace) : clipped).trimEnd()}...`;
+};
+
 const safeJsonLd = (value: unknown) =>
   JSON.stringify(value).replace(/</g, '\\u003c');
 
@@ -477,6 +485,25 @@ const ProductDetailPage = () => {
     return absoluteUrl(displayImages[0] || product.image);
   }, [displayImages, product]);
 
+  const metaTitle = useMemo(() => {
+    if (!product) return settings.storeName || 'Brajmart';
+    const storeName = settings.storeName || 'Brajmart';
+    const category = cleanText(product.category);
+    const base = category ? `${product.name} - ${category}` : product.name;
+    const withBrand = `${base} | ${storeName}`;
+    if (withBrand.length <= 60) return withBrand;
+    return truncateMeta(`${product.name} | ${storeName}`, 60);
+  }, [product, settings.storeName]);
+
+  const metaDescription = useMemo(() => {
+    if (!product) return '';
+    const storeName = settings.storeName || 'Brajmart';
+    const productDescription = cleanText(product.description);
+    const category = cleanText(product.category || 'devotional product').toLowerCase();
+    const fallback = `Buy ${product.name} online from ${storeName}. Authentic ${category} from Vrindavan for ${formatPrice(computedPrice || product.price)}, delivered across India.`;
+    return truncateMeta(productDescription || fallback, 160);
+  }, [computedPrice, product, settings.storeName]);
+
   const handleAddToCart = () => {
     if (!variantProduct) return;
     if (!product?.inStock) {
@@ -572,18 +599,21 @@ const ProductDetailPage = () => {
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>{product.name} | {settings.storeName || 'BrajMart'}</title>
-        <meta name="description" content={cleanText(product.description) || `${product.name} - ${formatPrice(computedPrice)} at ${settings.storeName || 'BrajMart'}`} />
+        <title>{metaTitle}</title>
+        <meta name="description" content={metaDescription} />
+        <meta name="robots" content="index,follow" />
         <link rel="canonical" href={productUrl} />
         <meta property="og:type" content="product" />
-        <meta property="og:title" content={product.name} />
-        <meta property="og:description" content={cleanText(product.description) || `${product.name} - ${formatPrice(computedPrice)}`} />
+        <meta property="og:site_name" content={settings.storeName || 'Brajmart'} />
+        <meta property="og:title" content={metaTitle} />
+        <meta property="og:description" content={metaDescription} />
         <meta property="og:url" content={productUrl} />
         {primaryImage ? <meta property="og:image" content={primaryImage} /> : null}
         <meta property="product:price:amount" content={toSchemaPrice(computedPrice)} />
         <meta property="product:price:currency" content="INR" />
-        <meta name="twitter:title" content={product.name} />
-        <meta name="twitter:description" content={cleanText(product.description) || `${product.name} - ${formatPrice(computedPrice)}`} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={metaTitle} />
+        <meta name="twitter:description" content={metaDescription} />
         {primaryImage ? <meta name="twitter:image" content={primaryImage} /> : null}
         {productSchema ? (
           <script type="application/ld+json">

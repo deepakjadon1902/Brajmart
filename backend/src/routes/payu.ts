@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { auth, AuthRequest } from '../middleware/auth';
+import { optionalAuth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { sendOrderConfirmation, sendPaymentFailed, sendPaymentReceipt, sendAdminPaymentNotice } from '../lib/email';
@@ -167,7 +167,7 @@ const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
   return rows[0];
 };
 
-router.post('/create-order', auth, async (req: AuthRequest, res) => {
+router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const { key, salt, actionUrl } = getPayuConfig();
@@ -175,6 +175,9 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
 
     const { amount, method, order, customer } = req.body || {};
     if (!order || !customer?.email || !customer?.name) return res.status(400).json({ message: 'Missing order details' });
+    const customerEmail = String(customer.email || '').trim().toLowerCase();
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
+    if (!emailValid) return res.status(400).json({ message: 'Enter a valid customer email' });
 
     const priced = await priceAndValidateOrderItems(order.items || []);
     if (!priced.ok) return res.status(400).json({ message: priced.message });
@@ -226,7 +229,7 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
 
     await dbExecute(
       'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [orderId, customer.name, customer.email, methodLabel, Number(totals.total), 'pending', txnid]
+      [orderId, customer.name, customerEmail, methodLabel, Number(totals.total), 'pending', txnid]
     );
 
     await dbExecute(
@@ -239,8 +242,8 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
       createdAt: new Date().toISOString(),
       amount: Number(totals.total),
       method: method === 'card' ? 'card' : 'upi',
-      customer: { name: customer.name, email: customer.email, phone: customer.phone },
-      order: { ...order, items: priced.items, total: totals.total },
+      customer: { name: customer.name, email: customerEmail, phone: customer.phone },
+      order: { ...order, items: priced.items, total: totals.total, customerEmail },
       orderId,
     });
 
@@ -253,7 +256,7 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
       amount: formattedAmount,
       productinfo,
       firstname: customer.name,
-      email: customer.email,
+      email: customerEmail,
       phone: customer.phone || '',
       surl,
       furl,
@@ -268,7 +271,7 @@ router.post('/create-order', auth, async (req: AuthRequest, res) => {
       amount: formattedAmount,
       productinfo,
       firstname: customer.name,
-      email: customer.email,
+      email: customerEmail,
       salt,
     });
 

@@ -105,7 +105,7 @@ const insertOrder = async (orderData, estimatedDelivery) => {
     const rows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
     return rows[0];
 };
-router.post('/create-order', auth_1.auth, async (req, res) => {
+router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
@@ -115,6 +115,10 @@ router.post('/create-order', auth_1.auth, async (req, res) => {
         const { amount, method, order, customer } = req.body || {};
         if (!order || !customer?.email || !customer?.name)
             return res.status(400).json({ message: 'Missing order details' });
+        const customerEmail = String(customer.email || '').trim().toLowerCase();
+        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
+        if (!emailValid)
+            return res.status(400).json({ message: 'Enter a valid customer email' });
         const priced = await (0, orderPricing_1.priceAndValidateOrderItems)(order.items || []);
         if (!priced.ok)
             return res.status(400).json({ message: priced.message });
@@ -157,15 +161,15 @@ router.post('/create-order', auth_1.auth, async (req, res) => {
             const addrToSave = order?.shippingAddress || order?.billingAddress;
             (0, userAddress_1.upsertUserDefaultAddress)(numericUserId, addrToSave).catch(() => { });
         }
-        await (0, db_1.dbExecute)('INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [orderId, customer.name, customer.email, methodLabel, Number(totals.total), 'pending', txnid]);
+        await (0, db_1.dbExecute)('INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [orderId, customer.name, customerEmail, methodLabel, Number(totals.total), 'pending', txnid]);
         await (0, db_1.dbExecute)('INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()', [txnid, 'pending', orderId, Number(totals.total), methodLabel, null]);
         createDraft({
             txnid,
             createdAt: new Date().toISOString(),
             amount: Number(totals.total),
             method: method === 'card' ? 'card' : 'upi',
-            customer: { name: customer.name, email: customer.email, phone: customer.phone },
-            order: { ...order, items: priced.items, total: totals.total },
+            customer: { name: customer.name, email: customerEmail, phone: customer.phone },
+            order: { ...order, items: priced.items, total: totals.total, customerEmail },
             orderId,
         });
         const surl = `${getBackendUrl()}/api/payu/success`;
@@ -176,7 +180,7 @@ router.post('/create-order', auth_1.auth, async (req, res) => {
             amount: formattedAmount,
             productinfo,
             firstname: customer.name,
-            email: customer.email,
+            email: customerEmail,
             phone: customer.phone || '',
             surl,
             furl,
@@ -191,7 +195,7 @@ router.post('/create-order', auth_1.auth, async (req, res) => {
             amount: formattedAmount,
             productinfo,
             firstname: customer.name,
-            email: customer.email,
+            email: customerEmail,
             salt,
         });
         res.json({ actionUrl, fields });

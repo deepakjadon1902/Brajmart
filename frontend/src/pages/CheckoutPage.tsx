@@ -18,6 +18,8 @@ const steps = ['Delivery Details', 'Payment', 'Confirmation'];
 
 const emptyAddress: Address = { fullName: '', mobile: '', street: '', city: '', state: '', pincode: '' };
 
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
 const INDIA_STATES = [
   'Andhra Pradesh',
   'Arunachal Pradesh',
@@ -58,16 +60,17 @@ const INDIA_STATES = [
 ] as const;
 
 const CheckoutPage = () => {
+  const { items, totalPrice, totalSavings, updateQuantity, removeItem } = useCartStore();
+  const { user, isAuthenticated } = useAuthStore();
+  const { settings, updateSettings } = useSettingsStore();
+  const navigate = useNavigate();
+
   const [step, setStep] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('upi');
   const [placedOrderId, setPlacedOrderId] = useState('');
   const [sameAsBilling, setSameAsBilling] = useState(true);
   const [processing, setProcessing] = useState(false);
-
-  const { items, totalPrice, totalSavings, updateQuantity, removeItem } = useCartStore();
-  const { user, isAuthenticated } = useAuthStore();
-  const { settings, updateSettings } = useSettingsStore();
-  const navigate = useNavigate();
+  const [customerEmail, setCustomerEmail] = useState(user?.email || '');
 
   const shipping = totalPrice() >= settings.freeShippingThreshold ? 0 : settings.shippingFee;
   const taxAmount = settings.taxRate > 0 ? Math.round(totalPrice() * settings.taxRate / 100) : 0;
@@ -92,6 +95,7 @@ const CheckoutPage = () => {
   });
 
   const effectiveShipping = sameAsBilling ? billingAddress : shippingAddress;
+  const effectiveEmail = String(isAuthenticated ? user?.email || '' : customerEmail || '').trim();
 
   // Payment status is now handled on the dedicated Payment Status page.
 
@@ -140,6 +144,10 @@ const CheckoutPage = () => {
     }
   }, [settings.upiEnabled, settings.cardEnabled, paymentMethod]);
 
+  useEffect(() => {
+    if (user?.email) setCustomerEmail(user.email);
+  }, [user?.email]);
+
   const shouldRedirectToCart = items.length === 0 && step < 2;
   useEffect(() => {
     if (shouldRedirectToCart) navigate('/cart');
@@ -147,6 +155,25 @@ const CheckoutPage = () => {
   if (shouldRedirectToCart) return null;
 
   const validateAddress = (addr: Address) => addr.fullName && addr.mobile && addr.street && addr.pincode && addr.city && addr.state;
+
+  const validateContactAndAddress = () => {
+    if (!isValidEmail(effectiveEmail)) {
+      toast.error('Please enter a valid email address for order updates');
+      setStep(0);
+      return false;
+    }
+    if (!validateAddress(billingAddress)) {
+      toast.error('Please fill all billing address details');
+      setStep(0);
+      return false;
+    }
+    if (!sameAsBilling && !validateAddress(shippingAddress)) {
+      toast.error('Please fill all shipping address details');
+      setStep(0);
+      return false;
+    }
+    return true;
+  };
 
   const submitPayuForm = (actionUrl: string, fields: Record<string, string>) => {
     const form = document.createElement('form');
@@ -164,20 +191,11 @@ const CheckoutPage = () => {
   };
 
   const startPayuPayment = async (method: 'upi' | 'card') => {
-    if (!validateAddress(billingAddress)) {
-      toast.error('Please fill all billing address details');
-      setStep(0);
-      return;
-    }
-    if (!sameAsBilling && !validateAddress(shippingAddress)) {
-      toast.error('Please fill all shipping address details');
-      setStep(0);
-      return;
-    }
+    if (!validateContactAndAddress()) return;
     setProcessing(true);
     try {
         const orderPayload = {
-          userId: user?.id || undefined,
+          userId: isAuthenticated ? user?.id : undefined,
           items: items.map((i) => ({
             productId: i.product.id,
             name: i.product.name,
@@ -191,7 +209,7 @@ const CheckoutPage = () => {
           total: grandTotal,
           status: 'confirmed',
           customerName: billingAddress.fullName,
-        customerEmail: user?.email || 'guest@brajmart.com',
+        customerEmail: effectiveEmail,
         shippingAddress: effectiveShipping,
         billingAddress,
         paymentMethod: method === 'upi' ? 'PayU UPI' : 'PayU Card',
@@ -200,7 +218,7 @@ const CheckoutPage = () => {
         amount: grandTotal,
         method,
         order: orderPayload,
-        customer: { name: billingAddress.fullName, email: user?.email || 'guest@brajmart.com', phone: billingAddress.mobile },
+        customer: { name: billingAddress.fullName, email: effectiveEmail, phone: billingAddress.mobile },
       });
       submitPayuForm(result.actionUrl, result.fields);
     } catch (err: unknown) {
@@ -211,26 +229,13 @@ const CheckoutPage = () => {
   };
 
   const handlePlaceOrder = async () => {
-    if (!isAuthenticated) {
-      toast.error('Please sign in to place your order');
-      navigate('/login');
-      return;
-    }
-    if (!validateAddress(billingAddress)) {
-      toast.error('Please fill all billing address details');
-      setStep(0);
-      return;
-    }
-    if (!sameAsBilling && !validateAddress(shippingAddress)) {
-      toast.error('Please fill all shipping address details');
-      setStep(0);
-      return;
-    }
+    if (!validateContactAndAddress()) return;
 
     if (settings.minOrderAmount && grandTotal < settings.minOrderAmount) {
       toast.error(`Minimum order amount is ${formatPrice(settings.minOrderAmount)}.`);
       return;
     }
+
 
     if (paymentMethod === 'upi') {
       startPayuPayment('upi');
@@ -352,6 +357,19 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-3">Contact Details</h3>
+                      <label className="block text-sm font-medium mb-1">Email Address</label>
+                      <input
+                        type="email"
+                        value={effectiveEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        disabled={isAuthenticated}
+                        placeholder="you@example.com"
+                        className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors disabled:opacity-70"
+                      />
+                    </div>
+
                     {renderAddressForm(billingAddress, setBillingAddress, 'Billing Address')}
 
                     <label className="flex items-center gap-3 cursor-pointer py-2 px-4 rounded-xl border border-border hover:border-gold/40 transition-colors">
@@ -366,7 +384,7 @@ const CheckoutPage = () => {
 
                     {!sameAsBilling && renderAddressForm(shippingAddress, setShippingAddress, 'Shipping Address')}
 
-                    <button onClick={() => setStep(1)} className="w-full py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform">
+                    <button onClick={() => validateContactAndAddress() && setStep(1)} className="w-full py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform">
                       Continue to Payment
                     </button>
                   </div>
@@ -655,8 +673,6 @@ const CheckoutPage = () => {
 };
 
 export default CheckoutPage;
-
-
 
 
 

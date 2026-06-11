@@ -14,8 +14,7 @@ const sections = [
   { title: '9. Third-Party Links', content: 'Our website may contain links to third-party sites. Once you leave our platform, we are not responsible for how those websites handle your data.' },
   { title: '10. Childrens Privacy', content: 'Brajmart does not knowingly collect personal information from individuals under 18 years of age without parental consent.' },
   { title: '11. Updates to This Policy', content: 'We may update this Privacy Policy from time to time to reflect changes in practices or legal requirements. Please review this page periodically.' },
-  { title: '12. Contact Us', content: 'Brajmart, ISKCON Vrindavan, Raman Reti, Mathura, Uttar Pradesh. Email: support@brajmart.com. Phone: +91 9634359003.' },
-];
+  { title: '12. Contact Us', content: 'BrajMart EcomTech LLP, Keshav Kunj, Near ISKCON Temple, Raman Reti, Vrindavan, Mathura, Uttar Pradesh – 281121, India. Email: support@brajmart.com. Phone: +91 9634359003.' },];
 
 const PrivacyPolicyPage = () => (
   <div className="min-h-screen bg-background">
@@ -52,7 +51,7 @@ const PrivacyPolicyPage = () => (
           <div className="mt-12 bg-pearl rounded-2xl border border-border p-6 text-center">
             <p className="text-sm text-muted-foreground">Questions about our privacy practices?</p>
             <p className="text-saffron font-semibold mt-1">support@brajmart.com</p>
-            <p className="text-muted-foreground text-sm mt-1">+91 75050 09970</p>
+            <p className="text-muted-foreground text-sm mt-1">+91 96343 59003</p>
           </div>
         </ScrollReveal>
       </div>

@@ -1,6 +1,6 @@
 ﻿import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { fetchMe, loginUser, registerUser, resendOtp, requestPasswordResetOtp, setAuthToken, startGoogleAuth, updateMyPassword, updateMyProfile, verifyOtp, verifyPasswordResetOtp } from '@/lib/api';
+import { fetchMe, loginUser, loginWithGoogleCredential as loginWithGoogleCredentialApi, registerUser, resendOtp, requestPasswordResetOtp, setAuthToken, updateMyPassword, updateMyProfile, verifyOtp, verifyPasswordResetOtp } from '@/lib/api';
 
 export interface User {
   id: string;
@@ -42,7 +42,7 @@ interface AuthStore {
   token: string | null;
   login: (email: string, password: string) => Promise<{ ok: boolean; message?: string }>;
   register: (data: { fullName: string; email: string; password: string; mobile?: string }) => Promise<{ ok: boolean; message?: string }>;
-  loginWithGoogle: () => Promise<{ ok: boolean; message?: string }>;
+  loginWithGoogleCredential: (credential: string) => Promise<{ ok: boolean; message?: string }>;
   verifyOtp: (payload: { email: string; otp: string }) => Promise<{ ok: boolean; message?: string }>;
   resendOtp: (payload: { email: string }) => Promise<{ ok: boolean; message?: string }>;
   requestPasswordResetOtp: (payload: { email: string }) => Promise<{ ok: boolean; message?: string }>;
@@ -83,10 +83,13 @@ export const useAuthStore = create<AuthStore>()(
           return { ok: false, message: err?.message || 'Registration failed' };
         }
       },
-      loginWithGoogle: async () => {
+      loginWithGoogleCredential: async (credential) => {
         try {
-          startGoogleAuth();
-          return { ok: true, message: 'Redirecting to Google...' };
+          const res: any = await loginWithGoogleCredentialApi(credential);
+          setAuthToken(res.token);
+          const user: User = mapUserFromApi(res.user, { authProvider: 'google' });
+          set({ user, isAuthenticated: true, token: res.token });
+          return { ok: true };
         } catch (err: any) {
           return { ok: false, message: err?.message || 'Google login failed' };
         }
