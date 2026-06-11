@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
   darkMode: ["class"],
@@ -14,10 +15,11 @@ export default {
     },
     extend: {
       fontFamily: {
-        cinzel: ['ui-serif', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
-        playfair: ['ui-serif', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
-        sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
-        devanagari: ['ui-serif', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
+        cinzel: ['Playfair Display', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
+        playfair: ['Playfair Display', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        devotional: ['Lora', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
+        devanagari: ['Lora', 'Georgia', 'Cambria', 'Times New Roman', 'serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -52,6 +54,17 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        brand: {
+          surface: "hsl(var(--brand-60))",
+          soft: "hsl(var(--brand-60-soft))",
+          raised: "hsl(var(--brand-60-raised))",
+          structure: "hsl(var(--brand-30))",
+          deep: "hsl(var(--brand-30-deep))",
+          muted: "hsl(var(--brand-30-muted))",
+          accent: "hsl(var(--brand-10))",
+          highlight: "hsl(var(--brand-10-soft))",
+          gold: "hsl(var(--brand-10-gold))",
         },
         saffron: {
           DEFAULT: "hsl(var(--saffron))",
@@ -112,5 +125,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [tailwindcssAnimate],
 } satisfies Config;

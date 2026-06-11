@@ -17,10 +17,10 @@ interface ProductCardProps {
 }
 
 const badgeStyles: Record<string, string> = {
-  new: 'bg-saffron text-primary-foreground',
-  bestseller: 'bg-gold-gradient text-maroon-dark font-bold',
-  combo: 'bg-maroon text-primary-foreground',
-  exclusive: 'bg-gold-gradient text-maroon-dark',
+  new: 'bg-brand-accent text-primary-foreground',
+  bestseller: 'bg-brand-structure text-primary-foreground',
+  combo: 'bg-brand-structure text-primary-foreground',
+  exclusive: 'bg-brand-accent text-primary-foreground',
 };
 
 const badgeLabels: Record<string, string> = {
@@ -41,6 +41,7 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
   const isAboveTheFold = priority && index < 2;
 
   const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
+  const savings = product.originalPrice ? Math.max(0, product.originalPrice - product.price) : 0;
   const badge = product.tags?.includes('bestseller')
     ? 'bestseller'
     : product.tags?.includes('new')
@@ -111,11 +112,11 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
 
   return (
     <div
-      className={`group relative flex flex-col h-full rounded-2xl border border-border bg-card overflow-hidden gold-glow-hover cursor-pointer content-visibility-auto ${isCompact ? 'min-h-[352px] sm:min-h-[390px]' : 'min-h-[430px]'}`}
+      className={`group relative flex flex-col h-full rounded-xl border border-border bg-card shadow-sm overflow-hidden gold-glow-hover cursor-pointer content-visibility-auto ${isCompact ? 'min-h-[352px] sm:min-h-[390px]' : 'min-h-[430px]'}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Link to={`/product/${product.slug}`} className={`relative ${mediaAspectClass} overflow-hidden bg-pearl`}>
+      <Link to={`/product/${product.slug}`} className={`relative ${mediaAspectClass} overflow-hidden bg-brand-raised`}>
         <img
           src={toSquareImageUrl(displayImage)}
           alt={product.name}
@@ -156,8 +157,8 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
         </div>
 
         {discount > 0 && (
-          <span className="absolute bottom-3 left-3 px-2 py-0.5 text-[0.65rem] font-bold rounded bg-tulsi text-primary-foreground">
-            {discount}% OFF
+          <span className="absolute bottom-3 left-3 rounded bg-brand-structure px-2 py-0.5 text-xs font-bold text-primary-foreground">
+            -{discount}%
           </span>
         )}
       </Link>
@@ -179,13 +180,15 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
         </Link>
 
         <div className="flex items-center gap-2 pt-1 min-h-[1.75rem]">
-          <span className="text-saffron font-bold text-sm sm:text-base">{formatPrice(product.price)}</span>
+          <span className="font-playfair text-xl font-bold text-brand-gold">{formatPrice(product.price)}</span>
           {product.originalPrice && <span className="text-muted-foreground line-through text-xs">{formatPrice(product.originalPrice)}</span>}
         </div>
 
         {!isCompact && (
           <div className="min-h-[14px]">
-            {product.soldCount ? (
+            {savings > 0 ? (
+              <span className="text-[13px] text-tulsi font-medium">Save {formatPrice(savings)}</span>
+            ) : product.soldCount ? (
               <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>
             ) : null}
           </div>
@@ -197,14 +200,14 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
           <button
             onClick={handleAddToCart}
             disabled={!product.inStock}
-            className={`w-full ${isCompact ? 'py-1.5' : 'py-2'} rounded-xl text-xs sm:text-sm font-bold transition ${product.inStock ? 'bg-gold-gradient text-maroon-dark shimmer active:scale-[0.97] transition-transform' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
+            className={`btn-action w-full ${isCompact ? 'px-2 py-2' : 'px-2.5 py-2'} text-[12px] sm:text-[13px] ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
           >
-            <ShoppingCart size={14} className="inline mr-1.5 -mt-0.5" /> Add to Cart
+            <ShoppingCart size={14} /> Add to Cart
           </button>
           <button
             onClick={handleBuyNow}
             disabled={!product.inStock}
-            className={`w-full ${isCompact ? 'py-1.5' : 'py-2'} rounded-xl text-xs sm:text-sm font-bold transition ${product.inStock ? 'border border-gold/40 text-gold hover:bg-gold/10' : 'border border-border text-muted-foreground cursor-not-allowed'}`}
+            className={`btn-action-secondary w-full ${isCompact ? 'px-2 py-2' : 'px-2.5 py-2'} text-[12px] sm:text-[13px] ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
           >
             Buy Now
           </button>

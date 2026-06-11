@@ -723,11 +723,11 @@ const ProductDetailPage = () => {
 
             {/* Price */}
             <div className="flex flex-wrap items-center gap-3">
-              <span className="text-3xl font-bold text-saffron">{formatPrice(computedPrice)}</span>
+              <span className="font-playfair text-3xl font-bold text-brand-gold">{formatPrice(computedPrice)}</span>
               {product.originalPrice && (
                 <>
                   <span className="text-lg text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>
-                  <span className="px-2 py-0.5 bg-tulsi/10 text-tulsi text-sm font-semibold rounded">Save {formatPrice(product.originalPrice - computedPrice)}</span>
+                  <span className="rounded bg-tulsi/10 px-2 py-0.5 text-sm font-semibold text-tulsi">Save {formatPrice(product.originalPrice - computedPrice)}</span>
                 </>
               )}
               {!product.inStock && (
@@ -882,19 +882,21 @@ const ProductDetailPage = () => {
             {/* Quantity */}
             <div className="flex items-center gap-4">
               <span className="text-sm font-medium">Quantity:</span>
-              <div className="flex items-center border border-border rounded-xl">
+              <div className="flex h-11 w-[130px] items-center justify-between rounded-lg border border-border bg-brand-soft">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
                   disabled={!product.inStock}
-                  className={`p-2 rounded-l-xl ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                  className={`flex h-full w-11 items-center justify-center rounded-l-lg ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                  aria-label="Decrease quantity"
                 >
                   <Minus size={16} />
                 </button>
-                <span className="px-4 font-semibold">{quantity}</span>
+                <span className="font-sans text-base font-bold text-brand-deep">{quantity}</span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
                   disabled={!product.inStock}
-                  className={`p-2 rounded-r-xl ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                  className={`flex h-full w-11 items-center justify-center rounded-r-lg ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                  aria-label="Increase quantity"
                 >
                   <Plus size={16} />
                 </button>
@@ -906,14 +908,14 @@ const ProductDetailPage = () => {
               <button
                 onClick={handleAddToCart}
                 disabled={!product.inStock}
-                className={`flex-1 py-3.5 rounded-xl font-bold text-base transition ${product.inStock ? 'bg-gold-gradient text-maroon-dark shimmer active:scale-[0.97] transition-transform' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
+                className={`btn-action flex-1 ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
               >
                 <ShoppingCart size={18} className="inline mr-2 -mt-0.5" />Add to Cart
               </button>
               <button
                 onClick={handleBuyNow}
                 disabled={!product.inStock}
-                className={`flex-1 py-3.5 rounded-xl font-bold text-base transition ${product.inStock ? 'bg-saffron text-primary-foreground hover:brightness-95 active:scale-[0.97] transition-transform' : 'bg-muted text-muted-foreground cursor-not-allowed'}`}
+                className={`btn-action-secondary flex-1 ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
               >
                 Buy Now
               </button>

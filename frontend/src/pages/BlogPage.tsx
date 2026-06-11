@@ -142,7 +142,7 @@ const BlogPage = () => {
                       {featured.category || 'BrajMart'}
                     </span>
                     {isAdminAuthenticated && featured.status === 'draft' && (
-                      <span className="inline-flex w-fit px-3 py-1 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold">
+                      <span className="inline-flex w-fit px-3 py-1 rounded-full bg-muted text-brand-muted text-xs font-semibold">
                         Draft
                       </span>
                     )}
@@ -184,7 +184,7 @@ const BlogPage = () => {
                           {post.category || 'BrajMart'}
                         </span>
                         {isAdminAuthenticated && post.status === 'draft' && (
-                          <span className="inline-block px-3 py-1 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold">
+                          <span className="inline-block px-3 py-1 rounded-full bg-muted text-brand-muted text-xs font-semibold">
                             Draft
                           </span>
                         )}

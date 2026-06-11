@@ -119,14 +119,14 @@ const CategoryNavbar = () => {
           {openCat && (
             <div className="absolute left-0 right-0 top-full z-[70] block">
               <div
-                className="mx-2 max-h-[70vh] overflow-y-auto border border-border bg-white shadow-2xl md:mx-auto md:max-w-[1180px]"
+                className="mx-2 max-h-[70vh] overflow-y-auto border border-border bg-brand-raised shadow-2xl md:mx-auto md:max-w-[1180px]"
                 onMouseEnter={() => clearCloseTimer()}
                 onMouseLeave={() => scheduleClose()}
                 role="menu"
                 aria-label={`${openCat.name} subcategories`}
               >
                 <div className="grid grid-cols-1 md:grid-cols-[220px_1fr]">
-                  <div className="bg-[#f7f5fb] px-5 py-6 border-b md:border-b-0 md:border-r border-border">
+                  <div className="bg-brand-soft px-5 py-6 border-b md:border-b-0 md:border-r border-border">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-saffron mb-2">{openCat.name}</p>
                     <RouterLink
                       to={`/category/${categoryToSlug(openCat.name)}`}
@@ -140,7 +140,7 @@ const CategoryNavbar = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
                     {chunkSubcategories(openCat.subcategories || [], 4).map((group, groupIndex) => (
-                      <div key={groupIndex} className={`px-5 py-5 ${groupIndex % 2 === 1 ? 'bg-[#f7f5fb]' : 'bg-white'}`}>
+                      <div key={groupIndex} className={`px-5 py-5 ${groupIndex % 2 === 1 ? 'bg-brand-soft' : 'bg-brand-raised'}`}>
                         <p className="mb-3 text-sm font-bold text-saffron">
                           {groupIndex === 0 ? 'Subcategories' : 'More'}
                         </p>
@@ -149,7 +149,7 @@ const CategoryNavbar = () => {
                             <li key={s.id}>
                               <RouterLink
                                 to={`/category/${categoryToSlug(openCat.name)}/${categoryToSlug(s.name)}`}
-                                className="block text-sm font-medium text-[#4a4963] transition-colors hover:text-saffron"
+                                className="block text-sm font-medium text-brand-muted transition-colors hover:text-saffron"
                                 onClick={() => setOpenCatId(null)}
                                 role="menuitem"
                               >

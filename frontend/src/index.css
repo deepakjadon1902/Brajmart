@@ -4,43 +4,53 @@
 
 @layer base {
   :root {
-    --background: 37 100% 98%;
-    --foreground: 0 0% 10%;
-    --card: 37 100% 97%;
-    --card-foreground: 0 0% 10%;
+    --background: 38 78% 97%;
+    --foreground: 354 44% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 354 44% 18%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    --primary: 24 100% 50%;
+    --popover-foreground: 354 44% 18%;
+    --primary: 24 90% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 53% 29%;
+    --secondary: 354 50% 24%;
     --secondary-foreground: 0 0% 100%;
-    --muted: 37 40% 93%;
-    --muted-foreground: 0 0% 47%;
-    --accent: 43 76% 52%;
-    --accent-foreground: 0 53% 21%;
+    --muted: 36 48% 91%;
+    --muted-foreground: 20 18% 40%;
+    --accent: 43 82% 47%;
+    --accent-foreground: 354 50% 18%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 43 40% 85%;
-    --input: 43 30% 88%;
-    --ring: 43 76% 52%;
-    --radius: 0.75rem;
+    --border: 35 32% 84%;
+    --input: 35 32% 84%;
+    --ring: 24 90% 45%;
+    --radius: 0.5rem;
 
-    /* BrajMart Custom Tokens */
-    --saffron: 24 100% 50%;
-    --saffron-light: 24 100% 60%;
-    --maroon: 0 53% 29%;
-    --maroon-dark: 0 53% 21%;
-    --cream: 37 100% 98%;
-    --pearl: 37 67% 96%;
-    --gold: 43 76% 52%;
-    --gold-light: 50 85% 66%;
-    --gold-dark: 43 86% 35%;
-    --tulsi-green: 153 43% 30%;
-    --lotus-pink: 0 50% 77%;
-    --divine-purple: 266 43% 44%;
-    --text-dark: 0 0% 10%;
-    --text-medium: 0 0% 29%;
-    --text-muted: 0 0% 47%;
+    /* BrajMart 60:30:10 palette: ivory surfaces, maroon structure, saffron-gold accents */
+    --brand-60: 38 78% 97%;
+    --brand-60-soft: 36 74% 94%;
+    --brand-60-raised: 0 0% 100%;
+    --brand-30: 354 50% 24%;
+    --brand-30-deep: 354 52% 16%;
+    --brand-30-muted: 18 22% 34%;
+    --brand-10: 24 90% 45%;
+    --brand-10-soft: 31 88% 54%;
+    --brand-10-gold: 43 82% 47%;
+
+    --saffron: var(--brand-10);
+    --saffron-light: var(--brand-10-soft);
+    --maroon: var(--brand-30);
+    --maroon-dark: var(--brand-30-deep);
+    --cream: var(--brand-60-raised);
+    --pearl: var(--brand-60-soft);
+    --gold: var(--brand-10-gold);
+    --gold-light: 46 92% 72%;
+    --gold-dark: 40 84% 35%;
+    --tulsi-green: 132 38% 34%;
+    --lotus-pink: 351 58% 72%;
+    --divine-purple: 277 31% 35%;
+    --text-dark: var(--brand-30-deep);
+    --text-medium: var(--brand-30-muted);
+    --text-muted: 20 14% 48%;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -60,9 +70,11 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     overflow-wrap: break-word;
+    color: hsl(var(--brand-30-muted));
   }
   h1, h2, h3, h4 {
     text-wrap: balance;
+    color: hsl(var(--brand-30-deep));
   }
   p {
     text-wrap: pretty;
@@ -72,16 +84,16 @@
 @layer utilities {
   /* Gold Gradient */
   .bg-gold-gradient {
-    background: linear-gradient(135deg, #D4AF37 0%, #F5E27A 40%, #D4AF37 70%, #A8870A 100%);
+    background: linear-gradient(135deg, hsl(var(--brand-10)) 0%, hsl(var(--brand-10-soft)) 56%, hsl(var(--brand-10-gold)) 100%);
   }
   .text-gold-gradient {
-    background: linear-gradient(135deg, #D4AF37 0%, #F5E27A 40%, #D4AF37 70%, #A8870A 100%);
+    background: linear-gradient(135deg, hsl(var(--brand-10)) 0%, hsl(var(--gold-light)) 42%, hsl(var(--brand-10-gold)) 72%, hsl(var(--gold-dark)) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
   .text-maroon-gold-gradient {
-    background: linear-gradient(135deg, #7B1818, #D4AF37);
+    background: linear-gradient(135deg, hsl(var(--brand-30)), hsl(var(--brand-10-gold)));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -89,12 +101,12 @@
 
   /* Glassmorphism */
   .glass {
-    background: rgba(255, 255, 255, 0.88);
+    background: hsl(var(--brand-60-raised) / 0.88);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
   }
   .glass-dark {
-    background: rgba(92, 16, 16, 0.85);
+    background: hsl(var(--brand-30-deep) / 0.88);
     backdrop-filter: blur(12px) saturate(180%);
     -webkit-backdrop-filter: blur(12px) saturate(180%);
   }
@@ -114,12 +126,77 @@
 
   /* Gold border glow on hover */
   .gold-glow-hover {
-    transition: box-shadow 0.4s ease, border-color 0.4s ease, transform 0.4s ease;
+    transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
   }
   .gold-glow-hover:hover {
-    box-shadow: 0 8px 30px rgba(212, 175, 55, 0.2), 0 2px 8px rgba(0,0,0,0.06);
-    border-color: #D4AF37;
-    transform: translateY(-6px);
+    box-shadow: 0 12px 28px hsl(var(--brand-30-deep) / 0.08);
+    border-color: hsl(var(--brand-10-gold) / 0.4);
+    transform: translateY(-3px);
+  }
+
+  .btn-action {
+    display: inline-flex;
+    min-height: 38px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    border-radius: 8px;
+    background: hsl(var(--brand-10));
+    color: hsl(var(--primary-foreground));
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.1;
+    padding: 9px 14px;
+    transition: background-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+  }
+
+  .btn-action:hover {
+    background: hsl(var(--brand-30));
+  }
+
+  .btn-action:active {
+    transform: scale(0.98);
+  }
+
+  .btn-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .btn-action-secondary {
+    display: inline-flex;
+    min-height: 38px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+    border-radius: 8px;
+    border: 1px solid hsl(var(--brand-30) / 0.32);
+    background: hsl(var(--brand-60-raised));
+    color: hsl(var(--brand-30));
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.1;
+    padding: 9px 14px;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+  }
+
+  .btn-action-secondary:hover {
+    border-color: hsl(var(--brand-30));
+    background: hsl(var(--brand-30));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .btn-action-secondary:active {
+    transform: scale(0.98);
+  }
+
+  .btn-action-secondary:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
   }
 
   .content-visibility-auto {
@@ -129,10 +206,10 @@
 
   /* Section alternating bg */
   .bg-section-cream {
-    background-color: hsl(37 100% 98%);
+    background-color: hsl(var(--brand-60));
   }
   .bg-section-pearl {
-    background-color: hsl(37 67% 96%);
+    background-color: hsl(var(--brand-60-soft));
   }
 }
 

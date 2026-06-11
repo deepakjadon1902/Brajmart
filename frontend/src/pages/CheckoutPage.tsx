@@ -495,16 +495,16 @@ const CheckoutPage = () => {
                     )}
 
                     {paymentMethod === 'card' && (
-                      <div className="mt-5 rounded-2xl border border-border bg-gradient-to-br from-[#0b1220] via-[#121a2b] to-[#1a1f3d] p-5 text-white shadow-lg">
+                      <div className="mt-5 rounded-2xl border border-brand-gold/20 bg-gradient-to-br from-brand-deep via-brand-structure to-brand-deep p-5 text-primary-foreground shadow-lg">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-xs uppercase tracking-widest text-white/60">Secure Payments</p>
+                            <p className="text-xs uppercase tracking-widest text-primary-foreground/60">Secure Payments</p>
                             <h3 className="text-lg font-semibold">Card Payment</h3>
-                            <p className="text-xs text-white/70 mt-1">Cards • NetBanking • Wallets • EMI</p>
+                            <p className="text-xs text-primary-foreground/70 mt-1">Cards • NetBanking • Wallets • EMI</p>
                           </div>
                           <div className="flex gap-2">
                             {['VISA', 'MC', 'RUPAY', 'AMEX'].map((b) => (
-                              <span key={b} className="px-2 py-1 rounded-lg bg-white/10 text-[10px] font-bold tracking-wide">
+                              <span key={b} className="px-2 py-1 rounded-lg bg-primary-foreground/10 text-[10px] font-bold tracking-wide">
                                 {b}
                               </span>
                             ))}
@@ -512,12 +512,12 @@ const CheckoutPage = () => {
                         </div>
                         <div className="mt-4 grid sm:grid-cols-3 gap-3">
                           {['Instant Bank Offers', 'Zero-Cost EMI', '100% Secure'].map((t) => (
-                            <div key={t} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs">
+                            <div key={t} className="rounded-xl border border-primary-foreground/10 bg-primary-foreground/5 px-3 py-2 text-xs">
                               {t}
                             </div>
                           ))}
                         </div>
-                        <div className="mt-4 text-xs text-white/70">
+                        <div className="mt-4 text-xs text-primary-foreground/70">
                           You may be redirected to a secure payment page to complete payment.
                         </div>
                       </div>
@@ -673,7 +673,6 @@ const CheckoutPage = () => {
 };
 
 export default CheckoutPage;
-
 
 
 

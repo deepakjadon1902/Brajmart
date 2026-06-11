@@ -7,6 +7,7 @@ import DeferredMount from '@/components/ui/DeferredMount';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
 import SEO from '@/components/seo/SEO';
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, SITE_URL, breadcrumbSchema } from '@/lib/seo';
+import TrustBar from '@/components/sections/TrustBar';
 
 const CollectionSection = lazy(() => import('@/components/sections/CollectionSection'));
 const ExclusiveBooks = lazy(() => import('@/components/sections/ExclusiveBooks'));
@@ -57,6 +58,7 @@ const Home = () => {
       <Navbar />
       <CategoryNavbar />
       <HeroCarousel />
+      <TrustBar />
 
       <Suspense fallback={null}>
         <DeferredMount minHeight={540}>

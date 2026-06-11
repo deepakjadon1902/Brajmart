@@ -4,7 +4,7 @@ import { brajDestinations } from '@/data/brajDestinations';
 import { MapPin } from 'lucide-react';
 
 const BrajYatra = () => (
-  <section className="py-12 md:py-20 bg-[#1a1a3e] relative overflow-hidden">
+  <section className="py-12 md:py-20 bg-brand-deep relative overflow-hidden">
     <div className="container mx-auto px-4">
       <ScrollReveal>
         <div className="text-center mb-10">

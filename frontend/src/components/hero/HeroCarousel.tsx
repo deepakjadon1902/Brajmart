@@ -55,27 +55,27 @@ const HeroCarousel = () => {
     <section className="relative bg-background">
       <div className="container mx-auto px-4 py-6 md:py-10">
         <div className="relative">
-          <div className="overflow-hidden rounded-[22px] md:rounded-[28px] border border-border shadow-lg bg-white">
-            <div className="grid md:grid-cols-[1fr_2fr] min-h-[320px] md:min-h-[420px] lg:h-[460px] bg-white">
-              <div className="bg-[#FBF4EC] px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center justify-center md:justify-start">
+          <div className="overflow-hidden rounded-[22px] md:rounded-[28px] border border-border shadow-lg bg-brand-raised">
+            <div className="grid md:grid-cols-[1fr_2fr] min-h-[320px] md:min-h-[420px] lg:h-[460px] bg-brand-raised">
+              <div className="bg-brand-soft px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center justify-center md:justify-start">
                 <div className="max-w-sm text-center md:text-left">
                   {visibleSlide && (
                     <div>
                       {visibleSlide.tag && (
-                        <span className="inline-block text-[#8A6D4E] font-semibold text-[0.65rem] uppercase tracking-[0.2em] mb-3">
+                        <span className="inline-block text-brand-muted font-semibold text-[0.65rem] uppercase tracking-[0.2em] mb-3">
                           {visibleSlide.tag}
                         </span>
                       )}
-                      <h1 className="font-cinzel text-2xl sm:text-3xl md:text-5xl lg:text-5xl font-bold text-[#3B4F66] leading-[1.12] mb-3">
+                      <h1 className="font-cinzel text-2xl sm:text-3xl md:text-5xl lg:text-5xl font-bold text-brand-deep leading-[1.12] mb-3">
                         {visibleSlide.title}
                       </h1>
                       {visibleSlide.subtitle && (
-                        <p className="text-[#6B7A8E] text-sm md:text-base leading-relaxed font-playfair mb-5 max-w-md mx-auto md:mx-0">
+                        <p className="text-brand-muted text-sm md:text-base leading-relaxed font-playfair mb-5 max-w-md mx-auto md:mx-0">
                           {visibleSlide.subtitle}
                         </p>
                       )}
                       {visibleSlide.cta && (
-                        <button className="px-6 py-2.5 rounded-xl bg-[#3B4F66] text-white font-bold text-sm active:scale-[0.97] transition-transform shadow">
+                        <button className="px-6 py-2.5 rounded-xl bg-brand-accent text-primary-foreground font-bold text-sm active:scale-[0.97] transition-colors shadow hover:bg-brand-structure">
                           {visibleSlide.cta}
                         </button>
                       )}
@@ -85,7 +85,7 @@ const HeroCarousel = () => {
               </div>
 
               {isDesktop && visibleSlide?.image ? (
-                <div className="relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
+                <div className="relative bg-brand-raised min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
                   <img
                     src={toResponsiveImageUrl(visibleSlide.image, { width: 900, height: 506, quality: 72 })}
                     alt={visibleSlide.title}
@@ -98,7 +98,7 @@ const HeroCarousel = () => {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
                 </div>
               ) : (
-                <div className="hidden md:block relative bg-white min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden" aria-hidden="true" />
+                <div className="hidden md:block relative bg-brand-raised min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden" aria-hidden="true" />
               )}
             </div>
           </div>
@@ -107,27 +107,27 @@ const HeroCarousel = () => {
             <>
               <button
                 onClick={() => setSelectedIndex((current) => (current - 1 + slides.length) % slides.length)}
-                className="hidden sm:flex absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-white border border-border items-center justify-center hover:bg-pearl active:scale-95 transition-all"
+                className="hidden sm:flex absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-raised border border-border items-center justify-center hover:bg-brand-soft active:scale-95 transition-all"
                 aria-label="Previous slide"
               >
-                <ChevronLeft size={18} className="text-[#3B4F66]" />
+                <ChevronLeft size={18} className="text-brand-structure" />
               </button>
               <button
                 onClick={() => setSelectedIndex((current) => (current + 1) % slides.length)}
-                className="hidden sm:flex absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-white border border-border items-center justify-center hover:bg-pearl active:scale-95 transition-all"
+                className="hidden sm:flex absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-raised border border-border items-center justify-center hover:bg-brand-soft active:scale-95 transition-all"
                 aria-label="Next slide"
               >
-                <ChevronRight size={18} className="text-[#3B4F66]" />
+                <ChevronRight size={18} className="text-brand-structure" />
               </button>
             </>
           )}
 
-          <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-white/80 backdrop-blur px-3 py-2 rounded-full border border-border">
+          <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-brand-raised/85 backdrop-blur px-3 py-2 rounded-full border border-border">
             {slides.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setSelectedIndex(i)}
-                className={`h-2 rounded-full transition-all duration-300 ${selectedIndex === i ? 'w-8 bg-gold' : 'w-2 bg-[#3B4F66]/30'}`}
+                className={`h-2 rounded-full transition-all duration-300 ${selectedIndex === i ? 'w-8 bg-brand-gold' : 'w-2 bg-brand-structure/30'}`}
                 aria-label={`Go to slide ${i + 1}`}
               />
             ))}

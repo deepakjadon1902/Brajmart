@@ -13,6 +13,7 @@ import { useCartStore } from "./store/cartStore";
 import { useAuthStore } from "./store/authStore";
 import { useWishlistStore } from "./store/wishlistStore";
 import { DEFAULT_IMAGE, SITE_URL } from "./lib/seo";
+import WhatsAppButton from "./components/layout/WhatsAppButton";
 
 const queryClient = new QueryClient();
 const DEFAULT_FAVICON_URL = "/favicon.ico";
@@ -237,6 +238,7 @@ const App = () => {
           <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
+          <WhatsAppButton />
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
