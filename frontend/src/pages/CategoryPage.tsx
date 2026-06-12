@@ -51,6 +51,7 @@ const CategoryPage = () => {
         title={`${pageName} Online | Brajmart`}
         description={description}
         path={path}
+        robots={products.length === 0 ? 'noindex,follow' : 'index,follow'}
         schema={[
           breadcrumbSchema([
             { name: 'Home', path: '/' },

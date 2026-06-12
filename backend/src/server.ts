@@ -108,6 +108,12 @@ app.get(['/product-category/:slug', '/product-category/:slug/'], (req, res) => {
   res.redirect(301, slug ? `/category/${slug}` : '/categories');
 });
 
+app.get(['/product-category/:slug/:subSlug', '/product-category/:slug/:subSlug/'], (req, res) => {
+  const slug = normalizeLegacySlug(req.params.slug);
+  const subSlug = normalizeLegacySlug(req.params.subSlug);
+  res.redirect(301, slug && subSlug ? `/category/${slug}/${subSlug}` : slug ? `/category/${slug}` : '/categories');
+});
+
 app.use('/uploads', express.static(UPLOADS_DIR, {
   maxAge: '7d',
   setHeaders: (res) => {
@@ -144,6 +150,12 @@ const slugify = (value: unknown) =>
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)+/g, '');
+
+const toLastmod = (value: unknown) => {
+  if (!value) return '';
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+};
 
 type SitemapEntry = {
   path: string;
@@ -201,15 +213,21 @@ app.get('/sitemap.xml', async (_req, res) => {
 
   if (isDbConnected()) {
     try {
-      const [products, categories, blogs] = await Promise.all([
+      const [products, categories, subcategories, blogs] = await Promise.all([
         dbQuery<any>('SELECT slug, updated_at FROM products WHERE slug IS NOT NULL AND slug <> "" ORDER BY updated_at DESC'),
-        dbQuery<any>('SELECT name, updated_at FROM categories WHERE name IS NOT NULL AND name <> "" ORDER BY updated_at DESC'),
-        dbQuery<any>('SELECT slug, updated_at FROM blogs WHERE slug IS NOT NULL AND slug <> "" ORDER BY updated_at DESC').catch(() => []),
+        dbQuery<any>('SELECT id, name, product_count, updated_at FROM categories WHERE name IS NOT NULL AND name <> "" ORDER BY updated_at DESC'),
+        dbQuery<any>('SELECT s.name, s.updated_at, c.name AS category_name FROM subcategories s JOIN categories c ON s.category_id = c.id WHERE s.name IS NOT NULL AND s.name <> "" AND c.name IS NOT NULL AND c.name <> "" ORDER BY s.updated_at DESC').catch(() => []),
+        dbQuery<any>("SELECT slug, updated_at FROM blogs WHERE slug IS NOT NULL AND slug <> '' AND status = 'published' ORDER BY updated_at DESC").catch(() => []),
       ]);
 
       for (const row of categories || []) {
         const slug = slugify(row.name);
-        if (slug) entries.push({ path: `/category/${slug}`, priority: '0.8', changefreq: 'weekly', lastmod: row.updated_at });
+        if (slug && Number(row.product_count ?? 0) > 0) entries.push({ path: `/category/${slug}`, priority: '0.8', changefreq: 'weekly', lastmod: row.updated_at });
+      }
+      for (const row of subcategories || []) {
+        const slug = slugify(row.category_name);
+        const subSlug = slugify(row.name);
+        if (slug && subSlug) entries.push({ path: `/category/${slug}/${subSlug}`, priority: '0.7', changefreq: 'weekly', lastmod: row.updated_at });
       }
       for (const row of products || []) {
         const slug = slugify(row.slug);
@@ -232,7 +250,8 @@ app.get('/sitemap.xml', async (_req, res) => {
       return true;
     })
     .map((entry) => {
-      const lastmod = entry.lastmod ? `\n    <lastmod>${xmlEscape(new Date(entry.lastmod).toISOString())}</lastmod>` : '';
+      const lastmodValue = toLastmod(entry.lastmod);
+      const lastmod = lastmodValue ? `\n    <lastmod>${xmlEscape(lastmodValue)}</lastmod>` : '';
       return [
         '  <url>',
         `    <loc>${xmlEscape(`${SITE_URL}${entry.path}`)}</loc>${lastmod}`,

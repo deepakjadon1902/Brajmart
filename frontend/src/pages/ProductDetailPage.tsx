@@ -15,6 +15,7 @@ import SectionHeader from '@/components/ui/SectionHeader';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import SEO from '@/components/seo/SEO';
 
 const absoluteUrl = (value: string) => {
   const raw = String(value || '').trim();
@@ -53,7 +54,7 @@ const safeJsonLd = (value: unknown) =>
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
-  const { getProductBySlug, products, loading } = useProductStore();
+  const { getProductBySlug, products, loading, lastFetchedAt, error, loadFromApi } = useProductStore();
   const settings = useSettingsStore((s) => s.settings);
   const product = getProductBySlug(slug || '');
   const [quantity, setQuantity] = useState(1);
@@ -67,6 +68,11 @@ const ProductDetailPage = () => {
   const addToCart = useCartStore(s => s.addItem);
   const { toggleItem, isInWishlist } = useWishlistStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!slug || product || loading) return;
+    loadFromApi({ force: products.length === 0 }).catch(() => undefined);
+  }, [loadFromApi, loading, product, products.length, slug]);
 
   const pieceOptions = useMemo(() => {
     if (!product) return [];
@@ -525,9 +531,16 @@ const ProductDetailPage = () => {
   };
 
   if (!product) {
-    if (loading || products.length === 0) {
+    const hasAttemptedCatalogLoad = lastFetchedAt > 0 || Boolean(error);
+    if (loading || !hasAttemptedCatalogLoad) {
       return (
         <div className="min-h-screen bg-background">
+          <SEO
+            title="Loading Product | Brajmart"
+            description="Brajmart is loading this product page."
+            path={slug ? `/product/${slug}` : '/products'}
+            robots="noindex,follow"
+          />
           <AnnouncementBar /><Navbar />
           <div className="container mx-auto px-4 py-20 text-center">
             <div className="inline-flex items-center gap-2 text-muted-foreground">
@@ -541,6 +554,12 @@ const ProductDetailPage = () => {
     }
     return (
       <div className="min-h-screen bg-background">
+        <SEO
+          title="Product Not Found | Brajmart"
+          description="This Brajmart product is no longer available."
+          path={slug ? `/product/${slug}` : '/products'}
+          robots="noindex,follow"
+        />
         <AnnouncementBar /><Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <h1 className="font-cinzel text-2xl font-bold mb-4">Product Not Found</h1>

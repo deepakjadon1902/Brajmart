@@ -44,7 +44,11 @@ const ProductsPage = () => {
     : category
     ? `Shop authentic ${category.toLowerCase()} online from Brajmart. Curated spiritual products from Vrindavan with reliable delivery across India.`
     : 'Shop authentic puja items, spiritual books, prasadam, deity idols and devotional accessories from Vrindavan. Delivered across India by Brajmart.';
-  const path = `${location.pathname}${params.toString() ? `?${params.toString()}` : ''}`;
+  const indexableParams = new URLSearchParams();
+  if (tag) indexableParams.set('tag', tag);
+  if (category) indexableParams.set('category', category);
+  const path = `${location.pathname}${indexableParams.toString() ? `?${indexableParams.toString()}` : ''}`;
+  const hasFacetFilters = Boolean(minPrice || maxPrice || minRating);
   const collectionSchema = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
@@ -67,6 +71,7 @@ const ProductsPage = () => {
         title={pageTitle}
         description={description}
         path={path}
+        robots={hasFacetFilters || (filtered.length === 0 && (tag || category)) ? 'noindex,follow' : 'index,follow'}
         schema={[
           breadcrumbSchema([
             { name: 'Home', path: '/' },

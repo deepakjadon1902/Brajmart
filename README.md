@@ -67,6 +67,18 @@ Set this in `frontend/.env`:
 VITE_API_URL=http://localhost:5000/api
 ```
 
+For production, set the deployed backend API URL in the frontend hosting
+environment before building:
+```
+VITE_API_URL=https://your-backend-domain.example.com/api
+VITE_API_BASE_URL=https://your-backend-domain.example.com/api
+VITE_SITE_URL=https://www.brajmart.com
+API_BASE_URL=https://your-backend-domain.example.com/api
+```
+
+This is SEO-critical because the build-time sitemap generator uses that API to
+include live product, category, subcategory, and blog URLs.
+
 ## 5) Install + Run
 
 Backend:

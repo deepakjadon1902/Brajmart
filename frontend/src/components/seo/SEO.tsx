@@ -7,6 +7,7 @@ type SEOProps = {
   path?: string;
   image?: string;
   type?: 'website' | 'product' | 'article';
+  robots?: string;
   schema?: unknown | unknown[];
 };
 
@@ -16,6 +17,7 @@ const SEO = ({
   path = '/',
   image = DEFAULT_IMAGE,
   type = 'website',
+  robots = 'index,follow',
   schema,
 }: SEOProps) => {
   const metaTitle = cleanMetaText(title, 70);
@@ -28,6 +30,7 @@ const SEO = ({
     <Helmet>
       <title>{metaTitle}</title>
       <meta name="description" content={metaDescription} />
+      <meta name="robots" content={robots} />
       <link rel="canonical" href={canonical} />
       <meta property="og:type" content={type} />
       <meta property="og:site_name" content={SITE_NAME} />

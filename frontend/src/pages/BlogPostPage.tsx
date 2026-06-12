@@ -74,6 +74,7 @@ const BlogPostPage = () => {
         title={`${post?.title || 'Blog Post'} | BrajMart`}
         description={description}
         path={path}
+        robots={!loading && !post ? 'noindex,follow' : 'index,follow'}
         schema={post ? [
           breadcrumbSchema([
             { name: 'Home', path: '/' },

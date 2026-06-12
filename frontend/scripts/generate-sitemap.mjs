@@ -1,9 +1,35 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+const loadLocalEnv = async () => {
+  const envFiles = ['.env.local', '.env'];
+  for (const file of envFiles) {
+    try {
+      const raw = await fs.readFile(path.resolve(process.cwd(), file), 'utf8');
+      for (const line of raw.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
+        const [key, ...rest] = trimmed.split('=');
+        const name = key.trim();
+        if (!name || process.env[name] !== undefined) continue;
+        process.env[name] = rest.join('=').trim().replace(/^["']|["']$/g, '');
+      }
+    } catch {
+      // Optional env file.
+    }
+  }
+};
+
+await loadLocalEnv();
+
 const SITE_URL = (process.env.VITE_SITE_URL || process.env.SITE_URL || 'https://www.brajmart.com').replace(/\/$/, '');
 const API_BASE_RAW = process.env.VITE_API_URL || process.env.VITE_API_BASE_URL || process.env.API_BASE_URL || '';
-const API_BASE = API_BASE_RAW ? API_BASE_RAW.replace(/\/$/, '') : '';
+const API_BASE = (() => {
+  const raw = String(API_BASE_RAW || SITE_URL).trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw.replace(/\/$/, '');
+  return `${SITE_URL}${raw.startsWith('/') ? raw : `/${raw}`}`.replace(/\/$/, '');
+})();
 const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
 
 const staticEntries = [
@@ -63,6 +89,8 @@ const toLastmod = (value) => {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString();
 };
 
+const hasUsefulText = (value, minLength = 20) => String(value ?? '').replace(/\s+/g, ' ').trim().length >= minLength;
+
 const buildSitemap = (entries) => {
   const seen = new Set();
   const urls = entries
@@ -99,37 +127,40 @@ const buildSitemapIndex = () =>
 
 const entries = [...staticEntries];
 
-if (!API_BASE) {
-  console.warn('No VITE_API_URL/VITE_API_BASE_URL found; generating sitemap with static routes only.');
-} else {
-  try {
-    const [products, categories, blogs] = await Promise.all([
-      fetchJson('/products'),
-      fetchJson('/categories'),
-      fetchJson('/blogs').catch(() => []),
-    ]);
+try {
+  const [products, categories, blogs] = await Promise.all([
+    fetchJson('/products'),
+    fetchJson('/categories'),
+    fetchJson('/blogs').catch(() => []),
+  ]);
 
-    for (const category of categories) {
-      const slug = slugify(category?.name);
-      if (slug) entries.push({ path: `/category/${slug}`, priority: '0.8', changefreq: 'weekly', lastmod: toLastmod(category?.updatedAt || category?.updated_at) });
-      for (const sub of Array.isArray(category?.subcategories) ? category.subcategories : []) {
-        const subSlug = slugify(sub?.name);
-        if (slug && subSlug) entries.push({ path: `/category/${slug}/${subSlug}`, priority: '0.7', changefreq: 'weekly', lastmod: toLastmod(sub?.updatedAt || sub?.updated_at) });
-      }
+  for (const category of categories) {
+    const slug = slugify(category?.name);
+    const productCount = Number(category?.productCount ?? category?.product_count ?? 0);
+    if (slug && productCount > 0) entries.push({ path: `/category/${slug}`, priority: '0.8', changefreq: 'weekly', lastmod: toLastmod(category?.updatedAt || category?.updated_at) });
+    for (const sub of Array.isArray(category?.subcategories) ? category.subcategories : []) {
+      const subSlug = slugify(sub?.name);
+      if (slug && subSlug) entries.push({ path: `/category/${slug}/${subSlug}`, priority: '0.7', changefreq: 'weekly', lastmod: toLastmod(sub?.updatedAt || sub?.updated_at) });
     }
-
-    for (const product of products) {
-      const slug = slugify(product?.slug || product?.name);
-      if (slug) entries.push({ path: `/product/${slug}`, priority: '0.7', changefreq: 'weekly', lastmod: toLastmod(product?.updatedAt || product?.updated_at) });
-    }
-
-    for (const blog of blogs) {
-      const slug = slugify(blog?.slug);
-      if (slug) entries.push({ path: `/blog/${slug}`, priority: '0.5', changefreq: 'monthly', lastmod: toLastmod(blog?.updatedAt || blog?.updated_at) });
-    }
-  } catch (err) {
-    console.warn(`Could not fetch live catalog for sitemap: ${err?.message || err}`);
   }
+
+  for (const product of products) {
+    const slug = slugify(product?.slug || product?.name);
+    const hasImage = product?.image || (Array.isArray(product?.images) && product.images.length);
+    const hasCoreFields = slug && product?.name && Number(product?.price) > 0 && hasImage;
+    if (hasCoreFields && hasUsefulText(product?.description, 30)) {
+      entries.push({ path: `/product/${slug}`, priority: '0.7', changefreq: 'weekly', lastmod: toLastmod(product?.updatedAt || product?.updated_at) });
+    }
+  }
+
+  for (const blog of blogs) {
+    const slug = slugify(blog?.slug);
+    if (slug && hasUsefulText(blog?.title, 5) && hasUsefulText(blog?.excerpt || blog?.content, 30)) {
+      entries.push({ path: `/blog/${slug}`, priority: '0.5', changefreq: 'monthly', lastmod: toLastmod(blog?.updatedAt || blog?.updated_at) });
+    }
+  }
+} catch (err) {
+  console.warn(`Could not fetch live catalog for sitemap from ${API_BASE}: ${err?.message || err}`);
 }
 
 await fs.mkdir(PUBLIC_DIR, { recursive: true });
