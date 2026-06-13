@@ -37,7 +37,7 @@ const BrajDarshanPage = () => {
             <ArrowLeft size={14} /> Back to Home
           </Link>
           <div className="flex items-center gap-3 mb-2">
-            <span className="text-4xl">{destination.emoji}</span>
+            <img src={destination.templeIcon} alt={`${destination.name} temple icon`} className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border-2 border-white shadow-md" />
             <h1 className="font-cinzel text-3xl md:text-5xl font-bold text-white">{destination.name}</h1>
           </div>
           <div className="flex items-center gap-2 text-white/70 text-sm">
@@ -104,7 +104,7 @@ const BrajDarshanPage = () => {
           <ScrollReveal>
             <div className="mb-12">
               <h2 className="font-cinzel text-xl md:text-2xl font-bold text-foreground mb-4">
-                ✨ Must-Do Highlights
+               Must-Do Highlights
               </h2>
               <div className="grid sm:grid-cols-2 gap-3">
                 {destination.highlights.map((h, i) => (
@@ -137,7 +137,7 @@ const BrajDarshanPage = () => {
           <ScrollReveal>
             <div>
               <h2 className="font-cinzel text-xl md:text-2xl font-bold text-foreground mb-6">
-                🪷 Explore Other Braj Destinations
+                Explore Other Braj Destinations
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {otherDestinations.map((d) => (
@@ -146,11 +146,16 @@ const BrajDarshanPage = () => {
                     to={`/braj-darshan/${d.slug}`}
                     className="block rounded-xl border border-border overflow-hidden hover:border-saffron/40 transition group"
                   >
-                    <div className="aspect-square overflow-hidden">
+                    <div className="aspect-square overflow-hidden relative">
                       <img src={d.image} alt={d.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
+                      <img
+                        src={d.templeIcon}
+                        alt={`${d.name} temple icon`}
+                        className="absolute top-2 left-2 w-8 h-8 rounded-full object-cover border-2 border-white shadow-md"
+                        loading="lazy"
+                      />
                     </div>
                     <div className="p-2 text-center">
-                      <span className="text-lg">{d.emoji}</span>
                       <p className="font-cinzel text-foreground text-xs font-semibold">{d.name}</p>
                     </div>
                   </Link>

@@ -104,30 +104,30 @@ const Footer = () => {
       <div className="container mx-auto px-4 py-7 md:py-8">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_2.8fr] gap-7 lg:gap-9 items-start">
           <div>
-            <Link to="/" className="flex items-center gap-2 mb-3">
+            <Link to="/" className="flex items-center gap-2.5 mb-3">
               {settings.storeLogo ? (
                 <img
-                  src={toResponsiveImageUrl(settings.storeLogo, { width: 96, height: 96, fit: 'contain', quality: 72 })}
+                  src={toResponsiveImageUrl(settings.storeLogo, { width: 120, height: 120, fit: 'contain', quality: 72 })}
                   alt={settings.storeName}
-                  className="w-9 h-9 rounded object-contain"
+                  className="w-12 h-12 rounded object-contain"
                 />
               ) : (
                 <span className="sr-only">{settings.storeName}</span>
               )}
-              <span className="font-cinzel text-lg font-bold text-gold">{settings.storeName}</span>
+              <span className="font-cinzel text-2xl font-bold text-gold">{settings.storeName}</span>
             </Link>
-            <p className="text-primary-foreground/70 text-xs leading-relaxed mb-2">{settings.tagline}</p>
-            <p className="text-primary-foreground/60 text-xs leading-relaxed mb-3">{settings.storeAddress}</p>
+            <p className="text-white text-sm leading-relaxed mb-2">{settings.tagline}</p>
+            <p className="text-white text-sm leading-relaxed mb-3">{settings.storeAddress}</p>
             <div className="space-y-1.5">
               {settings.storeEmail && (
-                <p className="flex items-center gap-2 text-primary-foreground/55 text-xs">
-                  <Mail size={13} />
+                <p className="flex items-center gap-2 text-white text-sm">
+                  <Mail size={15} />
                   {settings.storeEmail}
                 </p>
               )}
               {settings.storePhone && (
-                <p className="flex items-center gap-2 text-primary-foreground/55 text-xs">
-                  <Phone size={13} />
+                <p className="flex items-center gap-2 text-white text-sm">
+                  <Phone size={15} />
                   {settings.storePhone}
                 </p>
               )}

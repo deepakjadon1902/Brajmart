@@ -38,8 +38,15 @@ const BrajYatra = () => (
                 />
               </div>
               <div className="p-4 text-center">
-                <span className="text-2xl block mb-1">{d.emoji}</span>
-                <h3 className="font-cinzel text-primary-foreground font-semibold text-sm">{d.name}</h3>
+                <div className="flex items-center justify-center gap-2">
+                  <img
+                    src={d.templeIcon}
+                    alt={`${d.name} temple icon`}
+                    className="w-6 h-6 rounded-full object-cover border border-gold/40"
+                    loading="lazy"
+                  />
+                  <h3 className="font-cinzel text-primary-foreground font-semibold text-sm">{d.name}</h3>
+                </div>
                 <div className="flex items-center justify-center gap-1 mt-1">
                   <MapPin size={10} className="text-gold/60" />
                   <span className="text-primary-foreground/40 text-xs">{d.distance}</span>

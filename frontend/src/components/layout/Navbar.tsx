@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Heart, ShoppingCart, Menu, X, User, LogOut, Package, MapPin } from 'lucide-react';
+import { Search, Heart, ShoppingCart, Menu, X, User, LogOut, Package, MapPin, Newspaper } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useAuthStore } from '@/store/authStore';
@@ -39,7 +39,7 @@ const Navbar = () => {
 
   return (
     <header className={`sticky top-0 z-[80] transition-all duration-300 ${scrolled ? 'glass shadow-md border-b border-gold/20' : 'bg-card border-b border-border'}`}>
-      <div className="container mx-auto flex items-center gap-3 h-16 md:h-[68px] px-3 md:px-4">
+      <div className="container mx-auto flex items-center gap-4 h-16 md:h-[68px] px-3 md:px-4">
         <button className="md:hidden text-foreground" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu">
           {mobileOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
@@ -47,9 +47,9 @@ const Navbar = () => {
         <Link to="/" className="flex items-center shrink-0" aria-label={settings.storeName || 'Brajmart home'}>
           {settings.storeLogo ? (
             <img
-              src={toResponsiveImageUrl(settings.storeLogo, { width: 176, height: 176, fit: 'contain', quality: 76 })}
+              src={toResponsiveImageUrl(settings.storeLogo, { width: 220, height: 220, fit: 'contain', quality: 76 })}
               alt={settings.storeName}
-              className="h-12 w-16 md:h-16 md:w-24 rounded object-contain"
+              className="h-14 w-20 md:h-20 md:w-28 rounded object-contain"
             />
           ) : (
             <span className="sr-only">{settings.storeName}</span>
@@ -71,35 +71,42 @@ const Navbar = () => {
           </div>
         </form>
 
-        <div className="flex items-center gap-1 sm:gap-2 ml-auto md:ml-0">
-          <Link to="/blog" className="hidden lg:inline-flex px-2.5 py-2 text-sm font-semibold text-foreground hover:text-saffron transition-colors">
-            Blog
+        <div className="flex items-center gap-3 sm:gap-5 ml-auto md:ml-0">
+          <Link to="/blog" className="hidden lg:flex flex-col items-center gap-0.5 p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Blog">
+            <Newspaper size={20} className="text-foreground" />
+            <span className="hidden sm:block text-[0.65rem] font-medium text-foreground">Blog</span>
           </Link>
-          <Link to="/track-orders" className="relative p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Track Orders">
+          <Link to="/track-orders" className="relative flex flex-col items-center gap-0.5 p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Track Orders">
             <MapPin size={20} className="text-foreground" />
+            <span className="hidden sm:block text-[0.65rem] font-medium text-foreground">Track Order</span>
           </Link>
-          <Link to="/wishlist" className="relative p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Wishlist">
+          <Link to="/wishlist" className="relative flex flex-col items-center gap-0.5 p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Wishlist">
             <Heart size={20} className="text-foreground" />
             {wishlistCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-saffron text-primary-foreground text-[0.55rem] font-bold rounded-full flex items-center justify-center">{wishlistCount}</span>
+              <span className="absolute -top-0.5 right-1 sm:right-2 w-4 h-4 bg-saffron text-primary-foreground text-[0.55rem] font-bold rounded-full flex items-center justify-center">{wishlistCount}</span>
             )}
+            <span className="hidden sm:block text-[0.65rem] font-medium text-foreground">Wishlist</span>
           </Link>
-          <Link to="/cart" className="relative p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Cart">
+          <Link to="/cart" className="relative flex flex-col items-center gap-0.5 p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Cart">
             <ShoppingCart size={20} className="text-foreground" />
             {cartCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-saffron text-primary-foreground text-[0.55rem] font-bold rounded-full flex items-center justify-center">{cartCount}</span>
+              <span className="absolute -top-0.5 right-1 sm:right-2 w-4 h-4 bg-saffron text-primary-foreground text-[0.55rem] font-bold rounded-full flex items-center justify-center">{cartCount}</span>
             )}
+            <span className="hidden sm:block text-[0.65rem] font-medium text-foreground">Cart</span>
           </Link>
 
           {isAuthenticated && user ? (
             <div className="relative">
-              <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="w-9 h-9 rounded-full bg-gold-gradient flex items-center justify-center text-maroon-dark font-bold text-sm border-2 border-gold/30">
-                {user.fullName[0]?.toUpperCase()}
+              <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="flex flex-col items-center gap-0.5">
+                <span className="w-9 h-9 rounded-full bg-gold-gradient flex items-center justify-center text-maroon-dark font-bold text-sm border-2 border-gold/30">
+                  {user.fullName[0]?.toUpperCase()}
+                </span>
+                <span className="hidden sm:block text-[0.65rem] font-medium text-foreground">Profile</span>
               </button>
               {userMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-[90]" onClick={() => setUserMenuOpen(false)} />
-                  <div className="absolute right-0 top-12 z-[100] w-48 bg-card rounded-xl border border-border shadow-lg py-2">
+                  <div className="absolute right-0 top-14 z-[100] w-48 bg-card rounded-xl border border-border shadow-lg py-2">
                     <div className="px-4 py-2 border-b border-border">
                       <p className="text-sm font-semibold text-foreground">{user.fullName}</p>
                       <p className="text-[0.65rem] text-muted-foreground">{user.email}</p>

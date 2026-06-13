@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useProductStore } from '@/store/productStore';
 import { Search as SearchIcon, ArrowLeft } from 'lucide-react';
@@ -9,10 +9,26 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
 const SearchPage = () => {
-  const [query, setQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get('q') || '');
   const { searchProducts, products } = useProductStore();
   const results = query.length >= 2 ? searchProducts(query) : [];
   const trendingProducts = products.slice(0, 8);
+
+  // Keep local state in sync if the URL query param changes (e.g. navbar search)
+  useEffect(() => {
+    const q = searchParams.get('q') || '';
+    if (q !== query) setQuery(q);
+  }, [searchParams]);
+
+  // Keep URL in sync as the user types/searches on this page
+  useEffect(() => {
+    if (query) {
+      setSearchParams({ q: query }, { replace: true });
+    } else if (searchParams.get('q')) {
+      setSearchParams({}, { replace: true });
+    }
+  }, [query]);
 
   return (
     <div className="min-h-screen bg-background">
