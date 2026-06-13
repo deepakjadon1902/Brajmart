@@ -493,6 +493,7 @@ const ProductDetailPage = () => {
 
   const metaTitle = useMemo(() => {
     if (!product) return settings.storeName || 'Brajmart';
+    if (product.metaTitle) return truncateMeta(cleanText(product.metaTitle), 60);
     const storeName = settings.storeName || 'Brajmart';
     const category = cleanText(product.category);
     const base = category ? `${product.name} - ${category}` : product.name;
@@ -503,6 +504,7 @@ const ProductDetailPage = () => {
 
   const metaDescription = useMemo(() => {
     if (!product) return '';
+    if (product.metaDescription) return truncateMeta(cleanText(product.metaDescription), 160);
     const storeName = settings.storeName || 'Brajmart';
     const productDescription = cleanText(product.description);
     const category = cleanText(product.category || 'devotional product').toLowerCase();

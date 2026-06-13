@@ -28,7 +28,7 @@ const CollectionSection = ({
   ornamentIconUrl,
   bgClass = '',
 }: CollectionSectionProps) => (
-  <section className={`py-10 sm:py-12 md:py-20 ${bgClass}`}>
+  <section className={`py-4 sm:py-5 md:py-6 ${bgClass}`}>
     <div className="container mx-auto px-4">
       <SectionHeader
         tag={tag}
@@ -40,7 +40,7 @@ const CollectionSection = ({
         ornamentIconUrl={ornamentIconUrl}
       />
       {viewAllLink && viewAllLink !== '#' && (
-        <div className="flex justify-end -mt-6 mb-4">
+        <div className="flex justify-end -mt-3 mb-2">
           <Link
             to={viewAllLink}
             className="inline-flex items-center gap-2 text-saffron font-semibold text-sm hover:underline"

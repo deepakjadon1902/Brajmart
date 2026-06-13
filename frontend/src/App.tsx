@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -80,6 +80,12 @@ const AdminBlogs = lazy(() => import("./pages/admin/AdminBlogs"));
 const LegacyCategoryRedirect = () => {
   const { slug } = useParams();
   return <Navigate to={`/category/${slug || ''}`} replace />;
+};
+
+const StorefrontWhatsAppButton = () => {
+  const location = useLocation();
+  if (location.pathname.startsWith('/admin')) return null;
+  return <WhatsAppButton />;
 };
 
 const App = () => {
@@ -238,7 +244,7 @@ const App = () => {
           <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
-          <WhatsAppButton />
+          <StorefrontWhatsAppButton />
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

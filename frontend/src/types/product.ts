@@ -12,6 +12,8 @@ export interface Product {
   subcategoryId?: number;
   subcategory?: string | null;
   description?: string;
+  metaTitle?: string;
+  metaDescription?: string;
   rating: number;
   reviewCount: number;
   badge?: 'new' | 'bestseller' | 'combo' | 'exclusive';

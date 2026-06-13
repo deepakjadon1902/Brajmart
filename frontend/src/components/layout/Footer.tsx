@@ -101,8 +101,8 @@ const Footer = () => {
     )}
 
     <footer className="bg-maroon-dark text-primary-foreground">
-      <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_2.6fr] gap-10 lg:gap-12 items-start">
+      <div className="container mx-auto px-4 py-7 md:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_2.8fr] gap-7 lg:gap-9 items-start">
           <div>
             <Link to="/" className="flex items-center gap-2 mb-3">
               {settings.storeLogo ? (
@@ -134,11 +134,11 @@ const Footer = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-7">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
             {Object.entries(footerLinks).map(([title, links]) => (
               <div key={title}>
-                <h4 className="font-semibold text-sm text-gold mb-3">{title}</h4>
-                <ul className="space-y-2">
+                <h4 className="font-semibold text-sm text-gold mb-2">{title}</h4>
+                <ul className="space-y-1.5">
                   {links.map((link) => (
                     <li key={link.label}>
                       <Link to={link.to} className="text-primary-foreground/60 text-xs hover:text-primary-foreground transition-colors">

@@ -142,6 +142,15 @@ const ensureProductVariantColumns = async () => {
         await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN color_variants JSON NULL AFTER variant_pricing');
     }
 };
+const ensureProductSeoColumns = async () => {
+    const missing = await getMissingProductColumns(['meta_title', 'meta_description']);
+    if (missing.meta_title) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN meta_title VARCHAR(255) NULL AFTER description');
+    }
+    if (missing.meta_description) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN meta_description TEXT NULL AFTER meta_title');
+    }
+};
 const variantFieldsProvided = (data) => data?.sizes !== undefined ||
     data?.sizePricing !== undefined ||
     data?.piecePricing !== undefined ||
@@ -179,6 +188,8 @@ const mapProductRow = (row) => ({
     inStock: (0, dbHelpers_1.boolFromDb)(row.in_stock),
     soldCount: Number(row.sold_count ?? 0),
     description: row.description ?? '',
+    metaTitle: row.meta_title ?? '',
+    metaDescription: row.meta_description ?? '',
     sizes: (0, dbHelpers_1.parseJson)(row.sizes, []),
     sizePricing: (0, dbHelpers_1.parseJson)(row.size_pricing, []),
     piecePricing: (0, dbHelpers_1.parseJson)(row.piece_pricing, []),
@@ -233,6 +244,10 @@ const buildUpdate = (data) => {
         set('sold_count', data.soldCount);
     if (data.description !== undefined)
         set('description', data.description);
+    if (data.metaTitle !== undefined)
+        set('meta_title', data.metaTitle);
+    if (data.metaDescription !== undefined)
+        set('meta_description', data.metaDescription);
     if (data.sizes !== undefined)
         set('sizes', JSON.stringify(data.sizes || []));
     if (data.sizePricing !== undefined)
@@ -268,6 +283,7 @@ router.get('/', async (req, res) => {
             return res.json(listCache.data);
         }
         await ensureProductCategorySchema();
+        await ensureProductSeoColumns();
         const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, s.name AS subcategory_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
@@ -288,7 +304,7 @@ router.get('/schema', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
             return res.status(503).json({ message: 'Database unavailable' });
         const dbRow = await (0, db_1.dbQuery)('SELECT DATABASE() AS db');
         const database = dbRow?.[0]?.db ?? null;
-        const cols = ['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants'];
+        const cols = ['meta_title', 'meta_description', 'sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants'];
         const missing = await getMissingProductColumns(cols);
         res.json({
             database,
@@ -309,6 +325,7 @@ router.get('/:slug', async (req, res) => {
             return res.status(503).json({ message: 'Database unavailable' });
         res.setHeader('Cache-Control', 'no-store');
         await ensureProductCategorySchema();
+        await ensureProductSeoColumns();
         const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, s.name AS subcategory_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
@@ -329,6 +346,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         await ensureProductCategorySchema();
+        await ensureProductSeoColumns();
         const data = req.body || {};
         const normalizedPrice = normalizeRequiredMoney(data.price);
         if (normalizedPrice === null)
@@ -388,7 +406,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             if (found)
                 categoryIdToSave = Number(found);
         }
-        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`, `meta_title`, `meta_description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.price,
@@ -405,6 +423,8 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.inStock === undefined ? 1 : data.inStock ? 1 : 0,
             data.soldCount ?? 0,
             data.description ?? '',
+            data.metaTitle ?? '',
+            data.metaDescription ?? '',
             JSON.stringify(data.sizes || []),
             JSON.stringify(data.sizePricing || []),
             JSON.stringify(data.piecePricing || []),
@@ -412,7 +432,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             JSON.stringify(sanitizeVariantPricing(data.variantPricing || [])),
             JSON.stringify(sanitizeColorVariants(data.colorVariants || [])),
         ]);
-        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `sold_count`, `description`, `meta_title`, `meta_description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.price,
@@ -429,6 +449,8 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.inStock === undefined ? 1 : data.inStock ? 1 : 0,
             data.soldCount ?? 0,
             data.description ?? '',
+            data.metaTitle ?? '',
+            data.metaDescription ?? '',
         ]);
         let result;
         try {
@@ -471,6 +493,7 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         await ensureProductCategorySchema();
+        await ensureProductSeoColumns();
         const body = req.body || {};
         const normalizedCategoryId = (() => {
             const raw = (body.categoryId ?? body.category_id);

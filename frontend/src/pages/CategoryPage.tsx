@@ -63,6 +63,7 @@ const CategoryPage = () => {
       />
       <AnnouncementBar />
       <Navbar />
+      <CategoryNavbar />
 
       {/* Header */}
       <div className="bg-pearl border-b border-border">

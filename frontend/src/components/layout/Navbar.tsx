@@ -38,8 +38,8 @@ const Navbar = () => {
   };
 
   return (
-    <header className={`sticky top-0 z-40 transition-all duration-300 ${scrolled ? 'glass shadow-md border-b border-gold/20' : 'bg-card border-b border-border'}`}>
-      <div className="container mx-auto flex items-center gap-3 sm:gap-4 h-16 md:h-[72px] px-4">
+    <header className={`sticky top-0 z-[80] transition-all duration-300 ${scrolled ? 'glass shadow-md border-b border-gold/20' : 'bg-card border-b border-border'}`}>
+      <div className="container mx-auto flex items-center gap-3 h-16 md:h-[68px] px-3 md:px-4">
         <button className="md:hidden text-foreground" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu">
           {mobileOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
@@ -47,31 +47,34 @@ const Navbar = () => {
         <Link to="/" className="flex items-center shrink-0" aria-label={settings.storeName || 'Brajmart home'}>
           {settings.storeLogo ? (
             <img
-              src={toResponsiveImageUrl(settings.storeLogo, { width: 128, height: 128, fit: 'contain', quality: 72 })}
+              src={toResponsiveImageUrl(settings.storeLogo, { width: 176, height: 176, fit: 'contain', quality: 76 })}
               alt={settings.storeName}
-              className="w-10 h-10 md:w-14 md:h-14 rounded object-contain"
+              className="h-12 w-16 md:h-16 md:w-24 rounded object-contain"
             />
           ) : (
             <span className="sr-only">{settings.storeName}</span>
           )}
         </Link>
 
-        <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-xl mx-auto">
-          <div className="flex w-full rounded-full border border-gold/30 overflow-hidden bg-card focus-within:border-gold transition-colors">
+        <form onSubmit={handleSearch} className="hidden md:flex flex-1 min-w-[360px] max-w-[760px] mx-auto">
+          <div className="flex w-full rounded-md border border-gold/40 overflow-hidden bg-card focus-within:border-saffron transition-colors shadow-sm">
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search Prasadam, Books, Shringar..."
-              className="flex-1 px-4 py-2.5 text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
+              className="flex-1 px-4 py-3 text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
             />
-            <button type="submit" className="px-4 bg-saffron text-primary-foreground hover:bg-saffron-light transition-colors" aria-label="Search">
-              <Search size={18} />
+            <button type="submit" className="px-5 bg-saffron text-primary-foreground hover:bg-saffron-light transition-colors" aria-label="Search">
+              <Search size={21} />
             </button>
           </div>
         </form>
 
         <div className="flex items-center gap-1 sm:gap-2 ml-auto md:ml-0">
+          <Link to="/blog" className="hidden lg:inline-flex px-2.5 py-2 text-sm font-semibold text-foreground hover:text-saffron transition-colors">
+            Blog
+          </Link>
           <Link to="/track-orders" className="relative p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Track Orders">
             <MapPin size={20} className="text-foreground" />
           </Link>
@@ -95,8 +98,8 @@ const Navbar = () => {
               </button>
               {userMenuOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
-                  <div className="absolute right-0 top-12 z-50 w-48 bg-card rounded-xl border border-border shadow-lg py-2">
+                  <div className="fixed inset-0 z-[90]" onClick={() => setUserMenuOpen(false)} />
+                  <div className="absolute right-0 top-12 z-[100] w-48 bg-card rounded-xl border border-border shadow-lg py-2">
                     <div className="px-4 py-2 border-b border-border">
                       <p className="text-sm font-semibold text-foreground">{user.fullName}</p>
                       <p className="text-[0.65rem] text-muted-foreground">{user.email}</p>
@@ -142,6 +145,7 @@ const Navbar = () => {
         <div className="md:hidden border-t border-border bg-card px-4 py-4 space-y-3">
           <Link to="/" onClick={() => setMobileOpen(false)} className="block py-2 text-sm font-medium text-foreground hover:text-saffron">Home</Link>
           <Link to="/search" onClick={() => setMobileOpen(false)} className="block py-2 text-sm font-medium text-foreground hover:text-saffron">All Products</Link>
+          <Link to="/blog" onClick={() => setMobileOpen(false)} className="block py-2 text-sm font-medium text-foreground hover:text-saffron">Blog</Link>
           <Link to="/wishlist" onClick={() => setMobileOpen(false)} className="block py-2 text-sm font-medium text-foreground hover:text-saffron">Wishlist</Link>
           <Link to="/cart" onClick={() => setMobileOpen(false)} className="block py-2 text-sm font-medium text-foreground hover:text-saffron">Cart</Link>
           {isAuthenticated ? (

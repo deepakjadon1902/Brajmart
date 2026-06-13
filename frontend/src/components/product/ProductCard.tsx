@@ -94,7 +94,7 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
 
   const isCompact = variant === 'compact';
   const mediaAspectClass = 'aspect-square';
-  const mediaFitClass = isCompact ? 'object-contain p-3' : 'object-cover';
+  const mediaFitClass = isCompact ? 'object-contain p-2.5' : 'object-cover';
 
   useEffect(() => {
     if (!isHovered) {
@@ -112,7 +112,7 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
 
   return (
     <div
-      className={`group relative flex flex-col h-full rounded-xl border border-border bg-card shadow-sm overflow-hidden gold-glow-hover cursor-pointer content-visibility-auto ${isCompact ? 'min-h-[352px] sm:min-h-[390px]' : 'min-h-[430px]'}`}
+      className={`group relative flex flex-col h-full rounded-lg border border-border bg-card shadow-sm overflow-hidden gold-glow-hover cursor-pointer content-visibility-auto ${isCompact ? 'min-h-[278px] sm:min-h-[305px]' : 'min-h-[335px]'}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -127,18 +127,18 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
         />
 
         {!product.inStock && (
-          <span className="absolute bottom-3 right-3 px-2.5 py-1 text-[0.65rem] font-extrabold rounded-full bg-destructive text-primary-foreground tracking-wide">
+          <span className="absolute bottom-2 right-2 px-2 py-0.5 text-[0.62rem] font-extrabold rounded-full bg-destructive text-primary-foreground tracking-wide">
             OUT OF STOCK
           </span>
         )}
 
         {badge && (
-          <span className={`absolute top-3 left-3 px-2.5 py-1 text-[0.65rem] font-semibold rounded-full tracking-wide ${badgeStyles[badge]}`}>
+          <span className={`absolute top-2 left-2 px-2 py-0.5 text-[0.62rem] font-semibold rounded-full tracking-wide ${badgeStyles[badge]}`}>
             {badgeLabels[badge] || badge}
           </span>
         )}
 
-        <div className={`absolute top-3 right-3 flex flex-col gap-2 transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`absolute top-2 right-2 flex flex-col gap-1.5 transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
           <button
             onClick={handleToggleWishlist}
             className={`w-8 h-8 rounded-full shadow flex items-center justify-center transition-colors ${inWishlist ? 'bg-saffron text-primary-foreground' : 'bg-card/90 hover:bg-saffron hover:text-primary-foreground'}`}
@@ -173,15 +173,16 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
           <span className="text-[0.65rem] text-muted-foreground ml-1">({product.reviewCount})</span>
         </div>
 
-        <Link to={`/product/${product.slug}`} className="mt-auto">
-          <h3 className={`font-playfair text-[0.82rem] sm:text-sm font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors ${isCompact ? 'min-h-[2rem]' : 'min-h-[2.2rem]'}`}>
-            {product.name}
-          </h3>
-        </Link>
-
-        <div className="flex items-center gap-2 pt-1 min-h-[1.75rem]">
-          <span className="font-playfair text-xl font-bold text-brand-gold">{formatPrice(product.price)}</span>
-          {product.originalPrice && <span className="text-muted-foreground line-through text-xs">{formatPrice(product.originalPrice)}</span>}
+        <div className="mt-auto flex items-start justify-between gap-2">
+          <Link to={`/product/${product.slug}`} className="min-w-0 flex-1">
+            <h3 className="font-playfair text-[0.8rem] sm:text-[0.86rem] font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors">
+              {product.name}
+            </h3>
+          </Link>
+          <div className="shrink-0 text-right leading-tight">
+            <div className="font-playfair text-base sm:text-lg font-bold text-brand-gold">{formatPrice(product.price)}</div>
+            {product.originalPrice && <div className="text-muted-foreground line-through text-[0.65rem]">{formatPrice(product.originalPrice)}</div>}
+          </div>
         </div>
 
         {!isCompact && (

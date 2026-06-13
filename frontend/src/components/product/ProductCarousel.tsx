@@ -22,9 +22,9 @@ const ProductCarousel = ({ products, priority = false }: ProductCarouselProps) =
   return (
     <div className="relative group/carousel">
       <div className="overflow-hidden" ref={emblaRef}>
-        <div className="flex gap-3 sm:gap-4 md:gap-5">
+        <div className="flex gap-2.5 sm:gap-3 md:gap-4">
           {products.map((product, i) => (
-            <div key={product.id} className="flex-none w-[44vw] min-w-[168px] sm:w-[232px] md:w-[252px] lg:w-[264px]">
+            <div key={product.id} className="flex-none w-[43vw] min-w-[158px] sm:w-[218px] md:w-[236px] lg:w-[250px]">
               <ProductCard product={product} index={i} variant="compact" priority={priority} />
             </div>
           ))}

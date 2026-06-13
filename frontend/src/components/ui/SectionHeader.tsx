@@ -24,19 +24,19 @@ const SectionHeader = ({
   ornamentIconUrl: _ornamentIconUrl,
   light = false,
 }: SectionHeaderProps) => (
-  <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
+  <ScrollReveal className="text-center mb-3 sm:mb-4 md:mb-5">
     {tag && (
-      <span className="inline-block text-xs font-semibold tracking-[0.2em] uppercase text-gold mb-3">
+        <span className="inline-block text-[0.65rem] font-semibold tracking-[0.16em] uppercase text-gold mb-1.5">
         {tag}
       </span>
     )}
 
-    <h2 className={`font-cinzel text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold leading-tight ${light ? 'text-primary-foreground' : 'text-maroon'}`}>
+    <h2 className={`font-cinzel text-lg sm:text-xl md:text-2xl lg:text-[1.7rem] font-bold leading-tight ${light ? 'text-primary-foreground' : 'text-maroon'}`}>
       {title}
     </h2>
 
     {subtitle && (
-      <p className={`mt-2 font-playfair italic text-sm sm:text-base md:text-lg ${light ? 'text-gold-light' : 'text-muted-foreground'}`}>
+      <p className={`mt-1 font-playfair italic text-sm md:text-[0.95rem] ${light ? 'text-gold-light' : 'text-muted-foreground'}`}>
         {subtitle}
       </p>
     )}

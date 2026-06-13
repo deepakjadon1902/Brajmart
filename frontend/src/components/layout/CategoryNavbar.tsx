@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { ChevronRight, Grid2X2 } from 'lucide-react';
+import { ChevronRight, Menu, X } from 'lucide-react';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
-import { toResponsiveImageUrl } from '@/utils/responsiveImage';
-
-const isImageIcon = (icon?: string) =>
-  Boolean(icon && (icon.startsWith('data:') || icon.startsWith('http') || icon.startsWith('/uploads')));
 
 const chunkSubcategories = <T,>(items: T[], size = 4) => {
   const chunks: T[][] = [];
@@ -16,6 +12,7 @@ const chunkSubcategories = <T,>(items: T[], size = 4) => {
 const CategoryNavbar = () => {
   const categories = useProductStore((s) => s.categories);
   const [openCatId, setOpenCatId] = useState<string | null>(null);
+  const [allOpen, setAllOpen] = useState(false);
   const openCat = useMemo(() => categories.find((c) => c.id === openCatId) || null, [categories, openCatId]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const closeTimerRef = useRef<number | null>(null);
@@ -25,6 +22,7 @@ const CategoryNavbar = () => {
       const el = rootRef.current;
       if (!el || (e.target && el.contains(e.target as Node))) return;
       setOpenCatId(null);
+      setAllOpen(false);
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
@@ -43,17 +41,23 @@ const CategoryNavbar = () => {
   };
 
   return (
-    <div className="relative z-[45]">
-      <section className="relative z-[45] py-1.5 bg-card border-b border-border" ref={rootRef}>
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-base font-semibold text-maroon">Categories</span>
-            <RouterLink to="/categories" className="text-xs font-semibold text-saffron hover:underline">
-              View All
-            </RouterLink>
-          </div>
-
-          <div className="flex gap-3 sm:gap-4 md:gap-6 overflow-x-auto scrollbar-hide pb-2 justify-start md:justify-center snap-x snap-mandatory">
+    <div className="sticky top-16 md:top-[68px] z-[35]">
+      <section className="relative bg-card border-b border-border shadow-sm" ref={rootRef}>
+        <div className="container mx-auto px-3 md:px-4">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide h-10 md:h-11">
+            <button
+              type="button"
+              onClick={() => {
+                setOpenCatId(null);
+                setAllOpen((open) => !open);
+              }}
+              className="sticky left-0 z-10 inline-flex h-8 shrink-0 items-center gap-2 rounded-md bg-card px-3 text-sm font-bold text-maroon shadow-[8px_0_10px_-10px_rgba(0,0,0,0.4)] hover:text-saffron"
+              aria-expanded={allOpen}
+              aria-haspopup="menu"
+            >
+              {allOpen ? <X size={16} /> : <Menu size={17} />}
+              All
+            </button>
             {categories.map((cat) => {
               const subs = Array.isArray(cat.subcategories) ? cat.subcategories : [];
               const hasSubs = subs.length > 0;
@@ -74,7 +78,7 @@ const CategoryNavbar = () => {
                 >
                   <RouterLink
                     to={`/category/${categoryToSlug(cat.name)}`}
-                    className="flex flex-col items-center gap-2 min-w-[84px] sm:min-w-[96px] md:min-w-[108px]"
+                    className="inline-flex h-9 items-center whitespace-nowrap px-2.5 text-sm font-semibold text-foreground hover:text-saffron transition-colors"
                     onClick={(e) => {
                       if (!hasSubs) return;
                       e.preventDefault();
@@ -93,31 +97,53 @@ const CategoryNavbar = () => {
                     aria-haspopup={hasSubs ? 'menu' : undefined}
                     aria-expanded={hasSubs ? openCatId === cat.id : undefined}
                   >
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 md:w-[72px] md:h-[72px] rounded-full border-2 border-gold/30 bg-pearl flex items-center justify-center text-2xl sm:text-[1.65rem] transition-all duration-300 group-hover:border-gold group-hover:shadow-[0_0_16px_rgba(212,175,55,0.25)] group-hover:scale-110 overflow-hidden">
-                      {isImageIcon(cat.icon) ? (
-                        <img
-                          src={toResponsiveImageUrl(cat.icon, { width: 128, height: 128, fit: 'cover', quality: 70 })}
-                          alt={cat.name}
-                          loading="lazy"
-                          decoding="async"
-                          fetchPriority="low"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        cat.icon || <Grid2X2 size={24} className="text-saffron" />
-                      )}
-                    </div>
-                    <span className="text-xs sm:text-sm font-semibold font-cinzel text-foreground group-hover:text-saffron transition-colors text-center leading-tight whitespace-normal break-words w-[92px] sm:w-[108px]">
-                      {cat.name}
-                    </span>
+                    {cat.name}
                   </RouterLink>
                 </div>
               );
             })}
           </div>
 
+          {allOpen && (
+            <div className="absolute left-0 top-full z-[60] w-full md:w-[360px]">
+              <div className="max-h-[76vh] overflow-y-auto border border-border bg-brand-raised shadow-2xl md:ml-4">
+                <div className="border-b border-border bg-brand-soft px-4 py-3">
+                  <p className="text-sm font-bold text-maroon">All Categories</p>
+                </div>
+                <div className="divide-y divide-border">
+                  {categories.map((cat) => (
+                    <div key={cat.id} className="px-4 py-3">
+                      <RouterLink
+                        to={`/category/${categoryToSlug(cat.name)}`}
+                        className="flex items-center justify-between text-sm font-bold text-foreground hover:text-saffron"
+                        onClick={() => setAllOpen(false)}
+                      >
+                        {cat.name}
+                        <ChevronRight size={14} />
+                      </RouterLink>
+                      {Array.isArray(cat.subcategories) && cat.subcategories.length > 0 && (
+                        <div className="mt-2 grid gap-1 pl-2">
+                          {cat.subcategories.map((sub) => (
+                            <RouterLink
+                              key={sub.id}
+                              to={`/category/${categoryToSlug(cat.name)}/${categoryToSlug(sub.name)}`}
+                              className="py-1 text-xs font-medium text-brand-muted hover:text-saffron"
+                              onClick={() => setAllOpen(false)}
+                            >
+                              {sub.name}
+                            </RouterLink>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {openCat && (
-            <div className="absolute left-0 right-0 top-full z-[70] block">
+            <div className="absolute left-0 right-0 top-full z-[60] block">
               <div
                 className="mx-2 max-h-[70vh] overflow-y-auto border border-border bg-brand-raised shadow-2xl md:mx-auto md:max-w-[1180px]"
                 onMouseEnter={() => clearCloseTimer()}

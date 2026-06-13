@@ -61,7 +61,7 @@ const Home = () => {
       <TrustBar />
 
       <Suspense fallback={null}>
-        <DeferredMount minHeight={540}>
+        <DeferredMount minHeight={390}>
           <CollectionSection
             tag="BRAJMART COLLECTION"
             title="Latest Puja Items & Devotional Products"
@@ -71,7 +71,7 @@ const Home = () => {
           />
         </DeferredMount>
 
-        <DeferredMount minHeight={540}>
+        <DeferredMount minHeight={390}>
           <CollectionSection
             tag="MOST LOVED"
             title="Best-Selling Puja Items & Devotional Products"
@@ -82,7 +82,7 @@ const Home = () => {
         </DeferredMount>
 
         {categorySections.filter((c) => !isBrajmartSpecial(c.name) && !isPrasadam(c.name)).map((cat, idx) => (
-          <DeferredMount key={cat.id} minHeight={540}>
+          <DeferredMount key={cat.id} minHeight={390}>
             <CollectionSection
               tag="CATEGORY"
               title={cat.name}
@@ -94,11 +94,11 @@ const Home = () => {
           </DeferredMount>
         ))}
 
-        <DeferredMount minHeight={420}>
+        <DeferredMount minHeight={320}>
           <ExclusiveBooks />
         </DeferredMount>
 
-        <DeferredMount minHeight={540}>
+        <DeferredMount minHeight={390}>
           <CollectionSection
             tag="BRAJMART COLLECTION"
             title="Top Devotional Accessories"
@@ -109,11 +109,11 @@ const Home = () => {
           />
         </DeferredMount>
 
-        <DeferredMount minHeight={420}>
+        <DeferredMount minHeight={320}>
           <ExclusiveShop />
         </DeferredMount>
 
-        <DeferredMount minHeight={540}>
+        <DeferredMount minHeight={390}>
           <CollectionSection
             tag="SACRED OFFERINGS"
             title="Sacred Prasadam Collection"
@@ -124,7 +124,7 @@ const Home = () => {
         </DeferredMount>
 
         {brajmartSpecialCategory && (
-          <DeferredMount minHeight={540}>
+          <DeferredMount minHeight={390}>
             <CollectionSection
               tag="CATEGORY"
               title={brajmartSpecialCategory.name}
@@ -136,13 +136,13 @@ const Home = () => {
           </DeferredMount>
         )}
 
-        <DeferredMount minHeight={520}>
+        <DeferredMount minHeight={360}>
           <BrajYatra />
         </DeferredMount>
 
         
 
-        <DeferredMount minHeight={360}>
+        <DeferredMount>
           <Footer />
         </DeferredMount>
       </Suspense>

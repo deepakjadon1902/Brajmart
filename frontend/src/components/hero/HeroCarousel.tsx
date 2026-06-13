@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useSettingsStore } from '@/store/settingsStore';
 import { useHeroStore } from '@/store/heroStore';
 import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 
 const HeroCarousel = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [isDesktop, setIsDesktop] = useState(false);
   const slides = useHeroStore((s) => s.slides);
   const loadSlides = useHeroStore((s) => s.loadFromApi);
-  const heroBadges = useSettingsStore((s) => s.settings.heroBadges);
   const fallbackSlide = useMemo(
     () => ({
       id: 'fallback-hero',
@@ -22,84 +19,60 @@ const HeroCarousel = () => {
   );
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const media = window.matchMedia('(min-width: 768px)');
-    const update = () => setIsDesktop(media.matches);
-    update();
-    if (typeof media.addEventListener === 'function') {
-      media.addEventListener('change', update);
-      return () => media.removeEventListener('change', update);
-    }
-    media.addListener(update);
-    return () => media.removeListener(update);
-  }, []);
-
-  useEffect(() => {
-    if (!isDesktop) return;
     loadSlides();
-  }, [isDesktop, loadSlides]);
+  }, [loadSlides]);
 
-  const visibleSlide = useMemo(() => (isDesktop ? (slides[selectedIndex] || slides[0] || fallbackSlide) : fallbackSlide), [isDesktop, slides, selectedIndex, fallbackSlide]);
+  const visibleSlide = useMemo(() => slides[selectedIndex] || slides[0] || fallbackSlide, [slides, selectedIndex, fallbackSlide]);
 
   useEffect(() => {
-    if (!isDesktop) return;
     const preload = slides.slice(0, 2).map((slide) => slide.image).filter((url): url is string => Boolean(url));
     for (const url of preload) {
       const img = new Image();
       img.decoding = 'async';
       img.src = url;
     }
-  }, [isDesktop, slides]);
+  }, [slides]);
 
   return (
     <section className="relative bg-background">
-      <div className="container mx-auto px-4 py-6 md:py-10">
-        <div className="relative">
-          <div className="overflow-hidden rounded-[22px] md:rounded-[28px] border border-border shadow-lg bg-brand-raised">
-            <div className="grid md:grid-cols-[1fr_2fr] min-h-[320px] md:min-h-[420px] lg:h-[460px] bg-brand-raised">
-              <div className="bg-brand-soft px-5 sm:px-6 md:px-10 py-6 md:py-8 flex items-center justify-center md:justify-start">
-                <div className="max-w-sm text-center md:text-left">
-                  {visibleSlide && (
-                    <div>
-                      {visibleSlide.tag && (
-                        <span className="inline-block text-brand-muted font-semibold text-[0.65rem] uppercase tracking-[0.2em] mb-3">
-                          {visibleSlide.tag}
-                        </span>
-                      )}
-                      <h1 className="font-cinzel text-2xl sm:text-3xl md:text-5xl lg:text-5xl font-bold text-brand-deep leading-[1.12] mb-3">
-                        {visibleSlide.title}
-                      </h1>
-                      {visibleSlide.subtitle && (
-                        <p className="text-brand-muted text-sm md:text-base leading-relaxed font-playfair mb-5 max-w-md mx-auto md:mx-0">
-                          {visibleSlide.subtitle}
-                        </p>
-                      )}
-                      {visibleSlide.cta && (
-                        <button className="px-6 py-2.5 rounded-xl bg-brand-accent text-primary-foreground font-bold text-sm active:scale-[0.97] transition-colors shadow hover:bg-brand-structure">
-                          {visibleSlide.cta}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
+      <div className="relative w-full">
+        <div className="relative overflow-hidden bg-brand-raised">
+          <div className="relative aspect-[480/133] w-full">
+            {visibleSlide?.image ? (
+              <img
+                src={toResponsiveImageUrl(visibleSlide.image, { width: 1920, height: 532, quality: 76 })}
+                alt={visibleSlide.title}
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                sizes="100vw"
+                className="absolute inset-0 h-full w-full object-cover object-center"
+              />
+            ) : (
+              <div className="absolute inset-0 bg-brand-soft" aria-hidden="true" />
+            )}
 
-              {isDesktop && visibleSlide?.image ? (
-                <div className="relative bg-brand-raised min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden">
-                  <img
-                    src={toResponsiveImageUrl(visibleSlide.image, { width: 900, height: 506, quality: 72 })}
-                    alt={visibleSlide.title}
-                    loading="eager"
-                    decoding="async"
-                    fetchPriority="high"
-                    sizes="(max-width: 767px) 100vw, 66vw"
-                    className="absolute inset-0 w-full h-full object-cover object-center"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/5" />
-                </div>
-              ) : (
-                <div className="hidden md:block relative bg-brand-raised min-h-[220px] sm:min-h-[280px] md:min-h-0 overflow-hidden" aria-hidden="true" />
-              )}
+            <div className="absolute inset-y-0 left-0 flex w-[52%] items-center px-4 sm:px-8 md:px-14 lg:px-20">
+              <div className="max-w-[13rem] sm:max-w-sm md:max-w-md rounded-md bg-brand-raised/82 px-3 py-2 shadow-lg backdrop-blur-sm sm:px-5 sm:py-4 md:px-6 md:py-5">
+                {visibleSlide.tag && (
+                  <span className="block text-[0.48rem] font-bold uppercase tracking-[0.16em] text-brand-gold sm:text-[0.62rem] md:text-xs">
+                    {visibleSlide.tag}
+                  </span>
+                )}
+                <h1 className="mt-0.5 font-cinzel text-[0.78rem] font-bold leading-tight text-brand-deep sm:mt-1 sm:text-xl md:text-3xl lg:text-4xl">
+                  {visibleSlide.title}
+                </h1>
+                {visibleSlide.subtitle && (
+                  <p className="mt-1 line-clamp-2 text-[0.58rem] font-medium leading-snug text-brand-muted sm:mt-2 sm:text-sm md:text-base">
+                    {visibleSlide.subtitle}
+                  </p>
+                )}
+                {visibleSlide.cta && (
+                  <button className="mt-1.5 rounded bg-brand-accent px-2.5 py-1 text-[0.58rem] font-bold text-primary-foreground shadow-sm transition-colors hover:bg-brand-structure sm:mt-3 sm:px-4 sm:py-2 sm:text-xs md:text-sm">
+                    {visibleSlide.cta}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -122,7 +95,7 @@ const HeroCarousel = () => {
             </>
           )}
 
-          <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-brand-raised/85 backdrop-blur px-3 py-2 rounded-full border border-border">
+          <div className="absolute bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 bg-brand-raised/85 backdrop-blur px-2.5 py-1.5 rounded-full border border-border">
             {slides.map((_, i) => (
               <button
                 key={i}
@@ -135,13 +108,6 @@ const HeroCarousel = () => {
         </div>
       </div>
 
-      <div className="border-t border-gold/10 bg-card/80 backdrop-blur">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-center gap-3 sm:gap-6 md:gap-10 flex-wrap text-[0.7rem] sm:text-sm font-medium text-foreground">
-          {(heroBadges || []).map((b, i) => (
-            <span key={i}>{b}</span>
-          ))}
-        </div>
-      </div>
     </section>
   );
 };

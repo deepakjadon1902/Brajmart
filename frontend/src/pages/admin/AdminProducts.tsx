@@ -23,6 +23,26 @@ const normalizeKey = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)+/g, '');
 
+const cleanMetaText = (value: string, max = 160) => {
+  const cleaned = String(value || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned.length <= max) return cleaned;
+  return `${cleaned.slice(0, max - 3).trim()}...`;
+};
+
+const deriveProductMetaTitle = (name: string, category?: string) => {
+  const base = [name, category].map((v) => String(v || '').trim()).filter(Boolean).join(' - ');
+  return cleanMetaText(base || name, 60);
+};
+
+const deriveProductMetaDescription = (description: string, name?: string) => {
+  const fromDescription = cleanMetaText(description, 160);
+  if (fromDescription) return fromDescription;
+  return cleanMetaText(name ? `Buy ${name} online from Brajmart.` : '', 160);
+};
+
 const AdminProducts = () => {
   const { products, categories, addProduct, updateProduct, deleteProduct, loadFromApi } = useProductStore();
   const [search, setSearch] = useState('');
@@ -126,6 +146,8 @@ const AdminProducts = () => {
 
       const normalized = {
         ...product,
+        metaTitle: product.metaTitle?.trim() || deriveProductMetaTitle(product.name, product.category),
+        metaDescription: product.metaDescription?.trim() || deriveProductMetaDescription(product.description || '', product.name),
         price,
         originalPrice: (() => {
           const mrp = (product as any).originalPrice;
@@ -186,6 +208,8 @@ const AdminProducts = () => {
             images: [],
             colorVariants: [],
             description: '',
+            metaTitle: '',
+            metaDescription: '',
             categoryId: firstCategory ? Number(firstCategory.id) : undefined,
             category: firstCategory?.name || '',
             subcategoryId: undefined,
@@ -261,7 +285,11 @@ const AdminProducts = () => {
 };
 
 const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { product: Product; categories: Category[]; isCreating: boolean; onClose: () => void; onSave: (p: Product) => void }) => {
-  const [form, setForm] = useState(product);
+  const [form, setForm] = useState<Product>(() => ({
+    ...product,
+    metaTitle: product.metaTitle || deriveProductMetaTitle(product.name, product.category),
+    metaDescription: product.metaDescription || deriveProductMetaDescription(product.description || '', product.name),
+  }));
   const [imageError, setImageError] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [colorUploadKey, setColorUploadKey] = useState<string>('');
@@ -278,6 +306,49 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const colorFileInputRef = useRef<HTMLInputElement>(null);
   const update = (field: string, value: any) => setForm((prev) => ({ ...prev, [field]: value }));
+  const updateName = (value: string) => {
+    setForm((prev) => {
+      const previousAutoTitle = deriveProductMetaTitle(prev.name, prev.category);
+      const nextAutoTitle = deriveProductMetaTitle(value, prev.category);
+      const shouldAutoTitle = !prev.metaTitle || prev.metaTitle === previousAutoTitle;
+      const previousAutoDescription = deriveProductMetaDescription(prev.description || '', prev.name);
+      const nextAutoDescription = deriveProductMetaDescription(prev.description || '', value);
+      const shouldAutoDescription = !prev.metaDescription || prev.metaDescription === previousAutoDescription;
+      return {
+        ...prev,
+        name: value,
+        metaTitle: shouldAutoTitle ? nextAutoTitle : prev.metaTitle,
+        metaDescription: shouldAutoDescription ? nextAutoDescription : prev.metaDescription,
+      };
+    });
+  };
+  const updateDescription = (value: string) => {
+    setForm((prev) => {
+      const previousAuto = deriveProductMetaDescription(prev.description || '', prev.name);
+      const nextAuto = deriveProductMetaDescription(value, prev.name);
+      const shouldAuto = !prev.metaDescription || prev.metaDescription === previousAuto;
+      return {
+        ...prev,
+        description: value,
+        metaDescription: shouldAuto ? nextAuto : prev.metaDescription,
+      };
+    });
+  };
+  const updateCategorySelection = (category: Category | undefined) => {
+    setForm((prev) => {
+      const previousAutoTitle = deriveProductMetaTitle(prev.name, prev.category);
+      const nextAutoTitle = deriveProductMetaTitle(prev.name, category?.name || '');
+      const shouldAutoTitle = !prev.metaTitle || prev.metaTitle === previousAutoTitle;
+      return {
+        ...prev,
+        categoryId: category ? Number(category.id) : undefined,
+        category: category?.name || '',
+        subcategoryId: undefined,
+        subcategory: null,
+        metaTitle: shouldAutoTitle ? nextAutoTitle : prev.metaTitle,
+      };
+    });
+  };
 
   const normalize = (value: string) =>
     value
@@ -471,9 +542,14 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
         </div>
         <div className="p-5 space-y-4">
-          <Field label="Name" value={form.name} onChange={(v) => update('name', v)} />
+          <Field label="Name" value={form.name} onChange={updateName} />
           <Field label="Slug" value={form.slug} onChange={(v) => update('slug', v)} />
-          <Field label="Description" value={form.description || ''} onChange={(v) => update('description', v)} type="textarea" />
+          <Field label="Description" value={form.description || ''} onChange={updateDescription} type="textarea" />
+          <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+            <Field label="Meta Title" value={form.metaTitle || ''} onChange={(v) => update('metaTitle', cleanMetaText(v, 60))} />
+            <Field label="Meta Description" value={form.metaDescription || ''} onChange={(v) => update('metaDescription', cleanMetaText(v, 160))} type="textarea" />
+            <p className="text-xs text-slate-500">Auto-filled from product name and description. Edit these fields only when you want custom Google search text.</p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Price (INR)" value={String(form.price)} onChange={(v) => update('price', Number(v))} type="number" />
             <Field label="MRP (INR)" value={String(form.originalPrice || '')} onChange={(v) => update('originalPrice', Number(v))} type="number" />
@@ -485,10 +561,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
               onChange={(e) => {
                 const nextId = e.target.value;
                 const nextCat = categories.find((c) => String(c.id) === String(nextId));
-                update('categoryId', nextCat ? Number(nextCat.id) : undefined);
-                update('category', nextCat?.name || '');
-                update('subcategoryId', undefined);
-                update('subcategory', null);
+                updateCategorySelection(nextCat);
               }}
               className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
             >
@@ -1153,7 +1226,13 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
                 }
                 const baseImages = Array.isArray(form.images) ? form.images.filter(Boolean) : [];
                 const withMain = form.image && !baseImages.includes(form.image) ? [form.image, ...baseImages] : baseImages;
-                onSave({ ...form, images: withMain, slug: slugify(form.slug || form.name) });
+                onSave({
+                  ...form,
+                  images: withMain,
+                  slug: slugify(form.slug || form.name),
+                  metaTitle: form.metaTitle?.trim() || deriveProductMetaTitle(form.name, form.category),
+                  metaDescription: form.metaDescription?.trim() || deriveProductMetaDescription(form.description || '', form.name),
+                });
               }}
               className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition"
             >
