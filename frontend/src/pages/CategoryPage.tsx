@@ -8,7 +8,7 @@ import Navbar from '@/components/layout/Navbar';
 import CategoryNavbar from '@/components/layout/CategoryNavbar';
 import Footer from '@/components/layout/Footer';
 import SEO from '@/components/seo/SEO';
-import { breadcrumbSchema } from '@/lib/seo';
+import { breadcrumbSchema, categorySeo } from '@/lib/seo';
 
 const CategoryPage = () => {
   const { slug, subSlug } = useParams();
@@ -25,17 +25,16 @@ const CategoryPage = () => {
     ? getProductsBySubcategory(categoryName, subcategoryName)
     : getProductsByCategory(categoryName);
   const hasAttemptedCatalogLoad = lastFetchedAt > 0 || Boolean(error);
-  const categoryIsMissing = !loading && hasAttemptedCatalogLoad && products.length === 0;
-  const pageName = subcategoryName ? `${categoryName} - ${subcategoryName}` : categoryName || 'All Products';
+  const categoryIsMissing = !loading && hasAttemptedCatalogLoad && !catMeta && products.length === 0;
+  const subcategoryIsMissing = Boolean(subSlug) && !subMeta && !loading && hasAttemptedCatalogLoad;
+  const seo = categorySeo(categoryName || 'Devotional Products', subcategoryName);
+  const pageName = seo.pageTitle;
   const path = subSlug ? `/category/${slug}/${subSlug}` : `/category/${slug || ''}`;
-  const description = subcategoryName
-    ? `Shop ${subcategoryName.toLowerCase()} in ${categoryName.toLowerCase()} from Brajmart. Authentic devotional products from Vrindavan delivered across India.`
-    : `Shop ${categoryName.toLowerCase()} online from Brajmart. Authentic devotional products, puja essentials and spiritual items sourced from Vrindavan.`;
   const collectionSchema = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: pageName,
-    description,
+    description: seo.metaDescription,
     mainEntity: {
       '@type': 'ItemList',
       itemListElement: products.slice(0, 24).map((product, index) => ({
@@ -50,10 +49,10 @@ const CategoryPage = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEO
-        title={`${pageName} Online | Brajmart`}
-        description={description}
+        title={seo.metaTitle}
+        description={seo.metaDescription}
         path={path}
-        robots={categoryIsMissing ? 'noindex,follow' : 'index,follow'}
+        robots={categoryIsMissing || subcategoryIsMissing ? 'noindex,follow' : 'index,follow'}
         schema={[
           breadcrumbSchema([
             { name: 'Home', path: '/' },
@@ -90,11 +89,29 @@ const CategoryPage = () => {
               )}
               <div>
                 <h1 className="font-cinzel text-2xl md:text-3xl font-bold text-maroon">
-                  {subcategoryName ? `${categoryName} • ${subcategoryName}` : (categoryName || 'All Products')}
+                  {seo.heading}
                 </h1>
-                <p className="text-muted-foreground text-sm">{products.length} products available</p>
+                <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+                  {seo.description}
+                </p>
+                <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-saffron">
+                  {products.length} products available
+                </p>
               </div>
             </div>
+            {!subSlug && catMeta?.subcategories?.length ? (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {catMeta.subcategories.map((sub) => (
+                  <Link
+                    key={sub.id}
+                    to={`/category/${categoryToSlug(catMeta.name)}/${categoryToSlug(sub.name)}`}
+                    className="rounded-md border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:border-saffron/50 hover:text-saffron"
+                  >
+                    {sub.name}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
           </motion.div>
         </div>
       </div>

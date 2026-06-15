@@ -1,7 +1,7 @@
 import { ScrollReveal } from '../ui/ScrollReveal';
 
 const ExclusiveShop = () => (
-  <section className="relative py-16 md:py-28 overflow-hidden">
+  <section className="relative py-14 md:py-22 overflow-hidden">
     <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1609710228159-0fa9bd7c0827?w=1100&q=75&fm=webp&fit=crop')] bg-cover bg-center" />
     <div className="absolute inset-0 bg-gradient-to-r from-maroon-dark/90 via-maroon/80 to-maroon-dark/70" />
 

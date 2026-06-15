@@ -4,7 +4,7 @@ import { brajDestinations } from '@/data/brajDestinations';
 import { MapPin } from 'lucide-react';
 
 const BrajYatra = () => (
-  <section className="py-12 md:py-20 bg-brand-deep relative overflow-hidden">
+  <section className="py-12 md:py-18 bg-white relative overflow-hidden">
     <div className="container mx-auto px-4">
       <ScrollReveal>
         <div className="text-center mb-10">
@@ -13,10 +13,10 @@ const BrajYatra = () => (
             <span className="text-gold text-2xl">✾</span>
             <span className="h-px w-12 bg-gold/40" />
           </div>
-          <h2 className="font-cinzel text-2xl md:text-3xl font-bold text-primary-foreground mb-2">
+          <h2 className="font-cinzel text-2xl md:text-3xl font-bold text-brand-deep mb-2">
             Braj Darshan — Enter the Realm of the Divine
           </h2>
-          <p className="text-primary-foreground/60 text-sm max-w-xl mx-auto text-white">
+          <p className="text-brand-deep/70 text-sm max-w-xl mx-auto">
             Explore the sacred Yatra circuits of Braj Bhumi — from the birthplace of Lord Krishna to the land of Radha Rani
           </p>
         </div>
@@ -27,7 +27,7 @@ const BrajYatra = () => (
           <ScrollReveal key={d.id} delay={i * 0.08}>
             <Link
               to={`/braj-darshan/${d.slug}`}
-              className="block rounded-2xl bg-primary-foreground/5 border border-primary-foreground/10 backdrop-blur overflow-hidden group hover:border-gold/40 hover:bg-primary-foreground/10 transition-all"
+              className="block rounded-2xl bg-brand-deep/8 border border-brand-deep/15 backdrop-blur overflow-hidden group hover:border-gold/40 hover:bg-brand-deep/12 transition-all"
             >
               <div className="aspect-[4/3] overflow-hidden">
                 <img
@@ -45,13 +45,13 @@ const BrajYatra = () => (
                     className="w-6 h-6 rounded-full object-cover border border-gold/40"
                     loading="lazy"
                   />
-                  <h3 className="font-cinzel text-primary-foreground font-semibold text-sm">{d.name}</h3>
+                  <h3 className="font-cinzel text-brand-deep font-semibold text-sm">{d.name}</h3>
                 </div>
                 <div className="flex items-center justify-center gap-1 mt-1">
-                  <MapPin size={10} className="text-gold/60" />
-                  <span className="text-primary-foreground/40 text-xs">{d.distance}</span>
+                  <MapPin size={10} className="text-gold" />
+                  <span className="text-black text-xs">{d.distance}</span>
                 </div>
-                <p className="text-primary-foreground/50 text-xs mt-2 line-clamp-2">{d.shortDesc}</p>
+                <p className="text-black text-xs mt-2 line-clamp-2">{d.shortDesc}</p>
                 <span className="text-gold text-xs mt-2 block opacity-0 group-hover:opacity-100 transition-opacity">
                   Explore →
                 </span>

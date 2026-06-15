@@ -49,7 +49,7 @@ const Navbar = () => {
             <img
               src={toResponsiveImageUrl(settings.storeLogo, { width: 220, height: 220, fit: 'contain', quality: 76 })}
               alt={settings.storeName}
-              className="h-14 w-20 md:h-20 md:w-28 rounded object-contain"
+              className="h-16 w-24 md:h-24 md:w-32 rounded object-contain"
             />
           ) : (
             <span className="sr-only">{settings.storeName}</span>

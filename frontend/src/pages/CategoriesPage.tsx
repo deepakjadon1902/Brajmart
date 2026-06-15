@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
+import CategoryNavbar from '@/components/layout/CategoryNavbar';
 import Footer from '@/components/layout/Footer';
 import SEO from '@/components/seo/SEO';
-import { breadcrumbSchema } from '@/lib/seo';
+import { breadcrumbSchema, categorySeo } from '@/lib/seo';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
 
 const CategoriesPage = () => {
@@ -24,28 +25,44 @@ const CategoriesPage = () => {
       />
       <AnnouncementBar />
       <Navbar />
+      <CategoryNavbar />
       <div className="container mx-auto px-4 py-8">
-        <h1 className="font-cinzel text-2xl md:text-3xl font-bold text-maroon mb-6">All Categories</h1>
+        <div className="mb-7 max-w-3xl">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-saffron">Brajmart collections</p>
+          <h1 className="mt-2 font-cinzel text-2xl md:text-3xl font-bold text-maroon">All Categories</h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Browse every Brajmart category with automatically generated page titles, descriptions, and SEO-ready meta descriptions for each collection.
+          </p>
+        </div>
         {categories.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">No categories yet.</div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {categories.map((cat) => (
-              <Link
-                key={cat.id}
-                to={`/category/${categoryToSlug(cat.name)}`}
-                className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-3 hover:shadow-md transition"
-              >
-                <div className="w-20 h-20 rounded-full border border-gold/30 bg-pearl flex items-center justify-center text-3xl overflow-hidden">
-                  {cat.icon && (cat.icon.startsWith('data:') || cat.icon.startsWith('http') || cat.icon.startsWith('/uploads')) ? (
-                    <img src={cat.icon} alt={cat.name} className="w-full h-full object-cover" />
-                  ) : (
-                    cat.icon
-                  )}
-                </div>
-                <span className="text-sm font-semibold font-cinzel text-foreground text-center">{cat.name}</span>
-              </Link>
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {categories.map((cat) => {
+              const seo = categorySeo(cat.name);
+              return (
+                <Link
+                  key={cat.id}
+                  to={`/category/${categoryToSlug(cat.name)}`}
+                  className="group flex min-h-[154px] gap-4 rounded-lg border border-border bg-card p-4 transition hover:border-saffron/50 hover:shadow-md"
+                >
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gold/30 bg-pearl text-3xl">
+                    {cat.icon && (cat.icon.startsWith('data:') || cat.icon.startsWith('http') || cat.icon.startsWith('/uploads')) ? (
+                      <img src={cat.icon} alt={cat.name} className="w-full h-full object-cover" />
+                    ) : (
+                      cat.icon
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="font-cinzel text-base font-bold text-maroon transition-colors group-hover:text-saffron">{seo.heading}</h2>
+                    <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-muted-foreground">{seo.description}</p>
+                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-saffron">
+                      {cat.subcategories?.length ? `${cat.subcategories.length} subcategories` : 'View products'}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

@@ -16,7 +16,7 @@ const ExclusiveBooks = () => {
   ].slice(0, 4);
 
   return (
-    <section className="relative py-16 md:py-28 overflow-hidden">
+    <section className="relative py-14 md:py-22 overflow-hidden">
       <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=1100&q=75&fm=webp&fit=crop')] bg-cover bg-center" />
       <div className="absolute inset-0 bg-gradient-to-r from-maroon-dark/95 via-maroon/85 to-maroon-dark/75" />
       <div className="absolute right-0 top-0 hidden h-full w-[48%] md:block">

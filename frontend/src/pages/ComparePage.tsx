@@ -27,7 +27,7 @@ const ComparePage = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <section className="relative bg-maroon-dark text-primary-foreground py-16 md:py-20">
+      <section className="relative bg-maroon-dark text-primary-foreground py-8 md:py-12">
         <div className="container mx-auto px-4 text-center">
           <ScrollReveal>
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">SIDE BY SIDE</p>

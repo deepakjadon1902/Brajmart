@@ -23,7 +23,7 @@ const CustomerServicePage = () => (
   <div className="min-h-screen bg-background">
     <Navbar />
 
-    <section className="relative bg-maroon-dark text-primary-foreground py-16 md:py-24">
+    <section className="relative bg-maroon-dark text-primary-foreground py-8 md:py-12">
       <div className="container mx-auto px-4 text-center">
         <ScrollReveal>
           <div className="w-16 h-16 rounded-full bg-gold/10 flex items-center justify-center mx-auto mb-6">

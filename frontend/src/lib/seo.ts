@@ -28,3 +28,64 @@ export const breadcrumbSchema = (items: Array<{ name: string; path: string }>) =
     item: absoluteUrl(item.path),
   })),
 });
+
+const categoryFocus: Record<string, string> = {
+  'brajmart-special': 'exclusive Brajmart devotional selections, gift-ready spiritual essentials, and handpicked temple-inspired products',
+  books: 'spiritual books, scriptures, bhajan books, and devotional reading for daily sadhana',
+  accessories: 'devotional accessories, malas, keychains, counters, bags, and useful seva essentials',
+  clothing: 'devotional clothing, kurta sets, deity vastra, and traditional wear for worship and festivals',
+  groceries: 'satvik groceries, fasting essentials, temple-style ingredients, and daily devotional kitchen items',
+  'idols-shringar': 'deity idols, shringar items, dresses, ornaments, and altar decor for home mandir seva',
+  'incense-pooja': 'incense, pooja samagri, lamps, dhoop, and sacred worship essentials',
+  'incense-pooja-items': 'incense, pooja samagri, lamps, dhoop, and sacred worship essentials',
+  prasadam: 'prasadam, sweets, bhog items, and sacred offerings inspired by Braj and Vrindavan',
+  'spiritual-books': 'spiritual books, scriptures, bhajan books, and devotional reading for daily sadhana',
+  'braj-yatra': 'Braj Yatra essentials, travel-friendly devotional items, and pilgrim seva products',
+};
+
+const categoryIntros: Record<string, string> = {
+  'brajmart-special': 'Handpicked devotional products selected for gifting, worship, festivals, and everyday seva at home.',
+  books: 'Explore scriptures, bhajan books, children devotional books, and thoughtful reading for daily spiritual practice.',
+  accessories: 'Find useful devotional accessories for japa, travel, gifting, temple visits, and home mandir care.',
+  clothing: 'Shop traditional devotional clothing, kurta styles, deity vastra, and festive wear inspired by Braj culture.',
+  groceries: 'Bring home satvik grocery essentials, fasting ingredients, and kitchen staples for bhog and daily cooking.',
+  'idols-shringar': 'Discover deity idols, shringar pieces, altar decor, ornaments, and seva essentials for worship spaces.',
+  'incense-pooja': 'Choose incense, dhoop, lamps, pooja samagri, and sacred items for daily worship and festival rituals.',
+  'incense-pooja-items': 'Choose incense, dhoop, lamps, pooja samagri, and sacred items for daily worship and festival rituals.',
+  prasadam: 'Browse prasadam, sweets, bhog items, and Braj-inspired offerings prepared for devotional occasions.',
+  'spiritual-books': 'Explore scriptures, bhajan books, children devotional books, and thoughtful reading for daily spiritual practice.',
+  'braj-yatra': 'Prepare for Braj Yatra with travel-friendly devotional products, temple visit essentials, and pilgrim seva items.',
+};
+
+const titleCase = (value: string) =>
+  value
+    .split(/[\s-]+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`)
+    .join(' ');
+
+export const categorySeo = (categoryName: string, subcategoryName = '') => {
+  const category = cleanMetaText(categoryName || 'Devotional Products', 80);
+  const subcategory = cleanMetaText(subcategoryName || '', 80);
+  const key = category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+  const readableFocus = categoryFocus[key] || `${category.toLowerCase()} products, puja essentials, and devotional goods`;
+  const intro = categoryIntros[key] || `Browse ${category.toLowerCase()} selected for worship, gifting, festivals, and everyday devotional living.`;
+  const pageTitle = subcategory ? `${subcategory} in ${category}` : category;
+  const title = subcategory
+    ? `${subcategory} Online | ${category} | Brajmart`
+    : `${category} Online | Brajmart`;
+  const description = subcategory
+    ? `Shop ${subcategory.toLowerCase()} in ${category.toLowerCase()} at Brajmart. Find authentic Vrindavan-inspired devotional products, pooja essentials, and seva items delivered across India.`
+    : `Shop ${readableFocus} online at Brajmart. Discover authentic Vrindavan-inspired devotional products, pooja essentials, and seva items delivered across India.`;
+  const pageDescription = subcategory
+    ? `Browse ${subcategory.toLowerCase()} from our ${category.toLowerCase()} collection, curated for devotees who want authentic Vrindavan-inspired products delivered across India.`
+    : intro;
+
+  return {
+    pageTitle,
+    metaTitle: cleanMetaText(title, 60),
+    metaDescription: cleanMetaText(description, 155),
+    description: cleanMetaText(pageDescription, 210),
+    heading: subcategory ? `${category} - ${subcategory}` : titleCase(category),
+  };
+};

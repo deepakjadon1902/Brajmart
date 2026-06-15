@@ -44,7 +44,7 @@ const AboutPage = () => (
     <Navbar />
 
     {/* Hero */}
-    <section className="relative bg-maroon-dark text-primary-foreground py-20 md:py-28 overflow-hidden">
+    <section className="relative bg-maroon-dark text-primary-foreground py-8 md:py-12 overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,hsl(var(--gold)/0.08),transparent_60%)]" />
       <div className="container mx-auto px-4 text-center relative z-10">
         <ScrollReveal>

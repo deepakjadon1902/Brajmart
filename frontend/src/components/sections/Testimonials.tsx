@@ -3,16 +3,16 @@ import { Star } from 'lucide-react';
 import { testimonials } from '@/data/mockData';
 
 const stats = [
-  { label: 'Happy Devotees', value: '10,000+' },
+  { label: 'Happy Devotees', value: '1,000+' },
   { label: 'Average Rating', value: '4.8★' },
-  { label: 'Orders Delivered', value: '50,000+' },
-  { label: 'Products', value: '100+' },
+  { label: 'Orders Delivered', value: '5,000+' },
+  { label: 'Products', value: '300+' },
 ];
 
 const Testimonials = () => {
   if (!testimonials || testimonials.length === 0) return null;
   return (
-  <section className="py-12 md:py-20 bg-card">
+  <section className="py-12 md:py-18 bg-card">
     <div className="container mx-auto px-4">
       <ScrollReveal>
         <div className="flex items-center justify-center gap-3 mb-4">

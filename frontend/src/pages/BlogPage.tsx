@@ -81,7 +81,7 @@ const BlogPage = () => {
       />
       <Navbar />
 
-      <section className="relative bg-maroon-dark text-primary-foreground py-16 md:py-24">
+      <section className="relative bg-maroon-dark text-primary-foreground py-8 md:py-12">
         <div className="container mx-auto px-4 text-center">
           <ScrollReveal>
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">DIVINE WISDOM</p>

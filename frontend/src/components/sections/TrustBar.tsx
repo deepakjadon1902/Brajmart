@@ -8,7 +8,7 @@ const trustItems = [
   },
   {
     icon: Truck,
-    title: 'Free Shipping Rs. 499+',
+    title: 'Free Shipping Rs. 299+',
     subtitle: 'Fast delivery across India',
     titleClassName: 'text-tulsi',
   },
@@ -27,18 +27,19 @@ const trustItems = [
 const TrustBar = () => {
   return (
     <section className="bg-brand-soft border-y border-border" aria-label="Why shop with Brajmart">
-      <div className="container mx-auto px-4 py-2.5">
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
+      <div className="container mx-auto px-4 py-1.5 md:py-2.5">
+        <div className="flex flex-wrap justify-around md:justify-between gap-y-1.5 md:gap-3">
           {trustItems.map((item) => {
             const Icon = item.icon;
             return (
-              <div key={item.title} className="flex items-center gap-2 rounded-md bg-brand-raised/75 px-2 py-2 md:bg-transparent md:px-1">
-                <Icon size={34} strokeWidth={1.8} className="shrink-0 text-brand-accent" aria-hidden="true" />
+              <div key={item.title} className="flex items-center gap-1.5 md:gap-2 rounded-md bg-brand-raised/75 px-1.5 py-1.5 md:bg-transparent md:px-1 md:py-2 w-[47%] md:w-auto">
+                <Icon size={24} strokeWidth={1.8} className="shrink-0 text-brand-accent md:hidden" aria-hidden="true" />
+                <Icon size={34} strokeWidth={1.8} className="shrink-0 text-brand-accent hidden md:block" aria-hidden="true" />
                 <div className="min-w-0">
-                  <p className={`font-sans text-[13px] font-bold leading-tight text-brand-deep ${item.titleClassName || ''}`}>
+                  <p className={`font-sans text-[11px] md:text-[13px] font-bold leading-tight text-brand-deep ${item.titleClassName || ''}`}>
                     {item.title}
                   </p>
-                  <p className="mt-0.5 font-sans text-xs leading-snug text-brand-muted">{item.subtitle}</p>
+                  <p className="mt-0.5 font-sans text-[10px] md:text-xs leading-snug text-brand-muted">{item.subtitle}</p>
                 </div>
               </div>
             );
