@@ -5,6 +5,8 @@ import Footer from '@/components/layout/Footer';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { MapPin, Clock, Navigation, Star, ArrowLeft } from 'lucide-react';
+import SEO from '@/components/seo/SEO';
+import { breadcrumbSchema } from '@/lib/seo';
 
 const BrajDarshanPage = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -22,9 +24,31 @@ const BrajDarshanPage = () => {
   }
 
   const otherDestinations = brajDestinations.filter((d) => d.slug !== slug);
+  const path = `/braj-darshan/${destination.slug}`;
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title={`${destination.name} Braj Darshan | Brajmart`}
+        description={destination.shortDesc}
+        path={path}
+        image={destination.heroImage}
+        schema={[
+          breadcrumbSchema([
+            { name: 'Home', path: '/' },
+            { name: 'Braj Darshan', path: '/' },
+            { name: destination.name, path },
+          ]),
+          {
+            '@context': 'https://schema.org',
+            '@type': 'TouristDestination',
+            name: destination.name,
+            description: destination.fullDesc,
+            image: destination.heroImage,
+            url: `https://www.brajmart.com${path}`,
+          },
+        ]}
+      />
       <AnnouncementBar />
       <Navbar />
 

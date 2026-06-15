@@ -36,12 +36,29 @@ const staticEntries = [
   { path: '/', priority: '1.0', changefreq: 'daily' },
   { path: '/shop', priority: '0.9', changefreq: 'daily' },
   { path: '/products', priority: '0.9', changefreq: 'daily' },
+  { path: '/products?tag=bestseller', priority: '0.8', changefreq: 'daily' },
+  { path: '/products?tag=latest', priority: '0.8', changefreq: 'daily' },
+  { path: '/products?tag=new', priority: '0.8', changefreq: 'daily' },
+  { path: '/products?tag=prasadam', priority: '0.8', changefreq: 'weekly' },
+  { path: '/products?tag=accessories', priority: '0.8', changefreq: 'weekly' },
+  { path: '/products?tag=exclusive', priority: '0.8', changefreq: 'weekly' },
   { path: '/categories', priority: '0.8', changefreq: 'weekly' },
   { path: '/category/spiritual-books', priority: '0.8', changefreq: 'weekly' },
   { path: '/category/prasadam', priority: '0.8', changefreq: 'weekly' },
   { path: '/category/idols-shringar', priority: '0.8', changefreq: 'weekly' },
   { path: '/category/incense-pooja', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/incense-pooja-items', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/accessories', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/clothing', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/groceries', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/braj-yatra', priority: '0.8', changefreq: 'weekly' },
   { path: '/blog', priority: '0.6', changefreq: 'weekly' },
+  { path: '/braj-darshan/vrindavan', priority: '0.7', changefreq: 'monthly' },
+  { path: '/braj-darshan/mathura', priority: '0.7', changefreq: 'monthly' },
+  { path: '/braj-darshan/govardhan', priority: '0.7', changefreq: 'monthly' },
+  { path: '/braj-darshan/nandgaon', priority: '0.7', changefreq: 'monthly' },
+  { path: '/braj-darshan/barsana', priority: '0.7', changefreq: 'monthly' },
+  { path: '/braj-darshan/gokul', priority: '0.7', changefreq: 'monthly' },
   { path: '/about', priority: '0.6', changefreq: 'monthly' },
   { path: '/help-center', priority: '0.5', changefreq: 'monthly' },
   { path: '/customer-service', priority: '0.5', changefreq: 'monthly' },
@@ -136,8 +153,7 @@ try {
 
   for (const category of categories) {
     const slug = slugify(category?.name);
-    const productCount = Number(category?.productCount ?? category?.product_count ?? 0);
-    if (slug && productCount > 0) entries.push({ path: `/category/${slug}`, priority: '0.8', changefreq: 'weekly', lastmod: toLastmod(category?.updatedAt || category?.updated_at) });
+    if (slug) entries.push({ path: `/category/${slug}`, priority: '0.8', changefreq: 'weekly', lastmod: toLastmod(category?.updatedAt || category?.updated_at) });
     for (const sub of Array.isArray(category?.subcategories) ? category.subcategories : []) {
       const subSlug = slugify(sub?.name);
       if (slug && subSlug) entries.push({ path: `/category/${slug}/${subSlug}`, priority: '0.7', changefreq: 'weekly', lastmod: toLastmod(sub?.updatedAt || sub?.updated_at) });
@@ -146,9 +162,7 @@ try {
 
   for (const product of products) {
     const slug = slugify(product?.slug || product?.name);
-    const hasImage = product?.image || (Array.isArray(product?.images) && product.images.length);
-    const hasCoreFields = slug && product?.name && Number(product?.price) > 0 && hasImage;
-    if (hasCoreFields && hasUsefulText(product?.description, 30)) {
+    if (slug) {
       entries.push({ path: `/product/${slug}`, priority: '0.7', changefreq: 'weekly', lastmod: toLastmod(product?.updatedAt || product?.updated_at) });
     }
   }

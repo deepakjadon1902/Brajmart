@@ -164,6 +164,44 @@ type SitemapEntry = {
   lastmod?: string | null;
 };
 
+const staticSitemapEntries: SitemapEntry[] = [
+  { path: '/', priority: '1.0', changefreq: 'daily' },
+  { path: '/shop', priority: '0.9', changefreq: 'daily' },
+  { path: '/products', priority: '0.9', changefreq: 'daily' },
+  { path: '/products?tag=bestseller', priority: '0.8', changefreq: 'daily' },
+  { path: '/products?tag=latest', priority: '0.8', changefreq: 'daily' },
+  { path: '/products?tag=new', priority: '0.8', changefreq: 'daily' },
+  { path: '/products?tag=prasadam', priority: '0.8', changefreq: 'weekly' },
+  { path: '/products?tag=accessories', priority: '0.8', changefreq: 'weekly' },
+  { path: '/products?tag=exclusive', priority: '0.8', changefreq: 'weekly' },
+  { path: '/categories', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/spiritual-books', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/prasadam', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/idols-shringar', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/incense-pooja', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/incense-pooja-items', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/accessories', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/clothing', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/groceries', priority: '0.8', changefreq: 'weekly' },
+  { path: '/category/braj-yatra', priority: '0.8', changefreq: 'weekly' },
+  { path: '/blog', priority: '0.6', changefreq: 'weekly' },
+  { path: '/braj-darshan/vrindavan', priority: '0.7', changefreq: 'monthly' },
+  { path: '/braj-darshan/mathura', priority: '0.7', changefreq: 'monthly' },
+  { path: '/braj-darshan/govardhan', priority: '0.7', changefreq: 'monthly' },
+  { path: '/braj-darshan/nandgaon', priority: '0.7', changefreq: 'monthly' },
+  { path: '/braj-darshan/barsana', priority: '0.7', changefreq: 'monthly' },
+  { path: '/braj-darshan/gokul', priority: '0.7', changefreq: 'monthly' },
+  { path: '/about', priority: '0.6', changefreq: 'monthly' },
+  { path: '/contact', priority: '0.6', changefreq: 'monthly' },
+  { path: '/help-center', priority: '0.5', changefreq: 'monthly' },
+  { path: '/customer-service', priority: '0.5', changefreq: 'monthly' },
+  { path: '/privacy-policy', priority: '0.3', changefreq: 'yearly' },
+  { path: '/terms', priority: '0.3', changefreq: 'yearly' },
+  { path: '/shipping-delivery', priority: '0.3', changefreq: 'yearly' },
+  { path: '/return-policy', priority: '0.3', changefreq: 'yearly' },
+  { path: '/payment-method', priority: '0.3', changefreq: 'yearly' },
+];
+
 app.get('/robots.txt', (_req, res) => {
   res.type('text/plain').send([
     'User-agent: Googlebot',
@@ -172,10 +210,17 @@ app.get('/robots.txt', (_req, res) => {
     'User-agent: Bingbot',
     'Allow: /',
     '',
+    'User-agent: Twitterbot',
+    'Allow: /',
+    '',
+    'User-agent: facebookexternalhit',
+    'Allow: /',
+    '',
     'User-agent: *',
     'Allow: /',
     '',
     `Sitemap: ${SITE_URL}/sitemap.xml`,
+    `Sitemap: ${SITE_URL}/sitemap_index.xml`,
   ].join('\n'));
 });
 
@@ -194,22 +239,7 @@ app.get('/sitemap_index.xml', (_req, res) => {
 });
 
 app.get('/sitemap.xml', async (_req, res) => {
-  const entries: SitemapEntry[] = [
-    { path: '/', priority: '1.0', changefreq: 'daily' },
-    { path: '/shop', priority: '0.9', changefreq: 'daily' },
-    { path: '/products', priority: '0.9', changefreq: 'daily' },
-    { path: '/categories', priority: '0.8', changefreq: 'weekly' },
-    { path: '/about', priority: '0.6', changefreq: 'monthly' },
-    { path: '/contact', priority: '0.6', changefreq: 'monthly' },
-    { path: '/blog', priority: '0.5', changefreq: 'weekly' },
-    { path: '/help-center', priority: '0.5', changefreq: 'monthly' },
-    { path: '/customer-service', priority: '0.5', changefreq: 'monthly' },
-    { path: '/privacy-policy', priority: '0.3', changefreq: 'yearly' },
-    { path: '/terms', priority: '0.3', changefreq: 'yearly' },
-    { path: '/shipping-delivery', priority: '0.3', changefreq: 'yearly' },
-    { path: '/return-policy', priority: '0.3', changefreq: 'yearly' },
-    { path: '/payment-method', priority: '0.3', changefreq: 'yearly' },
-  ];
+  const entries: SitemapEntry[] = [...staticSitemapEntries];
 
   if (isDbConnected()) {
     try {
@@ -222,7 +252,7 @@ app.get('/sitemap.xml', async (_req, res) => {
 
       for (const row of categories || []) {
         const slug = slugify(row.name);
-        if (slug && Number(row.product_count ?? 0) > 0) entries.push({ path: `/category/${slug}`, priority: '0.8', changefreq: 'weekly', lastmod: row.updated_at });
+        if (slug) entries.push({ path: `/category/${slug}`, priority: '0.8', changefreq: 'weekly', lastmod: row.updated_at });
       }
       for (const row of subcategories || []) {
         const slug = slugify(row.category_name);

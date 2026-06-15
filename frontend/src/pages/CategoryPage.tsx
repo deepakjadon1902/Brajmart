@@ -12,7 +12,7 @@ import { breadcrumbSchema } from '@/lib/seo';
 
 const CategoryPage = () => {
   const { slug, subSlug } = useParams();
-  const { getProductsByCategory, getProductsBySubcategory, categories } = useProductStore();
+  const { getProductsByCategory, getProductsBySubcategory, categories, loading, lastFetchedAt, error } = useProductStore();
   const catMeta = categories.find(c => categoryToSlug(c.name) === slug);
   const categoryName = catMeta?.name || (slug && categorySlugMap[slug]) || (slug ? slug.replace(/-/g, ' ') : '');
 
@@ -24,6 +24,8 @@ const CategoryPage = () => {
   const products = subSlug
     ? getProductsBySubcategory(categoryName, subcategoryName)
     : getProductsByCategory(categoryName);
+  const hasAttemptedCatalogLoad = lastFetchedAt > 0 || Boolean(error);
+  const categoryIsMissing = !loading && hasAttemptedCatalogLoad && products.length === 0;
   const pageName = subcategoryName ? `${categoryName} - ${subcategoryName}` : categoryName || 'All Products';
   const path = subSlug ? `/category/${slug}/${subSlug}` : `/category/${slug || ''}`;
   const description = subcategoryName
@@ -51,7 +53,7 @@ const CategoryPage = () => {
         title={`${pageName} Online | Brajmart`}
         description={description}
         path={path}
-        robots={products.length === 0 ? 'noindex,follow' : 'index,follow'}
+        robots={categoryIsMissing ? 'noindex,follow' : 'index,follow'}
         schema={[
           breadcrumbSchema([
             { name: 'Home', path: '/' },

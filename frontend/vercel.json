@@ -79,11 +79,6 @@
       "source": "/product-category/:slug/:subSlug",
       "destination": "/category/:slug/:subSlug",
       "permanent": true
-    },
-    {
-      "source": "/sitemap_index.xml",
-      "destination": "/sitemap.xml",
-      "permanent": true
     }
   ],
   "rewrites": [

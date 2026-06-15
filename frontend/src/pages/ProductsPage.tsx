@@ -24,7 +24,7 @@ const ProductsPage = () => {
   const minPrice = Number(params.get('min') || 0);
   const maxPrice = Number(params.get('max') || 0);
   const minRating = Number(params.get('rating') || 0);
-  const { products, categories, getByTag } = useProductStore();
+  const { products, categories, getByTag, lastFetchedAt, loading, error } = useProductStore();
 
   let filtered = products;
   if (tag) filtered = filtered.filter((p) => p.tags?.includes(tag));
@@ -49,6 +49,8 @@ const ProductsPage = () => {
   if (category) indexableParams.set('category', category);
   const path = `${location.pathname}${indexableParams.toString() ? `?${indexableParams.toString()}` : ''}`;
   const hasFacetFilters = Boolean(minPrice || maxPrice || minRating);
+  const hasAttemptedCatalogLoad = lastFetchedAt > 0 || Boolean(error);
+  const collectionIsMissing = !loading && hasAttemptedCatalogLoad && filtered.length === 0 && Boolean(tag || category);
   const collectionSchema = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
@@ -71,7 +73,7 @@ const ProductsPage = () => {
         title={pageTitle}
         description={description}
         path={path}
-        robots={hasFacetFilters || (filtered.length === 0 && (tag || category)) ? 'noindex,follow' : 'index,follow'}
+        robots={hasFacetFilters || collectionIsMissing ? 'noindex,follow' : 'index,follow'}
         schema={[
           breadcrumbSchema([
             { name: 'Home', path: '/' },
