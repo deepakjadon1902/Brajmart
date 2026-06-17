@@ -73,9 +73,24 @@ const Navbar = () => {
 
         <div className="flex items-center gap-3 sm:gap-5 ml-auto md:ml-0">
           <Link to="/blog" className="hidden lg:flex flex-col items-center gap-0.5 p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Blog">
-            <Newspaper size={20} className="text-foreground" />
-            <span className="hidden sm:block text-[0.65rem] font-medium text-foreground">Blog</span>
-          </Link>
+  <svg
+    width={20}
+    height={20}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="text-foreground"
+  >
+    <path d="M4 4h11a2 2 0 0 1 2 2v13a1 1 0 0 1-1.5.87L13 18.5l-2.5 1.37A1 1 0 0 1 9 19V6a2 2 0 0 0-2-2H4Z" />
+    <path d="M4 4a2 2 0 0 0-2 2v13a1 1 0 0 0 1.5.87L6 18.5" />
+    <line x1="11" y1="8" x2="14" y2="8" />
+    <line x1="11" y1="11" x2="14" y2="11" />
+  </svg>
+  <span className="hidden sm:block text-[0.65rem] font-medium text-foreground">Blog</span>
+</Link>
           <Link to="/track-orders" className="relative flex flex-col items-center gap-0.5 p-1.5 sm:p-2 rounded-full hover:bg-muted transition-colors" aria-label="Track Orders">
             <MapPin size={20} className="text-foreground" />
             <span className="hidden sm:block text-[0.65rem] font-medium text-foreground">Track Order</span>

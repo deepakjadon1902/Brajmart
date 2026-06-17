@@ -53,7 +53,7 @@ const UserOrderTracking = () => {
       <Navbar />
 
       {/* Hero Search */}
-      <section className="relative bg-maroon-dark text-primary-foreground py-8 md:py-12">
+      <section className="relative bg-maroon-dark text-primary-foreground py-6 md:py-10">
         <div className="container mx-auto px-4 text-center">
           <ScrollReveal>
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">ORDER TRACKING</p>
