@@ -48,7 +48,7 @@ const WishlistPage = () => {
       <Navbar />
       <div className="container mx-auto px-4 py-8">
         <h1 className="font-cinzel text-2xl font-bold text-foreground mb-6">My Wishlist ({items.length})</h1>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="product-grid grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {items.map((product, i) => (
             <motion.div
               key={product.id}

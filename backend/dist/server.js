@@ -24,6 +24,19 @@ const blogs_1 = __importDefault(require("./routes/blogs"));
 const db_1 = require("./lib/db");
 const app = (0, express_1.default)();
 const SITE_URL = (process.env.SITE_URL || 'https://www.brajmart.com').replace(/\/$/, '');
+const DEFAULT_CORS_ORIGINS = [
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'https://www.brajmart.com',
+    'https://brajmart.com',
+];
+const corsOrigins = Array.from(new Set([
+    ...DEFAULT_CORS_ORIGINS,
+    ...String(process.env.CORS_ORIGIN || '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+]));
 const UPLOADS_DIR = path_1.default.join(__dirname, '..', 'uploads');
 if (!fs_1.default.existsSync(UPLOADS_DIR))
     fs_1.default.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -68,7 +81,11 @@ app.get('/uploads/:filename', async (req, res, next) => {
 });
 app.use((0, compression_1.default)());
 app.use((0, cors_1.default)({
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: (origin, callback) => {
+        if (!origin || origin === 'null' || corsOrigins.includes(origin))
+            return callback(null, true);
+        return callback(new Error(`CORS blocked origin: ${origin}`));
+    },
     credentials: true,
 }));
 app.use(express_1.default.json({ limit: '50mb' }));

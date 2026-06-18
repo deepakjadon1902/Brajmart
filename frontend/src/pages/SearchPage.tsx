@@ -68,7 +68,7 @@ const SearchPage = () => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <p className="text-sm text-muted-foreground mb-4">{results.length} results for "{query}"</p>
             {results.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="product-grid grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {results.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
               </div>
             ) : (
@@ -83,7 +83,7 @@ const SearchPage = () => {
         {query.length < 2 && (
           <div>
             <h2 className="font-cinzel text-lg font-bold text-foreground mb-4 text-center">Trending Products</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="product-grid grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {trendingProducts.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
             </div>
           </div>

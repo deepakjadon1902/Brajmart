@@ -21,6 +21,20 @@ import { isDbConnected, dbQuery } from './lib/db';
 
 const app = express();
 const SITE_URL = (process.env.SITE_URL || 'https://www.brajmart.com').replace(/\/$/, '');
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'https://www.brajmart.com',
+  'https://brajmart.com',
+];
+
+const corsOrigins = Array.from(new Set([
+  ...DEFAULT_CORS_ORIGINS,
+  ...String(process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+]));
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -68,7 +82,10 @@ app.get('/uploads/:filename', async (req, res, next) => {
 
 app.use(compression());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: (origin, callback) => {
+    if (!origin || origin === 'null' || corsOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`CORS blocked origin: ${origin}`));
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));

@@ -112,11 +112,11 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
 
   return (
     <div
-      className={`group relative flex flex-col h-full rounded-lg border border-border bg-card shadow-sm overflow-hidden gold-glow-hover cursor-pointer content-visibility-auto ${isCompact ? 'min-h-[278px] sm:min-h-[305px]' : 'min-h-[335px]'}`}
+      className={`product-card group relative flex flex-col h-full rounded-lg border border-border bg-card shadow-sm overflow-hidden gold-glow-hover cursor-pointer content-visibility-auto ${isCompact ? 'min-h-[278px] sm:min-h-[305px]' : 'min-h-[335px]'}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Link to={`/product/${product.slug}`} className={`relative ${mediaAspectClass} overflow-hidden bg-brand-raised`}>
+      <Link to={`/product/${product.slug}`} className={`image-wrap relative ${mediaAspectClass} overflow-hidden bg-brand-raised`}>
         <img
           src={toSquareImageUrl(displayImage)}
           alt={product.name}
@@ -157,7 +157,7 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
         </div>
 
         {discount > 0 && (
-          <span className="absolute bottom-3 left-3 rounded bg-brand-structure px-2 py-0.5 text-xs font-bold text-primary-foreground">
+          <span className="discount-badge absolute bottom-3 left-3 rounded bg-brand-structure px-2 py-0.5 text-xs font-bold text-primary-foreground">
             -{discount}%
           </span>
         )}
@@ -180,15 +180,15 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
             </h3>
           </Link>
           <div className="shrink-0 text-right leading-tight">
-            <div className="font-playfair text-base sm:text-lg font-bold text-brand-gold">{formatPrice(product.price)}</div>
-            {product.originalPrice && <div className="text-muted-foreground line-through text-[0.65rem]">{formatPrice(product.originalPrice)}</div>}
+            <div className="price-current font-playfair text-base sm:text-lg font-bold text-brand-gold">{formatPrice(product.price)}</div>
+            {product.originalPrice && <div className="price-original text-muted-foreground line-through text-[0.65rem]">{formatPrice(product.originalPrice)}</div>}
           </div>
         </div>
 
         {!isCompact && (
           <div className="min-h-[14px]">
             {savings > 0 ? (
-              <span className="text-[13px] text-tulsi font-medium">Save {formatPrice(savings)}</span>
+              <span className="save-text text-[13px] text-tulsi font-medium">Save {formatPrice(savings)}</span>
             ) : product.soldCount ? (
               <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>
             ) : null}
@@ -201,14 +201,14 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
           <button
             onClick={handleAddToCart}
             disabled={!product.inStock}
-            className={`btn-action w-full ${isCompact ? 'px-2 py-2' : 'px-2.5 py-2'} text-[12px] sm:text-[13px] ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            className={`add-to-cart-btn btn-action w-full ${isCompact ? 'px-2 py-2' : 'px-2.5 py-2'} text-[12px] sm:text-[13px] ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
           >
             <ShoppingCart size={14} /> Add to Cart
           </button>
           <button
             onClick={handleBuyNow}
             disabled={!product.inStock}
-            className={`btn-action-secondary w-full ${isCompact ? 'px-2 py-2' : 'px-2.5 py-2'} text-[12px] sm:text-[13px] ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            className={`buy-now-btn btn-action-secondary w-full ${isCompact ? 'px-2 py-2' : 'px-2.5 py-2'} text-[12px] sm:text-[13px] bg-white text-orange-500 hover:bg-white ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
           >
             Buy Now
           </button>

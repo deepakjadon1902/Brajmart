@@ -717,7 +717,7 @@ const ProductDetailPage = () => {
                 </span>
               )}
               {discount > 0 && (
-                <span className="absolute top-4 right-4 px-3 py-1 rounded-full bg-tulsi text-primary-foreground text-xs font-bold">
+                <span className="discount-badge absolute top-4 right-4 px-3 py-1 rounded-full bg-tulsi text-primary-foreground text-xs font-bold">
                   {discount}% OFF
                 </span>
               )}
@@ -744,11 +744,11 @@ const ProductDetailPage = () => {
 
             {/* Price */}
             <div className="flex flex-wrap items-center gap-3">
-              <span className="font-playfair text-3xl font-bold text-brand-gold">{formatPrice(computedPrice)}</span>
+              <span className="price-current font-playfair text-3xl font-bold text-brand-gold">{formatPrice(computedPrice)}</span>
               {product.originalPrice && (
                 <>
-                  <span className="text-lg text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>
-                  <span className="rounded bg-tulsi/10 px-2 py-0.5 text-sm font-semibold text-tulsi">Save {formatPrice(product.originalPrice - computedPrice)}</span>
+                  <span className="price-original text-lg text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>
+                  <span className="save-text rounded bg-tulsi/10 px-2 py-0.5 text-sm font-semibold text-tulsi">Save {formatPrice(product.originalPrice - computedPrice)}</span>
                 </>
               )}
               {!product.inStock && (
@@ -903,20 +903,20 @@ const ProductDetailPage = () => {
             {/* Quantity */}
             <div className="flex items-center gap-4">
               <span className="text-sm font-medium">Quantity:</span>
-              <div className="flex h-11 w-[130px] items-center justify-between rounded-lg border border-border bg-brand-soft">
+              <div className="qty-selector flex h-11 w-[130px] items-center justify-between rounded-lg border border-border bg-brand-soft">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
                   disabled={!product.inStock}
-                  className={`flex h-full w-11 items-center justify-center rounded-l-lg ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                  className={`qty-btn flex h-full w-11 items-center justify-center rounded-l-lg ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
                   aria-label="Decrease quantity"
                 >
                   <Minus size={16} />
                 </button>
-                <span className="font-sans text-base font-bold text-brand-deep">{quantity}</span>
+                <span id="qty-display" className="font-sans text-base font-bold text-brand-deep">{quantity}</span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
                   disabled={!product.inStock}
-                  className={`flex h-full w-11 items-center justify-center rounded-r-lg ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                  className={`qty-btn flex h-full w-11 items-center justify-center rounded-r-lg ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
                   aria-label="Increase quantity"
                 >
                   <Plus size={16} />
@@ -929,14 +929,14 @@ const ProductDetailPage = () => {
               <button
                 onClick={handleAddToCart}
                 disabled={!product.inStock}
-                className={`btn-action flex-1 ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                className={`add-to-cart-btn btn-action flex-1 ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
               >
                 <ShoppingCart size={18} className="inline mr-2 -mt-0.5" />Add to Cart
               </button>
               <button
                 onClick={handleBuyNow}
                 disabled={!product.inStock}
-                className={`btn-action-secondary flex-1 ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                className={`buy-now-btn btn-action-secondary flex-1 ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
               >
                 Buy Now
               </button>

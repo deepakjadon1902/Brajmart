@@ -412,11 +412,19 @@ router.post('/success', async (req, res) => {
         res.redirect(`${getFrontendUrl()}/payment-status/${req.body?.txnid || 'unknown'}`);
     });
 });
+router.get('/success', (req, res) => {
+    const txnid = String(req.query?.txnid || req.query?.mihpayid || 'unknown');
+    res.redirect(`${getFrontendUrl()}/payment-status/${encodeURIComponent(txnid)}`);
+});
 router.post('/failure', async (req, res) => {
     handlePayuCallback(req, res, 'failure').catch((err) => {
         console.error(err);
         res.redirect(`${getFrontendUrl()}/payment-status/${req.body?.txnid || 'unknown'}`);
     });
+});
+router.get('/failure', (req, res) => {
+    const txnid = String(req.query?.txnid || req.query?.mihpayid || 'unknown');
+    res.redirect(`${getFrontendUrl()}/payment-status/${encodeURIComponent(txnid)}`);
 });
 router.post('/webhook', async (req, res) => {
     const { key, salt } = getPayuConfig();

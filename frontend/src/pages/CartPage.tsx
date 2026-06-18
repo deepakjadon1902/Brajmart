@@ -7,6 +7,29 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
+const FREE_SHIPPING_THRESHOLD = 499;
+
+function ShippingProgressBar({ cartTotal }: { cartTotal: number }) {
+  const remaining = FREE_SHIPPING_THRESHOLD - cartTotal;
+  const percentage = Math.min((cartTotal / FREE_SHIPPING_THRESHOLD) * 100, 100);
+
+  return (
+    <div className="mb-4 rounded-r-lg border-l-[3px] border-[#2E7D32] bg-[#E8F5E9] px-4 py-3">
+      <p className="mb-2 text-[13px] font-semibold text-[#2E7D32]">
+        {remaining > 0
+          ? `Add ${formatPrice(Math.ceil(remaining))} more for FREE shipping!`
+          : 'You have unlocked FREE shipping!'}
+      </p>
+      <div className="h-1.5 rounded bg-[#E8E0D6]">
+        <div
+          className="h-1.5 rounded bg-[#2E7D32] transition-[width] duration-300 ease-out"
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 const CartPage = () => {
   const { items, removeItem, updateQuantity, clearCart, totalPrice, totalSavings } = useCartStore();
   const shipping = totalPrice() >= 499 ? 0 : 49;
@@ -97,6 +120,7 @@ const CartPage = () => {
           <div className="lg:col-span-1">
             <div className="bg-card rounded-2xl border border-border p-6 sticky top-24">
               <h3 className="font-cinzel text-lg font-bold text-foreground mb-4">Order Summary</h3>
+              <ShippingProgressBar cartTotal={totalPrice()} />
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatPrice(totalPrice())}</span></div>
                 {totalSavings() > 0 && (
@@ -110,7 +134,7 @@ const CartPage = () => {
               </div>
               <Link
                 to="/checkout"
-                className="block w-full mt-6 py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm text-center shimmer active:scale-[0.97] transition-transform"
+                className="checkout-btn block w-full mt-6 py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm text-center shimmer active:scale-[0.97] transition-transform"
               >
                 Proceed to Checkout →
               </Link>
