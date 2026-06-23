@@ -60,7 +60,60 @@ npm run seed:admin
 Admin login URL:
 - `/admin/login`
 
-## 4) Frontend Environment
+## 4) Image Uploads
+
+Set these in `backend/.env` to store optimized uploads in ImageKit:
+```
+UPLOAD_PROVIDER=imagekit
+IMAGEKIT_PUBLIC_KEY=your_public_key
+IMAGEKIT_PRIVATE_KEY=your_private_key
+IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/your_imagekit_id
+IMAGEKIT_FOLDER=/brajmart
+IMAGEKIT_UPLOAD_MAX_WIDTH=2000
+IMAGEKIT_UPLOAD_QUALITY=82
+```
+
+ImageKit setup checklist:
+- ImageKit dashboard -> Developer options -> API keys:
+  - Use **Standard keys** for the backend upload API.
+  - `IMAGEKIT_PUBLIC_KEY` = Standard Public Key
+  - `IMAGEKIT_PRIVATE_KEY` = Standard Private Key
+  - `IMAGEKIT_URL_ENDPOINT` = URL-endpoint, for example `https://ik.imagekit.io/your_id`
+  - Do not use Restricted keys unless the restricted key is explicitly allowed
+    to upload/manage media.
+- ImageKit dashboard -> Media library:
+  - Create/use folder `brajmart` (the env value should stay `/brajmart`)
+- Backend hosting environment:
+  - Add the same ImageKit variables to Hostinger/backend env, not only local `.env`
+  - Restart the Node backend after changing env variables
+- Admin verification:
+  - Log in as admin, then request `GET /api/upload/status`
+  - Expected result: `provider` is `imagekit` and `imagekitConfigured` is `true`
+- Upload verification:
+  - Upload a logo/product/category/hero image from admin
+  - The saved DB URL should start with `https://ik.imagekit.io/...`
+  - It should not start with `http://localhost...` or `/uploads/...`
+
+Audit old local image URLs:
+```
+cd backend
+npm run audit:images
+```
+
+Migrate old local image URLs when the matching files still exist in
+`backend/uploads`:
+```
+cd backend
+npm run migrate:images:imagekit
+npm run audit:images
+```
+
+If phpMyAdmin still shows `localhost` in fields such as `settings.store_logo`,
+upload that image again from the admin panel after ImageKit is configured, then
+click **Save Settings**. The old local URL in the database should be replaced by
+an ImageKit URL.
+
+## 5) Frontend Environment
 
 Set this in `frontend/.env`:
 ```
@@ -79,7 +132,7 @@ API_BASE_URL=https://your-backend-domain.example.com/api
 This is SEO-critical because the build-time sitemap generator uses that API to
 include live product, category, subcategory, and blog URLs.
 
-## 5) Install + Run
+## 6) Install + Run
 
 Backend:
 ```
@@ -95,12 +148,12 @@ npm install
 npm run dev
 ```
 
-## 6) User Flow
+## 7) User Flow
 
 - Normal users: register + login (mock Google login is also enabled)
 - Admin: login from `/admin/login`
 
-## 7) Notes
+## 8) Notes
 
 - Payments (PayU) will only work if PayU credentials are correct.
 - Email notifications will only work if SMTP credentials are correct.

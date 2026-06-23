@@ -1,33 +1,35 @@
 import { Router } from 'express';
-import cloudinary from 'cloudinary';
 import crypto from 'crypto';
 import fs from 'fs';
+import ImageKit from 'imagekit';
 import multer from 'multer';
 import path from 'path';
-import streamifier from 'streamifier';
+import sharp from 'sharp';
+import { auth, adminOnly } from '../middleware/auth';
 
 const router = Router();
 
 const UPLOADS_DIR = path.resolve(__dirname, '..', '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const cloudinaryEnabled = (() => {
+const imagekitConfig = {
+  publicKey: process.env.IMAGEKIT_PUBLIC_KEY || '',
+  privateKey: process.env.IMAGEKIT_PRIVATE_KEY || '',
+  urlEndpoint: (process.env.IMAGEKIT_URL_ENDPOINT || '').replace(/\/$/, ''),
+};
+const imagekitConfigured = Boolean(imagekitConfig.publicKey && imagekitConfig.privateKey && imagekitConfig.urlEndpoint);
+
+const imagekitEnabled = (() => {
   const forced = String(process.env.UPLOAD_PROVIDER || '').toLowerCase().trim();
   if (forced === 'local') return false;
-  if (forced === 'cloudinary') return true;
-  const hasKeys = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+  if (forced === 'imagekit') return true;
   // Prefer local uploads in dev for speed/reliability.
   if (String(process.env.NODE_ENV || '').toLowerCase() !== 'production') return false;
-  return hasKeys;
+  return imagekitConfigured;
 })();
+const imagekitRequired = String(process.env.UPLOAD_PROVIDER || '').toLowerCase().trim() === 'imagekit';
 
-if (cloudinaryEnabled) {
-  cloudinary.v2.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-}
+const imagekit = imagekitEnabled && imagekitConfigured ? new ImageKit(imagekitConfig) : null;
 
 const maxFileSizeMb = Number(process.env.UPLOAD_MAX_MB || 25);
 const maxFileSizeBytes = Number.isFinite(maxFileSizeMb) && maxFileSizeMb > 0 ? Math.floor(maxFileSizeMb * 1024 * 1024) : 25 * 1024 * 1024;
@@ -75,30 +77,65 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number) => {
   }
 };
 
-const uploadToCloudinary = (buffer: Buffer) =>
-  new Promise<string>((resolve, reject) => {
-    const uploadStream = cloudinary.v2.uploader.upload_stream(
-      { folder: 'brajmart', resource_type: 'image' },
-      (error: any, result: any) => {
-        if (error || !result) return reject(error || new Error('Upload failed'));
-        resolve(result.secure_url);
-      }
-    );
+const sanitizeBaseName = (fileName: string) => {
+  const base = path.basename(fileName, path.extname(fileName)) || 'image';
+  return base.replace(/[^a-z0-9._-]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 80) || 'image';
+};
 
-    streamifier.createReadStream(buffer).pipe(uploadStream);
+const optimizeImageBuffer = async (buffer: Buffer) => {
+  const maxWidth = Math.max(320, Number(process.env.IMAGEKIT_UPLOAD_MAX_WIDTH || 2000));
+  const quality = Math.min(92, Math.max(45, Number(process.env.IMAGEKIT_UPLOAD_QUALITY || 82)));
+  return sharp(buffer, { failOn: 'none' })
+    .rotate()
+    .resize({ width: maxWidth, height: maxWidth, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality, effort: 4 })
+    .toBuffer();
+};
+
+const uploadToImageKit = async (buffer: Buffer, originalName: string) => {
+  if (!imagekit) throw new Error('ImageKit is not configured');
+  const optimized = await optimizeImageBuffer(buffer);
+  const result = await imagekit.upload({
+    file: optimized,
+    fileName: `${sanitizeBaseName(originalName)}.webp`,
+    folder: process.env.IMAGEKIT_FOLDER || '/brajmart',
+    useUniqueFileName: true,
+    tags: ['brajmart', 'optimized'],
+    responseFields: ['width', 'height', 'size', 'filePath'],
   });
+  return result.url;
+};
 
-router.post('/', (cloudinaryEnabled ? memoryUpload.single('image') : diskUpload.single('image')), async (req, res) => {
+router.get('/status', auth, adminOnly, (_req, res) => {
+  const provider = imagekitEnabled ? 'imagekit' : 'local';
+  res.json({
+    provider,
+    imagekitConfigured,
+    imagekitRequired,
+    folder: process.env.IMAGEKIT_FOLDER || '/brajmart',
+    urlEndpoint: imagekitConfig.urlEndpoint || null,
+    maxUploadMb: maxFileSizeMb,
+    optimize: {
+      maxWidth: Math.max(320, Number(process.env.IMAGEKIT_UPLOAD_MAX_WIDTH || 2000)),
+      quality: Math.min(92, Math.max(45, Number(process.env.IMAGEKIT_UPLOAD_QUALITY || 82))),
+    },
+  });
+});
+
+router.post('/', (imagekitEnabled ? memoryUpload.single('image') : diskUpload.single('image')), async (req, res) => {
   const file = req.file as Express.Multer.File | undefined;
   if (!file) return res.status(400).json({ message: 'No file uploaded' });
 
   try {
-    if (!cloudinaryEnabled) return res.json({ url: publicUrlForLocalFile(req, file.filename) });
-    const url = await withTimeout(uploadToCloudinary((file as any).buffer as Buffer), 15_000);
+    if (!imagekitEnabled) return res.json({ url: publicUrlForLocalFile(req, file.filename) });
+    const url = await withTimeout(uploadToImageKit((file as any).buffer as Buffer, file.originalname), 15_000);
     return res.json({ url });
   } catch (err: any) {
     console.error('Upload error:', err);
-    // Cloudinary failed/slow → fallback to local so admin isn't blocked.
+    if (imagekitRequired) {
+      return res.status(502).json({ message: `ImageKit upload failed: ${err?.message || 'Upload failed'}` });
+    }
+    // ImageKit failed/slow: fallback to local so admin isn't blocked.
     try {
       const fallback = await new Promise<string>((resolve, reject) => {
         const ext = path.extname(file.originalname || '').slice(0, 10) || '.jpg';
@@ -113,22 +150,25 @@ router.post('/', (cloudinaryEnabled ? memoryUpload.single('image') : diskUpload.
   }
 });
 
-router.post('/multiple', (cloudinaryEnabled ? memoryUpload.array('images', 12) : diskUpload.array('images', 12)), async (req, res) => {
+router.post('/multiple', (imagekitEnabled ? memoryUpload.array('images', 12) : diskUpload.array('images', 12)), async (req, res) => {
   const files = (req.files as Express.Multer.File[] | undefined) || [];
   if (!files.length) return res.status(400).json({ message: 'No files uploaded' });
 
   try {
-    if (!cloudinaryEnabled) {
+    if (!imagekitEnabled) {
       return res.json({ urls: files.map((f) => publicUrlForLocalFile(req, f.filename)) });
     }
 
     const urls = await withTimeout(
-      Promise.all(files.map((f: any) => uploadToCloudinary(f.buffer as Buffer))),
+      Promise.all(files.map((f: any) => uploadToImageKit(f.buffer as Buffer, f.originalname))),
       25_000
     );
     return res.json({ urls });
   } catch (err: any) {
     console.error('Multi upload error:', err);
+    if (imagekitRequired) {
+      return res.status(502).json({ message: `ImageKit upload failed: ${err?.message || 'Upload failed'}` });
+    }
     // Fallback: store everything locally.
     try {
       const urls: string[] = [];

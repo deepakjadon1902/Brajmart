@@ -8,23 +8,23 @@
     "postinstall": "npm run build",
     "start": "node dist/index.js",
     "dev": "nodemon --watch src --ext ts --exec \"node -r ts-node/register src/index.ts\"",
-    "seed:admin": "node -r ts-node/register scripts/seedAdmin.ts"
+    "seed:admin": "node -r ts-node/register scripts/seedAdmin.ts",
+    "audit:images": "node -r ts-node/register scripts/auditLegacyImageUrls.ts",
+    "migrate:images:imagekit": "node -r ts-node/register scripts/migrateLegacyLocalImagesToImageKit.ts"
   },
   "dependencies": {
-    "@types/streamifier": "^0.1.2",
     "bcryptjs": "^2.4.3",
-    "cloudinary": "^1.41.3",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "google-auth-library": "^9.14.1",
+    "imagekit": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.11.0",
     "nodemailer": "^6.10.1",
     "sharp": "^0.34.5",
-    "streamifier": "^0.1.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
   },

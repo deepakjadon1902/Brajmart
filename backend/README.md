@@ -7,7 +7,7 @@ Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 1. Copy `.env.example` to `.env` and add your MySQL credentials and JWT secret
 2. Run `npm install`
 3. (Optional for local testing) Create `uploads/` directory: `mkdir uploads`
-4. Add Cloudinary credentials to `.env` if you want permanent deployed image storage.
+4. Add ImageKit credentials to `.env` if you want permanent deployed image storage.
 5. Run `npm run dev` (development) or `npm start` (production)
 
 ## API Endpoints

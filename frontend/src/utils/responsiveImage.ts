@@ -17,6 +17,17 @@ export function toResponsiveImageUrl(url: string, options: ResponsiveImageOption
   const quality = Math.min(100, Math.max(35, Math.round(options.quality ?? 78)));
   const fit = options.fit ?? 'cover';
 
+  if (url.includes('ik.imagekit.io')) {
+    try {
+      const parsed = new URL(url);
+      const crop = fit === 'contain' ? 'c-at_max' : 'c-at_least';
+      parsed.searchParams.set('tr', `w-${width},h-${height},${crop},q-${quality},f-webp`);
+      return parsed.toString();
+    } catch {
+      return url;
+    }
+  }
+
   if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
     const [prefix, rest] = url.split('/upload/');
     if (!prefix || rest === undefined) return url;
