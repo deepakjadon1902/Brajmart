@@ -1,9 +1,9 @@
 export const SITE_URL = 'https://www.brajmart.com';
 export const SITE_NAME = 'Brajmart';
 export const DEFAULT_IMAGE = `${SITE_URL}/logo.png`;
-export const DEFAULT_TITLE = 'Brajmart - Spiritual Books, Puja Items, Prasadam & Braj Yatra Online';
+export const DEFAULT_TITLE = 'Brajmart — Authentic Vrindavan Products | Prasadam, Tulsi Mala, Puja Items Online';
 export const DEFAULT_DESCRIPTION =
-  'Shop authentic puja items, spiritual books, prasadam, deity idols, tulsi mala and devotional accessories from the sacred land of Vrindavan. Delivered across India.';
+  'Buy authentic spiritual products directly from Vrindavan, Mathura. Prasadam, Tulsi Mala, Radha Krishna Idols, Puja Samagri, Books and Braj Yatra. Free shipping above ₹499. Pan India delivery.';
 
 export const absoluteUrl = (path = '/') => {
   if (/^https?:\/\//i.test(path)) return path;
@@ -29,20 +29,6 @@ export const breadcrumbSchema = (items: Array<{ name: string; path: string }>) =
   })),
 });
 
-const categoryFocus: Record<string, string> = {
-  'brajmart-special': 'exclusive Brajmart devotional selections, gift-ready spiritual essentials, and handpicked temple-inspired products',
-  books: 'spiritual books, scriptures, bhajan books, and devotional reading for daily sadhana',
-  accessories: 'devotional accessories, malas, keychains, counters, bags, and useful seva essentials',
-  clothing: 'devotional clothing, kurta sets, deity vastra, and traditional wear for worship and festivals',
-  groceries: 'satvik groceries, fasting essentials, temple-style ingredients, and daily devotional kitchen items',
-  'idols-shringar': 'deity idols, shringar items, dresses, ornaments, and altar decor for home mandir seva',
-  'incense-pooja': 'incense, pooja samagri, lamps, dhoop, and sacred worship essentials',
-  'incense-pooja-items': 'incense, pooja samagri, lamps, dhoop, and sacred worship essentials',
-  prasadam: 'prasadam, sweets, bhog items, and sacred offerings inspired by Braj and Vrindavan',
-  'spiritual-books': 'spiritual books, scriptures, bhajan books, and devotional reading for daily sadhana',
-  'braj-yatra': 'Braj Yatra essentials, travel-friendly devotional items, and pilgrim seva products',
-};
-
 const categoryIntros: Record<string, string> = {
   'brajmart-special': 'Handpicked devotional products selected for gifting, worship, festivals, and everyday seva at home.',
   books: 'Explore scriptures, bhajan books, children devotional books, and thoughtful reading for daily spiritual practice.',
@@ -64,27 +50,26 @@ const titleCase = (value: string) =>
     .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`)
     .join(' ');
 
-export const categorySeo = (categoryName: string, subcategoryName = '') => {
+export const categorySeo = (categoryName: string, subcategoryName = '', productCount = 0) => {
   const category = cleanMetaText(categoryName || 'Devotional Products', 80);
   const subcategory = cleanMetaText(subcategoryName || '', 80);
   const key = category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-  const readableFocus = categoryFocus[key] || `${category.toLowerCase()} products, puja essentials, and devotional goods`;
   const intro = categoryIntros[key] || `Browse ${category.toLowerCase()} selected for worship, gifting, festivals, and everyday devotional living.`;
   const pageTitle = subcategory ? `${subcategory} in ${category}` : category;
   const title = subcategory
-    ? `${subcategory} Online | ${category} | Brajmart`
-    : `${category} Online | Brajmart`;
+    ? `Buy ${subcategory} Online — Authentic Vrindavan Products | Brajmart`
+    : `Buy ${category} Online — Authentic Vrindavan Products | Brajmart`;
   const description = subcategory
-    ? `Shop ${subcategory.toLowerCase()} in ${category.toLowerCase()} at Brajmart. Find authentic Vrindavan-inspired devotional products, pooja essentials, and seva items delivered across India.`
-    : `Shop ${readableFocus} online at Brajmart. Discover authentic Vrindavan-inspired devotional products, pooja essentials, and seva items delivered across India.`;
+    ? `Shop authentic ${subcategory} from Vrindavan, Mathura. Temple-sourced, 100% genuine. Free shipping above ₹499. Delivered across India. Browse ${productCount}+ products.`
+    : `Shop authentic ${category} from Vrindavan, Mathura. Temple-sourced, 100% genuine. Free shipping above ₹499. Delivered across India. Browse ${productCount}+ products.`;
   const pageDescription = subcategory
     ? `Browse ${subcategory.toLowerCase()} from our ${category.toLowerCase()} collection, curated for devotees who want authentic Vrindavan-inspired products delivered across India.`
     : intro;
 
   return {
     pageTitle,
-    metaTitle: cleanMetaText(title, 60),
-    metaDescription: cleanMetaText(description, 155),
+    metaTitle: cleanMetaText(title, 120),
+    metaDescription: cleanMetaText(description, 220),
     description: cleanMetaText(pageDescription, 210),
     heading: subcategory ? `${category} - ${subcategory}` : titleCase(category),
   };

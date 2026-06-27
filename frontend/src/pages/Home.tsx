@@ -35,7 +35,26 @@ const Home = () => {
       name: 'Brajmart',
       url: SITE_URL,
       logo: `${SITE_URL}/logo.png`,
-      sameAs: [],
+      description:
+        'Authentic spiritual and devotional products from Vrindavan, Mathura. Tulsi Malas, Prasadam, Puja Items, Deity Idols and Braj Yatra services delivered across India.',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Vrindavan',
+        addressLocality: 'Mathura',
+        addressRegion: 'Uttar Pradesh',
+        postalCode: '281121',
+        addressCountry: 'IN',
+      },
+      contactPoint: {
+        '@type': 'ContactPoint',
+        telephone: '+91-9634359003',
+        contactType: 'customer service',
+        availableLanguage: ['Hindi', 'English'],
+      },
+      sameAs: [
+        'https://www.instagram.com/brajmart_official',
+        'https://www.facebook.com/brajmart',
+      ],
     },
     {
       '@context': 'https://schema.org',

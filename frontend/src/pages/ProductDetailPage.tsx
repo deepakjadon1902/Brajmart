@@ -16,6 +16,7 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import SEO from '@/components/seo/SEO';
+import { SITE_URL } from '@/lib/seo';
 
 const absoluteUrl = (value: string) => {
   const raw = String(value || '').trim();
@@ -384,9 +385,7 @@ const ProductDetailPage = () => {
   const productSchema = useMemo(() => {
     if (!product) return null;
 
-    const productUrl = typeof window !== 'undefined'
-      ? new URL(`/product/${product.slug || slug || ''}`, window.location.origin).toString()
-      : `/product/${product.slug || slug || ''}`;
+    const productUrl = `${SITE_URL}/product/${product.slug || slug || ''}`;
     const images = (displayImages.length ? displayImages : (product.images?.length ? product.images : [product.image]))
       .map(absoluteUrl)
       .filter(Boolean);
@@ -412,7 +411,7 @@ const ProductDetailPage = () => {
       category: product.category,
       brand: {
         '@type': 'Brand',
-        name: settings.storeName || 'BrajMart',
+        name: 'Brajmart',
       },
       offers: {
         '@type': 'Offer',
@@ -421,6 +420,10 @@ const ProductDetailPage = () => {
         priceCurrency: 'INR',
         availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
         itemCondition: 'https://schema.org/NewCondition',
+        seller: {
+          '@type': 'Organization',
+          name: 'Brajmart',
+        },
         shippingDetails: {
           '@type': 'OfferShippingDetails',
           shippingRate: {
@@ -482,8 +485,7 @@ const ProductDetailPage = () => {
 
   const productUrl = useMemo(() => {
     if (!product) return '';
-    if (typeof window === 'undefined') return `/product/${product.slug || slug || ''}`;
-    return new URL(`/product/${product.slug || slug || ''}`, window.location.origin).toString();
+    return `${SITE_URL}/product/${product.slug || slug || ''}`;
   }, [product, slug]);
 
   const primaryImage = useMemo(() => {
@@ -493,24 +495,17 @@ const ProductDetailPage = () => {
 
   const metaTitle = useMemo(() => {
     if (!product) return settings.storeName || 'Brajmart';
-    if (product.metaTitle) return truncateMeta(cleanText(product.metaTitle), 60);
-    const storeName = settings.storeName || 'Brajmart';
-    const category = cleanText(product.category);
-    const base = category ? `${product.name} - ${category}` : product.name;
-    const withBrand = `${base} | ${storeName}`;
-    if (withBrand.length <= 60) return withBrand;
-    return truncateMeta(`${product.name} | ${storeName}`, 60);
+    return `${product.name} — Buy Online | Authentic Vrindavan | Brajmart`;
   }, [product, settings.storeName]);
 
   const metaDescription = useMemo(() => {
     if (!product) return '';
-    if (product.metaDescription) return truncateMeta(cleanText(product.metaDescription), 160);
-    const storeName = settings.storeName || 'Brajmart';
-    const productDescription = cleanText(product.description);
-    const category = cleanText(product.category || 'devotional product').toLowerCase();
-    const fallback = `Buy ${product.name} online from ${storeName}. Authentic ${category} from Vrindavan for ${formatPrice(computedPrice || product.price)}, delivered across India.`;
-    return truncateMeta(productDescription || fallback, 160);
-  }, [computedPrice, product, settings.storeName]);
+    const shortDescription = cleanText(product.metaDescription || product.description || `${product.category || 'devotional product'} from Vrindavan.`);
+    return truncateMeta(
+      `Buy authentic ${product.name} from Vrindavan. ${shortDescription}. Free shipping above ₹499. 100% genuine temple-sourced product. Order now at Brajmart.`,
+      180
+    );
+  }, [product]);
 
   const handleAddToCart = () => {
     if (!variantProduct) return;

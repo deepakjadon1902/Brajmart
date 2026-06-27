@@ -15,7 +15,7 @@ const NotFound = () => {
         title="Page Not Found | Brajmart"
         description="The requested Brajmart page could not be found."
         path={location.pathname}
-        robots="noindex,follow"
+        robots="noindex, nofollow"
       />
       <div className="text-center">
         <h1 className="mb-4 text-4xl font-bold">404</h1>

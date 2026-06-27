@@ -20,8 +20,8 @@ const SEO = ({
   robots = 'index,follow',
   schema,
 }: SEOProps) => {
-  const metaTitle = cleanMetaText(title, 70);
-  const metaDescription = cleanMetaText(description, 160);
+  const metaTitle = cleanMetaText(title, 120);
+  const metaDescription = cleanMetaText(description, 220);
   const canonicalPath = path.split(/[?#]/)[0] || '/';
   const canonical = absoluteUrl(canonicalPath);
   const imageUrl = absoluteUrl(image);

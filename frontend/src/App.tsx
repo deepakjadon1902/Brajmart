@@ -82,6 +82,35 @@ const LegacyCategoryRedirect = () => {
   return <Navigate to={`/category/${slug || ''}`} replace />;
 };
 
+const noIndexPaths = new Set([
+  '/account',
+  '/cart',
+  '/checkout',
+  '/login',
+  '/my-orders',
+  '/orders',
+  '/profile',
+  '/profile/addresses',
+  '/profile/orders',
+  '/register',
+  '/search',
+  '/thank-you',
+  '/wishlist',
+]);
+
+const NoIndexRoutes = () => {
+  const { pathname } = useLocation();
+  const shouldNoIndex = noIndexPaths.has(pathname) || pathname.startsWith('/payment-status/');
+
+  if (!shouldNoIndex) return null;
+
+  return (
+    <Helmet>
+      <meta name="robots" content="noindex, nofollow" />
+    </Helmet>
+  );
+};
+
 const StorefrontWhatsAppButton = () => {
   const location = useLocation();
   if (location.pathname.startsWith('/admin')) return null;
@@ -264,6 +293,7 @@ const App = () => {
           <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
+          <NoIndexRoutes />
           <StorefrontWhatsAppButton />
         </BrowserRouter>
       </TooltipProvider>

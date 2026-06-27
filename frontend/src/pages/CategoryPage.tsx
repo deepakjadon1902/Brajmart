@@ -27,7 +27,7 @@ const CategoryPage = () => {
   const hasAttemptedCatalogLoad = lastFetchedAt > 0 || Boolean(error);
   const categoryIsMissing = !loading && hasAttemptedCatalogLoad && !catMeta && products.length === 0;
   const subcategoryIsMissing = Boolean(subSlug) && !subMeta && !loading && hasAttemptedCatalogLoad;
-  const seo = categorySeo(categoryName || 'Devotional Products', subcategoryName);
+  const seo = categorySeo(categoryName || 'Devotional Products', subcategoryName, products.length);
   const pageName = seo.pageTitle;
   const path = subSlug ? `/category/${slug}/${subSlug}` : `/category/${slug || ''}`;
   const collectionSchema = {
