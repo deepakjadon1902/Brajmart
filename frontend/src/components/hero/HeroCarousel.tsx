@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useHeroStore } from '@/store/heroStore';
 import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 
@@ -79,34 +78,22 @@ const HeroCarousel = () => {
           </div>
 
           {slides.length > 1 && (
-            <>
-              <button
-                onClick={() => setSelectedIndex((current) => (current - 1 + slides.length) % slides.length)}
-                className="hidden sm:flex absolute -left-3 md:-left-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-raised border border-border items-center justify-center hover:bg-brand-soft active:scale-95 transition-all"
-                aria-label="Previous slide"
-              >
-                <ChevronLeft size={18} className="text-brand-structure" />
-              </button>
-              <button
-                onClick={() => setSelectedIndex((current) => (current + 1) % slides.length)}
-                className="hidden sm:flex absolute -right-3 md:-right-5 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-brand-raised border border-border items-center justify-center hover:bg-brand-soft active:scale-95 transition-all"
-                aria-label="Next slide"
-              >
-                <ChevronRight size={18} className="text-brand-structure" />
-              </button>
-            </>
+            <div className="absolute bottom-4 left-1/2 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center justify-center gap-1.5 sm:bottom-5 sm:gap-2 md:bottom-6 md:gap-2.5">
+              {slides.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSelectedIndex(i)}
+                  className={`!h-[9px] !min-h-[9px] !w-[9px] !min-w-[9px] shrink-0 rounded-full border-2 border-black p-0 leading-none shadow-[0_1px_4px_rgba(255,255,255,0.65)] [box-sizing:border-box] transition-transform duration-200 ease-out hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:!h-[11px] sm:!min-h-[11px] sm:!w-[11px] sm:!min-w-[11px] md:!h-[12px] md:!min-h-[12px] md:!w-[12px] md:!min-w-[12px] ${
+                    selectedIndex === i
+                      ? 'bg-black'
+                      : 'bg-white'
+                  }`}
+                  aria-label={`Go to slide ${i + 1}`}
+                  aria-current={selectedIndex === i ? 'true' : undefined}
+                />
+              ))}
+            </div>
           )}
-
-          <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 scale-75 items-center gap-1.5 rounded-full border border-border bg-brand-raised/90 px-2.5 py-1.5 backdrop-blur sm:bottom-3 sm:scale-100">
-            {slides.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setSelectedIndex(i)}
-                className={`h-2 rounded-full transition-all duration-300 ${selectedIndex === i ? 'w-8 bg-brand-gold' : 'w-2 bg-brand-structure/30'}`}
-                aria-label={`Go to slide ${i + 1}`}
-              />
-            ))}
-          </div>
         </div>
       </div>
 
