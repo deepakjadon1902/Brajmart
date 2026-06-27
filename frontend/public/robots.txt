@@ -1,17 +1,23 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
 User-agent: *
 Allow: /
-
+# Block filter, sort, search, and pagination URLs
+Disallow: /*?sort=
+Disallow: /*?filter=
+Disallow: /*?page=
+Disallow: /*?category=
+Disallow: /*?color=
+Disallow: /*?price=
+Disallow: /*?brand=
+Disallow: /search
+Disallow: /search?
+Disallow: /search/
+# Block cart, account, and checkout pages from Google
+Disallow: /cart
+Disallow: /checkout
+Disallow: /account
+Disallow: /my-orders
+Disallow: /profile
+Disallow: /wishlist
+Disallow: /login
+Disallow: /register
 Sitemap: https://www.brajmart.com/sitemap.xml
-Sitemap: https://www.brajmart.com/sitemap_index.xml

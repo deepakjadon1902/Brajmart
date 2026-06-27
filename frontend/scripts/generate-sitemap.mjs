@@ -31,43 +31,31 @@ const API_BASE = (() => {
   return `${SITE_URL}${raw.startsWith('/') ? raw : `/${raw}`}`.replace(/\/$/, '');
 })();
 const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
+const EXISTING_SITEMAP = path.join(PUBLIC_DIR, 'sitemap.xml');
+
+const categoryEntries = [
+  { path: '/category/brajmart-special', priority: '0.9', changefreq: 'weekly' },
+  { path: '/category/books', priority: '0.9', changefreq: 'weekly' },
+  { path: '/category/accessories', priority: '0.9', changefreq: 'weekly' },
+  { path: '/category/clothing', priority: '0.9', changefreq: 'weekly' },
+  { path: '/category/groceries', priority: '0.9', changefreq: 'weekly' },
+  { path: '/category/idols-shringar', priority: '0.9', changefreq: 'weekly' },
+  { path: '/category/incense-pooja-items', priority: '0.9', changefreq: 'weekly' },
+  { path: '/category/prasadam', priority: '0.9', changefreq: 'weekly' },
+];
 
 const staticEntries = [
   { path: '/', priority: '1.0', changefreq: 'daily' },
-  { path: '/shop', priority: '0.9', changefreq: 'daily' },
-  { path: '/products', priority: '0.9', changefreq: 'daily' },
-  { path: '/products?tag=bestseller', priority: '0.8', changefreq: 'daily' },
-  { path: '/products?tag=latest', priority: '0.8', changefreq: 'daily' },
-  { path: '/products?tag=new', priority: '0.8', changefreq: 'daily' },
-  { path: '/products?tag=prasadam', priority: '0.8', changefreq: 'weekly' },
-  { path: '/products?tag=accessories', priority: '0.8', changefreq: 'weekly' },
-  { path: '/products?tag=exclusive', priority: '0.8', changefreq: 'weekly' },
-  { path: '/categories', priority: '0.8', changefreq: 'weekly' },
-  { path: '/category/spiritual-books', priority: '0.8', changefreq: 'weekly' },
-  { path: '/category/prasadam', priority: '0.8', changefreq: 'weekly' },
-  { path: '/category/idols-shringar', priority: '0.8', changefreq: 'weekly' },
-  { path: '/category/incense-pooja', priority: '0.8', changefreq: 'weekly' },
-  { path: '/category/incense-pooja-items', priority: '0.8', changefreq: 'weekly' },
-  { path: '/category/accessories', priority: '0.8', changefreq: 'weekly' },
-  { path: '/category/clothing', priority: '0.8', changefreq: 'weekly' },
-  { path: '/category/groceries', priority: '0.8', changefreq: 'weekly' },
-  { path: '/category/braj-yatra', priority: '0.8', changefreq: 'weekly' },
+  ...categoryEntries,
+  { path: '/about', priority: '0.7', changefreq: 'monthly' },
+  { path: '/contact', priority: '0.7', changefreq: 'monthly' },
   { path: '/blog', priority: '0.6', changefreq: 'weekly' },
-  { path: '/braj-darshan/vrindavan', priority: '0.7', changefreq: 'monthly' },
-  { path: '/braj-darshan/mathura', priority: '0.7', changefreq: 'monthly' },
-  { path: '/braj-darshan/govardhan', priority: '0.7', changefreq: 'monthly' },
-  { path: '/braj-darshan/nandgaon', priority: '0.7', changefreq: 'monthly' },
-  { path: '/braj-darshan/barsana', priority: '0.7', changefreq: 'monthly' },
-  { path: '/braj-darshan/gokul', priority: '0.7', changefreq: 'monthly' },
-  { path: '/about', priority: '0.6', changefreq: 'monthly' },
-  { path: '/help-center', priority: '0.5', changefreq: 'monthly' },
-  { path: '/customer-service', priority: '0.5', changefreq: 'monthly' },
-  { path: '/contact', priority: '0.6', changefreq: 'monthly' },
-  { path: '/privacy-policy', priority: '0.3', changefreq: 'yearly' },
-  { path: '/terms', priority: '0.3', changefreq: 'yearly' },
-  { path: '/shipping-delivery', priority: '0.3', changefreq: 'yearly' },
-  { path: '/return-policy', priority: '0.3', changefreq: 'yearly' },
-  { path: '/payment-method', priority: '0.3', changefreq: 'yearly' },
+  { path: '/braj-darshan/vrindavan', priority: '0.8', changefreq: 'weekly' },
+  { path: '/braj-darshan/mathura', priority: '0.8', changefreq: 'weekly' },
+  { path: '/braj-darshan/govardhan', priority: '0.8', changefreq: 'weekly' },
+  { path: '/braj-darshan/nandgaon', priority: '0.8', changefreq: 'weekly' },
+  { path: '/braj-darshan/barsana', priority: '0.8', changefreq: 'weekly' },
+  { path: '/braj-darshan/gokul', priority: '0.8', changefreq: 'weekly' },
 ];
 
 const xmlEscape = (value) =>
@@ -84,6 +72,15 @@ const slugify = (value) =>
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)+/g, '');
+
+const normalizePath = (value) => {
+  try {
+    const url = new URL(value, SITE_URL);
+    return url.pathname.replace(/\/$/, '') || '/';
+  } catch {
+    return '';
+  }
+};
 
 const apiUrl = (resourcePath) => {
   if (!API_BASE) return '';
@@ -108,25 +105,38 @@ const toLastmod = (value) => {
 
 const hasUsefulText = (value, minLength = 20) => String(value ?? '').replace(/\s+/g, ' ').trim().length >= minLength;
 
+const extractExistingPaths = async (prefix) => {
+  try {
+    const xml = await fs.readFile(EXISTING_SITEMAP, 'utf8');
+    return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)]
+      .map((match) => normalizePath(match[1]))
+      .filter((entryPath) => entryPath.startsWith(prefix) && !entryPath.includes('?'));
+  } catch {
+    return [];
+  }
+};
+
 const buildSitemap = (entries) => {
   const seen = new Set();
   const urls = entries
     .filter((entry) => {
-      if (!entry.path || seen.has(entry.path)) return false;
-      seen.add(entry.path);
+      const cleanPath = normalizePath(entry.path);
+      if (!cleanPath || cleanPath.includes('?') || seen.has(cleanPath)) return false;
+      seen.add(cleanPath);
+      entry.path = cleanPath;
       return true;
     })
     .map((entry) => {
       const lastmod = entry.lastmod ? `\n    <lastmod>${xmlEscape(entry.lastmod)}</lastmod>` : '';
       return [
         '  <url>',
-        `    <loc>${xmlEscape(`${SITE_URL}${entry.path}`)}</loc>${lastmod}`,
+        `    <loc>${xmlEscape(`${SITE_URL}${entry.path === '/' ? '/' : entry.path}`)}</loc>${lastmod}`,
         `    <changefreq>${entry.changefreq}</changefreq>`,
         `    <priority>${entry.priority}</priority>`,
         '  </url>',
       ].join('\n');
     })
-    .join('\n');
+    .join('\n\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 };
@@ -143,41 +153,61 @@ const buildSitemapIndex = () =>
   ].join('\n');
 
 const entries = [...staticEntries];
+let liveProductsLoaded = false;
+let liveBlogsLoaded = false;
 
 try {
-  const [products, categories, blogs] = await Promise.all([
+  const [products, blogs] = await Promise.all([
     fetchJson('/products'),
-    fetchJson('/categories'),
     fetchJson('/blogs').catch(() => []),
   ]);
-
-  for (const category of categories) {
-    const slug = slugify(category?.name);
-    if (slug) entries.push({ path: `/category/${slug}`, priority: '0.8', changefreq: 'weekly', lastmod: toLastmod(category?.updatedAt || category?.updated_at) });
-    for (const sub of Array.isArray(category?.subcategories) ? category.subcategories : []) {
-      const subSlug = slugify(sub?.name);
-      if (slug && subSlug) entries.push({ path: `/category/${slug}/${subSlug}`, priority: '0.7', changefreq: 'weekly', lastmod: toLastmod(sub?.updatedAt || sub?.updated_at) });
-    }
-  }
 
   for (const product of products) {
     const slug = slugify(product?.slug || product?.name);
     if (slug) {
-      entries.push({ path: `/product/${slug}`, priority: '0.7', changefreq: 'weekly', lastmod: toLastmod(product?.updatedAt || product?.updated_at) });
+      entries.push({
+        path: `/product/${slug}`,
+        priority: '0.8',
+        changefreq: 'weekly',
+        lastmod: toLastmod(product?.updatedAt || product?.updated_at),
+      });
     }
   }
+  liveProductsLoaded = products.length > 0;
 
   for (const blog of blogs) {
     const slug = slugify(blog?.slug);
     if (slug && hasUsefulText(blog?.title, 5) && hasUsefulText(blog?.excerpt || blog?.content, 30)) {
-      entries.push({ path: `/blog/${slug}`, priority: '0.5', changefreq: 'monthly', lastmod: toLastmod(blog?.updatedAt || blog?.updated_at) });
+      entries.push({
+        path: `/blog/${slug}`,
+        priority: '0.5',
+        changefreq: 'monthly',
+        lastmod: toLastmod(blog?.updatedAt || blog?.updated_at),
+      });
     }
   }
+  liveBlogsLoaded = blogs.length > 0;
 } catch (err) {
   console.warn(`Could not fetch live catalog for sitemap from ${API_BASE}: ${err?.message || err}`);
+}
+
+if (!liveProductsLoaded) {
+  const existingProducts = await extractExistingPaths('/product/');
+  for (const productPath of existingProducts) {
+    entries.push({ path: productPath, priority: '0.8', changefreq: 'weekly' });
+  }
+}
+
+if (!liveBlogsLoaded) {
+  const existingBlogs = await extractExistingPaths('/blog/');
+  for (const blogPath of existingBlogs) {
+    entries.push({ path: blogPath, priority: '0.5', changefreq: 'monthly' });
+  }
 }
 
 await fs.mkdir(PUBLIC_DIR, { recursive: true });
 await fs.writeFile(path.join(PUBLIC_DIR, 'sitemap.xml'), buildSitemap(entries));
 await fs.writeFile(path.join(PUBLIC_DIR, 'sitemap_index.xml'), buildSitemapIndex());
-console.log(`Generated sitemap.xml with ${new Set(entries.map((entry) => entry.path)).size} URLs.`);
+
+const productCount = entries.filter((entry) => normalizePath(entry.path).startsWith('/product/')).length;
+console.log(`Generated sitemap.xml with ${new Set(entries.map((entry) => normalizePath(entry.path))).size} clean URLs (${productCount} product URLs).`);

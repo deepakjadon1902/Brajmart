@@ -14,28 +14,34 @@ const CategoryNavbar = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const onDocPointerDown = (event: MouseEvent | TouchEvent) => {
-      const root = rootRef.current;
-      if (!root || root.contains(event.target as Node)) return;
+    const closeOpenMenus = () => {
       setAllOpen(false);
       setExpandedCategoryId(null);
       setBrajYatraOpen(false);
+    };
+
+    const onDocPointerDown = (event: MouseEvent | TouchEvent) => {
+      const root = rootRef.current;
+      if (!root || root.contains(event.target as Node)) return;
+      closeOpenMenus();
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      setAllOpen(false);
-      setExpandedCategoryId(null);
-      setBrajYatraOpen(false);
+      closeOpenMenus();
     };
+
+    const onWindowScroll = () => closeOpenMenus();
 
     document.addEventListener('mousedown', onDocPointerDown);
     document.addEventListener('touchstart', onDocPointerDown);
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onWindowScroll, { passive: true });
     return () => {
       document.removeEventListener('mousedown', onDocPointerDown);
       document.removeEventListener('touchstart', onDocPointerDown);
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onWindowScroll);
     };
   }, []);
 
@@ -52,8 +58,8 @@ const CategoryNavbar = () => {
   };
 
   return (
-    <div className="sticky top-16 z-[35] md:top-[68px]" ref={rootRef}>
-      <section className="relative border-b border-border bg-card shadow-sm">
+    <div className="sticky top-16 z-[70] md:top-[68px]" ref={rootRef}>
+      <section className="relative overflow-visible border-b border-border bg-card shadow-sm">
         <div className="container mx-auto px-3 md:px-4">
           <div className="flex h-10 items-center gap-2 overflow-x-auto scrollbar-hide md:h-11 md:justify-between md:gap-0">
             <button
@@ -63,7 +69,7 @@ const CategoryNavbar = () => {
                 setExpandedCategoryId(null);
                 setBrajYatraOpen(false);
               }}
-              className="sticky left-0 z-10 inline-flex h-10 w-[84px] shrink-0 items-center justify-center gap-2 border-r border-border bg-card text-sm font-bold text-maroon shadow-[8px_0_10px_-10px_rgba(0,0,0,0.4)] transition-colors hover:text-saffron md:h-11"
+              className="sticky left-0 z-[75] inline-flex h-10 w-[84px] shrink-0 items-center justify-center gap-2 border-r border-border bg-card text-sm font-bold text-maroon shadow-[8px_0_10px_-10px_rgba(0,0,0,0.4)] transition-colors hover:text-saffron md:h-11"
               aria-expanded={allOpen}
               aria-haspopup="menu"
             >
@@ -101,7 +107,7 @@ const CategoryNavbar = () => {
           </div>
 
           {allOpen && (
-            <div className="absolute left-0 top-full z-[60] w-[min(345px,calc(100vw-1rem))]">
+            <div className="absolute left-0 top-full z-[76] w-[min(345px,calc(100vw-1rem))]">
               <div className="max-h-[76vh] overflow-y-auto border border-border bg-brand-raised shadow-2xl md:ml-4">
                 <div className="border-b border-border bg-brand-soft px-4 py-3">
                   <p className="text-sm font-bold text-maroon">All Categories</p>
@@ -166,7 +172,7 @@ const CategoryNavbar = () => {
           )}
 
           {brajYatraOpen && (
-            <div className="absolute right-0 top-full z-[60] w-full md:w-[420px]">
+            <div className="absolute right-0 top-full z-[76] w-full md:w-[420px]">
               <div className="max-h-[76vh] overflow-y-auto border border-border bg-brand-raised shadow-2xl md:mr-4">
                 <div className="border-b border-border bg-brand-soft px-4 py-3">
                   <p className="text-sm font-bold text-maroon">Braj Yatra</p>

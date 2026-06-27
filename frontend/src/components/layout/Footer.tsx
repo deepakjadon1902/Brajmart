@@ -27,8 +27,27 @@ const footerLinks = {
   ],
 };
 
+const getFooterAddressLines = (address: string) => {
+  const trimmedAddress = address.trim();
+
+  if (!trimmedAddress) {
+    return [];
+  }
+
+  if (/Keshav Kunj/i.test(trimmedAddress) && /ISKCON/i.test(trimmedAddress)) {
+    return [
+      'Keshav Kunj, Near ISKCON',
+      'Vrindavan, Mathura, UP',
+      'Raman Reti, Uttar Pradesh - 281121, India',
+    ];
+  }
+
+  return trimmedAddress.split(/\s*,\s*/).filter(Boolean);
+};
+
 const Footer = () => {
   const { settings } = useSettingsStore();
+  const footerAddressLines = getFooterAddressLines(settings.storeAddress);
   const hasSocialLinks = Boolean(
     settings.socialLinks.instagram ||
       settings.socialLinks.facebook ||
@@ -117,7 +136,15 @@ const Footer = () => {
               <span className="font-cinzel text-2xl font-bold text-gold">{settings.storeName}</span>
             </Link>
             <p className="text-white text-sm leading-relaxed mb-2">{settings.tagline}</p>
-            <p className="text-white text-sm leading-relaxed mb-3">{settings.storeAddress}</p>
+            {footerAddressLines.length > 0 && (
+              <address className="mb-3 not-italic text-sm leading-relaxed text-white">
+                {footerAddressLines.map((line) => (
+                  <span key={line} className="block">
+                    {line}
+                  </span>
+                ))}
+              </address>
+            )}
             <div className="space-y-1.5">
               {settings.storeEmail && (
                 <p className="flex items-center gap-2 text-white text-sm">

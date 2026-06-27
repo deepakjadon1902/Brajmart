@@ -88,6 +88,25 @@ const StorefrontWhatsAppButton = () => {
   return <WhatsAppButton />;
 };
 
+const ScrollToTop = () => {
+  const { pathname, search } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [pathname, search]);
+
+  useEffect(() => {
+    if (!('scrollRestoration' in window.history)) return;
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    return () => {
+      window.history.scrollRestoration = previous;
+    };
+  }, []);
+
+  return null;
+};
+
 const App = () => {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const settings = useSettingsStore((s) => s.settings);
@@ -183,6 +202,7 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <ScrollToTop />
           <Suspense fallback={<div className="min-h-screen bg-background" />}>
           <Routes>
           <Route path="/" element={<Home />} />

@@ -22,7 +22,8 @@ const SEO = ({
 }: SEOProps) => {
   const metaTitle = cleanMetaText(title, 70);
   const metaDescription = cleanMetaText(description, 160);
-  const canonical = absoluteUrl(path);
+  const canonicalPath = path.split(/[?#]/)[0] || '/';
+  const canonical = absoluteUrl(canonicalPath);
   const imageUrl = absoluteUrl(image);
   const schemas = Array.isArray(schema) ? schema : schema ? [schema] : [];
 

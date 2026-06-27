@@ -54,7 +54,7 @@ const HeroCarousel = () => {
 
             <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/10 to-transparent md:from-black/42" aria-hidden="true" />
 
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-start px-3 pb-9 pt-16 sm:px-7 sm:pb-9 md:px-14 md:pb-10 lg:px-20">
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-start px-3 pb-16 pt-16 sm:px-7 sm:pb-9 md:px-14 md:pb-10 lg:px-20">
               <div className="max-w-[13.25rem] rounded-md bg-white/76 px-2.5 py-2 shadow-lg backdrop-blur-sm sm:max-w-xs sm:px-3.5 sm:py-2.5 md:max-w-[21rem] md:px-4 md:py-3">
                 {visibleSlide.tag && (
                   <span className="block text-[0.48rem] font-bold uppercase tracking-[0.14em] text-brand-gold sm:text-[0.58rem] md:text-[0.66rem]">
@@ -97,7 +97,7 @@ const HeroCarousel = () => {
             </>
           )}
 
-          <div className="absolute bottom-2 sm:bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 bg-brand-raised/85 backdrop-blur px-2.5 py-1.5 rounded-full border border-border">
+          <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 scale-75 items-center gap-1.5 rounded-full border border-border bg-brand-raised/90 px-2.5 py-1.5 backdrop-blur sm:bottom-3 sm:scale-100">
             {slides.map((_, i) => (
               <button
                 key={i}

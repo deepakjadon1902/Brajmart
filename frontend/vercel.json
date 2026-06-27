@@ -21,6 +21,121 @@
   ],
   "redirects": [
     {
+      "source": "/product-category/cloths",
+      "destination": "/category/clothing",
+      "permanent": true
+    },
+    {
+      "source": "/product-category/pooja-essentials",
+      "destination": "/category/incense-pooja-items",
+      "permanent": true
+    },
+    {
+      "source": "/product-category/deities",
+      "destination": "/category/idols-shringar",
+      "permanent": true
+    },
+    {
+      "source": "/contact-us-v2",
+      "destination": "/contact",
+      "permanent": true
+    },
+    {
+      "source": "/faqs",
+      "destination": "/help-center",
+      "permanent": true
+    },
+    {
+      "source": "/free-shipping",
+      "destination": "/shipping-delivery",
+      "permanent": true
+    },
+    {
+      "source": "/size-guide",
+      "destination": "/help-center",
+      "permanent": true
+    },
+    {
+      "source": "/track-order",
+      "destination": "/track-orders",
+      "permanent": true
+    },
+    {
+      "source": "/my-account-2",
+      "destination": "/profile",
+      "permanent": true
+    },
+    {
+      "source": "/legal",
+      "destination": "/terms",
+      "permanent": true
+    },
+    {
+      "source": "/legal/cookie-policy",
+      "destination": "/privacy-policy",
+      "permanent": true
+    },
+    {
+      "source": "/legal/privacy-policy-2",
+      "destination": "/privacy-policy",
+      "permanent": true
+    },
+    {
+      "source": "/legal/accessibility",
+      "destination": "/help-center",
+      "permanent": true
+    },
+    {
+      "source": "/legal/money-back-policy",
+      "destination": "/return-policy",
+      "permanent": true
+    },
+    {
+      "source": "/legal/license-agreement",
+      "destination": "/terms",
+      "permanent": true
+    },
+    {
+      "source": "/deals",
+      "destination": "/products",
+      "permanent": true
+    },
+    {
+      "source": "/flash-deals",
+      "destination": "/products",
+      "permanent": true
+    },
+    {
+      "source": "/product-deals-of-the-day",
+      "destination": "/products",
+      "permanent": true
+    },
+    {
+      "source": "/product-brand/brand",
+      "destination": "/products",
+      "permanent": true
+    },
+    {
+      "source": "/investors",
+      "destination": "/about",
+      "permanent": true
+    },
+    {
+      "source": "/product/desi-gaay-ghee-indigenous-cow-ghee-500gm",
+      "destination": "/product/vedamrut-cow-a2-pure-ghee",
+      "permanent": true
+    },
+    {
+      "source": "/product/white-neem-beads-japa-mala",
+      "destination": "/product/neem-japa-mala",
+      "permanent": true
+    },
+    {
+      "source": "/product/16-petals-hare-krishna-tulsi-mala-for-devotion-and-peace",
+      "destination": "/product/sacred-tulsi-mala-with-lotus-pendant",
+      "permanent": true
+    },
+    {
       "source": "/product-tag/best-selling-product",
       "destination": "/products?tag=bestseller",
       "permanent": true
