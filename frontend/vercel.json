@@ -197,6 +197,12 @@
     }
   ],
   "rewrites": [
+    { "source": "/category/:slug", "destination": "/category/:slug/index.html" },
+    { "source": "/category/:slug/:subSlug", "destination": "/category/:slug/:subSlug/index.html" },
+    { "source": "/product/:slug", "destination": "/product/:slug/index.html" },
+    { "source": "/blog/:slug", "destination": "/blog/:slug/index.html" },
+    { "source": "/braj-darshan/:slug", "destination": "/braj-darshan/:slug/index.html" },
+    { "source": "/:page", "destination": "/:page/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

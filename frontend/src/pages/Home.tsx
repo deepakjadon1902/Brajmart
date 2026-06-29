@@ -21,13 +21,23 @@ const Home = () => {
   const latestProducts = getLatestProducts();
   const bestSellingProducts = getBestSellers();
   const devotionalAccessories = getByTag('accessories');
-  const sacredPrasadam = getByTag('prasadam');
   // Show every category as a home-page section (even if a category currently has 0 products).
   // This matches the "all categories on home" requirement and avoids hiding categories due to naming mismatches.
   const categorySections = categories || [];
   const isBrajmartSpecial = (name: string) => (name || '').trim().toLowerCase() === 'brajmart special';
   const isPrasadam = (name: string) => (name || '').trim().toLowerCase() === 'prasadam';
+  const isBooks = (name: string) => ['books', 'spiritual books'].includes((name || '').trim().toLowerCase());
   const brajmartSpecialCategory = categorySections.find((c) => isBrajmartSpecial(c.name));
+  const regularCategories = categorySections.filter((c) => !isBrajmartSpecial(c.name) && !isPrasadam(c.name));
+  const prasadamCategory = categorySections.find((c) => isPrasadam(c.name));
+  const booksIndex = regularCategories.findIndex((c) => isBooks(c.name));
+  const orderedCategories = prasadamCategory
+    ? [
+        ...regularCategories.slice(0, booksIndex >= 0 ? booksIndex + 1 : regularCategories.length),
+        prasadamCategory,
+        ...regularCategories.slice(booksIndex >= 0 ? booksIndex + 1 : regularCategories.length),
+      ]
+    : regularCategories;
   const homeSchema = [
     {
       '@context': 'https://schema.org',
@@ -83,7 +93,7 @@ const Home = () => {
         <DeferredMount minHeight={390}>
           <CollectionSection
             tag="BRAJMART COLLECTION"
-            title="Latest Puja Items & Devotional Products"
+            title="Latest Puja Items "
             subtitle="Fresh arrivals from the divine lands of Braj"
             products={latestProducts}
             viewAllLink="/products?tag=latest"
@@ -93,14 +103,14 @@ const Home = () => {
         <DeferredMount minHeight={390}>
           <CollectionSection
             tag="MOST LOVED"
-            title="Best-Selling Puja Items & Devotional Products"
+            title="Best-Selling Puja Items"
             subtitle="Top picks from our devotee community"
             products={bestSellingProducts}
             viewAllLink="/products?tag=bestseller"
           />
         </DeferredMount>
 
-        {categorySections.filter((c) => !isBrajmartSpecial(c.name) && !isPrasadam(c.name)).map((cat, idx) => (
+        {orderedCategories.map((cat, idx) => (
           <DeferredMount key={cat.id} minHeight={390}>
             <CollectionSection
               tag="CATEGORY"
@@ -130,16 +140,6 @@ const Home = () => {
 
         <DeferredMount minHeight={320}>
           <ExclusiveShop />
-        </DeferredMount>
-
-        <DeferredMount minHeight={390}>
-          <CollectionSection
-            tag="SACRED OFFERINGS"
-            title="Sacred Prasadam Collection"
-            subtitle="Taste the Blessings of Vrindavan's Sacred Temples"
-            products={sacredPrasadam.length ? sacredPrasadam : products.filter(p => p.category === 'Prasadam')}
-            viewAllLink="/products?tag=prasadam"
-          />
         </DeferredMount>
 
         {brajmartSpecialCategory && (
