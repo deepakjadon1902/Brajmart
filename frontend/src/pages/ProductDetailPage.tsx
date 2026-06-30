@@ -18,6 +18,7 @@ import Footer from '@/components/layout/Footer';
 import SEO from '@/components/seo/SEO';
 import { SITE_URL, breadcrumbSchema } from '@/lib/seo';
 import { categoryToSlug } from '@/store/productStore';
+import { getInitialData } from '@/lib/initialData';
 
 const absoluteUrl = (value: string) => {
   const raw = String(value || '').trim();
@@ -345,7 +346,16 @@ const ProductDetailPage = () => {
 
   const relatedProducts = useMemo(() => {
     if (!product) return [];
-    return products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 6);
+    const routeProducts = getInitialData()?.products || [];
+    const availableProducts = [...products, ...routeProducts].filter((item, index, list) =>
+      list.findIndex((candidate) => candidate.id === item.id || candidate.slug === item.slug) === index
+    );
+    const candidates = availableProducts.filter((item) => item.id !== product.id && item.slug !== product.slug);
+    const sameCategory = candidates.filter((item) =>
+      categoryToSlug(item.category || '') === categoryToSlug(product.category || '')
+    );
+    const fallback = candidates.filter((item) => !sameCategory.some((related) => related.id === item.id));
+    return [...sameCategory, ...fallback].slice(0, 6);
   }, [product, products]);
   const [recentSlugs, setRecentSlugs] = useState<string[]>([]);
 

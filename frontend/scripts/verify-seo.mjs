@@ -30,7 +30,7 @@ const data = {
 };
 const rendered = await render('/product/seo-verification-prasadam', data);
 const productOutput = `${rendered.head}\n${rendered.appHtml}`;
-for (const marker of ['SEO Verification Prasadam', 'SKU-VERIFY-1', '₹199', 'InStock', 'BreadcrumbList']) {
+for (const marker of ['SEO Verification Prasadam', 'SKU-VERIFY-1', '₹199', 'InStock', 'BreadcrumbList', 'You May Also Like', '/product/related-prasadam']) {
   assert(productOutput.includes(marker), `Rendered product is missing ${marker}`);
 }
 

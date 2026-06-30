@@ -44,9 +44,12 @@ const dataForRoute = (route) => {
     });
   } else if (parts[0] === 'product') {
     const current = buildData.products.find((product) => slugify(product.slug || product.name) === parts[1]);
-    products = current
-      ? [current, ...buildData.products.filter((product) => product.id !== current.id && slugify(product.category) === slugify(current.category)).slice(0, 12)]
-      : [];
+    if (current) {
+      const candidates = buildData.products.filter((product) => product.id !== current.id && product.slug !== current.slug);
+      const sameCategory = candidates.filter((product) => slugify(product.category) === slugify(current.category));
+      const fallback = candidates.filter((product) => !sameCategory.some((related) => related.id === product.id));
+      products = [current, ...sameCategory, ...fallback].slice(0, 13);
+    }
   }
   if (parts[0] === 'blog') blogs = buildData.blogs;
   return {
