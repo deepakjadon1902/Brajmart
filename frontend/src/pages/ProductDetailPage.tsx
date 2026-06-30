@@ -1049,7 +1049,7 @@ const ProductDetailPage = () => {
                 alt={product.name}
                 loading="eager"
                 decoding="async"
-                fetchPriority="high"
+                {...({ fetchpriority: 'high' } as Record<string, string>)}
                 className="w-full h-full object-contain max-h-[80vh]"
               />
             </div>

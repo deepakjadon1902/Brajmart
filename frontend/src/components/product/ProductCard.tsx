@@ -122,7 +122,7 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
           alt={product.name}
           loading={isAboveTheFold ? 'eager' : 'lazy'}
           decoding="async"
-          fetchPriority={isAboveTheFold ? 'high' : 'low'}
+          {...({ fetchpriority: isAboveTheFold ? 'high' : 'low' } as Record<string, string>)}
           className={`w-full h-full ${mediaFitClass} transition-all duration-300 ease-out group-hover:scale-[1.02]`}
         />
 

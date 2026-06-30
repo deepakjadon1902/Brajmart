@@ -43,7 +43,7 @@ const HeroCarousel = () => {
                 alt={visibleSlide.title}
                 loading="eager"
                 decoding="async"
-                fetchPriority="high"
+                {...({ fetchpriority: 'high' } as Record<string, string>)}
                 sizes="100vw"
                 className="absolute inset-0 h-full w-full object-cover object-center"
               />
