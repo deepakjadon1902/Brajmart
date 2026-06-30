@@ -141,7 +141,6 @@ const Home = () => {
         <DeferredMount minHeight={320}>
           <ExclusiveShop />
         </DeferredMount>
-
         {brajmartSpecialCategory && (
           <DeferredMount minHeight={390}>
             <CollectionSection

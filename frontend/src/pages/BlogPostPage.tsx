@@ -9,6 +9,8 @@ import type { BlogPost } from '@/types/blog';
 import { useAdminStore } from '@/store/adminStore';
 import SEO from '@/components/seo/SEO';
 import { breadcrumbSchema } from '@/lib/seo';
+import { SITE_URL, absoluteUrl } from '@/lib/seo';
+import { getInitialData } from '@/lib/initialData';
 
 const formatDate = (value?: string | null) => {
   if (!value) return '';
@@ -19,8 +21,9 @@ const formatDate = (value?: string | null) => {
 
 const BlogPostPage = () => {
   const { slug } = useParams();
-  const [post, setPost] = useState<BlogPost | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialPost = getInitialData()?.blogs.find((item) => item.slug === slug) || null;
+  const [post, setPost] = useState<BlogPost | null>(initialPost);
+  const [loading, setLoading] = useState(!initialPost);
   const isAdminAuthenticated = useAdminStore((s) => s.isAdminAuthenticated);
 
   useEffect(() => {
@@ -35,14 +38,14 @@ const BlogPostPage = () => {
           ? await fetchAdminBlogBySlug(slug)
           : await fetchBlogBySlug(slug);
         if (!active) return;
-        setPost(data || null);
+        setPost((data as BlogPost) || null);
       } catch {
         if (!active) return;
         if (isAdminAuthenticated) {
           try {
             const fallback = await fetchBlogBySlug(slug);
             if (!active) return;
-            setPost(fallback || null);
+            setPost((fallback as BlogPost) || null);
             return;
           } catch {
             if (!active) return;
@@ -81,6 +84,24 @@ const BlogPostPage = () => {
             { name: 'Blog', path: '/blog' },
             { name: post.title, path },
           ]),
+          {
+            '@context': 'https://schema.org',
+            '@type': 'BlogPosting',
+            '@id': `${absoluteUrl(path)}#article`,
+            headline: post.title,
+            description,
+            image: post.coverImage ? [absoluteUrl(post.coverImage)] : undefined,
+            datePublished: post.publishedAt || post.createdAt || undefined,
+            dateModified: post.updatedAt || post.publishedAt || post.createdAt || undefined,
+            author: { '@type': 'Person', name: post.author || 'Brajmart Team' },
+            publisher: {
+              '@type': 'Organization',
+              '@id': `${SITE_URL}/#organization`,
+              name: 'Brajmart',
+              logo: { '@type': 'ImageObject', url: `${SITE_URL}/logo.png` },
+            },
+            mainEntityOfPage: absoluteUrl(path),
+          },
         ] : undefined}
       />
       <Navbar />

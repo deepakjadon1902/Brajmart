@@ -14,7 +14,9 @@ const DeferredMount = ({
   rootMargin = '180px 0px',
 }: DeferredMountProps) => {
   const ref = useRef<HTMLDivElement | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(() =>
+    typeof window === 'undefined' || Boolean(window.__BRAJMART_INITIAL_DATA__)
+  );
 
   useEffect(() => {
     const el = ref.current;

@@ -9,6 +9,7 @@ import type { BlogPost } from '@/types/blog';
 import { useAdminStore } from '@/store/adminStore';
 import SEO from '@/components/seo/SEO';
 import { breadcrumbSchema } from '@/lib/seo';
+import { getInitialData } from '@/lib/initialData';
 
 const formatDate = (value?: string | null) => {
   if (!value) return '';
@@ -18,8 +19,9 @@ const formatDate = (value?: string | null) => {
 };
 
 const BlogPage = () => {
-  const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [loading, setLoading] = useState(true);
+  const initialPosts = getInitialData()?.blogs || [];
+  const [posts, setPosts] = useState<BlogPost[]>(initialPosts);
+  const [loading, setLoading] = useState(initialPosts.length === 0);
   const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('published');
   const isAdminAuthenticated = useAdminStore((s) => s.isAdminAuthenticated);
 

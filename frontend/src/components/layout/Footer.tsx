@@ -3,6 +3,7 @@ import { Mail, Phone } from 'lucide-react';
 import { FaFacebookF, FaInstagram, FaWhatsapp, FaYoutube } from 'react-icons/fa';
 import { useSettingsStore } from '@/store/settingsStore';
 import { toResponsiveImageUrl } from '@/utils/responsiveImage';
+import { categoryToSlug, useProductStore } from '@/store/productStore';
 
 const footerLinks = {
   'Get to Know Us': [
@@ -47,6 +48,7 @@ const getFooterAddressLines = (address: string) => {
 
 const Footer = () => {
   const { settings } = useSettingsStore();
+  const popularCategories = useProductStore((state) => state.categories).slice(0, 8);
   const footerAddressLines = getFooterAddressLines(settings.storeAddress);
   const hasSocialLinks = Boolean(
     settings.socialLinks.instagram ||
@@ -178,6 +180,19 @@ const Footer = () => {
             ))}
           </div>
         </div>
+        {popularCategories.length > 0 && (
+          <nav aria-label="Popular categories" className="mt-6 border-t border-primary-foreground/10 pt-5">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gold">Popular Categories</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {popularCategories.map((category) => (
+                <Link key={category.id} to={`/category/${categoryToSlug(category.name)}`} className="text-xs text-primary-foreground/70 hover:text-primary-foreground">
+                  {category.name}
+                </Link>
+              ))}
+              <Link to="/products" className="text-xs font-semibold text-gold hover:text-primary-foreground">View all products</Link>
+            </div>
+          </nav>
+        )}
       </div>
 
      <div className="border-t border-primary-foreground/10">

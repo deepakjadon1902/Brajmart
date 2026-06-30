@@ -7,6 +7,7 @@ import { useWishlistStore } from '@/store/wishlistStore';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { toResponsiveImageUrl } from '@/utils/responsiveImage';
+import PublicBreadcrumbs from '@/components/seo/PublicBreadcrumbs';
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -38,6 +39,7 @@ const Navbar = () => {
   };
 
   return (
+    <>
     <header className={`sticky top-0 z-[80] transition-all duration-300 ${scrolled ? 'glass shadow-md border-b border-gold/20' : 'bg-card border-b border-border'}`}>
       <div className="container mx-auto flex items-center gap-4 h-16 md:h-[68px] px-3 md:px-4">
         <button className="md:hidden text-foreground" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu">
@@ -184,6 +186,8 @@ const Navbar = () => {
         </div>
       )}
     </header>
+    <PublicBreadcrumbs />
+    </>
   );
 };
 

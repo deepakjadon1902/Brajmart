@@ -20,4 +20,11 @@ Disallow: /profile
 Disallow: /wishlist
 Disallow: /login
 Disallow: /register
-Sitemap: https://www.brajmart.com/sitemap.xml
+Disallow: /admin
+Disallow: /orders
+Disallow: /oauth-callback
+Disallow: /verify-email
+Disallow: /verify-otp
+Disallow: /forgot-password
+Disallow: /payment-status/
+Sitemap: https://www.brajmart.com/sitemap-index.xml

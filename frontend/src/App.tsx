@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -14,6 +14,7 @@ import { useAuthStore } from "./store/authStore";
 import { useWishlistStore } from "./store/wishlistStore";
 import { DEFAULT_IMAGE, SITE_URL } from "./lib/seo";
 import WhatsAppButton from "./components/layout/WhatsAppButton";
+import RouteSEO from "./components/seo/RouteSEO";
 
 const queryClient = new QueryClient();
 const DEFAULT_FAVICON_URL = "/favicon.ico";
@@ -230,8 +231,8 @@ const App = () => {
         </Helmet>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
           <ScrollToTop />
+          <RouteSEO />
           <Suspense fallback={<div className="min-h-screen bg-background" />}>
           <Routes>
           <Route path="/" element={<Home />} />
@@ -295,7 +296,6 @@ const App = () => {
           </Suspense>
           <NoIndexRoutes />
           <StorefrontWhatsAppButton />
-        </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
   );

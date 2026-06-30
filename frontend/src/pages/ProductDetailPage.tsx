@@ -16,13 +16,14 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import SEO from '@/components/seo/SEO';
-import { SITE_URL } from '@/lib/seo';
+import { SITE_URL, breadcrumbSchema } from '@/lib/seo';
+import { categoryToSlug } from '@/store/productStore';
 
 const absoluteUrl = (value: string) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw)) return raw;
-  if (typeof window === 'undefined') return raw;
+  if (typeof window === 'undefined') return `${SITE_URL}${raw.startsWith('/') ? raw : `/${raw}`}`;
   return new URL(raw.startsWith('/') ? raw : `/${raw}`, window.location.origin).toString();
 };
 
@@ -346,6 +347,24 @@ const ProductDetailPage = () => {
     if (!product) return [];
     return products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 6);
   }, [product, products]);
+  const [recentSlugs, setRecentSlugs] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!product?.slug) return;
+    try {
+      const existing = JSON.parse(localStorage.getItem('brajmart-recent-products') || '[]');
+      const slugs = Array.isArray(existing) ? existing.map(String) : [];
+      setRecentSlugs(slugs.filter((item) => item !== product.slug).slice(0, 8));
+      localStorage.setItem('brajmart-recent-products', JSON.stringify([product.slug, ...slugs.filter((item) => item !== product.slug)].slice(0, 12)));
+    } catch {
+      setRecentSlugs([]);
+    }
+  }, [product?.slug]);
+
+  const recentlyViewedProducts = useMemo(() => recentSlugs
+    .map((recentSlug) => products.find((item) => item.slug === recentSlug))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .slice(0, 6), [products, recentSlugs]);
 
   const variantSuffix = useMemo(() => {
     const parts: string[] = [];
@@ -482,6 +501,20 @@ const ProductDetailPage = () => {
     settings.storeName,
     slug,
   ]);
+
+  const productBreadcrumbSchema = useMemo(() => {
+    if (!product) return null;
+    const categoryPath = `/category/${categoryToSlug(product.category)}`;
+    const items = [
+      { name: 'Home', path: '/' },
+      { name: product.category, path: categoryPath },
+    ];
+    if (product.subcategory) {
+      items.push({ name: product.subcategory, path: `${categoryPath}/${categoryToSlug(product.subcategory)}` });
+    }
+    items.push({ name: product.name, path: `/product/${product.slug}` });
+    return breadcrumbSchema(items);
+  }, [product]);
 
   const productUrl = useMemo(() => {
     if (!product) return '';
@@ -636,6 +669,9 @@ const ProductDetailPage = () => {
             {safeJsonLd(productSchema)}
           </script>
         ) : null}
+        {productBreadcrumbSchema ? (
+          <script type="application/ld+json">{safeJsonLd(productBreadcrumbSchema)}</script>
+        ) : null}
       </Helmet>
       <AnnouncementBar /><Navbar />
 
@@ -644,7 +680,10 @@ const ProductDetailPage = () => {
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-6 flex-wrap">
           <Link to="/" className="hover:text-saffron">Home</Link>
           <ChevronRight size={14} />
-          <Link to={`/category/${product.category.toLowerCase().replace(/[&\s]+/g, '-')}`} className="hover:text-saffron">{product.category}</Link>
+          <Link to={`/category/${categoryToSlug(product.category)}`} className="hover:text-saffron">{product.category}</Link>
+          {product.subcategory ? (
+            <><ChevronRight size={14} /><Link to={`/category/${categoryToSlug(product.category)}/${categoryToSlug(product.subcategory)}`} className="hover:text-saffron">{product.subcategory}</Link></>
+          ) : null}
           <ChevronRight size={14} />
           <span className="text-foreground line-clamp-1">{product.name}</span>
         </div>
@@ -703,7 +742,6 @@ const ProductDetailPage = () => {
                 alt={product.name}
                 loading="eager"
                 decoding="async"
-                fetchPriority="high"
                 className="w-full h-full object-cover"
               />
               {product.badge && (
@@ -725,6 +763,7 @@ const ProductDetailPage = () => {
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{product.category}</span>
               <h1 className="font-playfair text-2xl md:text-3xl font-bold text-foreground mt-1 leading-tight">{product.name}</h1>
+              <p className="mt-1 text-xs text-muted-foreground">SKU: {product.id}</p>
             </div>
 
             {/* Rating */}
@@ -975,6 +1014,12 @@ const ProductDetailPage = () => {
           <div className="mt-16">
             <SectionHeader title="You May Also Like" subtitle={`More from ${product.category}`} />
             <ProductCarousel products={relatedProducts} />
+          </div>
+        )}
+        {recentlyViewedProducts.length > 0 && (
+          <div className="mt-12">
+            <SectionHeader tag="YOUR HISTORY" title="Recently Viewed" subtitle="Continue exploring products you viewed earlier" />
+            <ProductCarousel products={recentlyViewedProducts} />
           </div>
         )}
       </div>

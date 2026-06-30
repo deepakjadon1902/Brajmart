@@ -10,7 +10,7 @@
       ]
     },
     {
-      "source": "/(favicon.ico|logo.png|robots.txt|sitemap.xml|sitemap_index.xml)",
+      "source": "/(favicon.ico|logo.png|robots.txt|sitemap.xml|sitemap-index.xml|sitemap_index.xml|sitemap-products.xml|sitemap-categories.xml|sitemap-pages.xml|sitemap-blog.xml)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -202,7 +202,18 @@
     { "source": "/product/:slug", "destination": "/product/:slug/index.html" },
     { "source": "/blog/:slug", "destination": "/blog/:slug/index.html" },
     { "source": "/braj-darshan/:slug", "destination": "/braj-darshan/:slug/index.html" },
-    { "source": "/:page", "destination": "/:page/index.html" },
+    { "source": "/about", "destination": "/about/index.html" },
+    { "source": "/categories", "destination": "/categories/index.html" },
+    { "source": "/products", "destination": "/products/index.html" },
+    { "source": "/blog", "destination": "/blog/index.html" },
+    { "source": "/contact", "destination": "/contact/index.html" },
+    { "source": "/help-center", "destination": "/help-center/index.html" },
+    { "source": "/customer-service", "destination": "/customer-service/index.html" },
+    { "source": "/shipping-delivery", "destination": "/shipping-delivery/index.html" },
+    { "source": "/return-policy", "destination": "/return-policy/index.html" },
+    { "source": "/privacy-policy", "destination": "/privacy-policy/index.html" },
+    { "source": "/payment-method", "destination": "/payment-method/index.html" },
+    { "source": "/terms", "destination": "/terms/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
