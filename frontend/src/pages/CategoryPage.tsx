@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Filter } from 'lucide-react';
@@ -12,7 +13,7 @@ import { breadcrumbSchema, categorySeo } from '@/lib/seo';
 
 const CategoryPage = () => {
   const { slug, subSlug } = useParams();
-  const { getProductsByCategory, getProductsBySubcategory, categories, loading, lastFetchedAt, error } = useProductStore();
+  const { getProductsByCategory, getProductsBySubcategory, categories, loading, lastFetchedAt, error, loadFromApi } = useProductStore();
   const catMeta = categories.find(c => categoryToSlug(c.name) === slug);
   const categoryName = catMeta?.name || (slug && categorySlugMap[slug]) || (slug ? slug.replace(/-/g, ' ') : '');
 
@@ -24,6 +25,10 @@ const CategoryPage = () => {
   const products = subSlug
     ? getProductsBySubcategory(categoryName, subcategoryName)
     : getProductsByCategory(categoryName);
+  useEffect(() => {
+    if (products.length > 0 || loading || lastFetchedAt > 0) return;
+    loadFromApi({ force: true }).catch(() => undefined);
+  }, [lastFetchedAt, loadFromApi, loading, products.length, slug, subSlug]);
   const hasAttemptedCatalogLoad = lastFetchedAt > 0 || Boolean(error);
   const categoryIsMissing = !loading && hasAttemptedCatalogLoad && !catMeta && products.length === 0;
   const subcategoryIsMissing = Boolean(subSlug) && !subMeta && !loading && hasAttemptedCatalogLoad;

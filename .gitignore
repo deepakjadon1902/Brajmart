@@ -11,3 +11,4 @@ frontend/node_modules/
 # Runtime uploads / generated build output
 backend/uploads/
 backend/dist/
+.seo-build-data-cache.json

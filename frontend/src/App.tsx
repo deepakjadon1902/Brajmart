@@ -202,6 +202,9 @@ const App = () => {
       loadProducts();
       return;
     }
+    // Public pre-rendered pages already contain the route data used to produce
+    // their HTML. Do not download the same catalog again after hydration.
+    if (typeof window !== 'undefined' && window.__BRAJMART_INITIAL_DATA__) return;
     return runWhenIdle(() => {
       loadProducts();
     });

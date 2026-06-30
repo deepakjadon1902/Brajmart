@@ -8,6 +8,8 @@ const serverEntry = path.resolve(process.cwd(), 'dist-ssr/entry-server.js');
 const template = await fs.readFile(path.join(dist, 'index.html'), 'utf8');
 const { render } = await import(`${pathToFileURL(serverEntry).href}?t=${Date.now()}`);
 const buildData = await getBuildData();
+const buildDataCache = path.resolve(process.cwd(), '.seo-build-data-cache.json');
+await fs.writeFile(buildDataCache, JSON.stringify(buildData));
 
 const publicPages = [
   '/', '/categories', '/products', '/about', '/contact', '/blog', '/help-center',

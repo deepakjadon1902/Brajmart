@@ -38,8 +38,8 @@ const getFooterAddressLines = (address: string) => {
   if (/Keshav Kunj/i.test(trimmedAddress) && /ISKCON/i.test(trimmedAddress)) {
     return [
       'Keshav Kunj, Near ISKCON',
-      'Vrindavan, Mathura, UP',
-      'Raman Reti, Uttar Pradesh - 281121, India',
+      'Raman Reti, Vrindavan',
+       'UP - 281121, India',
     ];
   }
 
@@ -122,7 +122,7 @@ const Footer = () => {
     )}
 
     <footer className="bg-maroon-dark text-primary-foreground">
-      <div className="container mx-auto px-4 py-7 md:py-8">
+      <div className="container mx-auto px-4 py-2 md:py-2">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_2.8fr] gap-7 lg:gap-9 items-start">
           <div>
             <Link to="/" className="flex items-center gap-2.5 mb-3">
@@ -180,19 +180,6 @@ const Footer = () => {
             ))}
           </div>
         </div>
-        {popularCategories.length > 0 && (
-          <nav aria-label="Popular categories" className="mt-6 border-t border-primary-foreground/10 pt-5">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gold">Popular Categories</p>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {popularCategories.map((category) => (
-                <Link key={category.id} to={`/category/${categoryToSlug(category.name)}`} className="text-xs text-primary-foreground/70 hover:text-primary-foreground">
-                  {category.name}
-                </Link>
-              ))}
-              <Link to="/products" className="text-xs font-semibold text-gold hover:text-primary-foreground">View all products</Link>
-            </div>
-          </nav>
-        )}
       </div>
 
      <div className="border-t border-primary-foreground/10">

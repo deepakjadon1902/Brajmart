@@ -5,7 +5,10 @@ import { getBuildData, SITE_URL, slugify } from './build-data.mjs';
 
 const publicDir = path.resolve(process.cwd(), 'public');
 const distDir = path.resolve(process.cwd(), 'dist');
-const data = await getBuildData();
+const buildDataCache = path.resolve(process.cwd(), '.seo-build-data-cache.json');
+const data = await fs.readFile(buildDataCache, 'utf8')
+  .then((raw) => JSON.parse(raw))
+  .catch(() => getBuildData());
 
 let fallbackPaths = [];
 if (!data.live) {
@@ -112,3 +115,4 @@ await Promise.all([publicDir, distDir].flatMap((directory) =>
 ));
 
 console.log(`Generated split sitemaps: ${products.length} products, ${categories.length} categories/subcategories, ${pages.length} pages, ${blogs.length} blogs.`);
+await fs.unlink(buildDataCache).catch(() => undefined);
