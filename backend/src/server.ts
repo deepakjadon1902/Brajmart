@@ -36,6 +36,11 @@ const corsOrigins = Array.from(new Set([
     .filter(Boolean),
 ]));
 
+const PAYU_CALLBACK_ORIGINS = new Set([
+  'https://secure.payu.in',
+  'https://test.payu.in',
+]);
+
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -81,12 +86,18 @@ app.get('/uploads/:filename', async (req, res, next) => {
 });
 
 app.use(compression());
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || origin === 'null' || corsOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error(`CORS blocked origin: ${origin}`));
-  },
-  credentials: true,
+app.use(cors((req, callback) => {
+  const origin = req.headers.origin;
+  const isPayuCallback = req.path === '/api/payu/success'
+    || req.path === '/api/payu/failure'
+    || req.path === '/api/payu/webhook';
+  const allowed = !origin
+    || origin === 'null'
+    || corsOrigins.includes(origin)
+    || (isPayuCallback && PAYU_CALLBACK_ORIGINS.has(origin));
+
+  if (!allowed) return callback(new Error(`CORS blocked origin: ${origin}`));
+  callback(null, { origin: true, credentials: true });
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
