@@ -1,4 +1,5 @@
 import { useSettingsStore } from '@/store/settingsStore';
+import { useLocation } from 'react-router-dom';
 
 const digitsOnly = (value: string) => value.replace(/\D/g, '');
 const DEFAULT_WHATSAPP_NUMBER = '919634359003';
@@ -17,10 +18,11 @@ const toWhatsAppHref = (whatsapp: string, phone: string) => {
 };
 
 const WhatsAppButton = () => {
+  const { pathname } = useLocation();
   const settings = useSettingsStore((s) => s.settings);
   const href = toWhatsAppHref(settings.socialLinks.whatsapp || '', settings.storePhone || '');
 
-  if (!href) return null;
+  if (pathname.toLowerCase().startsWith('/admin') || !href) return null;
 
   return (
     <a
