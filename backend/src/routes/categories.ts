@@ -71,8 +71,8 @@ const buildUpdate = (data: any) => {
 router.get('/', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    res.setHeader('Cache-Control', LIST_CACHE_CONTROL);
     const fresh = req.query.fresh === '1';
+    res.setHeader('Cache-Control', fresh ? 'no-store, max-age=0' : LIST_CACHE_CONTROL);
     if (!fresh && listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
       return res.json(listCache.data);
     }

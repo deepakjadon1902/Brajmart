@@ -4,6 +4,7 @@ import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 
 const HeroCarousel = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [failedSlideIds, setFailedSlideIds] = useState<Set<string>>(() => new Set());
   const slides = useHeroStore((s) => s.slides);
   const loadSlides = useHeroStore((s) => s.loadFromApi);
   const fallbackSlide = useMemo(
@@ -18,19 +19,39 @@ const HeroCarousel = () => {
   );
 
   useEffect(() => {
-    loadSlides();
+    loadSlides({ force: true });
+    const refreshSlides = () => {
+      if (document.visibilityState === 'visible') loadSlides({ force: true });
+    };
+    const interval = window.setInterval(refreshSlides, 60_000);
+    window.addEventListener('focus', refreshSlides);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshSlides);
+    };
   }, [loadSlides]);
 
-  const visibleSlide = useMemo(() => slides[selectedIndex] || slides[0] || fallbackSlide, [slides, selectedIndex, fallbackSlide]);
+  const displaySlides = useMemo(
+    () => slides.filter((slide) => !failedSlideIds.has(slide.id)),
+    [failedSlideIds, slides]
+  );
+  const visibleSlide = useMemo(
+    () => displaySlides[selectedIndex] || displaySlides[0] || fallbackSlide,
+    [displaySlides, fallbackSlide, selectedIndex]
+  );
 
   useEffect(() => {
-    const preload = slides.slice(0, 2).map((slide) => slide.image).filter((url): url is string => Boolean(url));
+    if (selectedIndex >= displaySlides.length) setSelectedIndex(0);
+  }, [displaySlides.length, selectedIndex]);
+
+  useEffect(() => {
+    const preload = displaySlides.slice(0, 2).map((slide) => slide.image).filter((url): url is string => Boolean(url));
     for (const url of preload) {
       const img = new Image();
       img.decoding = 'async';
       img.src = url;
     }
-  }, [slides]);
+  }, [displaySlides]);
 
   return (
     <section className="relative bg-background">
@@ -46,6 +67,14 @@ const HeroCarousel = () => {
                 {...({ fetchpriority: 'high' } as Record<string, string>)}
                 sizes="100vw"
                 className="absolute inset-0 h-full w-full object-cover object-center"
+                onError={() => {
+                  if (visibleSlide.id === fallbackSlide.id) return;
+                  setFailedSlideIds((current) => {
+                    const next = new Set(current);
+                    next.add(visibleSlide.id);
+                    return next;
+                  });
+                }}
               />
             ) : (
               <div className="absolute inset-0 bg-brand-soft" aria-hidden="true" />
@@ -77,11 +106,11 @@ const HeroCarousel = () => {
             </div>
           </div>
 
-          {slides.length > 1 && (
+          {displaySlides.length > 1 && (
             <div className="absolute bottom-4 left-1/2 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center justify-center gap-1.5 sm:bottom-5 sm:gap-2 md:bottom-6 md:gap-2.5">
-              {slides.map((_, i) => (
+              {displaySlides.map((slide, i) => (
                 <button
-                  key={i}
+                  key={slide.id}
                   onClick={() => setSelectedIndex(i)}
                   className={`!h-[9px] !min-h-[9px] !w-[9px] !min-w-[9px] shrink-0 rounded-full border-2 border-black p-0 leading-none shadow-[0_1px_4px_rgba(255,255,255,0.65)] [box-sizing:border-box] transition-transform duration-200 ease-out hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:!h-[11px] sm:!min-h-[11px] sm:!w-[11px] sm:!min-w-[11px] md:!h-[12px] md:!min-h-[12px] md:!w-[12px] md:!min-w-[12px] ${
                     selectedIndex === i

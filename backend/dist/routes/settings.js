@@ -109,8 +109,8 @@ router.get('/', async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
-        res.setHeader('Cache-Control', SETTINGS_CACHE_CONTROL);
         const fresh = req.query.fresh === '1';
+        res.setHeader('Cache-Control', fresh ? 'no-store, max-age=0' : SETTINGS_CACHE_CONTROL);
         if (!fresh && settingsCache && (Date.now() - settingsCache.at) < SETTINGS_CACHE_TTL_MS) {
             return res.json(settingsCache.data);
         }

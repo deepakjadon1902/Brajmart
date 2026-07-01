@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { Product, Category } from '@/types/product';
 import { fetchProducts, fetchCategories } from '@/lib/api';
 
@@ -36,9 +35,7 @@ interface ProductStore {
   getByTag: (tag: string) => Product[];
 }
 
-export const useProductStore = create<ProductStore>()(
-  persist(
-    (set, get) => ({
+export const useProductStore = create<ProductStore>((set, get) => ({
       products: [],
       categories: [],
       lastFetchedAt: 0,
@@ -186,20 +183,7 @@ export const useProductStore = create<ProductStore>()(
       getNewArrivals: () => get().products.filter((p) => p.tags?.includes('new')),
       getBestSellers: () => get().products.filter((p) => p.tags?.includes('bestseller')),
       getByTag: (tag) => get().products.filter((p) => p.tags?.includes(tag)),
-    }),
-    {
-      name: 'brajmart-products',
-      partialize: (state) => ({
-        products: state.products,
-        categories: state.categories.map((c) => ({
-          ...c,
-          icon: typeof c.icon === 'string' && c.icon.startsWith('data:') ? '' : c.icon,
-        })),
-        lastFetchedAt: state.lastFetchedAt,
-      }),
-    }
-  )
-);
+}));
 
 // Cross-tab instant refresh when Admin updates products.
 // Admin writes to localStorage key `brajmart-products-updated-at`, which triggers `storage` events in other tabs.

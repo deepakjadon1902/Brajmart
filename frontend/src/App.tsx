@@ -160,7 +160,7 @@ const App = () => {
     let active = true;
     const loadSettings = async () => {
       try {
-        const data = await fetchPublicSettings();
+        const data = await fetchPublicSettings({ fresh: true });
         if (!active || !data) return;
           updateSettings({
           storeName: data.storeName,
@@ -193,21 +193,44 @@ const App = () => {
       }
     };
     loadSettings();
-    return () => { active = false; };
+    const refreshSettings = () => {
+      if (document.visibilityState === 'visible') loadSettings();
+    };
+    const interval = window.setInterval(refreshSettings, 60_000);
+    window.addEventListener('focus', refreshSettings);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshSettings);
+    };
   }, [updateSettings]);
 
   useEffect(() => {
     const isAdminPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
     if (isAdminPath) {
-      loadProducts();
+      loadProducts({ force: true });
       return;
     }
-    // Public pre-rendered pages already contain the route data used to produce
-    // their HTML. Do not download the same catalog again after hydration.
-    if (typeof window !== 'undefined' && window.__BRAJMART_INITIAL_DATA__) return;
+    // Prerendered data makes the first paint fast, but it is only a snapshot from
+    // build time. Always refresh in the background so newly added products and
+    // images appear on every device without requiring another deployment.
     return runWhenIdle(() => {
-      loadProducts();
+      loadProducts({ force: true });
     });
+  }, [loadProducts]);
+
+  useEffect(() => {
+    const refreshCatalog = () => {
+      if (document.visibilityState === 'visible') loadProducts({ force: true });
+    };
+    const interval = window.setInterval(refreshCatalog, 60_000);
+    window.addEventListener('focus', refreshCatalog);
+    document.addEventListener('visibilitychange', refreshCatalog);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshCatalog);
+      document.removeEventListener('visibilitychange', refreshCatalog);
+    };
   }, [loadProducts]);
 
   useEffect(() => {

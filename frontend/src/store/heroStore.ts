@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { fetchHeroSlides } from '@/lib/api';
 
 export type HeroSlide = {
@@ -25,9 +24,7 @@ type HeroStore = {
   loadFromApi: (opts?: { force?: boolean }) => Promise<void>;
 };
 
-export const useHeroStore = create<HeroStore>()(
-  persist(
-    (set, get) => ({
+export const useHeroStore = create<HeroStore>((set, get) => ({
       slides: [],
       lastFetchedAt: 0,
       loading: false,
@@ -49,7 +46,4 @@ export const useHeroStore = create<HeroStore>()(
           set({ loading: false, error: String(err?.message || 'Failed to load hero slides') });
         }
       },
-    }),
-    { name: 'brajmart-hero' }
-  )
-);
+}));
