@@ -115,7 +115,7 @@ const CheckoutPage = () => {
           storeEmail: data.storeEmail,
           storePhone: data.storePhone,
           storeAddress: data.storeAddress,
-          packagingRate: data.packagingRate,
+          packagingRate: data.packagingRate ?? data.taxRate ?? 0,
           minOrderAmount: data.minOrderAmount,
           maxOrderQuantity: data.maxOrderQuantity,
           upiEnabled: data.upiEnabled,

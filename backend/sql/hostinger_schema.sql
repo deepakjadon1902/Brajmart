@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS settings (
   store_phone VARCHAR(50) NOT NULL DEFAULT '+91 9876543210',
   store_address VARCHAR(255) NOT NULL DEFAULT 'Vrindavan, Mathura, UP 281121, India',
   packaging_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
+  tax_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
   min_order_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
   max_order_quantity INT NOT NULL DEFAULT 10,
   delivery_eta_min_days INT NOT NULL DEFAULT 3,

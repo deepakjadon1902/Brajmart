@@ -60,7 +60,7 @@ const AdminSettings = () => {
         setStoreAddress(data.storeAddress);
         setFreeShippingThreshold(data.freeShippingThreshold);
         setShippingFee(data.shippingFee);
-        setPackagingRate(data.packagingRate);
+        setPackagingRate(data.packagingRate ?? data.taxRate ?? 0);
         setMinOrderAmount(data.minOrderAmount);
         setMaxOrderQuantity(data.maxOrderQuantity);
         setDeliveryEtaMinDays(data.deliveryEtaMinDays ?? settings.deliveryEtaMinDays);
@@ -90,7 +90,7 @@ const AdminSettings = () => {
     try {
       const payload = {
         storeName, tagline, currency, storeEmail, storePhone, storeAddress,
-        freeShippingThreshold, shippingFee, packagingRate, minOrderAmount, maxOrderQuantity,
+        freeShippingThreshold, shippingFee, packagingRate, taxRate: packagingRate, minOrderAmount, maxOrderQuantity,
         deliveryEtaMinDays, deliveryEtaMaxDays,
         upiEnabled, cardEnabled, maintenanceMode,
         metaTitle, metaDescription, storeLogo,

@@ -12,17 +12,23 @@ const columnExists = async (table: string, column: string) => {
 };
 
 const ensureOrderPricingSchema = async () => {
-  const MIGRATION_KEY = '2026-07-01_packaging_percentage_order_breakdown';
+  const MIGRATION_KEY = '2026-07-01_packaging_percentage_order_breakdown_v2_compat';
   if (await isMigrationDone(MIGRATION_KEY)) return;
 
   if (!(await columnExists('settings', 'packaging_rate'))) {
     if (await columnExists('settings', 'packaging_cost')) {
-      await dbExecute('ALTER TABLE settings CHANGE COLUMN packaging_cost packaging_rate DECIMAL(5,2) NOT NULL DEFAULT 0');
+      await dbExecute('ALTER TABLE settings ADD COLUMN packaging_rate DECIMAL(5,2) NOT NULL DEFAULT 0');
+      await dbExecute('UPDATE settings SET packaging_rate = packaging_cost');
     } else if (await columnExists('settings', 'tax_rate')) {
-      await dbExecute('ALTER TABLE settings CHANGE COLUMN tax_rate packaging_rate DECIMAL(5,2) NOT NULL DEFAULT 0');
+      await dbExecute('ALTER TABLE settings ADD COLUMN packaging_rate DECIMAL(5,2) NOT NULL DEFAULT 0');
+      await dbExecute('UPDATE settings SET packaging_rate = tax_rate');
     } else {
       await dbExecute('ALTER TABLE settings ADD COLUMN packaging_rate DECIMAL(5,2) NOT NULL DEFAULT 0');
     }
+  }
+  if (!(await columnExists('settings', 'tax_rate'))) {
+    await dbExecute('ALTER TABLE settings ADD COLUMN tax_rate DECIMAL(5,2) NOT NULL DEFAULT 0');
+    await dbExecute('UPDATE settings SET tax_rate = packaging_rate');
   }
 
   const orderColumns = [
