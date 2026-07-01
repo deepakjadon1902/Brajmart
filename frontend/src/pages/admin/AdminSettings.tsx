@@ -21,7 +21,7 @@ const AdminSettings = () => {
   const [storeAddress, setStoreAddress] = useState(settings.storeAddress);
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(settings.freeShippingThreshold);
   const [shippingFee, setShippingFee] = useState(settings.shippingFee);
-  const [taxRate, setTaxRate] = useState(settings.taxRate);
+  const [packagingRate, setPackagingRate] = useState(settings.packagingRate);
   const [minOrderAmount, setMinOrderAmount] = useState(settings.minOrderAmount);
   const [maxOrderQuantity, setMaxOrderQuantity] = useState(settings.maxOrderQuantity);
   const [deliveryEtaMinDays, setDeliveryEtaMinDays] = useState(settings.deliveryEtaMinDays);
@@ -60,7 +60,7 @@ const AdminSettings = () => {
         setStoreAddress(data.storeAddress);
         setFreeShippingThreshold(data.freeShippingThreshold);
         setShippingFee(data.shippingFee);
-        setTaxRate(data.taxRate);
+        setPackagingRate(data.packagingRate);
         setMinOrderAmount(data.minOrderAmount);
         setMaxOrderQuantity(data.maxOrderQuantity);
         setDeliveryEtaMinDays(data.deliveryEtaMinDays ?? settings.deliveryEtaMinDays);
@@ -90,7 +90,7 @@ const AdminSettings = () => {
     try {
       const payload = {
         storeName, tagline, currency, storeEmail, storePhone, storeAddress,
-        freeShippingThreshold, shippingFee, taxRate, minOrderAmount, maxOrderQuantity,
+        freeShippingThreshold, shippingFee, packagingRate, minOrderAmount, maxOrderQuantity,
         deliveryEtaMinDays, deliveryEtaMaxDays,
         upiEnabled, cardEnabled, maintenanceMode,
         metaTitle, metaDescription, storeLogo,
@@ -262,7 +262,7 @@ const AdminSettings = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <InputField label="Free Shipping Above (₹)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
             <InputField label="Shipping Fee (₹)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
-            <InputField label="Tax Rate (%)" value={String(taxRate)} onChange={(v) => setTaxRate(Number(v))} type="number" />
+            <InputField label="Packaging Cost (%)" value={String(packagingRate)} onChange={(v) => setPackagingRate(Math.max(0, Number(v)))} type="number" />
             <InputField label="Min Order Amount (₹)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
             <InputField label="Max Quantity Per Item" value={String(maxOrderQuantity)} onChange={(v) => setMaxOrderQuantity(Number(v))} type="number" />
             <InputField label="Delivery ETA Min Days" value={String(deliveryEtaMinDays)} onChange={(v) => setDeliveryEtaMinDays(Number(v))} type="number" />

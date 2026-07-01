@@ -171,7 +171,7 @@ const App = () => {
           storeEmail: data.storeEmail,
           storePhone: data.storePhone,
           storeAddress: data.storeAddress,
-          taxRate: data.taxRate,
+          packagingRate: data.packagingRate,
           minOrderAmount: data.minOrderAmount,
           maxOrderQuantity: data.maxOrderQuantity,
           deliveryEtaMinDays: data.deliveryEtaMinDays ?? 3,

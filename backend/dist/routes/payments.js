@@ -84,6 +84,10 @@ const getPaymentOrderDetails = async (orderId) => {
         details: {
             items: (0, dbHelpers_1.parseJson)(orderRow.items, []),
             total: Number(orderRow.total),
+            itemsSubtotal: orderRow.items_subtotal == null ? undefined : Number(orderRow.items_subtotal),
+            shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
+            packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
+            packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
             paymentMethod: orderRow.payment_method,
             shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
             billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),
@@ -266,6 +270,10 @@ router.post('/', auth_1.auth, async (req, res) => {
                 orderDetails = {
                     items: (0, dbHelpers_1.parseJson)(orderRow.items, []),
                     total: Number(orderRow.total),
+                    itemsSubtotal: orderRow.items_subtotal == null ? undefined : Number(orderRow.items_subtotal),
+                    shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
+                    packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
+                    packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
                     paymentMethod: orderRow.payment_method,
                     shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
                     billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),
@@ -317,6 +325,10 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 orderDetails = {
                     items: (0, dbHelpers_1.parseJson)(orderRow.items, []),
                     total: Number(orderRow.total),
+                    itemsSubtotal: orderRow.items_subtotal == null ? undefined : Number(orderRow.items_subtotal),
+                    shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
+                    packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
+                    packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
                     paymentMethod: orderRow.payment_method,
                     shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
                     billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),

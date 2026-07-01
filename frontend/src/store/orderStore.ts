@@ -25,6 +25,10 @@ export interface Order {
   userId: string;
   items: OrderItem[];
   total: number;
+  itemsSubtotal?: number;
+  shippingAmount?: number;
+  packagingAmount?: number;
+  packagingRate?: number;
   status: OrderStatus;
   shippingAddress: Address;
   billingAddress: Address;
@@ -86,6 +90,10 @@ export const useOrderStore = create<OrderStore>()(
               price: i.price || 0,
             })),
             total: o.total || 0,
+            itemsSubtotal: o.itemsSubtotal,
+            shippingAmount: o.shippingAmount,
+            packagingAmount: o.packagingAmount,
+            packagingRate: o.packagingRate,
             status: o.status,
             shippingAddress: o.shippingAddress,
             billingAddress: o.billingAddress,

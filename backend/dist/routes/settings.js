@@ -19,7 +19,7 @@ const mapSettingsRow = (row) => ({
     storeEmail: row.store_email,
     storePhone: row.store_phone,
     storeAddress: row.store_address,
-    taxRate: Number(row.tax_rate ?? 0),
+    packagingRate: Number(row.packaging_rate ?? 0),
     minOrderAmount: Number(row.min_order_amount ?? 0),
     maxOrderQuantity: Number(row.max_order_quantity ?? 0),
     deliveryEtaMinDays: Number(row.delivery_eta_min_days ?? 3),
@@ -62,8 +62,8 @@ const buildUpdate = (data) => {
         set('store_phone', data.storePhone);
     if (data.storeAddress !== undefined)
         set('store_address', data.storeAddress);
-    if (data.taxRate !== undefined)
-        set('tax_rate', data.taxRate);
+    if (data.packagingRate !== undefined)
+        set('packaging_rate', data.packagingRate);
     if (data.minOrderAmount !== undefined)
         set('min_order_amount', data.minOrderAmount);
     if (data.maxOrderQuantity !== undefined)

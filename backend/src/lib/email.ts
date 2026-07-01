@@ -215,6 +215,13 @@ const brandWrapper = async (title: string, body: string) => {
 
 type OrderItem = { name?: string; quantity?: number; price?: number };
 type OrderAddress = { fullName?: string; mobile?: string; street?: string; city?: string; state?: string; pincode?: string };
+type OrderPriceBreakdown = {
+  itemsSubtotal?: number;
+  shippingAmount?: number;
+  packagingAmount?: number;
+  packagingRate?: number;
+  total?: number;
+};
 
 const formatMoney = (value?: number) => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '';
@@ -266,21 +273,36 @@ const renderAddress = (label: string, addr?: OrderAddress) => {
 
 const renderOrderDetails = (payload: {
   items?: OrderItem[];
-  total?: number;
   paymentMethod?: string;
   transactionId?: string;
   shippingAddress?: OrderAddress;
   billingAddress?: OrderAddress;
-}) => {
+} & OrderPriceBreakdown) => {
   const itemsHtml = renderItemsTable(payload.items);
-  const totalHtml = payload.total !== undefined ? `<p><strong>Total:</strong> ${formatMoney(payload.total)}</p>` : '';
+  const calculatedSubtotal = Array.isArray(payload.items)
+    ? payload.items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0)
+    : undefined;
+  const subtotal = payload.itemsSubtotal ?? calculatedSubtotal;
+  const hasExactBreakdown = payload.shippingAmount !== undefined || payload.packagingAmount !== undefined;
+  const legacyAdjustment = !hasExactBreakdown && payload.total !== undefined && subtotal !== undefined
+    ? Math.max(0, Number(payload.total) - subtotal)
+    : 0;
+  const pricingHtml = payload.total !== undefined ? `
+    <div style="margin:14px 0;padding:14px;background:#fffaf2;border:1px solid #eadfce;border-radius:10px;">
+      <p style="margin:0 0 7px;display:flex;justify-content:space-between;"><span>Product price</span><strong>${formatMoney(subtotal)}</strong></p>
+      ${hasExactBreakdown ? `
+        <p style="margin:0 0 7px;display:flex;justify-content:space-between;"><span>Packaging cost${payload.packagingRate ? ` (${Number(payload.packagingRate)}%)` : ''}</span><strong>${formatMoney(payload.packagingAmount || 0)}</strong></p>
+        <p style="margin:0 0 10px;display:flex;justify-content:space-between;"><span>Shipping charge</span><strong>${Number(payload.shippingAmount || 0) === 0 ? 'FREE' : formatMoney(payload.shippingAmount)}</strong></p>
+      ` : legacyAdjustment > 0 ? `<p style="margin:0 0 10px;display:flex;justify-content:space-between;"><span>Packaging &amp; shipping</span><strong>${formatMoney(legacyAdjustment)}</strong></p>` : ''}
+      <p style="margin:0;padding-top:10px;border-top:1px solid #dbcdb8;display:flex;justify-content:space-between;font-size:16px;color:#3b1c12;"><strong>Order total</strong><strong>${formatMoney(payload.total)}</strong></p>
+    </div>` : '';
   const methodHtml = payload.paymentMethod ? `<p><strong>Payment Method:</strong> ${escapeHtml(payload.paymentMethod)}</p>` : '';
   const txnHtml = payload.transactionId ? `<p><strong>Transaction ID:</strong> ${escapeHtml(payload.transactionId)}</p>` : '';
   const shipHtml = renderAddress('Shipping Address', payload.shippingAddress);
   const billHtml = renderAddress('Billing Address', payload.billingAddress);
   return `
     ${itemsHtml}
-    ${totalHtml}
+    ${pricingHtml}
     ${methodHtml}
     ${txnHtml}
     ${shipHtml}
@@ -288,16 +310,19 @@ const renderOrderDetails = (payload: {
   `;
 };
 
-export const sendOrderConfirmation = async (to: string, payload: { orderId: string; total: number; itemsCount: number; eta?: string; items?: OrderItem[]; paymentMethod?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress }) => {
+export const sendOrderConfirmation = async (to: string, payload: { orderId: string; total: number; itemsCount: number; eta?: string; items?: OrderItem[]; paymentMethod?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } & OrderPriceBreakdown) => {
   const html = await brandWrapper(
     'Order Confirmed',
     `<p>Your order <strong>${escapeHtml(payload.orderId)}</strong> has been placed successfully.</p>
      <p>Items: ${payload.itemsCount}</p>
-     <p>Total: &#8377;${payload.total}</p>
      ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${escapeHtml(payload.eta)}</p>` : ''}
      ${renderOrderDetails({
        items: payload.items,
        total: payload.total,
+       itemsSubtotal: payload.itemsSubtotal,
+       shippingAmount: payload.shippingAmount,
+       packagingAmount: payload.packagingAmount,
+       packagingRate: payload.packagingRate,
        paymentMethod: payload.paymentMethod,
        shippingAddress: payload.shippingAddress,
        billingAddress: payload.billingAddress,
@@ -306,7 +331,7 @@ export const sendOrderConfirmation = async (to: string, payload: { orderId: stri
   await sendEmail(to, 'Your BrajMart Order Confirmation', html);
 };
 
-export const sendPaymentReceipt = async (to: string, payload: { orderId: string; amount: number; paymentId: string; invoiceNumber?: number | string; orderDate?: string; paidAt?: string; eta?: string; details?: { items?: OrderItem[]; total?: number; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } }) => {
+export const sendPaymentReceipt = async (to: string, payload: { orderId: string; amount: number; paymentId: string; invoiceNumber?: number | string; orderDate?: string; paidAt?: string; eta?: string; details?: ({ items?: OrderItem[]; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } & OrderPriceBreakdown) }) => {
   const invoiceNumber = payload.invoiceNumber ? String(payload.invoiceNumber) : payload.orderId;
   const paidAt = payload.paidAt || new Date().toISOString();
   const html = await brandWrapper(
@@ -334,7 +359,7 @@ export const sendPaymentReceipt = async (to: string, payload: { orderId: string;
   await sendEmail(to, `BrajMart Invoice #${invoiceNumber}`, html);
 };
 
-export const sendPaymentFailed = async (to: string, payload: { orderId: string; amount: number; paymentId?: string; eta?: string; details?: { items?: OrderItem[]; total?: number; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } }) => {
+export const sendPaymentFailed = async (to: string, payload: { orderId: string; amount: number; paymentId?: string; eta?: string; details?: ({ items?: OrderItem[]; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } & OrderPriceBreakdown) }) => {
   const html = await brandWrapper(
     'Payment Failed',
     `<p>Your payment for Order <strong>${escapeHtml(payload.orderId)}</strong> could not be completed.</p>
@@ -362,7 +387,7 @@ export const sendAdminPaymentNotice = async (payload: { status: 'paid' | 'failed
   await sendEmail(adminEmail, `Payment ${payload.status === 'paid' ? 'Success' : 'Failed'} - ${payload.orderId}`, html);
 };
 
-export const sendShippingUpdate = async (to: string, payload: { orderId: string; status: string; trackingId?: string; eta?: string; details?: { items?: OrderItem[]; total?: number; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } }) => {
+export const sendShippingUpdate = async (to: string, payload: { orderId: string; status: string; trackingId?: string; eta?: string; details?: ({ items?: OrderItem[]; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } & OrderPriceBreakdown) }) => {
   const html = await brandWrapper(
     'Shipping Update',
     `<p>Your order <strong>${escapeHtml(payload.orderId)}</strong> status is now <strong>${escapeHtml(payload.status)}</strong>.</p>

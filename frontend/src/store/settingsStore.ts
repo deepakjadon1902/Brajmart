@@ -26,7 +26,7 @@ interface StoreSettings {
   socialLinks: SocialLinks;
   announcementBar: AnnouncementBar;
   maintenanceMode: boolean;
-  taxRate: number;
+  packagingRate: number;
   minOrderAmount: number;
   maxOrderQuantity: number;
   deliveryEtaMinDays: number;
@@ -69,7 +69,7 @@ export const useSettingsStore = create<SettingsStore>()(
         socialLinks: { instagram: '', facebook: '', youtube: '', whatsapp: '' },
         announcementBar: { enabled: false, messages: [] },
         maintenanceMode: false,
-        taxRate: 0,
+        packagingRate: 0,
         minOrderAmount: 0,
         maxOrderQuantity: 0,
         deliveryEtaMinDays: 0,

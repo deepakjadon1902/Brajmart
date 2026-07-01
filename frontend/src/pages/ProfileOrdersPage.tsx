@@ -9,6 +9,7 @@ import ProfileSidebar from '@/components/profile/ProfileSidebar';
 import { useAuthStore } from '@/store/authStore';
 import { useOrderStore } from '@/store/orderStore';
 import { formatPrice } from '@/utils/formatPrice';
+import { OrderPaymentBreakdown } from '@/components/orders/OrderPaymentBreakdown';
 
 const ProfileOrdersPage = () => {
   const { user, isAuthenticated } = useAuthStore();
@@ -76,10 +77,7 @@ const ProfileOrdersPage = () => {
                       </div>
                     ))}
                   </div>
-                  <div className="mt-4 flex items-center justify-between text-sm border-t border-border pt-3">
-                    <span className="text-muted-foreground">Payment: {o.paymentMethod}</span>
-                    <span className="font-bold text-saffron">{formatPrice(o.total)}</span>
-                  </div>
+                  <OrderPaymentBreakdown itemsSubtotal={o.itemsSubtotal} packagingAmount={o.packagingAmount} packagingRate={o.packagingRate} shippingAmount={o.shippingAmount} total={o.total} calculatedItemsSubtotal={o.items.reduce((sum, item) => sum + item.price * item.quantity, 0)} paymentMethod={o.paymentMethod} />
                 </motion.div>
               ))
             )}

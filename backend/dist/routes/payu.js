@@ -87,9 +87,13 @@ const insertOrder = async (orderData, estimatedDelivery) => {
     const statusHistory = Array.isArray(orderData.statusHistory) && orderData.statusHistory.length
         ? orderData.statusHistory
         : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
-    const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+    const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
         orderData.userId || null,
         JSON.stringify(orderData.items || []),
+        orderData.itemsSubtotal,
+        orderData.packagingAmount,
+        orderData.packagingRate,
+        orderData.shippingAmount,
         orderData.total,
         status,
         orderData.customerName || null,
@@ -150,6 +154,10 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
             ...order,
             userId: numericUserId ?? null,
             items: priced.items,
+            itemsSubtotal: totals.itemsSubtotal,
+            packagingAmount: totals.packaging,
+            packagingRate: settings.packagingRate,
+            shippingAmount: totals.shipping,
             total: totals.total,
             status: 'processing',
             statusHistory: [{ status: 'processing', date: new Date().toISOString(), note: 'Payment initiated via PayU' }],
@@ -169,7 +177,7 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
             amount: Number(totals.total),
             method: method === 'card' ? 'card' : 'upi',
             customer: { name: customer.name, email: customerEmail, phone: customer.phone },
-            order: { ...order, items: priced.items, total: totals.total, customerEmail },
+            order: { ...order, items: priced.items, itemsSubtotal: totals.itemsSubtotal, packagingAmount: totals.packaging, packagingRate: settings.packagingRate, shippingAmount: totals.shipping, total: totals.total, customerEmail },
             orderId,
         });
         const surl = `${getBackendUrl()}/api/payu/success`;
@@ -305,6 +313,10 @@ const handlePayuCallback = async (req, res, statusOverride) => {
                 itemsCount,
                 eta: etaText,
                 items: parsedItems,
+                itemsSubtotal: orderRow.items_subtotal == null ? undefined : Number(orderRow.items_subtotal),
+                shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
+                packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
+                packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
                 paymentMethod: methodLabel,
                 shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
                 billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),
@@ -331,6 +343,10 @@ const handlePayuCallback = async (req, res, statusOverride) => {
                 details: {
                     items: (0, dbHelpers_1.parseJson)(orderRow.items, []),
                     total: Number(orderRow.total),
+                    itemsSubtotal: orderRow.items_subtotal == null ? undefined : Number(orderRow.items_subtotal),
+                    shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
+                    packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
+                    packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
                     paymentMethod: methodLabel,
                     shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
                     billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),
@@ -386,6 +402,10 @@ const handlePayuCallback = async (req, res, statusOverride) => {
                 details: {
                     items: (0, dbHelpers_1.parseJson)(orderRow.items, []),
                     total: Number(orderRow.total),
+                    itemsSubtotal: orderRow.items_subtotal == null ? undefined : Number(orderRow.items_subtotal),
+                    shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
+                    packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
+                    packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
                     paymentMethod: orderRow.payment_method,
                     shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
                     billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),

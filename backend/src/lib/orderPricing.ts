@@ -28,7 +28,7 @@ export type PricedOrderItem = {
 type SettingsRow = {
   free_shipping_threshold?: any;
   shipping_fee?: any;
-  tax_rate?: any;
+  packaging_rate?: any;
   min_order_amount?: any;
   max_order_quantity?: any;
 };
@@ -47,22 +47,22 @@ const asMoney = (value: any) => {
 };
 
 export const getCheckoutSettings = async () => {
-  const rows = await dbQuery<SettingsRow>('SELECT free_shipping_threshold, shipping_fee, tax_rate, min_order_amount, max_order_quantity FROM settings LIMIT 1');
+  const rows = await dbQuery<SettingsRow>('SELECT free_shipping_threshold, shipping_fee, packaging_rate, min_order_amount, max_order_quantity FROM settings LIMIT 1');
   const row = rows?.[0] || ({} as SettingsRow);
   return {
     freeShippingThreshold: Number(row.free_shipping_threshold ?? 0) || 0,
     shippingFee: Number(row.shipping_fee ?? 0) || 0,
-    taxRate: Number(row.tax_rate ?? 0) || 0,
+    packagingRate: Number(row.packaging_rate ?? 0) || 0,
     minOrderAmount: Number(row.min_order_amount ?? 0) || 0,
     maxOrderQuantity: Number(row.max_order_quantity ?? 0) || 0,
   };
 };
 
-export const computeTotals = (itemsSubtotal: number, settings: { freeShippingThreshold: number; shippingFee: number; taxRate: number }) => {
+export const computeTotals = (itemsSubtotal: number, settings: { freeShippingThreshold: number; shippingFee: number; packagingRate: number }) => {
   const shipping = itemsSubtotal >= settings.freeShippingThreshold ? 0 : settings.shippingFee;
-  const tax = settings.taxRate > 0 ? Math.round(itemsSubtotal * settings.taxRate / 100) : 0;
-  const total = itemsSubtotal + shipping + tax;
-  return { itemsSubtotal, shipping, tax, total };
+  const packaging = Math.round(itemsSubtotal * Math.max(0, settings.packagingRate) / 100);
+  const total = itemsSubtotal + packaging + shipping;
+  return { itemsSubtotal, packaging, shipping, total };
 };
 
 export const priceAndValidateOrderItems = async (items: any[]) => {

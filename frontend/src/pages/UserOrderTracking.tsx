@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import { OrderPaymentBreakdown } from '@/components/orders/OrderPaymentBreakdown';
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { Search, Package, CheckCircle, Truck, MapPin, BoxIcon, ArrowLeft, Clock, Copy } from 'lucide-react';
 import { toast } from 'sonner';
@@ -186,13 +187,7 @@ const UserOrderTracking = () => {
                   <p className="text-sm font-semibold text-foreground">₹{(item.price * item.quantity).toLocaleString('en-IN')}</p>
                 </div>
               ))}
-              <div className="flex justify-between mt-4 pt-3 border-t border-border">
-                <span className="font-semibold text-foreground">Total</span>
-                <span className="font-bold text-saffron text-lg">₹{selectedOrder.total.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="mt-2 text-xs text-muted-foreground">
-                Payment: <span className="text-foreground font-medium">{selectedOrder.paymentMethod}</span>
-              </div>
+              <OrderPaymentBreakdown itemsSubtotal={selectedOrder.itemsSubtotal} packagingAmount={selectedOrder.packagingAmount} packagingRate={selectedOrder.packagingRate} shippingAmount={selectedOrder.shippingAmount} total={selectedOrder.total} calculatedItemsSubtotal={selectedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0)} paymentMethod={selectedOrder.paymentMethod} />
             </div>
           </div>
         ) : (

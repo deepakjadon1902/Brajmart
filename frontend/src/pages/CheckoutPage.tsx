@@ -73,8 +73,9 @@ const CheckoutPage = () => {
   const [customerEmail, setCustomerEmail] = useState(user?.email || '');
 
   const shipping = totalPrice() >= settings.freeShippingThreshold ? 0 : settings.shippingFee;
-  const taxAmount = settings.taxRate > 0 ? Math.round(totalPrice() * settings.taxRate / 100) : 0;
-  const grandTotal = totalPrice() + shipping + taxAmount;
+  const packagingRate = Math.max(0, Number(settings.packagingRate) || 0);
+  const packagingCost = Math.round(totalPrice() * packagingRate / 100);
+  const grandTotal = totalPrice() + packagingCost + shipping;
 
   const [billingAddress, setBillingAddress] = useState<Address>({
     fullName: user?.fullName || '',
@@ -114,7 +115,7 @@ const CheckoutPage = () => {
           storeEmail: data.storeEmail,
           storePhone: data.storePhone,
           storeAddress: data.storeAddress,
-          taxRate: data.taxRate,
+          packagingRate: data.packagingRate,
           minOrderAmount: data.minOrderAmount,
           maxOrderQuantity: data.maxOrderQuantity,
           upiEnabled: data.upiEnabled,
@@ -633,7 +634,7 @@ const CheckoutPage = () => {
                 </div>
                 <div className="space-y-2 text-sm border-t border-border pt-3">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-muted-foreground">Product price</span>
                     <span>{formatPrice(totalPrice())}</span>
                   </div>
                   {totalSavings() > 0 && (
@@ -642,14 +643,12 @@ const CheckoutPage = () => {
                       <span>-{formatPrice(totalSavings())}</span>
                     </div>
                   )}
-                  {taxAmount > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tax ({settings.taxRate}%)</span>
-                      <span>{formatPrice(taxAmount)}</span>
-                    </div>
-                  )}
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Shipping</span>
+                    <span className="text-muted-foreground">Packaging cost ({packagingRate}%)</span>
+                    <span>{formatPrice(packagingCost)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Shipping charge</span>
                     <span className={shipping === 0 ? 'text-tulsi font-medium' : ''}>{shipping === 0 ? 'FREE' : formatPrice(shipping)}</span>
                   </div>
                   <div className="flex justify-between font-bold text-base border-t border-border pt-2">
@@ -673,6 +672,3 @@ const CheckoutPage = () => {
 };
 
 export default CheckoutPage;
-
-
-

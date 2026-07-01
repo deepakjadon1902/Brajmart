@@ -2,6 +2,44 @@ import { dbExecute, dbQuery, isDbConnected } from './db';
 
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
+const columnExists = async (table: string, column: string) => {
+  const rows = await dbQuery<any>(
+    `SELECT 1 FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1`,
+    [table, column]
+  );
+  return Boolean(rows.length);
+};
+
+const ensureOrderPricingSchema = async () => {
+  const MIGRATION_KEY = '2026-07-01_packaging_percentage_order_breakdown';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  if (!(await columnExists('settings', 'packaging_rate'))) {
+    if (await columnExists('settings', 'packaging_cost')) {
+      await dbExecute('ALTER TABLE settings CHANGE COLUMN packaging_cost packaging_rate DECIMAL(5,2) NOT NULL DEFAULT 0');
+    } else if (await columnExists('settings', 'tax_rate')) {
+      await dbExecute('ALTER TABLE settings CHANGE COLUMN tax_rate packaging_rate DECIMAL(5,2) NOT NULL DEFAULT 0');
+    } else {
+      await dbExecute('ALTER TABLE settings ADD COLUMN packaging_rate DECIMAL(5,2) NOT NULL DEFAULT 0');
+    }
+  }
+
+  const orderColumns = [
+    ['items_subtotal', 'DECIMAL(10,2) NULL AFTER items'],
+    ['packaging_amount', 'DECIMAL(10,2) NULL AFTER items_subtotal'],
+    ['packaging_rate', 'DECIMAL(5,2) NULL AFTER packaging_amount'],
+    ['shipping_amount', 'DECIMAL(10,2) NULL AFTER packaging_rate'],
+  ] as const;
+  for (const [column, definition] of orderColumns) {
+    if (!(await columnExists('orders', column))) {
+      await dbExecute(`ALTER TABLE orders ADD COLUMN ${column} ${definition}`);
+    }
+  }
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
 const ensureCoreTables = async () => {
   await dbExecute(`
     CREATE TABLE IF NOT EXISTS subcategories (
@@ -75,6 +113,7 @@ export const runDataMigrations = async () => {
   if (String(process.env.RUN_DATA_MIGRATIONS || '').toLowerCase() === 'false') return;
 
   await ensureCoreTables();
+  await ensureOrderPricingSchema();
   await migrateDeityShringarIntoIdolsSubcategory();
 };
 

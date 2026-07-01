@@ -87,6 +87,10 @@ const getPaymentOrderDetails = async (orderId: any) => {
     details: {
       items: parseJson(orderRow.items, []),
       total: Number(orderRow.total),
+      itemsSubtotal: orderRow.items_subtotal == null ? undefined : Number(orderRow.items_subtotal),
+      shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
+      packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
+      packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
       paymentMethod: orderRow.payment_method,
       shippingAddress: parseJson(orderRow.shipping_address, {}),
       billingAddress: parseJson(orderRow.billing_address, {}),
@@ -287,6 +291,10 @@ router.post('/', auth, async (req, res) => {
         orderDetails = {
           items: parseJson(orderRow.items, []),
           total: Number(orderRow.total),
+          itemsSubtotal: orderRow.items_subtotal == null ? undefined : Number(orderRow.items_subtotal),
+          shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
+          packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
+          packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
           paymentMethod: orderRow.payment_method,
           shippingAddress: parseJson(orderRow.shipping_address, {}),
           billingAddress: parseJson(orderRow.billing_address, {}),
@@ -350,6 +358,10 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
         orderDetails = {
           items: parseJson(orderRow.items, []),
           total: Number(orderRow.total),
+          itemsSubtotal: orderRow.items_subtotal == null ? undefined : Number(orderRow.items_subtotal),
+          shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
+          packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
+          packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
           paymentMethod: orderRow.payment_method,
           shippingAddress: parseJson(orderRow.shipping_address, {}),
           billingAddress: parseJson(orderRow.billing_address, {}),

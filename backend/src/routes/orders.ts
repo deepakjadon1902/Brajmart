@@ -15,6 +15,10 @@ const mapOrderRow = (row: any) => ({
   userId: row.user_id ? String(row.user_id) : undefined,
   items: parseJson(row.items, []),
   total: Number(row.total),
+  itemsSubtotal: row.items_subtotal == null ? undefined : Number(row.items_subtotal),
+  shippingAmount: row.shipping_amount == null ? undefined : Number(row.shipping_amount),
+  packagingAmount: row.packaging_amount == null ? undefined : Number(row.packaging_amount),
+  packagingRate: row.packaging_rate == null ? undefined : Number(row.packaging_rate),
   status: row.status,
   customerName: row.customer_name ?? undefined,
   customerEmail: row.customer_email ?? undefined,
@@ -116,10 +120,14 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
       : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
 
     const result: any = await dbExecute(
-      'INSERT INTO orders (user_id, items, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         req.user?.id || null,
         JSON.stringify(priced.items),
+        totals.itemsSubtotal,
+        totals.packaging,
+        settings.packagingRate,
+        totals.shipping,
         totals.total,
         status,
         data.customerName || null,
@@ -153,6 +161,10 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
         itemsCount: order.items?.length || 0,
         eta: etaText,
         items: order.items,
+        itemsSubtotal: order.itemsSubtotal,
+        shippingAmount: order.shippingAmount,
+        packagingAmount: order.packagingAmount,
+        packagingRate: order.packagingRate,
         paymentMethod: order.paymentMethod,
         shippingAddress: order.shippingAddress,
         billingAddress: order.billingAddress,
@@ -248,6 +260,10 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
         details: {
           items: order.items,
           total: order.total,
+          itemsSubtotal: order.itemsSubtotal,
+          shippingAmount: order.shippingAmount,
+          packagingAmount: order.packagingAmount,
+          packagingRate: order.packagingRate,
           paymentMethod: order.paymentMethod,
           shippingAddress: order.shippingAddress,
           billingAddress: order.billingAddress,
