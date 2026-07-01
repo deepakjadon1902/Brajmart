@@ -262,12 +262,30 @@ const renderOrderDetails = (payload) => {
         : 0;
     const pricingHtml = payload.total !== undefined ? `
     <div style="margin:14px 0;padding:14px;background:#fffaf2;border:1px solid #eadfce;border-radius:10px;">
-      <p style="margin:0 0 7px;display:flex;justify-content:space-between;"><span>Product price</span><strong>${formatMoney(subtotal)}</strong></p>
-      ${hasExactBreakdown ? `
-        <p style="margin:0 0 7px;display:flex;justify-content:space-between;"><span>Packaging cost${payload.packagingRate ? ` (${Number(payload.packagingRate)}%)` : ''}</span><strong>${formatMoney(payload.packagingAmount || 0)}</strong></p>
-        <p style="margin:0 0 10px;display:flex;justify-content:space-between;"><span>Shipping charge</span><strong>${Number(payload.shippingAmount || 0) === 0 ? 'FREE' : formatMoney(payload.shippingAmount)}</strong></p>
-      ` : legacyAdjustment > 0 ? `<p style="margin:0 0 10px;display:flex;justify-content:space-between;"><span>Packaging &amp; shipping</span><strong>${formatMoney(legacyAdjustment)}</strong></p>` : ''}
-      <p style="margin:0;padding-top:10px;border-top:1px solid #dbcdb8;display:flex;justify-content:space-between;font-size:16px;color:#3b1c12;"><strong>Order total</strong><strong>${formatMoney(payload.total)}</strong></p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px;color:#4b3f32;">
+        <tr>
+          <td style="padding:0 0 9px;">Product price</td>
+          <td style="width:140px;padding:0 0 9px 32px;text-align:right;font-weight:700;white-space:nowrap;">${formatMoney(subtotal)}</td>
+        </tr>
+        ${hasExactBreakdown ? `
+          <tr>
+            <td style="padding:0 0 9px;">Packaging cost${payload.packagingRate ? ` (${Number(payload.packagingRate)}%)` : ''}</td>
+            <td style="width:140px;padding:0 0 9px 32px;text-align:right;font-weight:700;white-space:nowrap;">${formatMoney(payload.packagingAmount || 0)}</td>
+          </tr>
+          <tr>
+            <td style="padding:0 0 12px;">Shipping charge</td>
+            <td style="width:140px;padding:0 0 12px 32px;text-align:right;font-weight:700;white-space:nowrap;">${Number(payload.shippingAmount || 0) === 0 ? 'FREE' : formatMoney(payload.shippingAmount)}</td>
+          </tr>
+        ` : legacyAdjustment > 0 ? `
+          <tr>
+            <td style="padding:0 0 12px;">Packaging &amp; shipping</td>
+            <td style="width:140px;padding:0 0 12px 32px;text-align:right;font-weight:700;white-space:nowrap;">${formatMoney(legacyAdjustment)}</td>
+          </tr>` : ''}
+        <tr>
+          <td style="padding:12px 0 0;border-top:1px solid #dbcdb8;font-size:16px;font-weight:700;color:#3b1c12;">Order total</td>
+          <td style="width:140px;padding:12px 0 0 32px;border-top:1px solid #dbcdb8;text-align:right;font-size:16px;font-weight:800;color:#3b1c12;white-space:nowrap;">${formatMoney(payload.total)}</td>
+        </tr>
+      </table>
     </div>` : '';
     const methodHtml = payload.paymentMethod ? `<p><strong>Payment Method:</strong> ${escapeHtml(payload.paymentMethod)}</p>` : '';
     const txnHtml = payload.transactionId ? `<p><strong>Transaction ID:</strong> ${escapeHtml(payload.transactionId)}</p>` : '';
