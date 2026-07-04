@@ -14,6 +14,7 @@ Disallow: /search/
 # Block cart, account, and checkout pages from Google
 Disallow: /cart
 Disallow: /checkout
+Disallow: /compare
 Disallow: /account
 Disallow: /my-orders
 Disallow: /profile
@@ -26,5 +27,7 @@ Disallow: /oauth-callback
 Disallow: /verify-email
 Disallow: /verify-otp
 Disallow: /forgot-password
+Disallow: /track-order
+Disallow: /track-orders
 Disallow: /payment-status/
 Sitemap: https://www.brajmart.com/sitemap-index.xml

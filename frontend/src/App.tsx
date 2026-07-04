@@ -87,6 +87,8 @@ const noIndexPaths = new Set([
   '/account',
   '/cart',
   '/checkout',
+  '/compare',
+  '/forgot-password',
   '/login',
   '/my-orders',
   '/orders',
@@ -96,12 +98,19 @@ const noIndexPaths = new Set([
   '/register',
   '/search',
   '/thank-you',
+  '/track-order',
+  '/track-orders',
+  '/verify-email',
+  '/verify-otp',
   '/wishlist',
 ]);
 
 const NoIndexRoutes = () => {
   const { pathname } = useLocation();
-  const shouldNoIndex = noIndexPaths.has(pathname) || pathname.startsWith('/payment-status/');
+  const shouldNoIndex = noIndexPaths.has(pathname)
+    || pathname.startsWith('/admin')
+    || pathname.startsWith('/oauth-callback')
+    || pathname.startsWith('/payment-status/');
 
   if (!shouldNoIndex) return null;
 

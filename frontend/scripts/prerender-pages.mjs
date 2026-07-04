@@ -85,4 +85,15 @@ for (const route of routes) {
   await fs.writeFile(output, html);
 }
 
+// Vercel serves this document with a real HTTP 404 for paths that are not in
+// the explicit SPA allowlist. Keeping the React not-found UI also preserves a
+// consistent customer experience for broken external links.
+const notFoundData = dataForRoute('/404');
+const { appHtml: notFoundHtml, head: notFoundHead } = await render('/404', notFoundData);
+const notFoundInitialData = `<script>window.__BRAJMART_INITIAL_DATA__=${serialize(notFoundData)};</script>`;
+const notFoundDocument = stripManagedHead(template)
+  .replace('</head>', `${notFoundHead}\n${notFoundInitialData}\n</head>`)
+  .replace('<div id="root"></div>', `<div id="root">${notFoundHtml}</div>`);
+await fs.writeFile(path.join(dist, '404.html'), notFoundDocument);
+
 console.log(`Pre-rendered complete React HTML for ${routes.length} public routes (${productPages.length} products).`);

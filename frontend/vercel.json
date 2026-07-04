@@ -17,6 +17,15 @@
           "value": "public, max-age=3600, stale-while-revalidate=86400"
         }
       ]
+    },
+    {
+      "source": "/(admin|admin/(.*)|account|cart|checkout|compare|forgot-password|login|my-orders|oauth-callback|orders|payment-status/(.*)|profile|profile/(.*)|register|search|thank-you|track-order|track-orders|verify-email|verify-otp|wishlist)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     }
   ],
   "redirects": [
@@ -214,6 +223,11 @@
     { "source": "/privacy-policy", "destination": "/privacy-policy/index.html" },
     { "source": "/payment-method", "destination": "/payment-method/index.html" },
     { "source": "/terms", "destination": "/terms/index.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/shop", "destination": "/products/index.html" },
+    { "source": "/(login|register|verify-email|verify-otp|forgot-password|oauth-callback|cart|wishlist|checkout|profile|orders|track-orders|search|compare|track-order)", "destination": "/index.html" },
+    { "source": "/profile/(.*)", "destination": "/index.html" },
+    { "source": "/payment-status/(.*)", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/(.*)", "destination": "/index.html" }
   ]
 }
