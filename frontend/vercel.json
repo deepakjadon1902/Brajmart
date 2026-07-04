@@ -19,7 +19,43 @@
       ]
     },
     {
-      "source": "/(admin|admin/(.*)|account|cart|checkout|compare|forgot-password|login|my-orders|oauth-callback|orders|payment-status/(.*)|profile|profile/(.*)|register|search|thank-you|track-order|track-orders|verify-email|verify-otp|wishlist)",
+      "source": "/(account|cart|checkout|compare|forgot-password|login|my-orders|oauth-callback|orders|profile|register|search|thank-you|track-order|track-orders|verify-email|verify-otp|wishlist)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/admin",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/admin/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/payment-status/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/profile/(.*)",
       "headers": [
         {
           "key": "X-Robots-Tag",
