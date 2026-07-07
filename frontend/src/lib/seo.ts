@@ -3,7 +3,7 @@ export const SITE_NAME = 'Brajmart';
 export const DEFAULT_IMAGE = `${SITE_URL}/logo.png`;
 export const DEFAULT_TITLE = 'Brajmart — Authentic Vrindavan Products | Prasadam, Tulsi Mala, Puja Items Online';
 export const DEFAULT_DESCRIPTION =
-  'Buy authentic spiritual products directly from Vrindavan, Mathura. Prasadam, Tulsi Mala, Radha Krishna Idols, Puja Samagri, Books and Braj Yatra. Free shipping above ₹499. Pan India delivery.';
+  'Buy authentic spiritual products directly from Vrindavan, Mathura. Prasadam, Tulsi Mala, Radha Krishna Idols, Puja Samagri, Books and Braj Yatra. Free shipping above ₹299. Pan India delivery.';
 
 export const absoluteUrl = (path = '/') => {
   if (/^https?:\/\//i.test(path)) return path;
@@ -60,8 +60,8 @@ export const categorySeo = (categoryName: string, subcategoryName = '', productC
     ? `Buy ${subcategory} Online — Authentic Vrindavan Products | Brajmart`
     : `Buy ${category} Online — Authentic Vrindavan Products | Brajmart`;
   const description = subcategory
-    ? `Shop authentic ${subcategory} from Vrindavan, Mathura. Temple-sourced, 100% genuine. Free shipping above ₹499. Delivered across India. Browse ${productCount}+ products.`
-    : `Shop authentic ${category} from Vrindavan, Mathura. Temple-sourced, 100% genuine. Free shipping above ₹499. Delivered across India. Browse ${productCount}+ products.`;
+    ? `Shop authentic ${subcategory} from Vrindavan, Mathura. Temple-sourced, 100% genuine. Free shipping above ₹299. Delivered across India. Browse ${productCount}+ products.`
+    : `Shop authentic ${category} from Vrindavan, Mathura. Temple-sourced, 100% genuine. Free shipping above ₹299. Delivered across India. Browse ${productCount}+ products.`;
   const pageDescription = subcategory
     ? `Browse ${subcategory.toLowerCase()} from our ${category.toLowerCase()} collection, curated for devotees who want authentic Vrindavan-inspired products delivered across India.`
     : intro;

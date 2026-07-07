@@ -46,6 +46,17 @@ const ensureOrderPricingSchema = async () => {
   await setMigrationDone(MIGRATION_KEY);
 };
 
+const ensureFreeShippingThresholdDefault = async () => {
+  const MIGRATION_KEY = '2026-07-07_free_shipping_threshold_299';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  await dbExecute(
+    'UPDATE settings SET free_shipping_threshold = 299 WHERE free_shipping_threshold IS NULL OR free_shipping_threshold = 0 OR free_shipping_threshold = 499'
+  );
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
 const ensureCoreTables = async () => {
   await dbExecute(`
     CREATE TABLE IF NOT EXISTS subcategories (
@@ -120,6 +131,7 @@ export const runDataMigrations = async () => {
 
   await ensureCoreTables();
   await ensureOrderPricingSchema();
+  await ensureFreeShippingThresholdDefault();
   await migrateDeityShringarIntoIdolsSubcategory();
 };
 

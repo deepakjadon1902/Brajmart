@@ -4,11 +4,11 @@ import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { Truck, Clock, MapPin, Package, IndianRupee, Shield } from 'lucide-react';
 
 const policies = [
-  { icon: Truck, title: 'Standard Delivery', desc: '5-7 business days across India. Free on orders above ₹499.' },
+  { icon: Truck, title: 'Standard Delivery', desc: '5-7 business days across India. Free on orders above ₹299.' },
   { icon: Clock, title: 'Express Delivery', desc: '2-3 business days in select metro cities. ₹99 flat fee.' },
   { icon: Package, title: 'Prasadam Priority', desc: 'All Prasadam orders are dispatched within 24 hours for freshness.' },
   { icon: MapPin, title: 'Pan-India Coverage', desc: 'We deliver to 25,000+ pin codes across all Indian states and UTs.' },
-  { icon: IndianRupee, title: 'Shipping Charges', desc: 'Free above ₹499. ₹49 flat rate for orders below ₹499.' },
+  { icon: IndianRupee, title: 'Shipping Charges', desc: 'Free above ₹299. ₹49 flat rate for orders below ₹299.' },
   { icon: Shield, title: 'Safe Packaging', desc: 'All items are packed with care — fragile products get extra cushioning.' },
 ];
 

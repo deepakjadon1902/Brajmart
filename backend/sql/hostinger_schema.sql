@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS settings (
   store_name VARCHAR(255) NOT NULL DEFAULT 'BrajMart',
   tagline VARCHAR(255) NOT NULL DEFAULT 'From Braj, With Love',
   currency VARCHAR(10) NOT NULL DEFAULT 'INR',
-  free_shipping_threshold DECIMAL(10,2) NOT NULL DEFAULT 499,
+  free_shipping_threshold DECIMAL(10,2) NOT NULL DEFAULT 299,
   shipping_fee DECIMAL(10,2) NOT NULL DEFAULT 49,
   store_email VARCHAR(255) NOT NULL DEFAULT 'support@brajmart.com',
   store_phone VARCHAR(50) NOT NULL DEFAULT '+91 9876543210',

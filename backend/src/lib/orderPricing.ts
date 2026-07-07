@@ -51,8 +51,8 @@ export const getCheckoutSettings = async () => {
   const rows = await dbQuery<SettingsRow>('SELECT free_shipping_threshold, shipping_fee, packaging_rate, tax_rate, min_order_amount, max_order_quantity FROM settings LIMIT 1');
   const row = rows?.[0] || ({} as SettingsRow);
   return {
-    freeShippingThreshold: Number(row.free_shipping_threshold ?? 0) || 0,
-    shippingFee: Number(row.shipping_fee ?? 0) || 0,
+    freeShippingThreshold: Number(row.free_shipping_threshold ?? 299) || 299,
+    shippingFee: Number(row.shipping_fee ?? 49) || 49,
     // tax_rate remains the rollout-compatible source while older backend instances exist.
     packagingRate: Number(row.tax_rate ?? row.packaging_rate ?? 0) || 0,
     minOrderAmount: Number(row.min_order_amount ?? 0) || 0,

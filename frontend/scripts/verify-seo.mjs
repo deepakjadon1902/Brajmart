@@ -25,7 +25,7 @@ const product = {
 const data = {
   products: [product, { ...product, id: 'SKU-VERIFY-2', name: 'Related Prasadam', slug: 'related-prasadam' }],
   categories: [{ id: '1', name: 'Prasadam', icon: '', color: '', productCount: 1, subcategories: [{ id: '2', categoryId: '1', name: 'Temple Prasadam' }] }],
-  blogs: [], heroSlides: [], settings: { storeName: 'Brajmart', currency: 'INR', freeShippingThreshold: 499, shippingFee: 49 },
+  blogs: [], heroSlides: [], settings: { storeName: 'Brajmart', currency: 'INR', freeShippingThreshold: 299, shippingFee: 49 },
   generatedAt: new Date().toISOString(), catalogComplete: false,
 };
 const rendered = await render('/product/seo-verification-prasadam', data);

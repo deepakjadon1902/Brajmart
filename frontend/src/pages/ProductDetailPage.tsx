@@ -421,7 +421,7 @@ const ProductDetailPage = () => {
     const schemaDescription = cleanText(product.description) || `${product.name} from ${settings.storeName || 'BrajMart'}`;
     const price = toSchemaPrice(computedPrice || product.price);
     const shippingFee = positiveNumber(settings.shippingFee, 49);
-    const freeShippingThreshold = positiveNumber(settings.freeShippingThreshold, 499);
+    const freeShippingThreshold = positiveNumber(settings.freeShippingThreshold, 299);
     const schemaShippingFee = freeShippingThreshold > 0 && computedPrice >= freeShippingThreshold ? 0 : shippingFee;
     const minDeliveryDays = Math.max(1, positiveNumber(settings.deliveryEtaMinDays, 3));
     const maxDeliveryDays = Math.max(minDeliveryDays, positiveNumber(settings.deliveryEtaMaxDays, 7));
@@ -545,7 +545,7 @@ const ProductDetailPage = () => {
     if (!product) return '';
     const shortDescription = cleanText(product.metaDescription || product.description || `${product.category || 'devotional product'} from Vrindavan.`);
     return truncateMeta(
-      `Buy authentic ${product.name} from Vrindavan. ${shortDescription}. Free shipping above ₹499. 100% genuine temple-sourced product. Order now at Brajmart.`,
+      `Buy authentic ${product.name} from Vrindavan. ${shortDescription}. Free shipping above ₹299. 100% genuine temple-sourced product. Order now at Brajmart.`,
       180
     );
   }, [product]);

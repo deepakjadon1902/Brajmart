@@ -15,6 +15,8 @@ import Footer from '@/components/layout/Footer';
 import { fetchPublicSettings, createPayuOrder } from '@/lib/api';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
+const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
+const DEFAULT_SHIPPING_FEE = 49;
 
 const emptyAddress: Address = { fullName: '', mobile: '', street: '', city: '', state: '', pincode: '' };
 
@@ -72,7 +74,9 @@ const CheckoutPage = () => {
   const [processing, setProcessing] = useState(false);
   const [customerEmail, setCustomerEmail] = useState(user?.email || '');
 
-  const shipping = totalPrice() >= settings.freeShippingThreshold ? 0 : settings.shippingFee;
+  const freeShippingThreshold = Number(settings.freeShippingThreshold) > 0 ? Number(settings.freeShippingThreshold) : DEFAULT_FREE_SHIPPING_THRESHOLD;
+  const shippingFee = Number(settings.shippingFee) > 0 ? Number(settings.shippingFee) : DEFAULT_SHIPPING_FEE;
+  const shipping = totalPrice() >= freeShippingThreshold ? 0 : shippingFee;
   const packagingRate = Math.max(0, Number(settings.packagingRate) || 0);
   const packagingCost = Math.round(totalPrice() * packagingRate / 100);
   const grandTotal = totalPrice() + packagingCost + shipping;
