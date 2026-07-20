@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Minus, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Minus, Plus, Trash2, Landmark, WalletCards } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createPayuOrder } from '@/lib/api';
+import { fetchPublicSettings, createPayuOrder, createRazorpayOrder, verifyRazorpayPayment } from '@/lib/api';
 import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
@@ -22,6 +22,27 @@ const DEFAULT_SHIPPING_FEE = 49;
 const emptyAddress: Address = { fullName: '', mobile: '', street: '', city: '', state: '', pincode: '' };
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open: () => void;
+      on: (event: string, handler: (response: unknown) => void) => void;
+    };
+  }
+}
+
+const loadRazorpayCheckout = () =>
+  new Promise<boolean>((resolve) => {
+    if (typeof window === 'undefined') return resolve(false);
+    if (window.Razorpay) return resolve(true);
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
 
 const INDIA_STATES = [
   'Andhra Pradesh',
@@ -69,7 +90,7 @@ const CheckoutPage = () => {
   const navigate = useNavigate();
 
   const [step, setStep] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState('upi');
+  const [paymentMethod, setPaymentMethod] = useState('razorpay');
   const [placedOrderId, setPlacedOrderId] = useState('');
   const [sameAsBilling, setSameAsBilling] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -142,7 +163,7 @@ const CheckoutPage = () => {
   }, [updateSettings]);
 
   useEffect(() => {
-    const available: string[] = [];
+    const available: string[] = ['razorpay'];
     if (settings.upiEnabled) available.push('upi');
     if (settings.cardEnabled) available.push('card');
     if (available.length > 0 && !available.includes(paymentMethod)) {
@@ -234,6 +255,95 @@ const CheckoutPage = () => {
     }
   };
 
+  const startRazorpayPayment = async () => {
+    if (!validateContactAndAddress()) return;
+    setProcessing(true);
+    try {
+      const loaded = await loadRazorpayCheckout();
+      if (!loaded || !window.Razorpay) {
+        throw new Error('Unable to load Razorpay checkout. Please try again.');
+      }
+
+      const orderPayload = {
+        userId: isAuthenticated ? user?.id : undefined,
+        items: items.map((i) => ({
+          productId: i.product.id,
+          name: i.product.name,
+          image: i.product.image,
+          quantity: i.quantity,
+          price: i.product.price,
+          selectedSize: i.product.selectedSize,
+          selectedPieces: i.product.selectedPieces,
+          selectedAttributes: i.product.selectedAttributes,
+        })),
+        total: grandTotal,
+        status: 'confirmed',
+        customerName: billingAddress.fullName,
+        customerEmail: effectiveEmail,
+        shippingAddress: effectiveShipping,
+        billingAddress,
+        paymentMethod: 'Razorpay',
+      };
+
+      const result = await createRazorpayOrder({
+        amount: grandTotal,
+        order: orderPayload,
+        customer: { name: billingAddress.fullName, email: effectiveEmail, phone: billingAddress.mobile },
+      });
+
+      const checkout = new window.Razorpay({
+        key: result.keyId,
+        amount: result.amount,
+        currency: result.currency,
+        name: result.name,
+        description: result.description,
+        image: settings.storeLogo || '/logo.png',
+        order_id: result.orderId,
+        prefill: result.prefill,
+        notes: {
+          source: 'brajmart_checkout',
+        },
+        theme: {
+          color: '#E8680A',
+        },
+        modal: {
+          ondismiss: () => setProcessing(false),
+        },
+        handler: async (response: unknown) => {
+          const payment = response as {
+            razorpay_order_id?: string;
+            razorpay_payment_id?: string;
+            razorpay_signature?: string;
+          };
+          try {
+            await verifyRazorpayPayment({
+              razorpay_order_id: payment.razorpay_order_id || result.orderId,
+              razorpay_payment_id: payment.razorpay_payment_id || '',
+              razorpay_signature: payment.razorpay_signature || '',
+            });
+            navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : '';
+            toast.error(message || 'Payment completed, but verification failed. We will verify it automatically.');
+            navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`);
+          } finally {
+            setProcessing(false);
+          }
+        },
+      });
+
+      checkout.on('payment.failed', () => {
+        toast.error('Razorpay payment failed. Please try again.');
+        setProcessing(false);
+      });
+      checkout.open();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '';
+      toast.error(message || 'Unable to start Razorpay payment. Please try again.');
+      setProcessing(false);
+    }
+  };
+
   const handlePlaceOrder = async () => {
     if (!validateContactAndAddress()) return;
 
@@ -255,7 +365,9 @@ const CheckoutPage = () => {
       payment_method: paymentMethod,
     });
 
-    if (paymentMethod === 'upi') {
+    if (paymentMethod === 'razorpay') {
+      startRazorpayPayment();
+    } else if (paymentMethod === 'upi') {
       startPayuPayment('upi');
     } else if (paymentMethod === 'card') {
       startPayuPayment('card');
@@ -272,21 +384,29 @@ const CheckoutPage = () => {
   ];
 
   const paymentOptions = [
+    {
+      value: 'razorpay',
+      title: 'Razorpay',
+      subtitle: 'Official Razorpay Checkout for UPI, cards, netbanking, wallets, and EMI',
+      icon: CreditCard,
+      pills: ['Primary', 'UPI', 'Cards', 'NetBanking', 'Wallets'],
+      badge: 'Primary',
+    },
     ...(settings.upiEnabled ? [{
       value: 'upi',
-      title: 'UPI',
-      subtitle: 'Pay securely using UPI',
+      title: 'PayU UPI',
+      subtitle: 'Secondary PayU fallback for UPI payments',
       icon: Smartphone,
       pills: ['GPay', 'PhonePe', 'Paytm', 'BHIM'],
-      badge: 'Recommended',
+      badge: 'Secondary',
     }] : []),
     ...(settings.cardEnabled ? [{
       value: 'card',
-      title: 'Credit or Debit Card',
-      subtitle: 'Visa, Mastercard, RuPay, Amex',
+      title: 'PayU Card',
+      subtitle: 'Secondary PayU fallback for cards',
       icon: CreditCard,
       pills: ['Visa', 'Mastercard', 'RuPay', 'Amex', 'Maestro'],
-      badge: 'Bank Offers',
+      badge: 'Secondary',
     }] : []),
   ];
 
@@ -541,6 +661,38 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
+                    {paymentMethod === 'razorpay' && (
+                      <div className="mt-5 overflow-hidden rounded-2xl border border-[#dfe7ff] bg-white shadow-sm">
+                        <div className="bg-[#0b72e7] px-5 py-4 text-white">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-widest text-white/75">Razorpay Secure Checkout</p>
+                              <h3 className="mt-1 text-lg font-semibold">Pay safely with Razorpay</h3>
+                              <p className="mt-1 text-xs text-white/80">The official Razorpay checkout window opens next with your saved amount and order ID.</p>
+                            </div>
+                            <div className="rounded-lg bg-white px-3 py-1.5 text-sm font-black tracking-tight text-[#0b72e7]">
+                              Razorpay
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 p-5 sm:grid-cols-3">
+                          {[
+                            { icon: Smartphone, title: 'UPI', text: 'GPay, PhonePe, Paytm, BHIM' },
+                            { icon: WalletCards, title: 'Cards & EMI', text: 'Visa, Mastercard, RuPay, Amex' },
+                            { icon: Landmark, title: 'NetBanking', text: 'Major Indian banks supported' },
+                          ].map((item) => (
+                            <div key={item.title} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                              <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                                <item.icon size={16} className="text-[#0b72e7]" />
+                                {item.title}
+                              </div>
+                              <p className="mt-1 text-xs text-slate-600">{item.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
 
                     <div className="mt-5 p-4 rounded-xl border border-gold/30 bg-gold/5 text-sm">
                       <div className="flex items-center gap-2 text-foreground font-medium">
@@ -559,7 +711,9 @@ const CheckoutPage = () => {
                     >
                       {processing
                         ? 'Processing Payment...'
-                        : `Pay Now - ${formatPrice(grandTotal)}`}
+                        : paymentMethod === 'razorpay'
+                          ? `Pay with Razorpay - ${formatPrice(grandTotal)}`
+                          : `Pay Now - ${formatPrice(grandTotal)}`}
                     </button>
                   </div>
                 </motion.div>

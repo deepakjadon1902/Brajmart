@@ -18,6 +18,7 @@ const payments_1 = __importDefault(require("./routes/payments"));
 const settings_1 = __importDefault(require("./routes/settings"));
 const upload_1 = __importDefault(require("./routes/upload"));
 const payu_1 = __importDefault(require("./routes/payu"));
+const razorpay_1 = __importDefault(require("./routes/razorpay"));
 const cart_1 = __importDefault(require("./routes/cart"));
 const heroSlides_1 = __importDefault(require("./routes/heroSlides"));
 const blogs_1 = __importDefault(require("./routes/blogs"));
@@ -27,6 +28,8 @@ const SITE_URL = (process.env.SITE_URL || 'https://www.brajmart.com').replace(/\
 const DEFAULT_CORS_ORIGINS = [
     'http://localhost:8080',
     'http://127.0.0.1:8080',
+    'http://localhost:8081',
+    'http://127.0.0.1:8081',
     'https://www.brajmart.com',
     'https://brajmart.com',
 ];
@@ -97,7 +100,14 @@ app.use((0, cors_1.default)((req, callback) => {
         return callback(new Error(`CORS blocked origin: ${origin}`));
     callback(null, { origin: true, credentials: true });
 }));
-app.use(express_1.default.json({ limit: '50mb' }));
+app.use(express_1.default.json({
+    limit: '50mb',
+    verify: (req, _res, buf) => {
+        if (req.originalUrl === '/api/razorpay/webhook') {
+            req.rawBody = buf.toString('utf8');
+        }
+    },
+}));
 app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
 const normalizeLegacySlug = (value) => String(value ?? '')
     .toLowerCase()
@@ -148,6 +158,7 @@ app.use('/api/payments', payments_1.default);
 app.use('/api/settings', settings_1.default);
 app.use('/api/upload', upload_1.default);
 app.use('/api/payu', payu_1.default);
+app.use('/api/razorpay', razorpay_1.default);
 app.use('/api/cart', cart_1.default);
 app.use('/api/hero-slides', heroSlides_1.default);
 app.use('/api/blogs', blogs_1.default);

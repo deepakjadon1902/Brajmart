@@ -275,17 +275,21 @@ const AdminSettings = () => {
       {activeTab === 'payments' && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><CreditCard size={18} /> Payment Methods</h2>
+          <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+            <p className="text-sm font-medium text-white">Razorpay Checkout</p>
+            <p className="text-xs text-slate-400">Primary checkout. Configure RAZORPAY_PLATFORM_KEY_ID, RAZORPAY_PLATFORM_KEY_SECRET, and RAZORPAY_PLATFORM_WEBHOOK_SECRET on the backend.</p>
+          </div>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-white">UPI Payments (PayU)</p>
-              <p className="text-xs text-slate-400">Enable PayU UPI in checkout</p>
+              <p className="text-xs text-slate-400">Enable PayU UPI as a secondary checkout option</p>
             </div>
             <Toggle value={upiEnabled} onChange={setUpiEnabled} />
           </div>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-white">Card Payments (PayU)</p>
-              <p className="text-xs text-slate-400">Enable card payments via PayU gateway</p>
+              <p className="text-xs text-slate-400">Enable PayU cards as a secondary checkout option</p>
             </div>
             <Toggle value={cardEnabled} onChange={setCardEnabled} />
           </div>

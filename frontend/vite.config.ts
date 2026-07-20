@@ -6,7 +6,8 @@ import path from "path";
 export default defineConfig(({ isSsrBuild }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 8081,
+    strictPort: true,
     proxy: {
       "/api": {
         target: "http://localhost:5001",

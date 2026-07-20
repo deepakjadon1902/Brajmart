@@ -113,6 +113,32 @@ export const createPayuOrder = (payload: {
     fields: Record<string, string>;
   }>('/payu/create-order', { method: 'POST', body: payload });
 
+export const createRazorpayOrder = (payload: {
+  amount: number;
+  order: Record<string, unknown>;
+  customer: { name: string; email: string; phone?: string };
+}) =>
+  getJson<{
+    keyId: string;
+    orderId: string;
+    statusToken: string;
+    amount: number;
+    currency: string;
+    name: string;
+    description: string;
+    prefill: { name: string; email: string; contact?: string };
+  }>('/razorpay/create-order', { method: 'POST', body: payload });
+
+export const verifyRazorpayPayment = (payload: {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}) =>
+  getJson<{ ok: boolean; orderId: number; paymentId: string; status: string }>('/razorpay/verify', {
+    method: 'POST',
+    body: payload,
+  });
+
 export const fetchPaymentStatus = (token: string) =>
   getJson(`/payments/status/${token}`);
 
