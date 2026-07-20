@@ -7,6 +7,7 @@ import { MapPin, Phone, Mail, Clock, Send, MessageSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import SEO from '@/components/seo/SEO';
 import { breadcrumbSchema } from '@/lib/seo';
+import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const contactInfo = [
   { icon: MapPin, title: 'Visit Us', lines: ['BrajMart EcomTech LLP', 'Keshav Kunj, Near ISKCON Temple, Raman Reti', 'Vrindavan, Mathura ', 'Uttar Pradesh — 281121, India'] },
@@ -21,6 +22,10 @@ const ContactPage = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    trackMetaPixelEvent('Lead', {
+      content_name: form.subject,
+      lead_type: 'contact_form',
+    });
     toast({ title: 'Message Sent! 🙏', description: 'We\'ll get back to you within 24 hours.' });
     setForm({ name: '', email: '', phone: '', subject: '', message: '' });
   };

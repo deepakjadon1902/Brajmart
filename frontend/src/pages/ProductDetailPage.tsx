@@ -19,6 +19,7 @@ import SEO from '@/components/seo/SEO';
 import { SITE_URL, breadcrumbSchema } from '@/lib/seo';
 import { categoryToSlug } from '@/store/productStore';
 import { getInitialData } from '@/lib/initialData';
+import { productToMetaPixelParams, trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const absoluteUrl = (value: string) => {
   const raw = String(value || '').trim();
@@ -557,6 +558,7 @@ const ProductDetailPage = () => {
       return;
     }
     for (let i = 0; i < quantity; i++) addToCart(variantProduct);
+    trackMetaPixelEvent('AddToCart', productToMetaPixelParams(variantProduct, quantity));
     toast.success(`${variantProduct.name} added to cart!`);
   };
 
@@ -567,7 +569,17 @@ const ProductDetailPage = () => {
       return;
     }
     for (let i = 0; i < quantity; i++) addToCart(variantProduct);
+    trackMetaPixelEvent('AddToCart', productToMetaPixelParams(variantProduct, quantity));
     navigate('/checkout');
+  };
+
+  const handleToggleWishlist = () => {
+    if (!product) return;
+    toggleItem(product);
+    if (!inWishlist) {
+      trackMetaPixelEvent('AddToWishlist', productToMetaPixelParams(product));
+    }
+    toast.success(inWishlist ? 'Removed from wishlist' : 'Added to wishlist ❤️');
   };
 
   if (!product) {
@@ -985,7 +997,7 @@ const ProductDetailPage = () => {
                 Buy Now
               </button>
               <button
-                onClick={() => { toggleItem(product); toast.success(inWishlist ? 'Removed from wishlist' : 'Added to wishlist ❤️'); }}
+                onClick={handleToggleWishlist}
                 className={`px-4 py-3.5 rounded-xl border-2 transition-colors active:scale-[0.97] ${inWishlist ? 'border-saffron bg-saffron/10 text-saffron' : 'border-border text-foreground hover:border-saffron hover:text-saffron'}`}
               >
                 <Heart size={18} className={inWishlist ? 'fill-current' : ''} />

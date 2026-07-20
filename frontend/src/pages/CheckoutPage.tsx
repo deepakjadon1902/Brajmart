@@ -13,6 +13,7 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { fetchPublicSettings, createPayuOrder } from '@/lib/api';
+import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
 const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
@@ -241,6 +242,18 @@ const CheckoutPage = () => {
       return;
     }
 
+    trackMetaPixelEvent('AddPaymentInfo', {
+      content_ids: items.map((i) => String(i.product.id || i.product.slug || i.product.name)),
+      content_type: 'product',
+      contents: items.map((i) => ({
+        id: String(i.product.id || i.product.slug || i.product.name),
+        item_price: Number(i.product.price) || 0,
+        quantity: Number(i.quantity) || 1,
+      })),
+      num_items: items.reduce((sum, i) => sum + (Number(i.quantity) || 1), 0),
+      value: grandTotal,
+      payment_method: paymentMethod,
+    });
 
     if (paymentMethod === 'upi') {
       startPayuPayment('upi');

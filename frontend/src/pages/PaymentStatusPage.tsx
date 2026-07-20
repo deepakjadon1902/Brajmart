@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { fetchPaymentStatus, trackOrder } from '@/lib/api';
+import { trackMetaPixelEvent } from '@/lib/metaPixel';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
@@ -71,6 +72,7 @@ const PaymentStatusPage = () => {
   useEffect(() => {
     if (!token || status !== 'paid' || amount === null) return;
     if (purchasePushedRef.current === token) return;
+    if (orderId && orderItems === null) return;
 
     const items = (Array.isArray(orderItems) ? orderItems : []).map((i: any) => ({
       item_id: String(i.productId || i.id || i._id || i.slug || i.name || ''),
@@ -78,6 +80,20 @@ const PaymentStatusPage = () => {
       price: Number(i.price || 0),
       quantity: Number(i.quantity || 1),
     }));
+
+    trackMetaPixelEvent('Purchase', {
+      content_ids: items.map((i) => i.item_id),
+      content_type: 'product',
+      contents: items.map((i) => ({
+        id: i.item_id,
+        item_price: i.price,
+        quantity: i.quantity,
+      })),
+      num_items: items.reduce((sum, i) => sum + i.quantity, 0),
+      order_id: orderId || undefined,
+      payment_type: method || undefined,
+      value: Number(amount),
+    });
 
     // Push GA4 ecommerce purchase event to GTM dataLayer.
     // Use payment token as the stable transaction identifier.

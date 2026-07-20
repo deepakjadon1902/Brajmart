@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useCartStore } from '@/store/cartStore';
 import { formatPrice } from '@/utils/formatPrice';
+import { productToMetaPixelParams, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
@@ -19,6 +20,7 @@ const WishlistPage = () => {
       return;
     }
     addToCart(product);
+    trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product));
     toast.success(`${product.name} added to cart!`);
   };
 

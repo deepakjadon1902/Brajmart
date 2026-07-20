@@ -7,6 +7,7 @@ import { formatPrice, calculateDiscount } from '@/utils/formatPrice';
 import { toSquareImageUrl } from '@/utils/image';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
+import { productToMetaPixelParams, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { toast } from 'sonner';
 
 interface ProductCardProps {
@@ -65,6 +66,7 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
       return;
     }
     addToCart(product);
+    trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product));
     toast.success(`${product.name} added to cart!`);
   };
 
@@ -72,6 +74,9 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
     e.preventDefault();
     e.stopPropagation();
     toggleItem(product);
+    if (!inWishlist) {
+      trackMetaPixelEvent('AddToWishlist', productToMetaPixelParams(product));
+    }
     toast.success(inWishlist ? 'Removed from wishlist' : 'Added to wishlist');
   };
 
@@ -83,6 +88,7 @@ const ProductCard = ({ product, index = 0, variant = 'default', priority = false
       return;
     }
     addToCart(product);
+    trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product));
     navigate('/checkout');
   };
 
