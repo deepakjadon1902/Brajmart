@@ -336,6 +336,48 @@ router.post('/verify', async (req, res) => {
   }
 });
 
+router.post('/failed', async (req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      customer_email,
+      reason,
+    } = req.body || {};
+
+    const razorpayOrderId = String(razorpay_order_id || '').trim();
+    const customerEmail = String(customer_email || '').trim().toLowerCase();
+    if (!razorpayOrderId || !customerEmail) {
+      return res.status(400).json({ message: 'Missing Razorpay order or customer email' });
+    }
+
+    const statusRows = await dbQuery<any>('SELECT order_id FROM payment_status WHERE token = ? LIMIT 1', [razorpayOrderId]);
+    const statusRow = statusRows[0];
+    if (!statusRow?.order_id) return res.status(404).json({ message: 'Payment not found' });
+
+    const orderRows = await dbQuery<any>('SELECT customer_email FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
+    const orderEmail = String(orderRows[0]?.customer_email || '').trim().toLowerCase();
+    if (!orderEmail || orderEmail !== customerEmail) {
+      return res.status(403).json({ message: 'Payment does not match this customer' });
+    }
+
+    const noteReason = String(reason || '').trim();
+    const result = await updateOrderForPayment({
+      razorpayOrderId,
+      razorpayPaymentId: razorpay_payment_id ? String(razorpay_payment_id) : undefined,
+      status: 'failed',
+      note: noteReason ? `Payment failed via Razorpay checkout: ${noteReason}` : 'Payment failed via Razorpay checkout',
+    });
+    if (!result) return res.status(404).json({ message: 'Payment not found' });
+
+    return res.json({ ok: true, ...result });
+  } catch (err: any) {
+    return res.status(500).json({ message: err?.message || 'Failed to record Razorpay payment failure' });
+  }
+});
+
 router.post('/webhook', async (req: any, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });

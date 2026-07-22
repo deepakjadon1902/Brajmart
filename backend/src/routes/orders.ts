@@ -6,6 +6,7 @@ import { auth, adminOnly, optionalAuth, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
 import { computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { upsertUserDefaultAddress } from '../lib/userAddress';
+import { checkDtdcPincode, trackDtdcShipment } from '../lib/dtdc';
 
 const router = Router();
 
@@ -61,6 +62,110 @@ router.get('/', auth, adminOnly, async (_req, res) => {
   }
 });
 
+const findOrderByLookup = async (lookup: string) => {
+  const input = String(lookup || '').trim();
+  if (!input) return null;
+  const rows = await dbQuery<any>(
+    `SELECT * FROM orders
+     WHERE LOWER(tracking_id) = LOWER(?) OR id = ?
+     ORDER BY updated_at DESC, id DESC
+     LIMIT 1`,
+    [input, /^\d+$/.test(input) ? Number(input) : -1]
+  );
+  return rows[0] || null;
+};
+
+const buildDtdcOrderStatusTracking = (order: ReturnType<typeof mapOrderRow>, message: string) => ({
+  carrier: 'DTDC',
+  trackingId: order.trackingId,
+  currentStatus: order.status.replace(/_/g, ' '),
+  lastLocation: '',
+  events: [{
+    status: order.status.replace(/_/g, ' '),
+    location: '',
+    date: order.updatedAt || order.createdAt || '',
+    time: '',
+    remarks: message,
+  }],
+});
+
+router.get('/dtdc/track/:lookup', async (req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const row = await findOrderByLookup(req.params.lookup);
+    if (!row) {
+      const trackingId = String(req.params.lookup || '').trim();
+      if (!trackingId) return res.status(404).json({ message: 'Order not found' });
+      const tracking = await trackDtdcShipment({ trackingId });
+      return res.json({ order: null, tracking });
+    }
+
+    const order = mapOrderRow(row);
+    const service = String(order.shippingService || '').toLowerCase();
+    if (service && !service.includes('dtdc')) {
+      return res.status(400).json({ message: 'This order is not assigned to DTDC' });
+    }
+    if (!order.trackingId) return res.status(400).json({ message: 'DTDC tracking ID is not available yet' });
+    if (!['shipped', 'out_for_delivery', 'delivered'].includes(String(order.status))) {
+      return res.json({
+        order,
+        tracking: buildDtdcOrderStatusTracking(order, 'DTDC live tracking will be available after dispatch.'),
+      });
+    }
+
+    const tracking = await trackDtdcShipment({ trackingId: order.trackingId });
+    return res.json({ order, tracking });
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Unable to fetch DTDC tracking' });
+  }
+});
+
+router.get('/admin/dtdc/track/:lookup', auth, adminOnly, async (req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const row = await findOrderByLookup(req.params.lookup);
+    if (!row) {
+      const trackingId = String(req.params.lookup || '').trim();
+      if (!trackingId) return res.status(400).json({ message: 'Tracking ID is required' });
+      const tracking = await trackDtdcShipment({ trackingId });
+      return res.json({ order: null, tracking });
+    }
+
+    const order = mapOrderRow(row);
+    const trackingId = order.trackingId || String(req.params.lookup || '').trim();
+    if (!trackingId) return res.status(400).json({ message: 'Tracking ID is required' });
+
+    const tracking = await trackDtdcShipment({ trackingId });
+    return res.json({ order, tracking });
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Unable to fetch DTDC tracking' });
+  }
+});
+
+router.post('/dtdc/pincode', async (req, res) => {
+  try {
+    const result = await checkDtdcPincode({
+      orgPincode: req.body?.orgPincode,
+      desPincode: req.body?.desPincode,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Unable to check DTDC pincode' });
+  }
+});
+
+router.post('/admin/dtdc/pincode', auth, adminOnly, async (req, res) => {
+  try {
+    const result = await checkDtdcPincode({
+      orgPincode: req.body?.orgPincode,
+      desPincode: req.body?.desPincode,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Unable to check DTDC pincode' });
+  }
+});
+
 router.get('/track/:orderId', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
@@ -77,7 +182,10 @@ router.get('/track-by-id/:trackingId', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const trackingId = req.params.trackingId;
-    const rows = await dbQuery<any>('SELECT * FROM orders WHERE tracking_id = ? LIMIT 1', [trackingId]);
+    const rows = await dbQuery<any>(
+      'SELECT * FROM orders WHERE LOWER(tracking_id) = LOWER(?) ORDER BY updated_at DESC, id DESC LIMIT 1',
+      [trackingId]
+    );
     if (!rows[0]) return res.status(404).json({ message: 'Order not found' });
     res.json(mapOrderRow(rows[0]));
   } catch (err: any) {
@@ -197,6 +305,16 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
         nextTrackingId = null;
       } else {
         nextTrackingId = cleaned;
+      }
+    }
+
+    if (nextTrackingId) {
+      const duplicateRows = await dbQuery<any>(
+        'SELECT id FROM orders WHERE LOWER(tracking_id) = LOWER(?) AND id <> ? LIMIT 1',
+        [nextTrackingId, req.params.id]
+      );
+      if (duplicateRows[0]) {
+        return res.status(409).json({ message: `Tracking ID ${nextTrackingId} is already assigned to another order` });
       }
     }
 

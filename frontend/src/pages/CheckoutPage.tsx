@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Minus, Plus, Trash2, Landmark, WalletCards } from 'lucide-react';
+import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Minus, Plus, Trash2, Landmark, WalletCards, Truck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createPayuOrder, createRazorpayOrder, verifyRazorpayPayment } from '@/lib/api';
+import { fetchPublicSettings, createPayuOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDtdcPincode } from '@/lib/api';
 import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
@@ -95,6 +95,8 @@ const CheckoutPage = () => {
   const [sameAsBilling, setSameAsBilling] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [customerEmail, setCustomerEmail] = useState(user?.email || '');
+  const [serviceability, setServiceability] = useState<{ pincode: string; serviceable: boolean; message?: string } | null>(null);
+  const [checkingPincode, setCheckingPincode] = useState(false);
 
   const freeShippingThreshold = Number(settings.freeShippingThreshold) > 0 ? Number(settings.freeShippingThreshold) : DEFAULT_FREE_SHIPPING_THRESHOLD;
   const shippingFee = Number(settings.shippingFee) > 0 ? Number(settings.shippingFee) : DEFAULT_SHIPPING_FEE;
@@ -200,6 +202,45 @@ const CheckoutPage = () => {
       return false;
     }
     return true;
+  };
+
+  const verifyDeliveryPincode = async () => {
+    const pincode = String(effectiveShipping.pincode || '').trim();
+    if (!/^\d{6}$/.test(pincode)) {
+      toast.error('Please enter a valid 6 digit delivery pincode');
+      setStep(0);
+      return false;
+    }
+    if (serviceability?.pincode === pincode && serviceability.serviceable) return true;
+
+    setCheckingPincode(true);
+    try {
+      const result: any = await checkDtdcPincode({ desPincode: pincode });
+      const next = {
+        pincode,
+        serviceable: Boolean(result?.serviceable),
+        message: typeof result?.message === 'string' ? result.message : '',
+      };
+      setServiceability(next);
+      if (!next.serviceable) {
+        toast.error(next.message || 'DTDC delivery is not available for this pincode right now');
+        return false;
+      }
+      toast.success('Delivery pincode verified');
+      return true;
+    } catch {
+      setServiceability(null);
+      toast.info('Could not verify courier serviceability right now. You can continue and our team will confirm dispatch.');
+      return true;
+    } finally {
+      setCheckingPincode(false);
+    }
+  };
+
+  const handleContinueToPayment = async () => {
+    if (!validateContactAndAddress()) return;
+    const canDeliver = await verifyDeliveryPincode();
+    if (canDeliver) setStep(1);
   };
 
   const submitPayuForm = (actionUrl: string, fields: Record<string, string>) => {
@@ -332,9 +373,31 @@ const CheckoutPage = () => {
         },
       });
 
-      checkout.on('payment.failed', () => {
+      checkout.on('payment.failed', async (response: unknown) => {
+        const failure = response as {
+          error?: {
+            description?: string;
+            reason?: string;
+            metadata?: {
+              order_id?: string;
+              payment_id?: string;
+            };
+          };
+        };
+        const reason = failure?.error?.description || failure?.error?.reason || 'Payment failed';
+        try {
+          await reportRazorpayPaymentFailed({
+            razorpay_order_id: failure?.error?.metadata?.order_id || result.orderId,
+            razorpay_payment_id: failure?.error?.metadata?.payment_id,
+            customer_email: effectiveEmail,
+            reason,
+          });
+        } catch {
+          // Webhooks may still reconcile this. Keep the user moving to the status page.
+        }
         toast.error('Razorpay payment failed. Please try again.');
         setProcessing(false);
+        navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`);
       });
       checkout.open();
     } catch (err: unknown) {
@@ -522,8 +585,26 @@ const CheckoutPage = () => {
 
                     {!sameAsBilling && renderAddressForm(shippingAddress, setShippingAddress, 'Shipping Address')}
 
-                    <button onClick={() => validateContactAndAddress() && setStep(1)} className="w-full py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform">
-                      Continue to Payment
+                    <div className="rounded-xl border border-border bg-muted/30 p-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <Truck size={16} className="text-gold" />
+                        DTDC delivery check
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {serviceability?.pincode === String(effectiveShipping.pincode || '').trim()
+                          ? serviceability.serviceable
+                            ? `Delivery available for ${serviceability.pincode}.`
+                            : serviceability.message || `Delivery needs review for ${serviceability.pincode}.`
+                          : 'Your delivery pincode is verified before payment for a smoother dispatch.'}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handleContinueToPayment}
+                      disabled={checkingPincode}
+                      className="w-full py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform disabled:opacity-60"
+                    >
+                      {checkingPincode ? 'Checking Delivery...' : 'Continue to Payment'}
                     </button>
                   </div>
                 </motion.div>

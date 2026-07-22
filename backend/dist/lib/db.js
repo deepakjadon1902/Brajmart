@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dbExecute = exports.dbQuery = exports.isDbConnected = exports.connectDb = void 0;
+exports.dbExecute = exports.dbQuery = exports.isDbConnected = exports.connectDb = exports.describeDbTarget = void 0;
 const promise_1 = __importDefault(require("mysql2/promise"));
 let pool = null;
 let connected = false;
@@ -13,10 +13,16 @@ const getConfig = () => {
     const database = process.env.DB_NAME;
     const password = process.env.DB_PASSWORD || '';
     const port = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
-    return { host, user, database, password, port };
+    const connectTimeout = process.env.DB_CONNECT_TIMEOUT_MS ? Number(process.env.DB_CONNECT_TIMEOUT_MS) : 10000;
+    return { host, user, database, password, port, connectTimeout };
 };
+const describeDbTarget = () => {
+    const { host, database, port } = getConfig();
+    return `${host || '<missing-host>'}:${port}/${database || '<missing-db>'}`;
+};
+exports.describeDbTarget = describeDbTarget;
 const connectDb = async () => {
-    const { host, user, database, password, port } = getConfig();
+    const { host, user, database, password, port, connectTimeout } = getConfig();
     if (!host || !user || !database) {
         connected = false;
         throw new Error('DB_HOST/DB_USER/DB_NAME is not set.');
@@ -32,6 +38,7 @@ const connectDb = async () => {
             connectionLimit: 10,
             queueLimit: 0,
             timezone: 'Z',
+            connectTimeout,
         });
         await pool.query('SELECT 1');
         connected = true;

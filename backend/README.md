@@ -38,6 +38,19 @@ Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 - `POST /api/orders` — Create order (auth)
 - `PUT /api/orders/:id/status` — Update status (admin)
 
+### DTDC Tracking
+- `GET /api/orders/dtdc/track/:lookup` - Live DTDC tracking for dispatched DTDC orders (public)
+- `GET /api/orders/admin/dtdc/track/:lookup` - Live DTDC tracking lookup (admin)
+- `POST /api/orders/admin/dtdc/pincode` - DTDC origin/destination pincode serviceability check (admin)
+
+Environment variables:
+- `DTDC_USERNAME` - DTDC API username
+- `DTDC_PASSWORD` - DTDC API password
+- `DTDC_ENV` - `production` or `staging` (defaults to `production`)
+- `DTDC_ORIGIN_PINCODE` - Store pickup/origin pincode for pincode checks
+- `DTDC_TRACKING_URL` - Optional production tracking URL override
+- `DTDC_PINCODE_URL` - Optional pincode API URL override
+
 ### Payments
 - `GET /api/payments` — All payments (admin)
 - `POST /api/payments` — Record payment (auth)

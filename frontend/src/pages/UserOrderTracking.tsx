@@ -1,14 +1,15 @@
 import * as React from "react";
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useOrderStore, OrderStatus } from '@/store/orderStore';
 import { useAuthStore } from '@/store/authStore';
+import { trackDtdcOrder, trackOrder, trackOrderById } from '@/lib/api';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { OrderPaymentBreakdown } from '@/components/orders/OrderPaymentBreakdown';
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
-import { Search, Package, CheckCircle, Truck, MapPin, BoxIcon, ArrowLeft, Clock, Copy } from 'lucide-react';
+import { Search, Package, CheckCircle, Truck, MapPin, BoxIcon, ArrowLeft, Clock, Copy, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 const statusSteps: { status: OrderStatus; label: string; icon: any }[] = [
@@ -21,9 +22,14 @@ const statusSteps: { status: OrderStatus; label: string; icon: any }[] = [
 
 const UserOrderTracking = () => {
   const [searchId, setSearchId] = useState('');
+  const [searchParams] = useSearchParams();
   const { user, token } = useAuthStore();
   const { getOrdersByUser, getOrderById, orders, loadMyOrders } = useOrderStore();
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [trackedOrder, setTrackedOrder] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [dtdcTracking, setDtdcTracking] = useState<any | null>(null);
+  const [dtdcLoading, setDtdcLoading] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -31,19 +37,116 @@ const UserOrderTracking = () => {
     }
   }, [token, loadMyOrders]);
 
-  const userOrders = orders.length ? orders : (user ? getOrdersByUser(user.id) : []);
-  const selectedOrder = selectedOrderId ? getOrderById(selectedOrderId) : null;
+  useEffect(() => {
+    const orderIdParam = searchParams.get('orderId');
+    if (orderIdParam) {
+      setSearchId(orderIdParam);
+    }
+  }, [searchParams]);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const userOrders = orders.length ? orders : (user ? getOrdersByUser(user.id) : []);
+  const selectedOrder = trackedOrder || (selectedOrderId ? getOrderById(selectedOrderId) : null);
+
+  const normalizeApiOrder = (o: any) => ({
+    ...o,
+    id: o.orderId ? String(o.orderId) : o._id || o.id,
+    userId: o.userId !== undefined && o.userId !== null ? String(o.userId) : 'user',
+    items: (o.items || []).map((i: any) => ({
+      ...i,
+      product: {
+        name: i?.name || i?.product?.name || 'Item',
+        image: i?.image || i?.product?.image || '',
+      },
+      quantity: i?.quantity || 1,
+      price: Number(i?.price || i?.product?.price || 0),
+    })),
+    shippingAddress: o.shippingAddress || {},
+    billingAddress: o.billingAddress || {},
+    statusHistory: o.statusHistory || [],
+  });
+
+  const loadDtdcTracking = async (orderToTrack: any) => {
+    const service = String(orderToTrack?.shippingService || '').toLowerCase();
+    const awb = String(orderToTrack?.trackingId || '').trim();
+    const shipped = ['shipped', 'out_for_delivery', 'delivered'].includes(String(orderToTrack?.status || ''));
+    if (!service.includes('dtdc') || !awb || !shipped) return;
+
+    setDtdcLoading(true);
+    try {
+      const data: any = await trackDtdcOrder(awb);
+      setDtdcTracking(data?.tracking || null);
+    } catch (err: any) {
+      setDtdcTracking({
+        carrier: 'DTDC',
+        trackingId: awb,
+        currentStatus: 'Tracking is available from your BrajMart order status',
+        events: [{ status: orderToTrack.status, remarks: err?.message || 'Live DTDC tracking is not available right now' }],
+      });
+    } finally {
+      setDtdcLoading(false);
+    }
+  };
+
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = searchId.trim();
     if (!id) return;
+    setLoading(true);
+    setDtdcTracking(null);
+    setTrackedOrder(null);
     const found = getOrderById(id);
     if (found) {
       setSelectedOrderId(id);
-    } else {
-      toast.error('Order not found. Please check the Order ID.');
+      loadDtdcTracking(found).catch(() => {});
+      setLoading(false);
+      return;
     }
+
+    try {
+      let apiOrder: any;
+      try {
+        apiOrder = await trackOrderById(id);
+      } catch {
+        if (/^\d+$/.test(id)) {
+          apiOrder = await trackOrder(id);
+        } else {
+          throw new Error('Order not found');
+        }
+      }
+      const normalized = normalizeApiOrder(apiOrder);
+      setSelectedOrderId(null);
+      setTrackedOrder(normalized);
+      loadDtdcTracking(normalized).catch(() => {});
+      toast.success('Order found');
+    } catch (err: any) {
+      try {
+        const data: any = await trackDtdcOrder(id);
+        if (data?.order) {
+          const normalized = normalizeApiOrder(data.order);
+          setTrackedOrder(normalized);
+          setSelectedOrderId(null);
+        }
+        setDtdcTracking(data?.tracking || null);
+        toast.success(data?.order ? 'Order found' : 'DTDC tracking loaded');
+      } catch (liveErr: any) {
+        toast.error(liveErr?.message || err?.message || 'Order not found. Please check the tracking ID.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectOrder = (order: any) => {
+    setTrackedOrder(order);
+    setSelectedOrderId(order.trackingId || order.id);
+    setDtdcTracking(null);
+    loadDtdcTracking(order).catch(() => {});
+  };
+
+  const clearSelectedOrder = () => {
+    setSelectedOrderId(null);
+    setTrackedOrder(null);
+    setDtdcTracking(null);
   };
 
   const currentStepIndex = selectedOrder ? statusSteps.findIndex((s) => s.status === selectedOrder.status) : -1;
@@ -59,16 +162,16 @@ const UserOrderTracking = () => {
           <ScrollReveal>
             <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">ORDER TRACKING</p>
             <h1 className="font-cinzel text-3xl md:text-4xl font-bold mb-6 text-white">Track Your Order</h1>
-            <p className="text-primary-foreground/60 text-sm mb-6 text-white">Enter your Order ID to track your delivery</p>
+            <p className="text-primary-foreground/60 text-sm mb-6 text-white">Enter the tracking ID sent to your email</p>
             <form onSubmit={handleSearch} className="max-w-md mx-auto flex rounded-full border border-primary-foreground/20 overflow-hidden bg-primary-foreground/5">
               <input
                 value={searchId}
                 onChange={(e) => setSearchId(e.target.value)}
-                placeholder="Enter Order ID"
+                placeholder="Enter tracking ID or order ID"
                 className="flex-1 px-5 py-3 bg-transparent text-sm outline-none placeholder:text-primary-foreground/40"
               />
-              <button type="submit" className="px-6 bg-gold-gradient text-maroon-dark font-bold text-sm shimmer">
-                <Search size={18} />
+              <button type="submit" className="px-6 bg-gold-gradient text-maroon-dark font-bold text-sm shimmer disabled:opacity-60" disabled={loading}>
+                {loading ? <RefreshCw size={18} className="animate-spin" /> : <Search size={18} />}
               </button>
             </form>
           </ScrollReveal>
@@ -78,7 +181,7 @@ const UserOrderTracking = () => {
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
         {selectedOrder ? (
           <div className="space-y-6">
-            <button onClick={() => setSelectedOrderId(null)} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+            <button onClick={clearSelectedOrder} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
               <ArrowLeft size={14} /> Back to orders
             </button>
 
@@ -88,7 +191,7 @@ const UserOrderTracking = () => {
                 <div>
                   <p className="text-xs text-muted-foreground">Order ID</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-xl font-bold text-saffron font-mono">{selectedOrder.trackingId || 'Pending'}</p>
+                    <p className="text-xl font-bold text-saffron font-mono">{selectedOrder.trackingId || selectedOrder.id}</p>
                     <button onClick={() => { navigator.clipboard.writeText(selectedOrder.trackingId || selectedOrder.id); toast.success('Copied!'); }} className="text-muted-foreground hover:text-foreground">
                       <Copy size={14} />
                     </button>
@@ -99,6 +202,52 @@ const UserOrderTracking = () => {
                   <p className="font-mono text-foreground">{selectedOrder.id}</p>
                 </div>
               </div>
+
+              {String(selectedOrder.shippingService || '').toLowerCase().includes('dtdc') && (
+                <div className="mb-6 rounded-xl border border-border bg-muted/30 p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">DTDC Tracking</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {selectedOrder.trackingId ? `AWB ${selectedOrder.trackingId}` : 'AWB pending'}
+                      </p>
+                    </div>
+                    {dtdcLoading ? (
+                      <span className="inline-flex items-center gap-2 text-xs text-saffron">
+                        <RefreshCw size={13} className="animate-spin" />
+                        Fetching courier status...
+                      </span>
+                    ) : selectedOrder.trackingId && ['shipped', 'out_for_delivery', 'delivered'].includes(String(selectedOrder.status)) ? (
+                      <button
+                        type="button"
+                        onClick={() => loadDtdcTracking(selectedOrder)}
+                        className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-saffron/40 text-saffron text-xs font-medium hover:bg-saffron/10"
+                      >
+                        <RefreshCw size={13} />
+                        Refresh DTDC
+                      </button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Available after dispatch</span>
+                    )}
+                  </div>
+                  {dtdcTracking && (
+                    <div className="mt-3 rounded-lg border border-border/70 bg-background/40 p-3">
+                      <p className="text-sm font-semibold text-foreground">{dtdcTracking.currentStatus}</p>
+                      {dtdcTracking.lastLocation && <p className="mt-1 text-xs text-muted-foreground">Last location: {dtdcTracking.lastLocation}</p>}
+                      {dtdcTracking.trackingPortalUrl && (
+                        <a
+                          href={dtdcTracking.trackingPortalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex text-xs font-medium text-saffron hover:underline"
+                        >
+                          Track on DTDC portal
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Timeline */}
               {selectedOrder.status !== 'cancelled' ? (
@@ -190,6 +339,46 @@ const UserOrderTracking = () => {
               <OrderPaymentBreakdown itemsSubtotal={selectedOrder.itemsSubtotal} packagingAmount={selectedOrder.packagingAmount} packagingRate={selectedOrder.packagingRate} shippingAmount={selectedOrder.shippingAmount} total={selectedOrder.total} calculatedItemsSubtotal={selectedOrder.items.reduce((sum, item) => sum + item.price * item.quantity, 0)} paymentMethod={selectedOrder.paymentMethod} />
             </div>
           </div>
+        ) : dtdcTracking ? (
+          <div className="bg-card border border-border rounded-2xl p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">DTDC Tracking</p>
+                <h2 className="font-cinzel text-xl font-bold text-foreground">AWB {dtdcTracking.trackingId || searchId}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={loading}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-saffron/40 text-saffron text-xs font-semibold hover:bg-saffron/10 disabled:opacity-60"
+              >
+                <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+            </div>
+            <div className="rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-sm font-semibold text-foreground">{dtdcTracking.currentStatus}</p>
+              {dtdcTracking.lastLocation && <p className="mt-1 text-xs text-muted-foreground">Last location: {dtdcTracking.lastLocation}</p>}
+              {dtdcTracking.trackingPortalUrl && (
+                <a href={dtdcTracking.trackingPortalUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-medium text-saffron hover:underline">
+                  Track on DTDC portal
+                </a>
+              )}
+            </div>
+            {(dtdcTracking.events || []).length > 0 && (
+              <div className="mt-4 space-y-4">
+                {dtdcTracking.events.map((event: any, idx: number) => (
+                  <div key={`${event.status}-${idx}`} className="flex gap-3">
+                    <div className="mt-1 h-2.5 w-2.5 rounded-full bg-saffron shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{event.status}</p>
+                      {event.remarks && <p className="text-xs text-muted-foreground mt-1">{event.remarks}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ) : (
           /* Order List */
           <div className="space-y-4">
@@ -204,7 +393,7 @@ const UserOrderTracking = () => {
               userOrders.map((order) => (
                 <button
                   key={order.id}
-                  onClick={() => setSelectedOrderId(order.trackingId || order.id)}
+                  onClick={() => selectOrder(order)}
                   className="w-full bg-card border border-border rounded-2xl p-5 text-left hover:border-saffron/40 transition"
                 >
                   <div className="flex items-center justify-between mb-2">

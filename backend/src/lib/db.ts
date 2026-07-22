@@ -9,11 +9,17 @@ const getConfig = () => {
   const database = process.env.DB_NAME;
   const password = process.env.DB_PASSWORD || '';
   const port = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
-  return { host, user, database, password, port };
+  const connectTimeout = process.env.DB_CONNECT_TIMEOUT_MS ? Number(process.env.DB_CONNECT_TIMEOUT_MS) : 10_000;
+  return { host, user, database, password, port, connectTimeout };
+};
+
+export const describeDbTarget = () => {
+  const { host, database, port } = getConfig();
+  return `${host || '<missing-host>'}:${port}/${database || '<missing-db>'}`;
 };
 
 export const connectDb = async () => {
-  const { host, user, database, password, port } = getConfig();
+  const { host, user, database, password, port, connectTimeout } = getConfig();
   if (!host || !user || !database) {
     connected = false;
     throw new Error('DB_HOST/DB_USER/DB_NAME is not set.');
@@ -29,6 +35,7 @@ export const connectDb = async () => {
       connectionLimit: 10,
       queueLimit: 0,
       timezone: 'Z',
+      connectTimeout,
     });
     await pool.query('SELECT 1');
     connected = true;

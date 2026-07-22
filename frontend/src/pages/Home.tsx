@@ -93,7 +93,7 @@ const Home = () => {
         <DeferredMount minHeight={390}>
           <CollectionSection
             tag="BRAJMART COLLECTION"
-            title="Latest Puja Items "
+            title="Latest Products "
             subtitle="Fresh arrivals from the divine lands of Braj"
             products={latestProducts}
             viewAllLink="/products?tag=latest"
@@ -103,7 +103,7 @@ const Home = () => {
         <DeferredMount minHeight={390}>
           <CollectionSection
             tag="MOST LOVED"
-            title="Best-Selling Puja Items"
+            title="Best-Selling Products"
             subtitle="Top picks from our devotee community"
             products={bestSellingProducts}
             viewAllLink="/products?tag=bestseller"

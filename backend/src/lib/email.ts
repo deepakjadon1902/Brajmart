@@ -406,10 +406,15 @@ export const sendAdminPaymentNotice = async (payload: { status: 'paid' | 'failed
 };
 
 export const sendShippingUpdate = async (to: string, payload: { orderId: string; status: string; trackingId?: string; eta?: string; details?: ({ items?: OrderItem[]; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } & OrderPriceBreakdown) }) => {
+  const frontendUrl = String(process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || process.env.APP_URL || '').replace(/\/$/, '');
+  const trackingUrl = payload.trackingId && frontendUrl
+    ? `${frontendUrl}/track-order?orderId=${encodeURIComponent(payload.trackingId)}`
+    : '';
   const html = await brandWrapper(
     'Shipping Update',
     `<p>Your order <strong>${escapeHtml(payload.orderId)}</strong> status is now <strong>${escapeHtml(payload.status)}</strong>.</p>
      ${payload.trackingId ? `<p>Tracking ID: ${escapeHtml(payload.trackingId)}</p>` : ''}
+     ${trackingUrl ? `<p><a href="${trackingUrl}" style="display:inline-block;padding:10px 16px;background:#c58f1f;color:#fff;text-decoration:none;border-radius:8px;">Track your order</a></p>` : ''}
      ${payload.eta ? `<p><strong>Estimated delivery:</strong> ${escapeHtml(payload.eta)}</p>` : ''}
      ${payload.details ? renderOrderDetails(payload.details) : ''}`
   );

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { OrderStatus } from '@/store/orderStore';
 import { StatusBadge } from './AdminDashboard';
-import { Search, Eye, X } from 'lucide-react';
-import { fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
+import { Search, Eye, X, RefreshCw, MapPin } from 'lucide-react';
+import { adminCheckDtdcPincode, adminTrackDtdcOrder, fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
 import { toast } from 'sonner';
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
@@ -14,6 +14,10 @@ const AdminOrders = () => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [editingTrackingId, setEditingTrackingId] = useState<string>('');
+  const [dtdcTracking, setDtdcTracking] = useState<any | null>(null);
+  const [dtdcLoading, setDtdcLoading] = useState(false);
+  const [pincodeResult, setPincodeResult] = useState<any | null>(null);
+  const [pincodeLoading, setPincodeLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -57,14 +61,22 @@ const AdminOrders = () => {
   useEffect(() => {
     if (!selectedOrder) {
       setEditingTrackingId('');
+      setDtdcTracking(null);
+      setPincodeResult(null);
       return;
     }
     const found = orders.find((o) => o.id === selectedOrder);
     setEditingTrackingId(found?.trackingId || '');
+    setDtdcTracking(null);
+    setPincodeResult(null);
   }, [selectedOrder, orders]);
 
   const filtered = orders.filter((o) => {
-    const matchSearch = o.id.toLowerCase().includes(search.toLowerCase()) || o.shippingAddress.fullName.toLowerCase().includes(search.toLowerCase());
+    const query = search.toLowerCase();
+    const customer = String(o.shippingAddress?.fullName || o.customerName || '').toLowerCase();
+    const email = String(o.customerEmail || '').toLowerCase();
+    const awb = String(o.trackingId || '').toLowerCase();
+    const matchSearch = String(o.id || '').toLowerCase().includes(query) || customer.includes(query) || email.includes(query) || awb.includes(query);
     const matchStatus = filterStatus === 'all' || o.status === filterStatus;
     return matchSearch && matchStatus;
   });
@@ -82,6 +94,7 @@ const AdminOrders = () => {
       const updated: any = await updateOrderStatusApi(orderId, {
         status: detail.status,
         trackingId: cleaned,
+        shippingService: detail.shippingService || 'DTDC',
         note: `Tracking ID updated to ${cleaned}`,
       });
       const normalized = normalizeOrder(updated);
@@ -95,13 +108,49 @@ const AdminOrders = () => {
   const handleStatusUpdate = async (orderId: string, status: OrderStatus, shippingService?: string) => {
     try {
       const payload: any = { status, note: `Status updated to ${status}` };
-      if (shippingService) payload.shippingService = shippingService;
+      if (shippingService !== undefined) payload.shippingService = shippingService;
       const updated: any = await updateOrderStatusApi(orderId, payload);
       const normalized = normalizeOrder(updated);
       setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...normalized } : o)));
       toast.success('Order updated');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update order');
+    }
+  };
+
+  const handleAdminDtdcTrack = async () => {
+    if (!detail) return;
+    const lookup = String(detail.trackingId || '').trim();
+    if (!lookup) {
+      toast.error('Add and update the DTDC AWB/tracking ID first');
+      return;
+    }
+    setDtdcLoading(true);
+    try {
+      const data: any = await adminTrackDtdcOrder(lookup);
+      setDtdcTracking(data?.tracking || null);
+      toast.success('DTDC tracking updated');
+    } catch (err: any) {
+      toast.error(err?.message || 'Unable to fetch DTDC tracking');
+    } finally {
+      setDtdcLoading(false);
+    }
+  };
+
+  const handlePincodeCheck = async () => {
+    if (!detail?.shippingAddress?.pincode) {
+      toast.error('Destination pincode is missing');
+      return;
+    }
+    setPincodeLoading(true);
+    try {
+      const data: any = await adminCheckDtdcPincode({ desPincode: String(detail.shippingAddress.pincode) });
+      setPincodeResult(data);
+      toast.success('DTDC pincode checked');
+    } catch (err: any) {
+      toast.error(err?.message || 'Unable to check DTDC pincode');
+    } finally {
+      setPincodeLoading(false);
     }
   };
 
@@ -137,7 +186,7 @@ const AdminOrders = () => {
               {filtered.map((o) => (
                 <tr key={o.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                   <td className="px-5 py-3 text-amber-400 font-mono text-xs">{o.id}</td>
-                  <td className="px-5 py-3 text-white">{o.shippingAddress.fullName}</td>
+                  <td className="px-5 py-3 text-white">{o.shippingAddress?.fullName || o.customerName || '-'}</td>
                   <td className="px-5 py-3 text-slate-300 hidden sm:table-cell">{o.items.length} items</td>
                   <td className="px-5 py-3 text-white font-medium">INR {o.total.toLocaleString('en-IN')}</td>
                   <td className="px-5 py-3 text-slate-300 hidden sm:table-cell">{o.paymentMethod}</td>
@@ -181,21 +230,21 @@ const AdminOrders = () => {
               <div>
                 <h3 className="text-sm font-medium text-slate-400 mb-2">Shipping Address</h3>
                 <div className="bg-slate-800/50 rounded-xl p-3 text-sm text-slate-300">
-                  <p className="font-medium text-white">{detail.shippingAddress.fullName}</p>
-                  <p>{detail.shippingAddress.street}, {detail.shippingAddress.city}</p>
-                  <p>{detail.shippingAddress.state} - {detail.shippingAddress.pincode}</p>
-                  <p>Phone: {detail.shippingAddress.mobile}</p>
+                  <p className="font-medium text-white">{detail.shippingAddress?.fullName || detail.customerName || '-'}</p>
+                  <p>{[detail.shippingAddress?.street, detail.shippingAddress?.city].filter(Boolean).join(', ') || '-'}</p>
+                  <p>{[detail.shippingAddress?.state, detail.shippingAddress?.pincode].filter(Boolean).join(' - ') || '-'}</p>
+                  <p>Phone: {detail.shippingAddress?.mobile || '-'}</p>
                 </div>
               </div>
 
               {/* Tracking ID */}
               <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-2">Order ID (Tracking)</h3>
+                <h3 className="text-sm font-medium text-slate-400 mb-2">DTDC AWB / Tracking ID</h3>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     value={editingTrackingId}
                     onChange={(e) => setEditingTrackingId(e.target.value)}
-                    placeholder="Enter Order ID"
+                    placeholder="Enter DTDC AWB"
                     className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 font-mono"
                   />
                   <button
@@ -205,7 +254,82 @@ const AdminOrders = () => {
                     Update
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">This ID is shown to the user for tracking.</p>
+                <p className="text-xs text-slate-500 mt-2">Save the DTDC consignment/AWB number here before fetching live courier status.</p>
+              </div>
+
+              {/* DTDC Live Tracking */}
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+                  <h3 className="text-sm font-medium text-slate-400">DTDC Live Tracking</h3>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={handlePincodeCheck}
+                      disabled={pincodeLoading}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:border-amber-500/50 hover:text-amber-300 text-xs disabled:opacity-60"
+                    >
+                      <MapPin size={14} />
+                      {pincodeLoading ? 'Checking...' : 'Check Pincode'}
+                    </button>
+                    <button
+                      onClick={handleAdminDtdcTrack}
+                      disabled={dtdcLoading || !detail.trackingId}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-xs font-medium disabled:opacity-60"
+                    >
+                      <RefreshCw size={14} className={dtdcLoading ? 'animate-spin' : ''} />
+                      {dtdcLoading ? 'Fetching...' : 'Fetch DTDC'}
+                    </button>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-800/40 p-3">
+                  {pincodeResult && (
+                    <div className="mb-3 rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-xs text-slate-300">
+                      <p className="font-medium text-white">Pincode serviceability</p>
+                      <p className={pincodeResult.serviceable ? 'text-emerald-400' : 'text-red-400'}>
+                        {pincodeResult.orgPincode} to {pincodeResult.desPincode}: {pincodeResult.serviceable ? 'Serviceable' : 'Needs review'}
+                      </p>
+                      {pincodeResult.message && <p className="mt-1 text-slate-400">{pincodeResult.message}</p>}
+                      {Array.isArray(pincodeResult.details) && pincodeResult.details.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {pincodeResult.details.map((detail: string) => (
+                            <p key={detail} className="text-slate-500">{detail}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {dtdcTracking ? (
+                    <div>
+                      <p className="text-sm font-semibold text-white">{dtdcTracking.currentStatus}</p>
+                      {dtdcTracking.lastLocation && <p className="text-xs text-slate-400">Last location: {dtdcTracking.lastLocation}</p>}
+                      {dtdcTracking.trackingPortalUrl && (
+                        <a
+                          href={dtdcTracking.trackingPortalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex text-xs font-medium text-amber-300 hover:text-amber-200"
+                        >
+                          Track on DTDC portal
+                        </a>
+                      )}
+                      <div className="mt-3 space-y-3">
+                        {(dtdcTracking.events || []).slice(0, 8).map((event: any, idx: number) => (
+                          <div key={`${event.status}-${idx}`} className="flex gap-3">
+                            <div className="mt-1.5 h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+                            <div>
+                              <p className="text-xs font-medium text-white">{event.status}</p>
+                              {(event.date || event.time || event.location) && (
+                                <p className="text-xs text-slate-500">{[event.date, event.time, event.location].filter(Boolean).join(' - ')}</p>
+                              )}
+                              {event.remarks && <p className="text-xs text-slate-400">{event.remarks}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">Select DTDC as shipping service, add AWB/tracking ID, then fetch live courier status.</p>
+                  )}
+                </div>
               </div>
 
               {/* Status Update */}
@@ -216,7 +340,7 @@ const AdminOrders = () => {
                     <label className="block text-xs text-slate-400 mb-1">Shipping Service</label>
                     <select
                       value={detail.shippingService || ''}
-                      onChange={(e) => handleStatusUpdate(detail._id, detail.status, e.target.value || undefined)}
+                      onChange={(e) => handleStatusUpdate(detail._id, detail.status, e.target.value)}
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                     >
                       <option value="">Select Service</option>

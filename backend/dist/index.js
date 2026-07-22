@@ -17,6 +17,7 @@ const DB_CONNECT_RETRY_DELAY_MS = Math.max(0, Number(process.env.DB_CONNECT_RETR
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const connectDbWithRetry = async () => {
     let lastErr;
+    const dbTarget = (0, db_1.describeDbTarget)();
     for (let attempt = 0; attempt <= DB_CONNECT_RETRIES; attempt++) {
         try {
             await (0, db_1.connectDb)();
@@ -27,11 +28,21 @@ const connectDbWithRetry = async () => {
             const remaining = DB_CONNECT_RETRIES - attempt;
             if (remaining <= 0)
                 break;
-            console.error(`DB connection failed (attempt ${attempt + 1}/${DB_CONNECT_RETRIES + 1}). Retrying in ${DB_CONNECT_RETRY_DELAY_MS}ms...`);
+            console.error(`DB connection to ${dbTarget} failed (attempt ${attempt + 1}/${DB_CONNECT_RETRIES + 1}). Retrying in ${DB_CONNECT_RETRY_DELAY_MS}ms...`);
             await sleep(DB_CONNECT_RETRY_DELAY_MS);
         }
     }
     throw lastErr;
+};
+const formatStartupError = (err) => {
+    const connectionCodes = new Set(['EACCES', 'ECONNREFUSED', 'ENETUNREACH', 'ETIMEDOUT']);
+    if (!connectionCodes.has(err?.code))
+        return err;
+    return new Error([
+        `Could not connect to MySQL at ${(0, db_1.describeDbTarget)()} (${err.code}).`,
+        'Check that the database server is online, port 3306 is open, and your current public IP is allowed by the database host/firewall.',
+        'For frontend/API development without MySQL, set ALLOW_DBLESS_START=true in backend/.env.',
+    ].join(' '));
 };
 const start = async () => {
     try {
@@ -52,6 +63,6 @@ const start = async () => {
     });
 };
 start().catch((err) => {
-    console.error('Failed to start server:', err);
+    console.error('Failed to start server:', formatStartupError(err));
     process.exit(1);
 });

@@ -139,6 +139,17 @@ export const verifyRazorpayPayment = (payload: {
     body: payload,
   });
 
+export const reportRazorpayPaymentFailed = (payload: {
+  razorpay_order_id: string;
+  razorpay_payment_id?: string;
+  customer_email: string;
+  reason?: string;
+}) =>
+  getJson<{ ok: boolean; orderId: number; paymentId: string; status: string }>('/razorpay/failed', {
+    method: 'POST',
+    body: payload,
+  });
+
 export const fetchPaymentStatus = (token: string) =>
   getJson(`/payments/status/${token}`);
 
@@ -196,6 +207,14 @@ export const trackOrder = (orderId: string | number) =>
   getJson(`/orders/track/${orderId}`);
 export const trackOrderById = (trackingId: string) =>
   getJson(`/orders/track-by-id/${trackingId}`);
+export const trackDtdcOrder = (lookup: string | number) =>
+  getJson(`/orders/dtdc/track/${encodeURIComponent(String(lookup))}`);
+export const adminTrackDtdcOrder = (lookup: string | number) =>
+  getJson(`/orders/admin/dtdc/track/${encodeURIComponent(String(lookup))}`);
+export const checkDtdcPincode = (payload: { orgPincode?: string; desPincode: string }) =>
+  getJson('/orders/dtdc/pincode', { method: 'POST', body: payload });
+export const adminCheckDtdcPincode = (payload: { orgPincode?: string; desPincode: string }) =>
+  getJson('/orders/admin/dtdc/pincode', { method: 'POST', body: payload });
 
 // Payments
 export const fetchPayments = () => getJson('/payments');
