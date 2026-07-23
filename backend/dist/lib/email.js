@@ -256,7 +256,8 @@ const renderOrderDetails = (payload) => {
         ? payload.items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0)
         : undefined;
     const subtotal = payload.itemsSubtotal ?? calculatedSubtotal;
-    const hasExactBreakdown = payload.shippingAmount !== undefined || payload.packagingAmount !== undefined;
+    const hasExactBreakdown = payload.shippingAmount !== undefined || payload.packagingAmount !== undefined || payload.codAmount !== undefined;
+    const codAmount = Number(payload.codAmount || 0);
     const legacyAdjustment = !hasExactBreakdown && payload.total !== undefined && subtotal !== undefined
         ? Math.max(0, Number(payload.total) - subtotal)
         : 0;
@@ -276,6 +277,12 @@ const renderOrderDetails = (payload) => {
             <td style="padding:0 0 12px;">Shipping charge</td>
             <td style="width:140px;padding:0 0 12px 32px;text-align:right;font-weight:700;white-space:nowrap;">${Number(payload.shippingAmount || 0) === 0 ? 'FREE' : formatMoney(payload.shippingAmount)}</td>
           </tr>
+          ${codAmount > 0 ? `
+            <tr>
+              <td style="padding:0 0 12px;">COD Handle Fee${payload.codPincode ? ` (${escapeHtml(payload.codPincode)})` : ''}</td>
+              <td style="width:140px;padding:0 0 12px 32px;text-align:right;font-weight:700;white-space:nowrap;">${formatMoney(codAmount)}</td>
+            </tr>
+          ` : ''}
         ` : legacyAdjustment > 0 ? `
           <tr>
             <td style="padding:0 0 12px;">Packaging &amp; shipping</td>
@@ -288,6 +295,7 @@ const renderOrderDetails = (payload) => {
       </table>
     </div>` : '';
     const methodHtml = payload.paymentMethod ? `<p><strong>Payment Method:</strong> ${escapeHtml(payload.paymentMethod)}</p>` : '';
+    const codHtml = payload.codMessage ? `<p><strong>DTDC COD:</strong> ${escapeHtml(payload.codMessage)}</p>` : '';
     const txnHtml = payload.transactionId ? `<p><strong>Transaction ID:</strong> ${escapeHtml(payload.transactionId)}</p>` : '';
     const shipHtml = renderAddress('Shipping Address', payload.shippingAddress);
     const billHtml = renderAddress('Billing Address', payload.billingAddress);
@@ -295,6 +303,7 @@ const renderOrderDetails = (payload) => {
     ${itemsHtml}
     ${pricingHtml}
     ${methodHtml}
+    ${codHtml}
     ${txnHtml}
     ${shipHtml}
     ${billHtml}
@@ -311,6 +320,10 @@ const sendOrderConfirmation = async (to, payload) => {
         shippingAmount: payload.shippingAmount,
         packagingAmount: payload.packagingAmount,
         packagingRate: payload.packagingRate,
+        codAmount: payload.codAmount,
+        codPincode: payload.codPincode,
+        codAvailable: payload.codAvailable,
+        codMessage: payload.codMessage,
         paymentMethod: payload.paymentMethod,
         shippingAddress: payload.shippingAddress,
         billingAddress: payload.billingAddress,

@@ -29,6 +29,10 @@ export interface Order {
   shippingAmount?: number;
   packagingAmount?: number;
   packagingRate?: number;
+  codAmount?: number;
+  codAvailable?: boolean;
+  codPincode?: string;
+  codMessage?: string;
   status: OrderStatus;
   shippingAddress: Address;
   billingAddress: Address;
@@ -94,6 +98,10 @@ export const useOrderStore = create<OrderStore>()(
             shippingAmount: o.shippingAmount,
             packagingAmount: o.packagingAmount,
             packagingRate: o.packagingRate,
+            codAmount: o.codAmount,
+            codAvailable: o.codAvailable,
+            codPincode: o.codPincode,
+            codMessage: o.codMessage,
             status: o.status,
             shippingAddress: o.shippingAddress,
             billingAddress: o.billingAddress,

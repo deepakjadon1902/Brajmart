@@ -19,6 +19,7 @@ const getDtdcConfig = () => {
   const username = process.env.DTDC_USERNAME || '';
   const password = process.env.DTDC_PASSWORD || '';
   const portalUrl = process.env.DTDC_PORTAL_URL || 'https://customer.dtdc.in';
+  const publicTrackingUrl = process.env.DTDC_PUBLIC_TRACKING_URL || 'https://www.dtdc.com/track-your-shipment/';
   const tokenTtlMinutes = Number(process.env.DTDC_TOKEN_TTL_MINUTES || 50);
   const defaultAuthBase = env === 'staging'
     ? 'https://dtdcstagingapi.dtdc.com/dtdc-api/api/dtdc/authenticate'
@@ -30,7 +31,7 @@ const getDtdcConfig = () => {
   const trackingUrl = process.env.DTDC_TRACKING_URL || defaultTrackingUrl;
   const pincodeUrl = process.env.DTDC_PINCODE_URL || 'https://smarttrack-ctbsplus.dtdc.com/ratecalapi/PincodeApiCall';
 
-  return { env, username, password, portalUrl, tokenTtlMinutes, authBase, trackingUrl, pincodeUrl };
+  return { env, username, password, portalUrl, publicTrackingUrl, tokenTtlMinutes, authBase, trackingUrl, pincodeUrl };
 };
 
 const readResponse = async (response: Response) => {
@@ -86,10 +87,13 @@ const getAuthToken = async () => {
   return token;
 };
 
-const getTrackingPortalUrl = (trackingId: string) => {
+const getPublicTrackingUrl = (trackingId: string) => {
   const config = getDtdcConfig();
-  const portal = config.portalUrl.replace(/\/$/, '');
-  return `${portal}/track`;
+  const url = new URL(config.publicTrackingUrl);
+  url.searchParams.set('awb', trackingId);
+  url.searchParams.set('trackingId', trackingId);
+  url.searchParams.set('shipmentNumber', trackingId);
+  return url.toString();
 };
 
 const flattenTrackEvents = (value: any): any[] => {
@@ -250,7 +254,7 @@ export const trackDtdcShipment = async (params: {
         currentStatus: 'AWB saved for tracking',
         lastLocation: '',
         events: [],
-        trackingPortalUrl: getTrackingPortalUrl(trackingId),
+        trackingPortalUrl: getPublicTrackingUrl(trackingId),
         raw: { message: err.message, status: err.status },
       };
     }
@@ -314,6 +318,7 @@ export const checkDtdcPincode = async (params: {
     orgPincode,
     desPincode,
     serviceable,
+    codAvailable: cod === null ? false : cod,
     message: [
       destination || null,
       serviceable ? 'Delivery available' : 'Delivery needs review',

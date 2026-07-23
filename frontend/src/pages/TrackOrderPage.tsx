@@ -249,7 +249,7 @@ const TrackOrderPage = () => {
                     </div>
                   ))}
                 </div>
-                <OrderPaymentBreakdown itemsSubtotal={order.itemsSubtotal} packagingAmount={order.packagingAmount} packagingRate={order.packagingRate} shippingAmount={order.shippingAmount} total={Number(order.total || 0)} calculatedItemsSubtotal={(order.items || []).reduce((sum: number, item: { price?: number; quantity?: number }) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0)} paymentMethod={order.paymentMethod} />
+                <OrderPaymentBreakdown itemsSubtotal={order.itemsSubtotal} packagingAmount={order.packagingAmount} packagingRate={order.packagingRate} shippingAmount={order.shippingAmount} codAmount={order.codAmount} codPincode={order.codPincode} total={Number(order.total || 0)} calculatedItemsSubtotal={(order.items || []).reduce((sum: number, item: { price?: number; quantity?: number }) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0)} paymentMethod={order.paymentMethod} />
               </div>
             </ScrollReveal>
           </div>

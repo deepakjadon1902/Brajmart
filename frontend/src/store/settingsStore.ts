@@ -31,6 +31,7 @@ interface StoreSettings {
   maxOrderQuantity: number;
   deliveryEtaMinDays: number;
   deliveryEtaMaxDays: number;
+  codEnabled: boolean;
   upiEnabled: boolean;
   cardEnabled: boolean;
   storeLogo: string;
@@ -74,6 +75,7 @@ export const useSettingsStore = create<SettingsStore>()(
         maxOrderQuantity: 0,
         deliveryEtaMinDays: 0,
         deliveryEtaMaxDays: 0,
+        codEnabled: true,
         upiEnabled: true,
         cardEnabled: true,
         storeLogo: '',

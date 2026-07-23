@@ -104,7 +104,7 @@ const AdminShipments = () => {
                   rel="noreferrer"
                   className="mt-2 inline-flex text-xs font-medium text-amber-300 hover:text-amber-200"
                 >
-                  Track on DTDC portal
+                  Open DTDC tracking page
                 </a>
               )}
               <div className="mt-3 grid gap-2 sm:grid-cols-2">

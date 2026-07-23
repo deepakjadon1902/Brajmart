@@ -30,12 +30,41 @@ const ensureOrderPricingSchema = async () => {
     await dbExecute('ALTER TABLE settings ADD COLUMN tax_rate DECIMAL(5,2) NOT NULL DEFAULT 0');
     await dbExecute('UPDATE settings SET tax_rate = packaging_rate');
   }
+  const settingsToggleColumns = [
+    ['cod_enabled', 'TINYINT(1) NOT NULL DEFAULT 1'],
+    ['upi_enabled', 'TINYINT(1) NOT NULL DEFAULT 1'],
+    ['card_enabled', 'TINYINT(1) NOT NULL DEFAULT 1'],
+  ] as const;
+  for (const [column, definition] of settingsToggleColumns) {
+    if (!(await columnExists('settings', column))) {
+      await dbExecute(`ALTER TABLE settings ADD COLUMN ${column} ${definition}`);
+    }
+  }
 
   const orderColumns = [
     ['items_subtotal', 'DECIMAL(10,2) NULL AFTER items'],
     ['packaging_amount', 'DECIMAL(10,2) NULL AFTER items_subtotal'],
     ['packaging_rate', 'DECIMAL(5,2) NULL AFTER packaging_amount'],
     ['shipping_amount', 'DECIMAL(10,2) NULL AFTER packaging_rate'],
+  ] as const;
+  for (const [column, definition] of orderColumns) {
+    if (!(await columnExists('orders', column))) {
+      await dbExecute(`ALTER TABLE orders ADD COLUMN ${column} ${definition}`);
+    }
+  }
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
+const ensureOrderCodSchema = async () => {
+  const MIGRATION_KEY = '2026-07-23_order_cod_breakdown';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  const orderColumns = [
+    ['cod_amount', 'DECIMAL(10,2) NULL AFTER shipping_amount'],
+    ['cod_available', 'TINYINT(1) NULL AFTER cod_amount'],
+    ['cod_pincode', 'VARCHAR(10) NULL AFTER cod_available'],
+    ['cod_message', 'TEXT NULL AFTER cod_pincode'],
   ] as const;
   for (const [column, definition] of orderColumns) {
     if (!(await columnExists('orders', column))) {
@@ -131,6 +160,7 @@ export const runDataMigrations = async () => {
 
   await ensureCoreTables();
   await ensureOrderPricingSchema();
+  await ensureOrderCodSchema();
   await ensureFreeShippingThresholdDefault();
   await migrateDeityShringarIntoIdolsSubcategory();
 };

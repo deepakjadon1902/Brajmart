@@ -308,7 +308,7 @@ const AdminOrders = () => {
                           rel="noreferrer"
                           className="mt-2 inline-flex text-xs font-medium text-amber-300 hover:text-amber-200"
                         >
-                          Track on DTDC portal
+                          Open DTDC tracking page
                         </a>
                       )}
                       <div className="mt-3 space-y-3">

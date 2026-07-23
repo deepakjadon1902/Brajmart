@@ -77,7 +77,7 @@ const ProfileOrdersPage = () => {
                       </div>
                     ))}
                   </div>
-                  <OrderPaymentBreakdown itemsSubtotal={o.itemsSubtotal} packagingAmount={o.packagingAmount} packagingRate={o.packagingRate} shippingAmount={o.shippingAmount} total={o.total} calculatedItemsSubtotal={o.items.reduce((sum, item) => sum + item.price * item.quantity, 0)} paymentMethod={o.paymentMethod} />
+                  <OrderPaymentBreakdown itemsSubtotal={o.itemsSubtotal} packagingAmount={o.packagingAmount} packagingRate={o.packagingRate} shippingAmount={o.shippingAmount} codAmount={o.codAmount} codPincode={o.codPincode} total={o.total} calculatedItemsSubtotal={o.items.reduce((sum, item) => sum + item.price * item.quantity, 0)} paymentMethod={o.paymentMethod} />
                 </motion.div>
               ))
             )}

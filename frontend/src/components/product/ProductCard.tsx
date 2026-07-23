@@ -31,7 +31,7 @@ const badgeLabels: Record<string, string> = {
   exclusive: 'Exclusive',
 };
 
-const ProductCard = ({ product, index = 0, variant = 'default', priority = false }: ProductCardProps) => {
+const ProductCard = ({ product, index = 0, variant = 'compact', priority = false }: ProductCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const [hoverImageIndex, setHoverImageIndex] = useState(0);
   const cardImages = Array.isArray(product.images) && product.images.length

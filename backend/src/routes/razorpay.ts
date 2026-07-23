@@ -7,6 +7,7 @@ import { sendAdminPaymentNotice, sendOrderConfirmation, sendPaymentFailed, sendP
 import { parseJson } from '../lib/dbHelpers';
 import { computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { upsertUserDefaultAddress } from '../lib/userAddress';
+import { resolveCodHandleFee } from '../lib/cod';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
     : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
 
   const result: any = await dbExecute(
-    'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
       orderData.userId || null,
       JSON.stringify(orderData.items || []),
@@ -41,6 +42,10 @@ const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
       orderData.packagingAmount,
       orderData.packagingRate,
       orderData.shippingAmount,
+      orderData.codAmount || 0,
+      orderData.codAvailable,
+      orderData.codPincode || null,
+      orderData.codMessage || null,
       orderData.total,
       status,
       orderData.customerName || null,
@@ -97,6 +102,10 @@ const getOrderDetails = async (orderRow: any) => ({
   shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
   packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
   packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
+  codAmount: orderRow.cod_amount == null ? undefined : Number(orderRow.cod_amount),
+  codAvailable: orderRow.cod_available == null ? undefined : Boolean(Number(orderRow.cod_available)),
+  codPincode: orderRow.cod_pincode ?? undefined,
+  codMessage: orderRow.cod_message ?? undefined,
   paymentMethod: orderRow.payment_method,
   shippingAddress: parseJson(orderRow.shipping_address, {}),
   billingAddress: parseJson(orderRow.billing_address, {}),
@@ -224,7 +233,9 @@ router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
     if (!priced.ok) return res.status(400).json({ message: priced.message });
 
     const settings = await getCheckoutSettings();
-    const totals = computeTotals(priced.itemsSubtotal, settings);
+    const baseTotals = computeTotals(priced.itemsSubtotal, settings);
+    const cod = await resolveCodHandleFee(order, settings);
+    const totals = { ...baseTotals, cod: cod.amount, total: baseTotals.total + cod.amount };
     if (settings.minOrderAmount && totals.total < settings.minOrderAmount) {
       return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
     }
@@ -253,6 +264,10 @@ router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
       packagingAmount: totals.packaging,
       packagingRate: settings.packagingRate,
       shippingAmount: totals.shipping,
+      codAmount: cod.amount,
+      codAvailable: cod.available,
+      codPincode: cod.pincode,
+      codMessage: cod.message,
       total: totals.total,
       paymentMethod: 'Razorpay',
       status: 'processing',

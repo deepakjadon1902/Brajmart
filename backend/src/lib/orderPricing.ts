@@ -32,6 +32,7 @@ type SettingsRow = {
   tax_rate?: any;
   min_order_amount?: any;
   max_order_quantity?: any;
+  cod_enabled?: any;
 };
 
 const asInt = (value: any) => {
@@ -48,7 +49,7 @@ const asMoney = (value: any) => {
 };
 
 export const getCheckoutSettings = async () => {
-  const rows = await dbQuery<SettingsRow>('SELECT free_shipping_threshold, shipping_fee, packaging_rate, tax_rate, min_order_amount, max_order_quantity FROM settings LIMIT 1');
+  const rows = await dbQuery<SettingsRow>('SELECT free_shipping_threshold, shipping_fee, packaging_rate, tax_rate, min_order_amount, max_order_quantity, cod_enabled FROM settings LIMIT 1');
   const row = rows?.[0] || ({} as SettingsRow);
   return {
     freeShippingThreshold: Number(row.free_shipping_threshold ?? 299) || 299,
@@ -57,6 +58,7 @@ export const getCheckoutSettings = async () => {
     packagingRate: Number(row.tax_rate ?? row.packaging_rate ?? 0) || 0,
     minOrderAmount: Number(row.min_order_amount ?? 0) || 0,
     maxOrderQuantity: Number(row.max_order_quantity ?? 0) || 0,
+    codEnabled: boolFromDb(row.cod_enabled ?? 1),
   };
 };
 

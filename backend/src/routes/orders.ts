@@ -9,6 +9,7 @@ import { upsertUserDefaultAddress } from '../lib/userAddress';
 import { checkDtdcPincode, trackDtdcShipment } from '../lib/dtdc';
 
 const router = Router();
+const COD_CHARGE = 40;
 
 const mapOrderRow = (row: any) => ({
   _id: String(row.id),
@@ -20,6 +21,10 @@ const mapOrderRow = (row: any) => ({
   shippingAmount: row.shipping_amount == null ? undefined : Number(row.shipping_amount),
   packagingAmount: row.packaging_amount == null ? undefined : Number(row.packaging_amount),
   packagingRate: row.packaging_rate == null ? undefined : Number(row.packaging_rate),
+  codAmount: row.cod_amount == null ? undefined : Number(row.cod_amount),
+  codAvailable: row.cod_available == null ? undefined : Boolean(Number(row.cod_available)),
+  codPincode: row.cod_pincode ?? undefined,
+  codMessage: row.cod_message ?? undefined,
   status: row.status,
   customerName: row.customer_name ?? undefined,
   customerEmail: row.customer_email ?? undefined,
@@ -211,7 +216,33 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
     if (!priced.ok) return res.status(400).json({ message: priced.message });
 
     const settings = await getCheckoutSettings();
-    const totals = computeTotals(priced.itemsSubtotal, settings);
+    const baseTotals = computeTotals(priced.itemsSubtotal, settings);
+    const paymentMethod = String(data.paymentMethod || '').trim();
+    const wantsCod = /^cod$/i.test(paymentMethod) || /cash\s*on\s*delivery/i.test(paymentMethod);
+    let codAmount = 0;
+    let codAvailable: boolean | null = null;
+    let codPincode: string | null = null;
+    let codMessage: string | null = null;
+
+    if (wantsCod) {
+      if (!settings.codEnabled) {
+        return res.status(400).json({ message: 'COD is currently disabled' });
+      }
+      const deliveryPincode = String(data.shippingAddress?.pincode || data.billingAddress?.pincode || '').trim();
+      if (!/^\d{6}$/.test(deliveryPincode)) {
+        return res.status(400).json({ message: 'A valid 6 digit delivery pincode is required for COD' });
+      }
+      const dtdc = await checkDtdcPincode({ desPincode: deliveryPincode });
+      codAvailable = Boolean(dtdc.serviceable && dtdc.codAvailable);
+      codPincode = deliveryPincode;
+      codMessage = dtdc.message || (codAvailable ? 'COD available for this pincode' : 'COD not available for this pincode');
+      if (!codAvailable) {
+        return res.status(400).json({ message: codMessage || 'COD is not available for this pincode' });
+      }
+      codAmount = COD_CHARGE;
+    }
+
+    const totals = { ...baseTotals, cod: codAmount, total: baseTotals.total + codAmount };
     if (settings.minOrderAmount && totals.total < settings.minOrderAmount) {
       return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
     }
@@ -228,7 +259,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
       : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
 
     const result: any = await dbExecute(
-      'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         req.user?.id || null,
         JSON.stringify(priced.items),
@@ -236,13 +267,17 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
         totals.packaging,
         settings.packagingRate,
         totals.shipping,
+        codAmount,
+        codAvailable,
+        codPincode,
+        codMessage,
         totals.total,
         status,
         data.customerName || null,
         customerEmail,
         JSON.stringify(data.shippingAddress || {}),
         JSON.stringify(data.billingAddress || {}),
-        data.paymentMethod,
+        wantsCod ? 'COD' : paymentMethod,
         null,
         null,
         estimatedDelivery,
@@ -273,6 +308,10 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
         shippingAmount: order.shippingAmount,
         packagingAmount: order.packagingAmount,
         packagingRate: order.packagingRate,
+        codAmount: order.codAmount,
+        codPincode: order.codPincode,
+        codAvailable: order.codAvailable,
+        codMessage: order.codMessage,
         paymentMethod: order.paymentMethod,
         shippingAddress: order.shippingAddress,
         billingAddress: order.billingAddress,
@@ -382,6 +421,10 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
           shippingAmount: order.shippingAmount,
           packagingAmount: order.packagingAmount,
           packagingRate: order.packagingRate,
+          codAmount: order.codAmount,
+          codPincode: order.codPincode,
+          codAvailable: order.codAvailable,
+          codMessage: order.codMessage,
           paymentMethod: order.paymentMethod,
           shippingAddress: order.shippingAddress,
           billingAddress: order.billingAddress,

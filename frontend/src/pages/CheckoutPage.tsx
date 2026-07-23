@@ -18,6 +18,8 @@ import { trackMetaPixelEvent } from '@/lib/metaPixel';
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
 const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
 const DEFAULT_SHIPPING_FEE = 49;
+const COD_CHARGE = 40;
+type ServiceabilityState = { pincode: string; serviceable: boolean; codAvailable: boolean; message?: string };
 
 const emptyAddress: Address = { fullName: '', mobile: '', street: '', city: '', state: '', pincode: '' };
 
@@ -95,16 +97,15 @@ const CheckoutPage = () => {
   const [sameAsBilling, setSameAsBilling] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [customerEmail, setCustomerEmail] = useState(user?.email || '');
-  const [serviceability, setServiceability] = useState<{ pincode: string; serviceable: boolean; message?: string } | null>(null);
+  const [serviceability, setServiceability] = useState<ServiceabilityState | null>(null);
   const [checkingPincode, setCheckingPincode] = useState(false);
+  const [wantsCodService, setWantsCodService] = useState(false);
 
   const freeShippingThreshold = Number(settings.freeShippingThreshold) > 0 ? Number(settings.freeShippingThreshold) : DEFAULT_FREE_SHIPPING_THRESHOLD;
   const shippingFee = Number(settings.shippingFee) > 0 ? Number(settings.shippingFee) : DEFAULT_SHIPPING_FEE;
   const shipping = totalPrice() >= freeShippingThreshold ? 0 : shippingFee;
   const packagingRate = Math.max(0, Number(settings.packagingRate) || 0);
   const packagingCost = Math.round(totalPrice() * packagingRate / 100);
-  const grandTotal = totalPrice() + packagingCost + shipping;
-
   const [billingAddress, setBillingAddress] = useState<Address>({
     fullName: user?.fullName || '',
     mobile: user?.mobile || '',
@@ -125,6 +126,11 @@ const CheckoutPage = () => {
 
   const effectiveShipping = sameAsBilling ? billingAddress : shippingAddress;
   const effectiveEmail = String(isAuthenticated ? user?.email || '' : customerEmail || '').trim();
+  const effectivePincode = String(effectiveShipping.pincode || '').trim();
+  const codAvailable = Boolean(serviceability?.pincode === effectivePincode && serviceability.serviceable && serviceability.codAvailable);
+  const canUseCodService = Boolean(settings.codEnabled && codAvailable);
+  const codCharge = wantsCodService && canUseCodService ? COD_CHARGE : 0;
+  const grandTotal = totalPrice() + packagingCost + shipping + codCharge;
 
   // Payment status is now handled on the dedicated Payment Status page.
 
@@ -146,6 +152,7 @@ const CheckoutPage = () => {
           packagingRate: data.packagingRate ?? data.taxRate ?? 0,
           minOrderAmount: data.minOrderAmount,
           maxOrderQuantity: data.maxOrderQuantity,
+          codEnabled: data.codEnabled,
           upiEnabled: data.upiEnabled,
           cardEnabled: data.cardEnabled,
           maintenanceMode: data.maintenanceMode,
@@ -172,6 +179,46 @@ const CheckoutPage = () => {
       setPaymentMethod(available[0]);
     }
   }, [settings.upiEnabled, settings.cardEnabled, paymentMethod]);
+
+  useEffect(() => {
+    if (serviceability && serviceability.pincode !== effectivePincode) {
+      setServiceability(null);
+      setWantsCodService(false);
+    }
+  }, [effectivePincode, serviceability]);
+
+  useEffect(() => {
+    if (wantsCodService && !canUseCodService) setWantsCodService(false);
+  }, [canUseCodService, wantsCodService]);
+
+  useEffect(() => {
+    if (!/^\d{6}$/.test(effectivePincode)) return;
+    if (serviceability?.pincode === effectivePincode) return;
+
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setCheckingPincode(true);
+      try {
+        const result: any = await checkDtdcPincode({ desPincode: effectivePincode });
+        if (!active) return;
+        setServiceability({
+          pincode: effectivePincode,
+          serviceable: Boolean(result?.serviceable),
+          codAvailable: Boolean(result?.codAvailable),
+          message: typeof result?.message === 'string' ? result.message : '',
+        });
+      } catch {
+        if (active) setServiceability(null);
+      } finally {
+        if (active) setCheckingPincode(false);
+      }
+    }, 600);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [effectivePincode, serviceability?.pincode]);
 
   useEffect(() => {
     if (user?.email) setCustomerEmail(user.email);
@@ -219,6 +266,7 @@ const CheckoutPage = () => {
       const next = {
         pincode,
         serviceable: Boolean(result?.serviceable),
+        codAvailable: Boolean(result?.codAvailable),
         message: typeof result?.message === 'string' ? result.message : '',
       };
       setServiceability(next);
@@ -281,6 +329,10 @@ const CheckoutPage = () => {
         shippingAddress: effectiveShipping,
         billingAddress,
         paymentMethod: method === 'upi' ? 'PayU UPI' : 'PayU Card',
+        codRequested: codCharge > 0,
+        codAmount: codCharge,
+        codPincode: codCharge > 0 ? effectivePincode : undefined,
+        codMessage: codCharge > 0 ? serviceability?.message || `COD available for ${effectivePincode}` : undefined,
       };
       const result = await createPayuOrder({
         amount: grandTotal,
@@ -324,6 +376,10 @@ const CheckoutPage = () => {
         shippingAddress: effectiveShipping,
         billingAddress,
         paymentMethod: 'Razorpay',
+        codRequested: codCharge > 0,
+        codAmount: codCharge,
+        codPincode: codCharge > 0 ? effectivePincode : undefined,
+        codMessage: codCharge > 0 ? serviceability?.message || `COD available for ${effectivePincode}` : undefined,
       };
 
       const result = await createRazorpayOrder({
@@ -409,6 +465,8 @@ const CheckoutPage = () => {
 
   const handlePlaceOrder = async () => {
     if (!validateContactAndAddress()) return;
+    const canDeliver = await verifyDeliveryPincode();
+    if (!canDeliver) return;
 
     if (settings.minOrderAmount && grandTotal < settings.minOrderAmount) {
       toast.error(`Minimum order amount is ${formatPrice(settings.minOrderAmount)}.`);
@@ -593,9 +651,13 @@ const CheckoutPage = () => {
                       <p className="mt-1 text-xs text-muted-foreground">
                         {serviceability?.pincode === String(effectiveShipping.pincode || '').trim()
                           ? serviceability.serviceable
-                            ? `Delivery available for ${serviceability.pincode}.`
+                            ? serviceability.codAvailable
+                              ? `Delivery and COD available for ${serviceability.pincode}. COD Handle Fee ${formatPrice(COD_CHARGE)} applies only when COD is selected.`
+                              : `Delivery available for ${serviceability.pincode}. COD is not available for this pincode.`
                             : serviceability.message || `Delivery needs review for ${serviceability.pincode}.`
-                          : 'Your delivery pincode is verified before payment for a smoother dispatch.'}
+                          : checkingPincode
+                            ? 'Checking this pincode with DTDC...'
+                            : 'Your delivery pincode is verified automatically when you enter 6 digits.'}
                       </p>
                     </div>
 
@@ -612,10 +674,35 @@ const CheckoutPage = () => {
 
               {step === 1 && (
                 <motion.div key="payment" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
-                  <div className="bg-card rounded-2xl border border-border p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <CreditCard size={18} className="text-gold" />
-                      <h2 className="font-cinzel text-lg font-bold">Payment Method</h2>
+                  <div className="bg-card rounded-2xl border border-border p-6 shadow-sm">
+                    <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <CreditCard size={18} className="text-gold" />
+                          <h2 className="font-cinzel text-lg font-bold">Payment Method</h2>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">Choose a secure payment gateway to complete your BrajMart order.</p>
+                      </div>
+                      <div className="rounded-xl border border-gold/25 bg-gold/5 px-4 py-3 text-right">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Payable Now</p>
+                        <p className="text-xl font-bold text-saffron tabular-nums">{formatPrice(grandTotal)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      {[
+                        { icon: ShieldCheck, title: 'Secure gateway', text: 'Encrypted checkout' },
+                        { icon: CheckCircle2, title: 'Verified order', text: 'Email confirmation' },
+                        { icon: Truck, title: 'DTDC checked', text: codAvailable ? 'COD serviceable' : 'Delivery verified' },
+                      ].map((item) => (
+                        <div key={item.title} className="flex items-center gap-3 rounded-xl border border-border bg-pearl/60 px-3 py-2.5">
+                          <item.icon size={16} className="shrink-0 text-tulsi" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-foreground">{item.title}</p>
+                            <p className="text-[11px] text-muted-foreground">{item.text}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
 
                     {paymentOptions.length === 0 ? (
@@ -623,14 +710,14 @@ const CheckoutPage = () => {
                         No payment methods are currently available. Please contact support.
                       </div>
                     ) : (
-                      <div className="space-y-4">
+                      <div className="mt-5 space-y-3">
                         {paymentOptions.map((m) => {
                           const Icon = m.icon;
                           const selected = paymentMethod === m.value;
                           return (
                             <label
                               key={m.value}
-                              className={`group flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-colors ${selected ? 'border-gold bg-gold/5' : 'border-border hover:border-gold/40'}`}
+                              className={`group flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all ${selected ? 'border-gold bg-gold/5 shadow-[0_0_0_1px_rgba(218,165,32,0.2)]' : 'border-border bg-background hover:border-gold/50 hover:bg-pearl/50'}`}
                             >
                               <input
                                 type="radio"
@@ -640,27 +727,33 @@ const CheckoutPage = () => {
                                 onChange={() => setPaymentMethod(m.value)}
                                 className="sr-only"
                               />
-                              <div className={`h-11 w-11 rounded-xl flex items-center justify-center border ${selected ? 'border-gold/40 bg-gold/10 text-gold' : 'border-border bg-muted text-muted-foreground'}`}>
+                              <div className={`h-12 w-12 rounded-xl flex items-center justify-center border ${selected ? 'border-gold/40 bg-gold/10 text-gold' : 'border-border bg-pearl text-muted-foreground'}`}>
                                 <Icon size={18} />
                               </div>
                               <div className="flex-1">
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                   <span className="text-sm font-semibold">{m.title}</span>
-                                  <span className={`text-[11px] px-2 py-0.5 rounded-full border ${selected ? 'border-gold text-gold' : 'border-border text-muted-foreground'}`}>
+                                  <span className={`text-[11px] px-2 py-0.5 rounded-full border bg-background ${selected ? 'border-gold text-gold' : 'border-border text-muted-foreground'}`}>
                                     {m.badge}
                                   </span>
+                                  {selected && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-tulsi">
+                                      <CheckCircle2 size={12} />
+                                      Selected
+                                    </span>
+                                  )}
                                 </div>
                                 <span className="block text-xs text-muted-foreground mt-0.5">{m.subtitle}</span>
                                 <div className="flex flex-wrap gap-2 mt-2">
                                   {m.pills.map((p) => (
-                                    <span key={p} className="text-[11px] px-2 py-0.5 rounded-full border border-border text-muted-foreground">
+                                    <span key={p} className="text-[11px] px-2 py-0.5 rounded-full border border-border bg-background text-muted-foreground">
                                       {p}
                                     </span>
                                   ))}
                                 </div>
                               </div>
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selected ? 'border-gold' : 'border-border'}`}>
-                                {selected && <div className="w-2.5 h-2.5 rounded-full bg-gold" />}
+                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selected ? 'border-gold bg-gold/10' : 'border-border bg-background'}`}>
+                                {selected && <div className="w-3 h-3 rounded-full bg-gold" />}
                               </div>
                             </label>
                           );
@@ -668,88 +761,91 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {paymentMethod === 'upi' && (
-                      <div className="mt-5 grid lg:grid-cols-2 gap-4">
-                        <div className="space-y-3">
-                          <div className="text-sm font-semibold text-foreground">UPI Payments</div>
-                          <div className="grid sm:grid-cols-2 gap-3">
-                            <div className="text-left p-4 rounded-xl border border-border bg-muted/30">
-                              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                                <CheckCircle2 size={16} className="text-tulsi" />
-                                Instant confirmation
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-1">Pay using any UPI app. No extra steps.</div>
+                    {settings.codEnabled && (
+                      <div className={`mt-5 rounded-xl border p-4 transition-colors ${canUseCodService ? 'border-tulsi/30 bg-tulsi/5' : 'border-border bg-muted/30'}`}>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-start gap-3">
+                            <div className={`mt-0.5 h-10 w-10 rounded-xl flex items-center justify-center border ${canUseCodService ? 'border-tulsi/30 bg-tulsi/10 text-tulsi' : 'border-border bg-background text-muted-foreground'}`}>
+                              <Truck size={17} />
                             </div>
-                            <div className="text-left p-4 rounded-xl border border-border bg-muted/30">
-                              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                                <ShieldCheck size={16} className="text-gold" />
-                                Safe & encrypted
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-semibold text-foreground">DTDC COD service</p>
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full border ${canUseCodService ? 'border-tulsi/30 text-tulsi' : 'border-border text-muted-foreground'}`}>
+                                  {canUseCodService ? 'Available' : checkingPincode ? 'Checking' : 'Not available'}
+                                </span>
                               </div>
-                              <div className="text-xs text-muted-foreground mt-1">Your UPI PIN is never shared with BrajMart.</div>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {canUseCodService
+                                  ? `Want COD service for this shipment? COD Handle Fee ${formatPrice(COD_CHARGE)} will be added to your online payment total.`
+                                  : 'Enter a DTDC COD serviceable pincode in delivery details to enable this service.'}
+                              </p>
                             </div>
                           </div>
-                          <div className="rounded-xl border border-border bg-pearl p-3 text-xs text-muted-foreground">
-                            Works with GPay, PhonePe, Paytm, BHIM, Amazon Pay, and all UPI apps.
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => canUseCodService && setWantsCodService((value) => !value)}
+                            disabled={!canUseCodService}
+                            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${wantsCodService ? 'bg-tulsi text-white' : 'border border-border bg-background text-foreground hover:border-tulsi/50'}`}
+                          >
+                            {wantsCodService ? 'COD Added' : 'Want COD'}
+                          </button>
                         </div>
+                      </div>
+                    )}
 
-                        <div className="rounded-2xl border border-border bg-muted/30 p-4">
-                          <div className="text-sm font-semibold text-foreground mb-2">How UPI payment works</div>
-                          <div className="space-y-2 text-xs text-muted-foreground">
-                            <div className="flex items-start gap-2">
-                              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold font-bold text-[11px]">1</span>
-                              <span>Choose UPI and place the order.</span>
-                            </div>
-                            <div className="flex items-start gap-2">
-                              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold font-bold text-[11px]">2</span>
-                              <span>Approve the payment request in your UPI app.</span>
-                            </div>
-                            <div className="flex items-start gap-2">
-                              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold font-bold text-[11px]">3</span>
-                              <span>Enter UPI PIN to complete payment.</span>
-                            </div>
-                          </div>
+                    {paymentMethod === 'upi' && (
+                      <div className="mt-5 rounded-xl border border-border bg-pearl/50 p-4">
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+                          <Smartphone size={16} className="text-tulsi" />
+                          PayU UPI selected
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">Complete payment from GPay, PhonePe, Paytm, BHIM, or any UPI app through PayU.</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {['GPay', 'PhonePe', 'Paytm', 'BHIM', 'UPI'].map((item) => (
+                            <span key={item} className="rounded-lg border border-border bg-background px-3 py-1 text-[11px] font-medium text-muted-foreground">{item}</span>
+                          ))}
                         </div>
                       </div>
                     )}
 
                     {paymentMethod === 'card' && (
-                      <div className="mt-5 rounded-2xl border border-brand-gold/20 bg-gradient-to-br from-brand-deep via-brand-structure to-brand-deep p-5 text-primary-foreground shadow-lg">
-                        <div className="flex items-center justify-between">
+                      <div className="mt-5 rounded-xl border border-border bg-pearl/50 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="text-xs uppercase tracking-widest text-primary-foreground/60">Secure Payments</p>
-                            <h3 className="text-lg font-semibold">Card Payment</h3>
-                            <p className="text-xs text-primary-foreground/70 mt-1">Cards • NetBanking • Wallets • EMI</p>
+                            <p className="text-xs uppercase tracking-wide text-muted-foreground">PayU Secure Card</p>
+                            <h3 className="text-sm font-semibold text-foreground">Card payment selected</h3>
+                            <p className="text-xs text-muted-foreground mt-1">Cards, netbanking, wallets, and EMI through PayU</p>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             {['VISA', 'MC', 'RUPAY', 'AMEX'].map((b) => (
-                              <span key={b} className="px-2 py-1 rounded-lg bg-primary-foreground/10 text-[10px] font-bold tracking-wide">
+                              <span key={b} className="rounded-lg border border-border bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground">
                                 {b}
                               </span>
                             ))}
                           </div>
                         </div>
-                        <div className="mt-4 grid sm:grid-cols-3 gap-3">
+                        <div className="mt-4 grid sm:grid-cols-3 gap-3 text-foreground">
                           {['Instant Bank Offers', 'Zero-Cost EMI', '100% Secure'].map((t) => (
-                            <div key={t} className="rounded-xl border border-primary-foreground/10 bg-primary-foreground/5 px-3 py-2 text-xs">
+                            <div key={t} className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
                               {t}
                             </div>
                           ))}
                         </div>
-                        <div className="mt-4 text-xs text-primary-foreground/70">
-                          You may be redirected to a secure payment page to complete payment.
+                        <div className="mt-4 text-xs text-muted-foreground">
+                          PayU verifies the payment with bank authentication before order confirmation.
                         </div>
                       </div>
                     )}
 
                     {paymentMethod === 'razorpay' && (
-                      <div className="mt-5 overflow-hidden rounded-2xl border border-[#dfe7ff] bg-white shadow-sm">
-                        <div className="bg-[#0b72e7] px-5 py-4 text-white">
-                          <div className="flex items-start justify-between gap-4">
+                      <div className="mt-5 overflow-hidden rounded-xl border border-[#cfe0ff] bg-white shadow-sm">
+                        <div className="border-b border-[#e6efff] bg-[#0b72e7] px-5 py-4 text-white">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
-                              <p className="text-xs font-bold uppercase tracking-widest text-white/75">Razorpay Secure Checkout</p>
-                              <h3 className="mt-1 text-lg font-semibold">Pay safely with Razorpay</h3>
-                              <p className="mt-1 text-xs text-white/80">The official Razorpay checkout window opens next with your saved amount and order ID.</p>
+                              <p className="text-xs font-bold uppercase tracking-wide text-white/75">Razorpay Secure Checkout</p>
+                              <h3 className="mt-1 text-base font-semibold">Official Razorpay payment window</h3>
+                              <p className="mt-1 text-xs text-white/80">Your payable amount and BrajMart order reference are sent to Razorpay securely.</p>
                             </div>
                             <div className="rounded-lg bg-white px-3 py-1.5 text-sm font-black tracking-tight text-[#0b72e7]">
                               Razorpay
@@ -774,14 +870,13 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-
-                    <div className="mt-5 p-4 rounded-xl border border-gold/30 bg-gold/5 text-sm">
-                      <div className="flex items-center gap-2 text-foreground font-medium">
+                    <div className="mt-5 rounded-xl border border-gold/25 bg-gold/5 p-4 text-sm">
+                      <div className="flex items-center gap-2 font-medium text-foreground">
                         <ShieldCheck size={16} className="text-gold" />
-                        100% Secure Checkout
+                        Protected payment
                       </div>
                       <p className="text-muted-foreground text-xs mt-1">
-                        Payments are encrypted end-to-end. BrajMart never stores your card details or UPI PIN.
+                        BrajMart never stores card details or UPI PIN. Payment status is confirmed by the gateway before your order is marked successful.
                       </p>
                     </div>
 
@@ -839,8 +934,14 @@ const CheckoutPage = () => {
           {/* Summary sidebar */}
           {step < 2 && (
             <div className="lg:col-span-1">
-              <div className="bg-card rounded-2xl border border-border p-6 lg:sticky lg:top-24">
-                <h3 className="font-cinzel text-lg font-bold mb-4">Order Summary</h3>
+              <div className="bg-card rounded-2xl border border-border p-6 shadow-sm lg:sticky lg:top-24">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-cinzel text-lg font-bold">Order Summary</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">{items.length} item{items.length === 1 ? '' : 's'} in this order</p>
+                  </div>
+                  <span className="rounded-full border border-tulsi/25 bg-tulsi/5 px-2.5 py-1 text-[11px] font-semibold text-tulsi">Verified</span>
+                </div>
                 <div className="space-y-3 mb-5">
                   {items.map((item) => (
                     <div key={item.product.id} className="flex gap-3">
@@ -885,6 +986,10 @@ const CheckoutPage = () => {
                   ))}
                 </div>
                 <div className="space-y-2 text-sm border-t border-border pt-3">
+                  <div className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <span>Price Details</span>
+                    <span>INR</span>
+                  </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Product price</span>
                     <span>{formatPrice(totalPrice())}</span>
@@ -903,15 +1008,21 @@ const CheckoutPage = () => {
                     <span className="text-muted-foreground">Shipping charge</span>
                     <span className={shipping === 0 ? 'text-tulsi font-medium' : ''}>{shipping === 0 ? 'FREE' : formatPrice(shipping)}</span>
                   </div>
-                  <div className="flex justify-between font-bold text-base border-t border-border pt-2">
-                    <span>Total</span>
+                  {codCharge > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">COD Handle Fee</span>
+                      <span>{formatPrice(codCharge)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-base border-t border-border pt-3">
+                    <span>Payable Total</span>
                     <span className="text-saffron">{formatPrice(grandTotal)}</span>
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center gap-2 rounded-xl border border-border bg-pearl px-3 py-2 text-xs text-muted-foreground">
+                <div className="mt-4 flex items-center gap-2 rounded-xl border border-tulsi/20 bg-tulsi/5 px-3 py-2 text-xs text-muted-foreground">
                   <ShieldCheck size={16} className="text-tulsi" />
-                  <span>Secure checkout. Prices update with quantity.</span>
+                  <span>Final amount is verified again before payment gateway opens.</span>
                 </div>
               </div>
             </div>

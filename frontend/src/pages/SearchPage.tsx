@@ -68,8 +68,8 @@ const SearchPage = () => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <p className="text-sm text-muted-foreground mb-4">{results.length} results for "{query}"</p>
             {results.length > 0 ? (
-              <div className="product-grid grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {results.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
+              <div className="product-grid grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)]">
+                {results.map((p, i) => <ProductCard key={p.id} product={p} index={i} variant="compact" />)}
               </div>
             ) : (
               <div className="text-center py-12">
@@ -83,8 +83,8 @@ const SearchPage = () => {
         {query.length < 2 && (
           <div>
             <h2 className="font-cinzel text-lg font-bold text-foreground mb-4 text-center">Trending Products</h2>
-            <div className="product-grid grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {trendingProducts.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
+            <div className="product-grid grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)]">
+              {trendingProducts.map((p, i) => <ProductCard key={p.id} product={p} index={i} variant="compact" />)}
             </div>
           </div>
         )}

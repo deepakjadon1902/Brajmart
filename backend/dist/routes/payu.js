@@ -12,6 +12,7 @@ const email_1 = require("../lib/email");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const orderPricing_1 = require("../lib/orderPricing");
 const userAddress_1 = require("../lib/userAddress");
+const cod_1 = require("../lib/cod");
 const payuDrafts = new Map();
 const createDraft = (draft) => {
     payuDrafts.set(draft.txnid, draft);
@@ -87,13 +88,17 @@ const insertOrder = async (orderData, estimatedDelivery) => {
     const statusHistory = Array.isArray(orderData.statusHistory) && orderData.statusHistory.length
         ? orderData.statusHistory
         : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
-    const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+    const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
         orderData.userId || null,
         JSON.stringify(orderData.items || []),
         orderData.itemsSubtotal,
         orderData.packagingAmount,
         orderData.packagingRate,
         orderData.shippingAmount,
+        orderData.codAmount || 0,
+        orderData.codAvailable,
+        orderData.codPincode || null,
+        orderData.codMessage || null,
         orderData.total,
         status,
         orderData.customerName || null,
@@ -127,7 +132,9 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
         if (!priced.ok)
             return res.status(400).json({ message: priced.message });
         const settings = await (0, orderPricing_1.getCheckoutSettings)();
-        const totals = (0, orderPricing_1.computeTotals)(priced.itemsSubtotal, settings);
+        const baseTotals = (0, orderPricing_1.computeTotals)(priced.itemsSubtotal, settings);
+        const cod = await (0, cod_1.resolveCodHandleFee)(order, settings);
+        const totals = { ...baseTotals, cod: cod.amount, total: baseTotals.total + cod.amount };
         if (settings.minOrderAmount && totals.total < settings.minOrderAmount) {
             return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
         }
@@ -158,6 +165,10 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
             packagingAmount: totals.packaging,
             packagingRate: settings.packagingRate,
             shippingAmount: totals.shipping,
+            codAmount: cod.amount,
+            codAvailable: cod.available,
+            codPincode: cod.pincode,
+            codMessage: cod.message,
             total: totals.total,
             status: 'processing',
             statusHistory: [{ status: 'processing', date: new Date().toISOString(), note: 'Payment initiated via PayU' }],
@@ -177,7 +188,7 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
             amount: Number(totals.total),
             method: method === 'card' ? 'card' : 'upi',
             customer: { name: customer.name, email: customerEmail, phone: customer.phone },
-            order: { ...order, items: priced.items, itemsSubtotal: totals.itemsSubtotal, packagingAmount: totals.packaging, packagingRate: settings.packagingRate, shippingAmount: totals.shipping, total: totals.total, customerEmail },
+            order: { ...order, items: priced.items, itemsSubtotal: totals.itemsSubtotal, packagingAmount: totals.packaging, packagingRate: settings.packagingRate, shippingAmount: totals.shipping, codAmount: cod.amount, codAvailable: cod.available, codPincode: cod.pincode, codMessage: cod.message, total: totals.total, customerEmail },
             orderId,
         });
         const surl = `${getBackendUrl()}/api/payu/success`;
@@ -317,6 +328,10 @@ const handlePayuCallback = async (req, res, statusOverride) => {
                 shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
                 packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
                 packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
+                codAmount: orderRow.cod_amount == null ? undefined : Number(orderRow.cod_amount),
+                codAvailable: orderRow.cod_available == null ? undefined : Boolean(Number(orderRow.cod_available)),
+                codPincode: orderRow.cod_pincode ?? undefined,
+                codMessage: orderRow.cod_message ?? undefined,
                 paymentMethod: methodLabel,
                 shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
                 billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),
@@ -347,6 +362,10 @@ const handlePayuCallback = async (req, res, statusOverride) => {
                     shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
                     packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
                     packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
+                    codAmount: orderRow.cod_amount == null ? undefined : Number(orderRow.cod_amount),
+                    codAvailable: orderRow.cod_available == null ? undefined : Boolean(Number(orderRow.cod_available)),
+                    codPincode: orderRow.cod_pincode ?? undefined,
+                    codMessage: orderRow.cod_message ?? undefined,
                     paymentMethod: methodLabel,
                     shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
                     billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),
@@ -406,6 +425,10 @@ const handlePayuCallback = async (req, res, statusOverride) => {
                     shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
                     packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
                     packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
+                    codAmount: orderRow.cod_amount == null ? undefined : Number(orderRow.cod_amount),
+                    codAvailable: orderRow.cod_available == null ? undefined : Boolean(Number(orderRow.cod_available)),
+                    codPincode: orderRow.cod_pincode ?? undefined,
+                    codMessage: orderRow.cod_message ?? undefined,
                     paymentMethod: orderRow.payment_method,
                     shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
                     billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),
