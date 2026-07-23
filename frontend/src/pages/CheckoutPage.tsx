@@ -142,7 +142,7 @@ const CheckoutPage = () => {
     let active = true;
     const loadSettings = async () => {
       try {
-        const data = await fetchPublicSettings();
+        const data = await fetchPublicSettings({ fresh: true });
         if (!active || !data) return;
         updateSettings({
           storeName: data.storeName,
@@ -292,7 +292,24 @@ const CheckoutPage = () => {
   const handleContinueToPayment = async () => {
     if (!validateContactAndAddress()) return;
     const canDeliver = await verifyDeliveryPincode();
-    if (canDeliver) setStep(1);
+    if (!canDeliver) return;
+    try {
+      const data = await fetchPublicSettings({ fresh: true });
+      updateSettings({
+        freeShippingThreshold: data.freeShippingThreshold,
+        shippingFee: data.shippingFee,
+        packagingRate: data.packagingRate ?? data.taxRate ?? 0,
+        minOrderAmount: data.minOrderAmount,
+        maxOrderQuantity: data.maxOrderQuantity,
+        codEnabled: data.codEnabled,
+        upiEnabled: data.upiEnabled,
+        cardEnabled: data.cardEnabled,
+      });
+      if (!data.codEnabled) setWantsCodService(false);
+    } catch {
+      // Keep current settings if the refresh fails; backend validation still protects the order.
+    }
+    setStep(1);
   };
 
   const submitPayuForm = (actionUrl: string, fields: Record<string, string>) => {
@@ -471,6 +488,24 @@ const CheckoutPage = () => {
     if (settings.minOrderAmount && grandTotal < settings.minOrderAmount) {
       toast.error(`Minimum order amount is ${formatPrice(settings.minOrderAmount)}.`);
       return;
+    }
+
+    if (wantsCodService) {
+      try {
+        const data = await fetchPublicSettings({ fresh: true });
+        updateSettings({
+          codEnabled: data.codEnabled,
+          upiEnabled: data.upiEnabled,
+          cardEnabled: data.cardEnabled,
+        });
+        if (!data.codEnabled) {
+          setWantsCodService(false);
+          toast.error('COD is currently disabled. Please use online payment.');
+          return;
+        }
+      } catch {
+        // Backend order creation still checks the setting before accepting COD.
+      }
     }
 
     trackMetaPixelEvent('AddPaymentInfo', {

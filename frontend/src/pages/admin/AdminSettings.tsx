@@ -26,6 +26,7 @@ const AdminSettings = () => {
   const [maxOrderQuantity, setMaxOrderQuantity] = useState(settings.maxOrderQuantity);
   const [deliveryEtaMinDays, setDeliveryEtaMinDays] = useState(settings.deliveryEtaMinDays);
   const [deliveryEtaMaxDays, setDeliveryEtaMaxDays] = useState(settings.deliveryEtaMaxDays);
+  const [codEnabled, setCodEnabled] = useState(settings.codEnabled);
   const [upiEnabled, setUpiEnabled] = useState(settings.upiEnabled);
   const [cardEnabled, setCardEnabled] = useState(settings.cardEnabled);
   const [maintenanceMode, setMaintenanceMode] = useState(settings.maintenanceMode);
@@ -50,8 +51,7 @@ const AdminSettings = () => {
       try {
         const data = await fetchPublicSettings({ fresh: true });
         if (!active || !data) return;
-        const { codEnabled: _codEnabled, ...safeData } = data || {};
-        updateSettings({ ...safeData, heroBadges: sanitizeBadges(safeData.heroBadges) });
+        updateSettings({ ...data, heroBadges: sanitizeBadges(data.heroBadges) });
         setStoreName(data.storeName);
         setTagline(data.tagline);
         setCurrency(data.currency);
@@ -65,6 +65,7 @@ const AdminSettings = () => {
         setMaxOrderQuantity(data.maxOrderQuantity);
         setDeliveryEtaMinDays(data.deliveryEtaMinDays ?? settings.deliveryEtaMinDays);
         setDeliveryEtaMaxDays(data.deliveryEtaMaxDays ?? settings.deliveryEtaMaxDays);
+        setCodEnabled(Boolean(data.codEnabled));
         setUpiEnabled(data.upiEnabled);
         setCardEnabled(data.cardEnabled);
         setMaintenanceMode(data.maintenanceMode);
@@ -92,7 +93,7 @@ const AdminSettings = () => {
         storeName, tagline, currency, storeEmail, storePhone, storeAddress,
         freeShippingThreshold, shippingFee, packagingRate, taxRate: packagingRate, minOrderAmount, maxOrderQuantity,
         deliveryEtaMinDays, deliveryEtaMaxDays,
-        upiEnabled, cardEnabled, maintenanceMode,
+        codEnabled, upiEnabled, cardEnabled, maintenanceMode,
         metaTitle, metaDescription, storeLogo,
         announcementBar: { enabled: announcementEnabled, messages: announcementMessages },
         socialLinks,
@@ -101,6 +102,7 @@ const AdminSettings = () => {
       };
       const updated = await updatePublicSettings(payload);
       updateSettings(updated);
+      setCodEnabled(Boolean(updated.codEnabled));
       updateAnnouncementMessages(updated.announcementBar?.messages || announcementMessages);
       Object.entries(updated.socialLinks || socialLinks).forEach(([k, v]) => updateSocialLinks(k, v as string));
       setSaved(true);
@@ -278,6 +280,22 @@ const AdminSettings = () => {
           <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
             <p className="text-sm font-medium text-white">Razorpay Checkout</p>
             <p className="text-xs text-slate-400">Primary checkout. Configure RAZORPAY_PLATFORM_KEY_ID, RAZORPAY_PLATFORM_KEY_SECRET, and RAZORPAY_PLATFORM_WEBHOOK_SECRET on the backend.</p>
+          </div>
+          <div className={`flex items-center justify-between rounded-xl border p-4 ${codEnabled ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
+            <div>
+              <p className="text-sm font-medium text-white">Cash on Delivery</p>
+              <p className="text-xs text-slate-400">
+                {codEnabled
+                  ? 'COD is enabled on the storefront after DTDC pincode verification. Prasadam products remain blocked.'
+                  : 'COD is disabled everywhere on the storefront. Customers will see only online payment methods.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={`text-xs font-semibold ${codEnabled ? 'text-emerald-300' : 'text-red-300'}`}>
+                {codEnabled ? 'Enabled' : 'Disabled'}
+              </span>
+              <Toggle value={codEnabled} onChange={setCodEnabled} />
+            </div>
           </div>
           <div className="flex items-center justify-between">
             <div>
