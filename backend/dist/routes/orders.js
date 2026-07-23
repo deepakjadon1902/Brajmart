@@ -221,6 +221,9 @@ router.post('/', auth_1.optionalAuth, async (req, res) => {
         let codPincode = null;
         let codMessage = null;
         if (wantsCod) {
+            if ((0, orderPricing_1.hasPrasadamItems)(priced.items)) {
+                return res.status(400).json({ message: 'COD is not available for Prasadam products. Please use online payment for Prasadam orders.' });
+            }
             if (!settings.codEnabled) {
                 return res.status(400).json({ message: 'COD is currently disabled' });
             }

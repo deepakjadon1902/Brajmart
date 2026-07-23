@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createPayuOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDtdcPincode } from '@/lib/api';
+import { fetchPublicSettings, createOrder, createPayuOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDtdcPincode } from '@/lib/api';
 import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
@@ -86,7 +86,7 @@ const INDIA_STATES = [
 ] as const;
 
 const CheckoutPage = () => {
-  const { items, totalPrice, totalSavings, updateQuantity, removeItem } = useCartStore();
+  const { items, totalPrice, totalSavings, updateQuantity, removeItem, clearCart } = useCartStore();
   const { user, isAuthenticated } = useAuthStore();
   const { settings, updateSettings } = useSettingsStore();
   const navigate = useNavigate();
@@ -127,8 +127,12 @@ const CheckoutPage = () => {
   const effectiveShipping = sameAsBilling ? billingAddress : shippingAddress;
   const effectiveEmail = String(isAuthenticated ? user?.email || '' : customerEmail || '').trim();
   const effectivePincode = String(effectiveShipping.pincode || '').trim();
+  const hasPrasadamItems = items.some((i) => {
+    const text = `${i.product.category || ''} ${i.product.name || ''} ${i.product.slug || ''}`.toLowerCase();
+    return /\bprasadam\b|\bprasad\b/.test(text);
+  });
   const codAvailable = Boolean(serviceability?.pincode === effectivePincode && serviceability.serviceable && serviceability.codAvailable);
-  const canUseCodService = Boolean(settings.codEnabled && codAvailable);
+  const canUseCodService = Boolean(settings.codEnabled && codAvailable && !hasPrasadamItems);
   const codCharge = wantsCodService && canUseCodService ? COD_CHARGE : 0;
   const grandTotal = totalPrice() + packagingCost + shipping + codCharge;
 
@@ -329,10 +333,8 @@ const CheckoutPage = () => {
         shippingAddress: effectiveShipping,
         billingAddress,
         paymentMethod: method === 'upi' ? 'PayU UPI' : 'PayU Card',
-        codRequested: codCharge > 0,
-        codAmount: codCharge,
-        codPincode: codCharge > 0 ? effectivePincode : undefined,
-        codMessage: codCharge > 0 ? serviceability?.message || `COD available for ${effectivePincode}` : undefined,
+        codRequested: false,
+        codAmount: 0,
       };
       const result = await createPayuOrder({
         amount: grandTotal,
@@ -376,10 +378,8 @@ const CheckoutPage = () => {
         shippingAddress: effectiveShipping,
         billingAddress,
         paymentMethod: 'Razorpay',
-        codRequested: codCharge > 0,
-        codAmount: codCharge,
-        codPincode: codCharge > 0 ? effectivePincode : undefined,
-        codMessage: codCharge > 0 ? serviceability?.message || `COD available for ${effectivePincode}` : undefined,
+        codRequested: false,
+        codAmount: 0,
       };
 
       const result = await createRazorpayOrder({
@@ -485,6 +485,47 @@ const CheckoutPage = () => {
       value: grandTotal,
       payment_method: paymentMethod,
     });
+
+    if (wantsCodService) {
+      setProcessing(true);
+      try {
+        const order = await createOrder({
+          userId: isAuthenticated ? user?.id : undefined,
+          items: items.map((i) => ({
+            productId: i.product.id,
+            name: i.product.name,
+            image: i.product.image,
+            quantity: i.quantity,
+            price: i.product.price,
+            selectedSize: i.product.selectedSize,
+            selectedPieces: i.product.selectedPieces,
+            selectedAttributes: i.product.selectedAttributes,
+          })),
+          total: grandTotal,
+          status: 'confirmed',
+          customerName: billingAddress.fullName,
+          customerEmail: effectiveEmail,
+          shippingAddress: effectiveShipping,
+          billingAddress,
+          paymentMethod: 'COD',
+          codRequested: true,
+          codAmount: COD_CHARGE,
+          codPincode: effectivePincode,
+          codMessage: serviceability?.message || `COD available for ${effectivePincode}`,
+          statusHistory: [{ status: 'confirmed', date: new Date().toISOString(), note: 'Order confirmed with Cash on Delivery' }],
+        }) as any;
+        setPlacedOrderId(String(order?.orderId || order?._id || order?.id || ''));
+        clearCart();
+        setStep(2);
+        toast.success('COD order confirmed successfully');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : '';
+        toast.error(message || 'Unable to confirm COD order. Please try again.');
+      } finally {
+        setProcessing(false);
+      }
+      return;
+    }
 
     if (paymentMethod === 'razorpay') {
       startRazorpayPayment();
@@ -772,13 +813,15 @@ const CheckoutPage = () => {
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="text-sm font-semibold text-foreground">DTDC COD service</p>
                                 <span className={`text-[11px] px-2 py-0.5 rounded-full border ${canUseCodService ? 'border-tulsi/30 text-tulsi' : 'border-border text-muted-foreground'}`}>
-                                  {canUseCodService ? 'Available' : checkingPincode ? 'Checking' : 'Not available'}
+                                {canUseCodService ? 'Available' : checkingPincode ? 'Checking' : 'Not available'}
                                 </span>
                               </div>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {canUseCodService
-                                  ? `Want COD service for this shipment? COD Handle Fee ${formatPrice(COD_CHARGE)} will be added to your online payment total.`
-                                  : 'Enter a DTDC COD serviceable pincode in delivery details to enable this service.'}
+                                {hasPrasadamItems
+                                  ? 'COD is not available for Prasadam products. Please continue with online payment.'
+                                  : canUseCodService
+                                    ? `Select COD to confirm this order without online payment. COD Handle Fee ${formatPrice(COD_CHARGE)} will be collected with the order total.`
+                                    : 'Enter a DTDC COD serviceable pincode in delivery details to enable this service.'}
                               </p>
                             </div>
                           </div>
@@ -788,7 +831,7 @@ const CheckoutPage = () => {
                             disabled={!canUseCodService}
                             className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${wantsCodService ? 'bg-tulsi text-white' : 'border border-border bg-background text-foreground hover:border-tulsi/50'}`}
                           >
-                            {wantsCodService ? 'COD Added' : 'Want COD'}
+                            {wantsCodService ? 'COD Selected' : 'Want COD'}
                           </button>
                         </div>
                       </div>
@@ -876,20 +919,24 @@ const CheckoutPage = () => {
                         Protected payment
                       </div>
                       <p className="text-muted-foreground text-xs mt-1">
-                        BrajMart never stores card details or UPI PIN. Payment status is confirmed by the gateway before your order is marked successful.
+                        {wantsCodService
+                          ? 'COD orders are confirmed directly. Please keep the payable amount ready at delivery.'
+                          : 'BrajMart never stores card details or UPI PIN. Payment status is confirmed by the gateway before your order is marked successful.'}
                       </p>
                     </div>
 
                     <button
                       onClick={handlePlaceOrder}
-                      disabled={processing || paymentOptions.length === 0}
+                      disabled={processing || (!wantsCodService && paymentOptions.length === 0)}
                       className="mt-6 w-full py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform disabled:opacity-60"
                     >
                       {processing
-                        ? 'Processing Payment...'
-                        : paymentMethod === 'razorpay'
-                          ? `Pay with Razorpay - ${formatPrice(grandTotal)}`
-                          : `Pay Now - ${formatPrice(grandTotal)}`}
+                        ? wantsCodService ? 'Confirming COD Order...' : 'Processing Payment...'
+                        : wantsCodService
+                          ? `Confirm COD Order - ${formatPrice(grandTotal)}`
+                          : paymentMethod === 'razorpay'
+                            ? `Pay with Razorpay - ${formatPrice(grandTotal)}`
+                            : `Pay Now - ${formatPrice(grandTotal)}`}
                     </button>
                   </div>
                 </motion.div>

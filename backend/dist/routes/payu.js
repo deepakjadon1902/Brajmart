@@ -131,6 +131,9 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
         const priced = await (0, orderPricing_1.priceAndValidateOrderItems)(order.items || []);
         if (!priced.ok)
             return res.status(400).json({ message: priced.message });
+        if ((Boolean(order?.codRequested) || Number(order?.codAmount || 0) > 0) && (0, orderPricing_1.hasPrasadamItems)(priced.items)) {
+            return res.status(400).json({ message: 'COD is not available for Prasadam products. Please use online payment for Prasadam orders.' });
+        }
         const settings = await (0, orderPricing_1.getCheckoutSettings)();
         const baseTotals = (0, orderPricing_1.computeTotals)(priced.itemsSubtotal, settings);
         const cod = await (0, cod_1.resolveCodHandleFee)(order, settings);

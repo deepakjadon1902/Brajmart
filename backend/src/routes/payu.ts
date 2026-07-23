@@ -5,7 +5,7 @@ import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { sendOrderConfirmation, sendPaymentFailed, sendPaymentReceipt, sendAdminPaymentNotice } from '../lib/email';
 import { parseJson } from '../lib/dbHelpers';
-import { computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
+import { computeTotals, getCheckoutSettings, hasPrasadamItems, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { upsertUserDefaultAddress } from '../lib/userAddress';
 import { resolveCodHandleFee } from '../lib/cod';
 
@@ -190,6 +190,9 @@ router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
 
     const priced = await priceAndValidateOrderItems(order.items || []);
     if (!priced.ok) return res.status(400).json({ message: priced.message });
+    if ((Boolean(order?.codRequested) || Number(order?.codAmount || 0) > 0) && hasPrasadamItems(priced.items)) {
+      return res.status(400).json({ message: 'COD is not available for Prasadam products. Please use online payment for Prasadam orders.' });
+    }
 
     const settings = await getCheckoutSettings();
     const baseTotals = computeTotals(priced.itemsSubtotal, settings);

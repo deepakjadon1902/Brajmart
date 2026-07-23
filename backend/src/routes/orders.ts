@@ -4,7 +4,7 @@ import { sendOrderConfirmation, sendShippingUpdate } from '../lib/email';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { auth, adminOnly, optionalAuth, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
-import { computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
+import { computeTotals, getCheckoutSettings, hasPrasadamItems, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { upsertUserDefaultAddress } from '../lib/userAddress';
 import { checkDtdcPincode, trackDtdcShipment } from '../lib/dtdc';
 
@@ -225,6 +225,9 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
     let codMessage: string | null = null;
 
     if (wantsCod) {
+      if (hasPrasadamItems(priced.items)) {
+        return res.status(400).json({ message: 'COD is not available for Prasadam products. Please use online payment for Prasadam orders.' });
+      }
       if (!settings.codEnabled) {
         return res.status(400).json({ message: 'COD is currently disabled' });
       }

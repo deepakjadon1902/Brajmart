@@ -17,6 +17,7 @@ export type PricedOrderItem = {
   slug: string;
   name: string;
   image: string;
+  category: string;
   quantity: number;
   price: number;
   selectedSize?: string;
@@ -83,7 +84,7 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
   // De-duplicate ids for query.
   const uniqueIds = Array.from(new Set(ids));
   const placeholders = uniqueIds.map(() => '?').join(',');
-  const rows = await dbQuery<any>(`SELECT id, name, slug, price, image, in_stock FROM products WHERE id IN (${placeholders})`, uniqueIds);
+  const rows = await dbQuery<any>(`SELECT id, name, slug, price, image, category, in_stock FROM products WHERE id IN (${placeholders})`, uniqueIds);
   const byId = new Map<string, any>((rows || []).map((r) => [String(r.id), r]));
 
   const pricedItems: PricedOrderItem[] = [];
@@ -113,6 +114,7 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
       slug: String(product.slug || ''),
       name: String(product.name || ''),
       image: String(product.image || ''),
+      category: String(product.category || ''),
       quantity,
       price,
       selectedSize: raw.selectedSize,
@@ -124,3 +126,11 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
 
   return { ok: true as const, items: pricedItems, itemsSubtotal: subtotal };
 };
+
+export const isPrasadamItem = (item: { name?: unknown; category?: unknown; slug?: unknown }) => {
+  const text = `${item.category || ''} ${item.name || ''} ${item.slug || ''}`.toLowerCase();
+  return /\bprasadam\b|\bprasad\b/.test(text);
+};
+
+export const hasPrasadamItems = (items: Array<{ name?: unknown; category?: unknown; slug?: unknown }>) =>
+  Array.isArray(items) && items.some(isPrasadamItem);
