@@ -2,9 +2,38 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { fetchPaymentStatus, trackOrder } from '@/lib/api';
-import { trackMetaPixelEvent } from '@/lib/metaPixel';
+import { toPositiveMetaValue, trackMetaPixelEvent } from '@/lib/metaPixel';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+
+const META_PURCHASE_VALUE = 9.90;
+
+type PaymentStatusResponse = {
+  status?: 'paid' | 'pending' | 'failed' | null;
+  orderId?: number | null;
+  amount?: number | string | null;
+  method?: string | null;
+};
+
+type OrderItem = {
+  productId?: string | number;
+  id?: string | number;
+  _id?: string | number;
+  slug?: string;
+  name?: string;
+  price?: number | string;
+  quantity?: number | string;
+};
+
+type TrackedOrder = {
+  items?: OrderItem[];
+};
+
+declare global {
+  interface Window {
+    dataLayer?: Array<Record<string, unknown>>;
+  }
+}
 
 const PaymentStatusPage = () => {
   const { token } = useParams();
@@ -13,7 +42,7 @@ const PaymentStatusPage = () => {
   const [orderId, setOrderId] = useState<number | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
   const [method, setMethod] = useState<string | null>(null);
-  const [orderItems, setOrderItems] = useState<any[] | null>(null);
+  const [orderItems, setOrderItems] = useState<OrderItem[] | null>(null);
   const purchasePushedRef = useRef<string>('');
 
   useEffect(() => {
@@ -21,11 +50,11 @@ const PaymentStatusPage = () => {
     const load = async () => {
       if (!token) return;
       try {
-        const data: any = await fetchPaymentStatus(token);
+        const data = await fetchPaymentStatus(token) as PaymentStatusResponse;
         if (!active) return;
-        setStatus(data.status);
+        setStatus(data.status || null);
         setOrderId(data.orderId || null);
-        setAmount(data.amount || null);
+        setAmount(data.amount === null || data.amount === undefined ? null : Number(data.amount));
         setMethod(data.method || null);
       } catch {
         if (active) setStatus('failed');
@@ -41,10 +70,10 @@ const PaymentStatusPage = () => {
     if (!token || status !== 'pending') return;
     const interval = setInterval(async () => {
       try {
-        const data: any = await fetchPaymentStatus(token);
-        setStatus(data.status);
+        const data = await fetchPaymentStatus(token) as PaymentStatusResponse;
+        setStatus(data.status || null);
         setOrderId(data.orderId || null);
-        setAmount(data.amount || null);
+        setAmount(data.amount === null || data.amount === undefined ? null : Number(data.amount));
         setMethod(data.method || null);
       } catch {
         // ignore polling errors
@@ -58,7 +87,7 @@ const PaymentStatusPage = () => {
     const loadOrder = async () => {
       if (!orderId) return;
       try {
-        const order: any = await trackOrder(orderId);
+        const order = await trackOrder(orderId) as TrackedOrder;
         if (!active) return;
         setOrderItems(Array.isArray(order?.items) ? order.items : []);
       } catch {
@@ -70,11 +99,13 @@ const PaymentStatusPage = () => {
   }, [status, orderId]);
 
   useEffect(() => {
-    if (!token || status !== 'paid' || amount === null) return;
+    const purchaseValue = toPositiveMetaValue(META_PURCHASE_VALUE);
+    if (!token || status !== 'paid' || purchaseValue === undefined) return;
     if (purchasePushedRef.current === token) return;
     if (orderId && orderItems === null) return;
+    const analyticsValue = toPositiveMetaValue(amount) ?? purchaseValue;
 
-    const items = (Array.isArray(orderItems) ? orderItems : []).map((i: any) => ({
+    const items = (Array.isArray(orderItems) ? orderItems : []).map((i) => ({
       item_id: String(i.productId || i.id || i._id || i.slug || i.name || ''),
       item_name: String(i.name || ''),
       price: Number(i.price || 0),
@@ -92,12 +123,12 @@ const PaymentStatusPage = () => {
       num_items: items.reduce((sum, i) => sum + i.quantity, 0),
       order_id: orderId || undefined,
       payment_type: method || undefined,
-      value: Number(amount),
+      value: purchaseValue,
     });
 
     // Push GA4 ecommerce purchase event to GTM dataLayer.
     // Use payment token as the stable transaction identifier.
-    const dl = (window as any).dataLayer;
+    const dl = window.dataLayer;
     if (Array.isArray(dl)) {
       // GA4 recommended: clear previous ecommerce object to avoid bleed between events.
       dl.push({ ecommerce: null });
@@ -107,7 +138,7 @@ const PaymentStatusPage = () => {
           transaction_id: String(orderId || token),
           transaction_token: token,
           affiliation: 'BrajMart',
-          value: Number(amount),
+          value: analyticsValue,
           currency: 'INR',
           payment_type: method || undefined,
           order_id: orderId || undefined,
