@@ -48,7 +48,9 @@ const fetchJson = async (resource, fallback) => {
 
 const slugify = (value) => String(value || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
-export const getBuildData = async ({ strict = Boolean(process.env.VERCEL || process.env.CI) } = {}) => {
+const isStrictSeoBuild = () => String(process.env.SEO_STRICT_BUILD || '').toLowerCase() === 'true';
+
+export const getBuildData = async ({ strict = isStrictSeoBuild() } = {}) => {
   let products = [];
   let categories = [];
   let blogs = [];
@@ -81,9 +83,9 @@ export const getBuildData = async ({ strict = Boolean(process.env.VERCEL || proc
   } catch (caught) {
     error = caught instanceof Error ? caught : new Error(String(caught));
     if (strict) {
-      throw new Error(`SEO build stopped to prevent publishing empty HTML: ${error.message}. Configure API_BASE_URL in Vercel.`);
+      throw new Error(`SEO strict build stopped to prevent publishing empty HTML: ${error.message}. Fix API_BASE_URL or set SEO_STRICT_BUILD=false for an emergency deploy.`);
     }
-    console.warn(`SEO build is using limited local fallback data: ${error.message}`);
+    console.warn(`SEO build is using limited fallback data because the catalog API is unavailable: ${error.message}`);
   }
 
   return {
