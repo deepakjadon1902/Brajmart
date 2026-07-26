@@ -34,15 +34,31 @@ declare global {
   }
 }
 
+let razorpayCheckoutLoadPromise: Promise<boolean> | null = null;
+
 const loadRazorpayCheckout = () =>
-  new Promise<boolean>((resolve) => {
+  razorpayCheckoutLoadPromise ||= new Promise<boolean>((resolve) => {
     if (typeof window === 'undefined') return resolve(false);
     if (window.Razorpay) return resolve(true);
+    const existingScript = document.querySelector<HTMLScriptElement>('script[data-brajmart-razorpay-checkout="true"]');
+    if (existingScript && window.Razorpay) return resolve(true);
+
+    let settled = false;
+    const finish = (loaded: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      if (!loaded) razorpayCheckoutLoadPromise = null;
+      resolve(loaded);
+    };
+
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
     script.async = true;
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
+    script.dataset.brajmartRazorpayCheckout = 'true';
+    script.onload = () => finish(Boolean(window.Razorpay));
+    script.onerror = () => finish(false);
+    const timeoutId = window.setTimeout(() => finish(false), 12000);
     document.body.appendChild(script);
   });
 
@@ -379,7 +395,7 @@ const CheckoutPage = () => {
     try {
       const loaded = await loadRazorpayCheckout();
       if (!loaded || !window.Razorpay) {
-        throw new Error('Unable to load Razorpay checkout. Please try again.');
+        throw new Error('Unable to load Razorpay checkout. Please disable browser shields/ad blockers for this payment page or try PayU.');
       }
 
       const orderPayload = {
