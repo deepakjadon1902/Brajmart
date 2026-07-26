@@ -1,7 +1,28 @@
-const API_BASE =
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_API_BASE_URL ||
-  (typeof window !== 'undefined' ? `${window.location.origin}/api` : 'http://localhost:5000/api');
+const normalizeApiBase = (value: unknown) => String(value || '').trim().replace(/\/$/, '');
+
+const isLocalHostname = (hostname: string) =>
+  ['localhost', '127.0.0.1', '::1'].includes(hostname) || hostname.endsWith('.localhost');
+
+const isLocalApiBase = (value: string) => {
+  try {
+    return isLocalHostname(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+};
+
+const resolveApiBase = () => {
+  const configured = normalizeApiBase(import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL);
+  if (typeof window === 'undefined') return configured || 'http://localhost:5001/api';
+
+  const runtimeOrigin = window.location.origin;
+  const runtimeIsLocal = isLocalHostname(window.location.hostname);
+
+  if (configured && (!isLocalApiBase(configured) || runtimeIsLocal)) return configured;
+  return `${runtimeOrigin}/api`;
+};
+
+const API_BASE = resolveApiBase();
 let memoryToken = '';
 
 type RequestOptions = {
@@ -38,16 +59,24 @@ export const getAuthToken = () => {
 
 const getJson = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
   const token = getAuthToken();
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: options.method || 'GET',
-    cache: options.cache,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: options.method || 'GET',
+      cache: options.cache,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    throw new Error(
+      `Cannot reach BrajMart API at ${API_BASE}. Please check the production API URL/CORS configuration.${message ? ` (${message})` : ''}`
+    );
+  }
 
   const resClone = res.clone();
   const contentType = res.headers.get('content-type') || '';

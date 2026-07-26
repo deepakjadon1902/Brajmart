@@ -1,4 +1,5 @@
 import { dbExecute, dbQuery, isDbConnected } from './db';
+import bcrypt from 'bcryptjs';
 
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
@@ -100,6 +101,44 @@ const ensureCoreTables = async () => {
       UNIQUE KEY uq_subcategories_category_name (category_id, name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS admins (
+      id INT NOT NULL AUTO_INCREMENT,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      password VARCHAR(255) NOT NULL,
+      status VARCHAR(50) DEFAULT 'active',
+      last_login TIMESTAMP NULL DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_admins_email (email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+};
+
+const syncAdminFromEnv = async () => {
+  if (String(process.env.ADMIN_SYNC_ON_START || '').toLowerCase() === 'false') return;
+
+  const email = String(process.env.ADMIN_EMAIL || '').trim();
+  const password = String(process.env.ADMIN_PASSWORD || '');
+  const name = String(process.env.ADMIN_NAME || 'Admin').trim() || 'Admin';
+  if (!email || !password) return;
+
+  const hash = await bcrypt.hash(password, 12);
+  const existing = await dbQuery<any>('SELECT id FROM admins WHERE LOWER(email) = ? LIMIT 1', [email.toLowerCase()]);
+  const forceSingle = String(process.env.ADMIN_FORCE_SINGLE || 'true').toLowerCase() !== 'false';
+
+  if (forceSingle) {
+    await dbExecute('UPDATE admins SET status = ? WHERE LOWER(email) <> ?', ['blocked', email.toLowerCase()]);
+  }
+
+  if (existing[0]?.id) {
+    await dbExecute('UPDATE admins SET name = ?, password = ?, status = ? WHERE id = ?', [name, hash, 'active', existing[0].id]);
+  } else {
+    await dbExecute('INSERT INTO admins (name, email, password, status) VALUES (?, ?, ?, ?)', [name, email, hash, 'active']);
+  }
 };
 
 const getCategoryIdByName = async (name: string): Promise<number | null> => {
@@ -159,6 +198,7 @@ export const runDataMigrations = async () => {
   if (String(process.env.RUN_DATA_MIGRATIONS || '').toLowerCase() === 'false') return;
 
   await ensureCoreTables();
+  await syncAdminFromEnv();
   await ensureOrderPricingSchema();
   await ensureOrderCodSchema();
   await ensureFreeShippingThresholdDefault();

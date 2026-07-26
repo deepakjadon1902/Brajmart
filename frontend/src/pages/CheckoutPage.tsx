@@ -19,7 +19,7 @@ const steps = ['Delivery Details', 'Payment', 'Confirmation'];
 const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
 const DEFAULT_SHIPPING_FEE = 49;
 const COD_CHARGE = 40;
-type ServiceabilityState = { pincode: string; serviceable: boolean; codAvailable: boolean; message?: string };
+type ServiceabilityState = { pincode: string; serviceable: boolean; codAvailable: boolean; manualReview?: boolean; message?: string };
 
 const emptyAddress: Address = { fullName: '', mobile: '', street: '', city: '', state: '', pincode: '' };
 
@@ -209,6 +209,7 @@ const CheckoutPage = () => {
           pincode: effectivePincode,
           serviceable: Boolean(result?.serviceable),
           codAvailable: Boolean(result?.codAvailable),
+          manualReview: Boolean(result?.manualReview),
           message: typeof result?.message === 'string' ? result.message : '',
         });
       } catch {
@@ -271,9 +272,14 @@ const CheckoutPage = () => {
         pincode,
         serviceable: Boolean(result?.serviceable),
         codAvailable: Boolean(result?.codAvailable),
+        manualReview: Boolean(result?.manualReview),
         message: typeof result?.message === 'string' ? result.message : '',
       };
       setServiceability(next);
+      if (next.manualReview) {
+        toast.info(next.message || 'Courier auto-check is unavailable. You can continue and our team will confirm dispatch.');
+        return true;
+      }
       if (!next.serviceable) {
         toast.error(next.message || 'DTDC delivery is not available for this pincode right now');
         return false;
@@ -726,7 +732,9 @@ const CheckoutPage = () => {
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {serviceability?.pincode === String(effectiveShipping.pincode || '').trim()
-                          ? serviceability.serviceable
+                          ? serviceability.manualReview
+                            ? serviceability.message || 'Courier auto-check is unavailable. Our team will confirm dispatch.'
+                            : serviceability.serviceable
                             ? serviceability.codAvailable
                               ? `Delivery and COD available for ${serviceability.pincode}. COD Handle Fee ${formatPrice(COD_CHARGE)} applies only when COD is selected.`
                               : `Delivery available for ${serviceability.pincode}. COD is not available for this pincode.`
@@ -769,7 +777,7 @@ const CheckoutPage = () => {
                       {[
                         { icon: ShieldCheck, title: 'Secure gateway', text: 'Encrypted checkout' },
                         { icon: CheckCircle2, title: 'Verified order', text: 'Email confirmation' },
-                        { icon: Truck, title: 'DTDC checked', text: codAvailable ? 'COD serviceable' : 'Delivery verified' },
+                        { icon: Truck, title: serviceability?.manualReview ? 'Courier review' : 'DTDC checked', text: serviceability?.manualReview ? 'Dispatch confirmed by team' : codAvailable ? 'COD serviceable' : 'Delivery verified' },
                       ].map((item) => (
                         <div key={item.title} className="flex items-center gap-3 rounded-xl border border-border bg-pearl/60 px-3 py-2.5">
                           <item.icon size={16} className="shrink-0 text-tulsi" />

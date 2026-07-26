@@ -145,14 +145,29 @@ router.get('/admin/dtdc/track/:lookup', auth_1.auth, auth_1.adminOnly, async (re
 });
 router.post('/dtdc/pincode', async (req, res) => {
     try {
+        const desPincode = String(req.body?.desPincode || '').trim();
+        const orgPincode = req.body?.orgPincode ? String(req.body.orgPincode).trim() : undefined;
+        if (!/^\d{6}$/.test(desPincode)) {
+            return res.status(400).json({ message: 'Destination pincode must be 6 digits' });
+        }
         const result = await (0, dtdc_1.checkDtdcPincode)({
-            orgPincode: req.body?.orgPincode,
-            desPincode: req.body?.desPincode,
+            orgPincode,
+            desPincode,
         });
         res.json(result);
     }
     catch (err) {
-        res.status(500).json({ message: err?.message || 'Unable to check DTDC pincode' });
+        console.error('Public DTDC pincode check failed:', err?.message || err);
+        res.json({
+            carrier: 'DTDC',
+            orgPincode: String(req.body?.orgPincode || process.env.DTDC_ORIGIN_PINCODE || ''),
+            desPincode: String(req.body?.desPincode || ''),
+            serviceable: true,
+            codAvailable: false,
+            manualReview: true,
+            message: 'Courier auto-check is temporarily unavailable. Online orders can continue and our team will confirm dispatch.',
+            details: [],
+        });
     }
 });
 router.post('/admin/dtdc/pincode', auth_1.auth, auth_1.adminOnly, async (req, res) => {
