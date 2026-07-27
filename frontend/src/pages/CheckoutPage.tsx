@@ -2,6 +2,7 @@ import * as React from "react";
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Minus, Plus, Trash2, Landmark, WalletCards, Truck } from 'lucide-react';
+import { SiRazorpay } from 'react-icons/si';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
@@ -20,10 +21,28 @@ const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
 const DEFAULT_SHIPPING_FEE = 49;
 const COD_CHARGE = 40;
 type ServiceabilityState = { pincode: string; serviceable: boolean; codAvailable: boolean; manualReview?: boolean; message?: string };
-
-const emptyAddress: Address = { fullName: '', mobile: '', street: '', city: '', state: '', pincode: '' };
+type DtdcCheckResponse = Partial<Omit<ServiceabilityState, 'pincode'>>;
+type CreatedOrderResponse = { orderId?: string | number; _id?: string | number; id?: string | number };
+type AddressValidationResult = { valid: true } | { valid: false; message: string };
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+const DUMMY_TEXT_PATTERN = /^(test|testing|demo|dummy|fake|sample|asdf|qwerty|abc|abcd|aaaa|xxxxx|none|null|unknown|na|n\/a)$/i;
+const DUMMY_EMAIL_PATTERN = /@(example\.com|test\.com|fake\.com|dummy\.com)$/i;
+
+const cleanText = (value?: string) => String(value || '').trim().replace(/\s+/g, ' ');
+const isRepeatedCharacters = (value: string) => /^([a-z0-9])\1+$/i.test(value.replace(/\s+/g, ''));
+const isDummyText = (value?: string) => {
+  const cleaned = cleanText(value);
+  return !cleaned || DUMMY_TEXT_PATTERN.test(cleaned) || isRepeatedCharacters(cleaned);
+};
+const isValidIndianMobile = (value?: string) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  return /^[6-9]\d{9}$/.test(digits) && !isRepeatedCharacters(digits);
+};
+const isValidPincode = (value?: string) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  return /^[1-9]\d{5}$/.test(digits) && !isRepeatedCharacters(digits) && digits !== '123456';
+};
 
 declare global {
   interface Window {
@@ -101,6 +120,20 @@ const INDIA_STATES = [
   'Puducherry',
 ] as const;
 
+const RazorpayLogo = () => (
+  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#0b72e7]/25 bg-[#0b72e7]/10 text-[#0b72e7]">
+    <SiRazorpay size={24} />
+  </div>
+);
+
+const PayULogo = () => (
+  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#a7d500]/35 bg-white">
+    <span className="text-base font-black tracking-tight">
+      <span className="text-[#00a4e4]">Pay</span><span className="text-[#8cc63f]">U</span>
+    </span>
+  </div>
+);
+
 const CheckoutPage = () => {
   const { items, totalPrice, totalSavings, updateQuantity, removeItem, clearCart } = useCartStore();
   const { user, isAuthenticated } = useAuthStore();
@@ -109,8 +142,9 @@ const CheckoutPage = () => {
 
   const [step, setStep] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('razorpay');
+  const [payuChannel, setPayuChannel] = useState<'upi' | 'card'>('upi');
   const [placedOrderId, setPlacedOrderId] = useState('');
-  const [sameAsBilling, setSameAsBilling] = useState(true);
+  const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [customerEmail, setCustomerEmail] = useState(user?.email || '');
   const [serviceability, setServiceability] = useState<ServiceabilityState | null>(null);
@@ -126,22 +160,26 @@ const CheckoutPage = () => {
     fullName: user?.fullName || '',
     mobile: user?.mobile || '',
     street: user?.address || '',
+    addressLine2: '',
     city: user?.city || '',
     state: user?.state || '',
     pincode: user?.pincode || '',
+    email: user?.email || '',
   });
 
   const [shippingAddress, setShippingAddress] = useState<Address>({
     fullName: user?.fullName || '',
     mobile: user?.mobile || '',
     street: user?.address || '',
+    addressLine2: '',
     city: user?.city || '',
     state: user?.state || '',
     pincode: user?.pincode || '',
+    email: user?.email || '',
   });
 
-  const effectiveShipping = sameAsBilling ? billingAddress : shippingAddress;
-  const effectiveEmail = String(isAuthenticated ? user?.email || '' : customerEmail || '').trim();
+  const effectiveShipping = shippingAddress;
+  const effectiveEmail = String(billingAddress.email || shippingAddress.email || customerEmail || user?.email || '').trim();
   const effectivePincode = String(effectiveShipping.pincode || '').trim();
   const hasPrasadamItems = items.some((i) => {
     const text = `${i.product.category || ''} ${i.product.name || ''} ${i.product.slug || ''}`.toLowerCase();
@@ -193,8 +231,7 @@ const CheckoutPage = () => {
 
   useEffect(() => {
     const available: string[] = ['razorpay'];
-    if (settings.upiEnabled) available.push('upi');
-    if (settings.cardEnabled) available.push('card');
+    if (settings.upiEnabled || settings.cardEnabled) available.push('payu');
     if (available.length > 0 && !available.includes(paymentMethod)) {
       setPaymentMethod(available[0]);
     }
@@ -212,6 +249,11 @@ const CheckoutPage = () => {
   }, [canUseCodService, wantsCodService]);
 
   useEffect(() => {
+    if (payuChannel === 'upi' && !settings.upiEnabled && settings.cardEnabled) setPayuChannel('card');
+    if (payuChannel === 'card' && !settings.cardEnabled && settings.upiEnabled) setPayuChannel('upi');
+  }, [payuChannel, settings.upiEnabled, settings.cardEnabled]);
+
+  useEffect(() => {
     if (!/^\d{6}$/.test(effectivePincode)) return;
     if (serviceability?.pincode === effectivePincode) return;
 
@@ -219,7 +261,7 @@ const CheckoutPage = () => {
     const timer = window.setTimeout(async () => {
       setCheckingPincode(true);
       try {
-        const result: any = await checkDtdcPincode({ desPincode: effectivePincode });
+        const result = await checkDtdcPincode({ desPincode: effectivePincode }) as DtdcCheckResponse;
         if (!active) return;
         setServiceability({
           pincode: effectivePincode,
@@ -242,8 +284,15 @@ const CheckoutPage = () => {
   }, [effectivePincode, serviceability?.pincode]);
 
   useEffect(() => {
-    if (user?.email) setCustomerEmail(user.email);
+    if (!user?.email) return;
+    setCustomerEmail(user.email);
+    setBillingAddress((addr) => ({ ...addr, email: addr.email || user.email || '' }));
+    setShippingAddress((addr) => ({ ...addr, email: addr.email || user.email || '' }));
   }, [user?.email]);
+
+  useEffect(() => {
+    if (billingSameAsShipping) setBillingAddress({ ...shippingAddress });
+  }, [billingSameAsShipping, shippingAddress]);
 
   const shouldRedirectToCart = items.length === 0 && step < 2;
   useEffect(() => {
@@ -251,30 +300,68 @@ const CheckoutPage = () => {
   }, [shouldRedirectToCart, navigate]);
   if (shouldRedirectToCart) return null;
 
-  const validateAddress = (addr: Address) => addr.fullName && addr.mobile && addr.street && addr.pincode && addr.city && addr.state;
+  const validateAddress = (addr: Address, section: 'Shipping' | 'Billing'): AddressValidationResult => {
+    const fullName = cleanText(addr.fullName);
+    const street = cleanText(addr.street);
+    const city = cleanText(addr.city);
+    const state = cleanText(addr.state);
+    const email = cleanText(addr.email);
+
+    if (isDummyText(fullName) || fullName.length < 3 || /\d/.test(fullName)) {
+      return { valid: false, message: `${section}: enter the customer's real full name` };
+    }
+    if (isDummyText(street) || street.length < 10) {
+      return { valid: false, message: `${section}: enter a complete Address Line 1 for parcel delivery` };
+    }
+    if (isDummyText(city) || city.length < 2 || /\d/.test(city)) {
+      return { valid: false, message: `${section}: enter a valid city name` };
+    }
+    if (!INDIA_STATES.includes(state as (typeof INDIA_STATES)[number])) {
+      return { valid: false, message: `${section}: select a valid state from the dropdown` };
+    }
+    if (!isValidPincode(addr.pincode)) {
+      return { valid: false, message: `${section}: enter a valid 6 digit delivery pincode` };
+    }
+    if (!isValidIndianMobile(addr.mobile)) {
+      return { valid: false, message: `${section}: enter a valid 10 digit Indian mobile number` };
+    }
+    if (!isValidEmail(email) || DUMMY_EMAIL_PATTERN.test(email)) {
+      return { valid: false, message: `${section}: enter a real email address for order updates` };
+    }
+    return { valid: true };
+  };
 
   const validateContactAndAddress = () => {
-    if (!isValidEmail(effectiveEmail)) {
-      toast.error('Please enter a valid email address for order updates');
+    const shippingResult = validateAddress(shippingAddress, 'Shipping');
+    if (!shippingResult.valid) {
+      toast.error(shippingResult.message);
       setStep(0);
       return false;
     }
-    if (!validateAddress(billingAddress)) {
-      toast.error('Please fill all billing address details');
-      setStep(0);
-      return false;
-    }
-    if (!sameAsBilling && !validateAddress(shippingAddress)) {
-      toast.error('Please fill all shipping address details');
+    const billingResult = validateAddress(billingAddress, 'Billing');
+    if (!billingResult.valid) {
+      toast.error(billingResult.message);
       setStep(0);
       return false;
     }
     return true;
   };
 
+  const cleanAddressForOrder = (addr: Address): Address => ({
+    ...addr,
+    fullName: cleanText(addr.fullName),
+    mobile: String(addr.mobile || '').replace(/\D/g, ''),
+    street: cleanText(addr.street),
+    addressLine2: cleanText(addr.addressLine2),
+    city: cleanText(addr.city),
+    state: cleanText(addr.state),
+    pincode: String(addr.pincode || '').replace(/\D/g, ''),
+    email: cleanText(addr.email).toLowerCase(),
+  });
+
   const verifyDeliveryPincode = async () => {
     const pincode = String(effectiveShipping.pincode || '').trim();
-    if (!/^\d{6}$/.test(pincode)) {
+    if (!isValidPincode(pincode)) {
       toast.error('Please enter a valid 6 digit delivery pincode');
       setStep(0);
       return false;
@@ -283,7 +370,7 @@ const CheckoutPage = () => {
 
     setCheckingPincode(true);
     try {
-      const result: any = await checkDtdcPincode({ desPincode: pincode });
+      const result = await checkDtdcPincode({ desPincode: pincode }) as DtdcCheckResponse;
       const next = {
         pincode,
         serviceable: Boolean(result?.serviceable),
@@ -353,24 +440,26 @@ const CheckoutPage = () => {
     if (!validateContactAndAddress()) return;
     setProcessing(true);
     try {
-        const orderPayload = {
-          userId: isAuthenticated ? user?.id : undefined,
-          items: items.map((i) => ({
-            productId: i.product.id,
-            name: i.product.name,
-            image: i.product.image,
-            quantity: i.quantity,
-            price: i.product.price,
-            selectedSize: i.product.selectedSize,
-            selectedPieces: i.product.selectedPieces,
-            selectedAttributes: i.product.selectedAttributes,
-          })),
-          total: grandTotal,
-          status: 'confirmed',
-          customerName: billingAddress.fullName,
+      const cleanShippingAddress = cleanAddressForOrder(effectiveShipping);
+      const cleanBillingAddress = cleanAddressForOrder(billingAddress);
+      const orderPayload = {
+        userId: isAuthenticated ? user?.id : undefined,
+        items: items.map((i) => ({
+          productId: i.product.id,
+          name: i.product.name,
+          image: i.product.image,
+          quantity: i.quantity,
+          price: i.product.price,
+          selectedSize: i.product.selectedSize,
+          selectedPieces: i.product.selectedPieces,
+          selectedAttributes: i.product.selectedAttributes,
+        })),
+        total: grandTotal,
+        status: 'confirmed',
+        customerName: cleanBillingAddress.fullName,
         customerEmail: effectiveEmail,
-        shippingAddress: effectiveShipping,
-        billingAddress,
+        shippingAddress: cleanShippingAddress,
+        billingAddress: cleanBillingAddress,
         paymentMethod: method === 'upi' ? 'PayU UPI' : 'PayU Card',
         codRequested: false,
         codAmount: 0,
@@ -379,7 +468,7 @@ const CheckoutPage = () => {
         amount: grandTotal,
         method,
         order: orderPayload,
-        customer: { name: billingAddress.fullName, email: effectiveEmail, phone: billingAddress.mobile },
+        customer: { name: cleanBillingAddress.fullName, email: effectiveEmail, phone: cleanBillingAddress.mobile },
       });
       submitPayuForm(result.actionUrl, result.fields);
     } catch (err: unknown) {
@@ -393,6 +482,8 @@ const CheckoutPage = () => {
     if (!validateContactAndAddress()) return;
     setProcessing(true);
     try {
+      const cleanShippingAddress = cleanAddressForOrder(effectiveShipping);
+      const cleanBillingAddress = cleanAddressForOrder(billingAddress);
       const loaded = await loadRazorpayCheckout();
       if (!loaded || !window.Razorpay) {
         throw new Error('Unable to load Razorpay checkout. Please disable browser shields/ad blockers for this payment page or try PayU.');
@@ -412,10 +503,10 @@ const CheckoutPage = () => {
         })),
         total: grandTotal,
         status: 'confirmed',
-        customerName: billingAddress.fullName,
+        customerName: cleanBillingAddress.fullName,
         customerEmail: effectiveEmail,
-        shippingAddress: effectiveShipping,
-        billingAddress,
+        shippingAddress: cleanShippingAddress,
+        billingAddress: cleanBillingAddress,
         paymentMethod: 'Razorpay',
         codRequested: false,
         codAmount: 0,
@@ -424,7 +515,7 @@ const CheckoutPage = () => {
       const result = await createRazorpayOrder({
         amount: grandTotal,
         order: orderPayload,
-        customer: { name: billingAddress.fullName, email: effectiveEmail, phone: billingAddress.mobile },
+        customer: { name: cleanBillingAddress.fullName, email: effectiveEmail, phone: cleanBillingAddress.mobile },
       });
 
       const checkout = new window.Razorpay({
@@ -546,6 +637,8 @@ const CheckoutPage = () => {
     if (wantsCodService) {
       setProcessing(true);
       try {
+        const cleanShippingAddress = cleanAddressForOrder(effectiveShipping);
+        const cleanBillingAddress = cleanAddressForOrder(billingAddress);
         const order = await createOrder({
           userId: isAuthenticated ? user?.id : undefined,
           items: items.map((i) => ({
@@ -560,17 +653,17 @@ const CheckoutPage = () => {
           })),
           total: grandTotal,
           status: 'confirmed',
-          customerName: billingAddress.fullName,
+          customerName: cleanBillingAddress.fullName,
           customerEmail: effectiveEmail,
-          shippingAddress: effectiveShipping,
-          billingAddress,
+          shippingAddress: cleanShippingAddress,
+          billingAddress: cleanBillingAddress,
           paymentMethod: 'COD',
           codRequested: true,
           codAmount: COD_CHARGE,
           codPincode: effectivePincode,
           codMessage: serviceability?.message || `COD available for ${effectivePincode}`,
           statusHistory: [{ status: 'confirmed', date: new Date().toISOString(), note: 'Order confirmed with Cash on Delivery' }],
-        }) as any;
+        }) as CreatedOrderResponse;
         setPlacedOrderId(String(order?.orderId || order?._id || order?.id || ''));
         clearCart();
         setStep(2);
@@ -586,20 +679,20 @@ const CheckoutPage = () => {
 
     if (paymentMethod === 'razorpay') {
       startRazorpayPayment();
-    } else if (paymentMethod === 'upi') {
-      startPayuPayment('upi');
-    } else if (paymentMethod === 'card') {
-      startPayuPayment('card');
+    } else if (paymentMethod === 'payu') {
+      startPayuPayment(payuChannel);
     }
   };
 
   const addressFields = [
-    { key: 'fullName', label: 'Full Name', type: 'text', full: false },
-    { key: 'mobile', label: 'Mobile Number', type: 'tel', full: false },
-    { key: 'street', label: 'Full Address', type: 'text', full: true, multiline: true },
-    { key: 'city', label: 'City', type: 'text', full: false },
-    { key: 'state', label: 'State', type: 'text', full: false },
-    { key: 'pincode', label: 'Pincode', type: 'text', full: false },
+    { key: 'fullName', label: 'Full Name', type: 'text', full: false, required: true },
+    { key: 'street', label: 'Address Line 1', type: 'text', full: true, multiline: true, required: true, placeholder: 'House/Flat no, Building, Area' },
+    { key: 'addressLine2', label: 'Address Line 2', type: 'text', full: true, required: false, placeholder: 'Landmark, nearby temple, floor, or company (optional)' },
+    { key: 'city', label: 'City', type: 'text', full: false, required: true },
+    { key: 'state', label: 'State', type: 'text', full: false, required: true },
+    { key: 'pincode', label: 'Pincode', type: 'text', full: false, required: true },
+    { key: 'mobile', label: 'Mobile Number', type: 'tel', full: false, required: true },
+    { key: 'email', label: 'Email Address', type: 'email', full: false, required: true },
   ];
 
   const paymentOptions = [
@@ -607,52 +700,52 @@ const CheckoutPage = () => {
       value: 'razorpay',
       title: 'Razorpay',
       subtitle: 'Official Razorpay Checkout for UPI, cards, netbanking, wallets, and EMI',
-      icon: CreditCard,
+      logo: RazorpayLogo,
       pills: ['Primary', 'UPI', 'Cards', 'NetBanking', 'Wallets'],
       badge: 'Primary',
+      brandColor: 'text-[#0b72e7]',
     },
-    ...(settings.upiEnabled ? [{
-      value: 'upi',
-      title: 'PayU UPI',
-      subtitle: 'Secondary PayU fallback for UPI payments',
-      icon: Smartphone,
-      pills: ['GPay', 'PhonePe', 'Paytm', 'BHIM'],
+    ...((settings.upiEnabled || settings.cardEnabled) ? [{
+      value: 'payu',
+      title: 'PayU',
+      subtitle: 'Secondary PayU fallback with UPI and card payments in one checkout',
+      logo: PayULogo,
+      pills: ['UPI', 'Cards', 'NetBanking', 'Wallets'],
       badge: 'Secondary',
-    }] : []),
-    ...(settings.cardEnabled ? [{
-      value: 'card',
-      title: 'PayU Card',
-      subtitle: 'Secondary PayU fallback for cards',
-      icon: CreditCard,
-      pills: ['Visa', 'Mastercard', 'RuPay', 'Amex', 'Maestro'],
-      badge: 'Secondary',
+      brandColor: 'text-[#00a4e4]',
     }] : []),
   ];
 
   const renderAddressForm = (
     addr: Address,
     setAddr: React.Dispatch<React.SetStateAction<Address>>,
-    label: string
+    label: string,
+    disabled = false
   ) => (
     <div>
       <h3 className="text-sm font-semibold text-foreground mb-3">{label}</h3>
       <div className="grid md:grid-cols-2 gap-4">
         {addressFields.map((f) => (
           <div key={f.key} className={f.full ? 'md:col-span-2' : ''}>
-            <label className="block text-sm font-medium mb-1">{f.label}</label>
+            <label className="block text-sm font-medium mb-1">
+              {f.label}
+              {f.required ? <span className="text-saffron"> *</span> : <span className="text-muted-foreground"> (optional)</span>}
+            </label>
             {f.multiline ? (
               <textarea
                 rows={3}
-                value={addr[f.key as keyof Address]}
+                value={String(addr[f.key as keyof Address] || '')}
                 onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
-                placeholder="House/Flat no, Building, Area, Landmark"
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors resize-none"
+                placeholder={f.placeholder}
+                disabled={disabled}
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors resize-none disabled:cursor-not-allowed disabled:opacity-70"
               />
             ) : f.key === 'state' ? (
               <select
                 value={String(addr.state || '')}
                 onChange={(e) => setAddr((a) => ({ ...a, state: e.target.value }))}
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors"
+                disabled={disabled}
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <option value="" disabled>Select state</option>
                 {INDIA_STATES.map((s) => (
@@ -662,9 +755,11 @@ const CheckoutPage = () => {
             ) : (
               <input
                 type={f.type}
-                value={addr[f.key as keyof Address]}
+                value={String(addr[f.key as keyof Address] || '')}
                 onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors"
+                placeholder={f.placeholder}
+                disabled={disabled}
+                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors disabled:cursor-not-allowed disabled:opacity-70"
               />
             )}
           </div>
@@ -708,38 +803,22 @@ const CheckoutPage = () => {
                       <MapPin size={18} className="text-gold" />
                       <h2 className="font-cinzel text-lg font-bold">Delivery Details</h2>
                     </div>
-                    {!isAuthenticated && (
-                      <div className="p-3 bg-pearl rounded-xl text-sm">
-                        <Link to="/login" className="text-saffron font-semibold hover:underline">Sign in</Link> for faster checkout with saved addresses.
-                      </div>
-                    )}
+                    {renderAddressForm(shippingAddress, setShippingAddress, 'Shipping Details')}
 
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground mb-3">Contact Details</h3>
-                      <label className="block text-sm font-medium mb-1">Email Address</label>
-                      <input
-                        type="email"
-                        value={effectiveEmail}
-                        onChange={(e) => setCustomerEmail(e.target.value)}
-                        disabled={isAuthenticated}
-                        placeholder="you@example.com"
-                        className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors disabled:opacity-70"
-                      />
-                    </div>
-
-                    {renderAddressForm(billingAddress, setBillingAddress, 'Billing Address')}
-
-                    <label className="flex items-center gap-3 cursor-pointer py-2 px-4 rounded-xl border border-border hover:border-gold/40 transition-colors">
+                    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3 transition-colors hover:border-gold/40">
                       <input
                         type="checkbox"
-                        checked={sameAsBilling}
-                        onChange={() => setSameAsBilling(!sameAsBilling)}
-                        className="w-4 h-4 accent-saffron rounded"
+                        checked={billingSameAsShipping}
+                        onChange={(event) => {
+                          setBillingSameAsShipping(event.target.checked);
+                          if (event.target.checked) setBillingAddress({ ...shippingAddress });
+                        }}
+                        className="h-4 w-4 rounded accent-saffron"
                       />
-                      <span className="text-sm font-medium text-foreground">Shipping address same as billing address</span>
+                      <span className="text-sm font-medium text-foreground">Billing details same as shipping details</span>
                     </label>
 
-                    {!sameAsBilling && renderAddressForm(shippingAddress, setShippingAddress, 'Shipping Address')}
+                    {!billingSameAsShipping && renderAddressForm(billingAddress, setBillingAddress, 'Billing Details')}
 
                     <div className="rounded-xl border border-border bg-muted/30 p-3">
                       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -761,13 +840,6 @@ const CheckoutPage = () => {
                       </p>
                     </div>
 
-                    <button
-                      onClick={handleContinueToPayment}
-                      disabled={checkingPincode}
-                      className="w-full py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform disabled:opacity-60"
-                    >
-                      {checkingPincode ? 'Checking Delivery...' : 'Continue to Payment'}
-                    </button>
                   </div>
                 </motion.div>
               )}
@@ -812,11 +884,21 @@ const CheckoutPage = () => {
                     ) : (
                       <div className="mt-5 space-y-3">
                         {paymentOptions.map((m) => {
-                          const Icon = m.icon;
+                          const Logo = m.logo;
                           const selected = paymentMethod === m.value;
                           return (
-                            <label
+                            <div
                               key={m.value}
+                              role="radio"
+                              aria-checked={selected}
+                              tabIndex={0}
+                              onClick={() => setPaymentMethod(m.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  setPaymentMethod(m.value);
+                                }
+                              }}
                               className={`group flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all ${selected ? 'border-gold bg-gold/5 shadow-[0_0_0_1px_rgba(218,165,32,0.2)]' : 'border-border bg-background hover:border-gold/50 hover:bg-pearl/50'}`}
                             >
                               <input
@@ -827,12 +909,10 @@ const CheckoutPage = () => {
                                 onChange={() => setPaymentMethod(m.value)}
                                 className="sr-only"
                               />
-                              <div className={`h-12 w-12 rounded-xl flex items-center justify-center border ${selected ? 'border-gold/40 bg-gold/10 text-gold' : 'border-border bg-pearl text-muted-foreground'}`}>
-                                <Icon size={18} />
-                              </div>
+                              <Logo />
                               <div className="flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-sm font-semibold">{m.title}</span>
+                                  <span className={`text-sm font-semibold ${m.brandColor}`}>{m.title}</span>
                                   <span className={`text-[11px] px-2 py-0.5 rounded-full border bg-background ${selected ? 'border-gold text-gold' : 'border-border text-muted-foreground'}`}>
                                     {m.badge}
                                   </span>
@@ -851,11 +931,33 @@ const CheckoutPage = () => {
                                     </span>
                                   ))}
                                 </div>
+                                {m.value === 'payu' && selected && (
+                                  <div className="mt-3 inline-flex rounded-lg border border-border bg-background p-1">
+                                    {[
+                                      { value: 'upi' as const, label: 'UPI', disabled: !settings.upiEnabled },
+                                      { value: 'card' as const, label: 'Cards', disabled: !settings.cardEnabled },
+                                    ].map((option) => (
+                                      <button
+                                        key={option.value}
+                                        type="button"
+                                        disabled={option.disabled}
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          setPayuChannel(option.value);
+                                        }}
+                                        className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${payuChannel === option.value ? 'bg-[#00a4e4] text-white' : 'text-muted-foreground hover:bg-muted'}`}
+                                      >
+                                        {option.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                               <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selected ? 'border-gold bg-gold/10' : 'border-border bg-background'}`}>
                                 {selected && <div className="w-3 h-3 rounded-full bg-gold" />}
                               </div>
-                            </label>
+                            </div>
                           );
                         })}
                       </div>
@@ -896,39 +998,24 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {paymentMethod === 'upi' && (
-                      <div className="mt-5 rounded-xl border border-border bg-pearl/50 p-4">
-                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
-                          <Smartphone size={16} className="text-tulsi" />
-                          PayU UPI selected
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">Complete payment from GPay, PhonePe, Paytm, BHIM, or any UPI app through PayU.</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {['GPay', 'PhonePe', 'Paytm', 'BHIM', 'UPI'].map((item) => (
-                            <span key={item} className="rounded-lg border border-border bg-background px-3 py-1 text-[11px] font-medium text-muted-foreground">{item}</span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {paymentMethod === 'card' && (
+                    {paymentMethod === 'payu' && (
                       <div className="mt-5 rounded-xl border border-border bg-pearl/50 p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="text-xs uppercase tracking-wide text-muted-foreground">PayU Secure Card</p>
-                            <h3 className="text-sm font-semibold text-foreground">Card payment selected</h3>
-                            <p className="text-xs text-muted-foreground mt-1">Cards, netbanking, wallets, and EMI through PayU</p>
+                            <p className="text-xs font-bold uppercase tracking-wide text-[#00a4e4]">PayU Secure Checkout</p>
+                            <h3 className="text-sm font-semibold text-foreground">{payuChannel === 'upi' ? 'UPI payment selected' : 'Card payment selected'}</h3>
+                            <p className="text-xs text-muted-foreground mt-1">Complete payment through PayU using UPI, cards, netbanking, or wallets.</p>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {['VISA', 'MC', 'RUPAY', 'AMEX'].map((b) => (
-                              <span key={b} className="rounded-lg border border-border bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground">
-                                {b}
-                              </span>
-                            ))}
+                          <div className="rounded-lg bg-white px-3 py-1.5 text-sm font-black tracking-tight shadow-sm">
+                            <span className="text-[#00a4e4]">Pay</span><span className="text-[#8cc63f]">U</span>
                           </div>
                         </div>
                         <div className="mt-4 grid sm:grid-cols-3 gap-3 text-foreground">
-                          {['Instant Bank Offers', 'Zero-Cost EMI', '100% Secure'].map((t) => (
+                          {[
+                            payuChannel === 'upi' ? 'GPay, PhonePe, Paytm' : 'Visa, Mastercard, RuPay',
+                            'NetBanking & Wallets',
+                            'Bank authentication',
+                          ].map((t) => (
                             <div key={t} className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
                               {t}
                             </div>
@@ -984,19 +1071,6 @@ const CheckoutPage = () => {
                       </p>
                     </div>
 
-                    <button
-                      onClick={handlePlaceOrder}
-                      disabled={processing || (!wantsCodService && paymentOptions.length === 0)}
-                      className="mt-6 w-full py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer active:scale-[0.97] transition-transform disabled:opacity-60"
-                    >
-                      {processing
-                        ? wantsCodService ? 'Confirming COD Order...' : 'Processing Payment...'
-                        : wantsCodService
-                          ? `Confirm COD Order - ${formatPrice(grandTotal)}`
-                          : paymentMethod === 'razorpay'
-                            ? `Pay with Razorpay - ${formatPrice(grandTotal)}`
-                            : `Pay Now - ${formatPrice(grandTotal)}`}
-                    </button>
                   </div>
                 </motion.div>
               )}
@@ -1126,10 +1200,22 @@ const CheckoutPage = () => {
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center gap-2 rounded-xl border border-tulsi/20 bg-tulsi/5 px-3 py-2 text-xs text-muted-foreground">
-                  <ShieldCheck size={16} className="text-tulsi" />
-                  <span>Final amount is verified again before payment gateway opens.</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={step === 0 ? handleContinueToPayment : handlePlaceOrder}
+                  disabled={step === 0 ? checkingPincode : processing || (!wantsCodService && paymentOptions.length === 0)}
+                  className="mt-4 w-full rounded-xl bg-gold-gradient px-4 py-3 text-sm font-bold text-maroon-dark shimmer transition-transform active:scale-[0.97] disabled:opacity-60"
+                >
+                  {step === 0
+                    ? checkingPincode ? 'Checking Delivery...' : 'Continue to Payment'
+                    : processing
+                      ? wantsCodService ? 'Confirming COD Order...' : 'Processing Payment...'
+                      : wantsCodService
+                        ? `Confirm COD Order - ${formatPrice(grandTotal)}`
+                        : paymentMethod === 'razorpay'
+                          ? `Pay with Razorpay - ${formatPrice(grandTotal)}`
+                          : `Pay with PayU - ${formatPrice(grandTotal)}`}
+                </button>
               </div>
             </div>
           )}

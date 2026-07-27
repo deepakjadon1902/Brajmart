@@ -23,11 +23,72 @@ const mapUserRow = (row: any) => ({
   updatedAt: toIsoString(row.updated_at),
 });
 
+const mapCustomerRow = (row: any) => ({
+  _id: row.id,
+  id: row.id,
+  name: row.name || 'Customer',
+  email: row.email || '',
+  phone: row.phone || '',
+  role: row.role || 'user',
+  status: row.status || 'active',
+  customerType: row.customer_type || 'registered',
+  orders: Number(row.orders || 0),
+  spent: Number(row.spent || 0),
+  addresses: parseJson(row.addresses, []),
+  createdAt: toIsoString(row.created_at),
+  updatedAt: toIsoString(row.updated_at),
+});
+
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    const rows = await dbQuery<any>('SELECT * FROM users ORDER BY created_at DESC');
-    res.json(rows.map(mapUserRow));
+    const rows = await dbQuery<any>(`
+      SELECT
+        CAST(u.id AS CHAR) AS id,
+        u.name,
+        u.email,
+        u.phone,
+        u.role,
+        u.status,
+        u.addresses,
+        u.created_at,
+        u.updated_at,
+        'registered' AS customer_type,
+        COUNT(o.id) AS orders,
+        COALESCE(SUM(o.total), 0) AS spent
+      FROM users u
+      LEFT JOIN orders o ON o.user_id = u.id
+      GROUP BY u.id
+
+      UNION ALL
+
+      SELECT
+        CONCAT('guest:', LOWER(o.customer_email)) AS id,
+        COALESCE(NULLIF(SUBSTRING_INDEX(GROUP_CONCAT(o.customer_name ORDER BY o.created_at DESC SEPARATOR '||'), '||', 1), ''), 'Guest Customer') AS name,
+        LOWER(o.customer_email) AS email,
+        COALESCE(
+          NULLIF(JSON_UNQUOTE(JSON_EXTRACT(SUBSTRING_INDEX(GROUP_CONCAT(o.shipping_address ORDER BY o.created_at DESC SEPARATOR '||'), '||', 1), '$.mobile')), ''),
+          NULLIF(JSON_UNQUOTE(JSON_EXTRACT(SUBSTRING_INDEX(GROUP_CONCAT(o.billing_address ORDER BY o.created_at DESC SEPARATOR '||'), '||', 1), '$.mobile')), ''),
+          ''
+        ) AS phone,
+        'user' AS role,
+        'active' AS status,
+        JSON_ARRAY(
+          JSON_EXTRACT(SUBSTRING_INDEX(GROUP_CONCAT(o.shipping_address ORDER BY o.created_at DESC SEPARATOR '||'), '||', 1), '$')
+        ) AS addresses,
+        MIN(o.created_at) AS created_at,
+        MAX(o.updated_at) AS updated_at,
+        'guest' AS customer_type,
+        COUNT(o.id) AS orders,
+        COALESCE(SUM(o.total), 0) AS spent
+      FROM orders o
+      WHERE o.user_id IS NULL
+        AND o.customer_email IS NOT NULL
+        AND o.customer_email <> ''
+      GROUP BY LOWER(o.customer_email)
+      ORDER BY updated_at DESC
+    `);
+    res.json(rows.map(mapCustomerRow));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }

@@ -15,9 +15,11 @@ export interface Address {
   fullName: string;
   mobile: string;
   street: string;
+  addressLine2?: string;
   city: string;
   state: string;
   pincode: string;
+  email?: string;
 }
 
 export interface Order {

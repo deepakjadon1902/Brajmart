@@ -11,6 +11,20 @@ interface MockUser {
   orders: number;
   spent: number;
   status: 'active' | 'blocked';
+  customerType?: 'registered' | 'guest';
+}
+
+interface AdminUserResponse {
+  _id?: string;
+  id?: string;
+  name?: string;
+  fullName?: string;
+  email?: string;
+  createdAt?: string;
+  orders?: number | string;
+  spent?: number | string;
+  status?: 'active' | 'blocked';
+  customerType?: 'registered' | 'guest';
 }
 
 const AdminUsers = () => {
@@ -21,18 +35,19 @@ const AdminUsers = () => {
     const load = async () => {
       try {
         const data = await fetchUsers();
-        const mapped = (Array.isArray(data) ? data : []).map((u: any) => ({
+        const mapped = (Array.isArray(data) ? data : []).map((u: AdminUserResponse) => ({
           id: u._id || u.id,
           name: u.name || u.fullName || 'User',
           email: u.email || '',
           joined: u.createdAt || new Date().toISOString(),
-          orders: 0,
-          spent: 0,
+          orders: Number(u.orders || 0),
+          spent: Number(u.spent || 0),
           status: u.status || 'active',
+          customerType: u.customerType || 'registered',
         }));
         setUsers(mapped);
-      } catch (err: any) {
-        toast.error(err?.message || 'Failed to load users');
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to load users');
       }
     };
     load();
@@ -48,8 +63,8 @@ const AdminUsers = () => {
       await updateUserStatus(id, nextStatus);
       setUsers((prev) => prev.map((u) => u.id === id ? { ...u, status: nextStatus } : u));
       toast.success('User updated');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to update user');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update user');
     }
   };
 
@@ -95,6 +110,7 @@ const AdminUsers = () => {
                     <div>
                       <p className="text-white font-medium">{u.name}</p>
                       <p className="text-slate-400 text-xs">{u.email}</p>
+                      {u.customerType === 'guest' && <p className="mt-1 text-[11px] font-medium text-amber-300">Guest checkout</p>}
                     </div>
                   </td>
                   <td className="px-5 py-3 text-slate-300">{new Date(u.joined).toLocaleDateString('en-IN')}</td>
@@ -106,9 +122,13 @@ const AdminUsers = () => {
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <button onClick={() => toggleStatus(u.id)} className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition ${u.status === 'active' ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10'}`}>
-                      {u.status === 'active' ? <><Ban size={12} /> Block</> : <><CheckCircle size={12} /> Activate</>}
-                    </button>
+                    {u.customerType === 'guest' ? (
+                      <span className="text-xs text-slate-500">Order only</span>
+                    ) : (
+                      <button onClick={() => toggleStatus(u.id)} className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition ${u.status === 'active' ? 'border-red-500/30 text-red-400 hover:bg-red-500/10' : 'border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10'}`}>
+                        {u.status === 'active' ? <><Ban size={12} /> Block</> : <><CheckCircle size={12} /> Activate</>}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
