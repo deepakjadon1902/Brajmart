@@ -297,11 +297,19 @@ const renderOrderDetails = (payload) => {
     const methodHtml = payload.paymentMethod ? `<p><strong>Payment Method:</strong> ${escapeHtml(payload.paymentMethod)}</p>` : '';
     const codHtml = payload.codMessage ? `<p><strong>DTDC COD:</strong> ${escapeHtml(payload.codMessage)}</p>` : '';
     const txnHtml = payload.transactionId ? `<p><strong>Transaction ID:</strong> ${escapeHtml(payload.transactionId)}</p>` : '';
+    const couponDiscount = Number(payload.couponDiscount || payload.couponDetails?.discountAmount || 0);
+    const couponHtml = payload.couponCode || couponDiscount > 0 ? `
+    <div style="margin:12px 0;padding:12px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:10px;color:#14532d;">
+      <p style="margin:0;"><strong>Coupon:</strong> ${escapeHtml(payload.couponCode || payload.couponDetails?.code || '')}</p>
+      ${couponDiscount > 0 ? `<p style="margin:5px 0 0;"><strong>Discount:</strong> -${formatMoney(couponDiscount)}</p>` : ''}
+      ${payload.couponDetails?.description ? `<p style="margin:5px 0 0;">${escapeHtml(payload.couponDetails.description)}</p>` : ''}
+    </div>` : '';
     const shipHtml = renderAddress('Shipping Address', payload.shippingAddress);
     const billHtml = renderAddress('Billing Address', payload.billingAddress);
     return `
     ${itemsHtml}
     ${pricingHtml}
+    ${couponHtml}
     ${methodHtml}
     ${codHtml}
     ${txnHtml}

@@ -31,7 +31,7 @@ const insertOrder = async (orderData, estimatedDelivery) => {
     const statusHistory = Array.isArray(orderData.statusHistory) && orderData.statusHistory.length
         ? orderData.statusHistory
         : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
-    const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+    const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, coupon_code, coupon_discount, coupon_details, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
         orderData.userId || null,
         JSON.stringify(orderData.items || []),
         orderData.itemsSubtotal,
@@ -42,6 +42,9 @@ const insertOrder = async (orderData, estimatedDelivery) => {
         orderData.codAvailable,
         orderData.codPincode || null,
         orderData.codMessage || null,
+        orderData.couponCode || null,
+        orderData.couponDiscount || 0,
+        orderData.couponDetails ? JSON.stringify(orderData.couponDetails) : null,
         orderData.total,
         status,
         orderData.customerName || null,
@@ -90,6 +93,9 @@ const getOrderDetails = async (orderRow) => ({
     codAvailable: orderRow.cod_available == null ? undefined : Boolean(Number(orderRow.cod_available)),
     codPincode: orderRow.cod_pincode ?? undefined,
     codMessage: orderRow.cod_message ?? undefined,
+    couponCode: orderRow.coupon_code ?? undefined,
+    couponDiscount: orderRow.coupon_discount == null ? undefined : Number(orderRow.coupon_discount),
+    couponDetails: (0, dbHelpers_1.parseJson)(orderRow.coupon_details, null),
     paymentMethod: orderRow.payment_method,
     shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
     billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),
@@ -128,6 +134,9 @@ const updateOrderForPayment = async (params) => {
         await (0, db_1.dbExecute)('INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [statusRow.order_id, orderRow.customer_name || '', orderRow.customer_email || '', statusRow.method || 'Razorpay', Number(statusRow.amount || orderRow.total || 0), params.status, transactionId]);
     }
     await (0, db_1.dbExecute)('INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()', [params.razorpayOrderId, params.status, statusRow.order_id, Number(statusRow.amount || orderRow.total || 0), statusRow.method || 'Razorpay', transactionId]);
+    if (params.status === 'paid' && orderRow.coupon_code) {
+        await (0, orderPricing_1.markCouponUsed)(orderRow.coupon_code);
+    }
     const refreshedRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
     orderRow = refreshedRows[0] || orderRow;
     const details = await getOrderDetails(orderRow);
@@ -227,7 +236,16 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
         const settings = await (0, orderPricing_1.getCheckoutSettings)();
         const baseTotals = (0, orderPricing_1.computeTotals)(priced.itemsSubtotal, settings);
         const cod = await (0, cod_1.resolveCodHandleFee)(order, settings);
-        const totals = { ...baseTotals, cod: cod.amount, total: baseTotals.total + cod.amount };
+        const totalsBeforeCoupon = { ...baseTotals, cod: cod.amount, total: baseTotals.total + cod.amount };
+        let totals = totalsBeforeCoupon;
+        let couponDetails = null;
+        if (order?.couponCode) {
+            const couponResult = await (0, orderPricing_1.applyCouponToTotals)(order.couponCode, priced.items, totalsBeforeCoupon);
+            if (!couponResult.valid)
+                return res.status(400).json({ message: couponResult.message });
+            totals = { ...totalsBeforeCoupon, total: couponResult.totals.total };
+            couponDetails = couponResult.coupon;
+        }
         if (settings.minOrderAmount && totals.total < settings.minOrderAmount) {
             return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
         }
@@ -259,6 +277,9 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
             codAvailable: cod.available,
             codPincode: cod.pincode,
             codMessage: cod.message,
+            couponCode: couponDetails?.code || null,
+            couponDiscount: couponDetails?.discountAmount || 0,
+            couponDetails,
             total: totals.total,
             paymentMethod: 'Razorpay',
             status: 'processing',

@@ -1,13 +1,49 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAdminStore } from '@/store/adminStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { Save, Store, Bell, Shield, Truck, CheckCircle, Globe, Megaphone, CreditCard, Image, Search, Settings2, Plus, X, Upload } from 'lucide-react';
-import { fetchPublicSettings, updatePublicSettings, uploadImage, sendTestEmail } from '@/lib/api';
+import { useProductStore } from '@/store/productStore';
+import { Save, Store, Bell, Shield, Truck, CheckCircle, Globe, Megaphone, CreditCard, Image, Search, Settings2, Plus, X, Upload, Tag, Trash2, Pencil } from 'lucide-react';
+import { createCoupon, deleteCoupon, fetchCoupons, fetchPublicSettings, sendTestEmail, updateCoupon, updatePublicSettings, uploadImage } from '@/lib/api';
 import { toast } from 'sonner';
+
+type CouponFormState = {
+  code: string;
+  title: string;
+  discountType: 'amount' | 'percent';
+  discountValue: string;
+  maxDiscount: string;
+  freeShipping: boolean;
+  freePackaging: boolean;
+  scopeType: 'all' | 'product' | 'category';
+  scopeValue: string;
+  minOrderAmount: string;
+  usageLimit: string;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+};
+
+const emptyCouponForm: CouponFormState = {
+  code: '',
+  title: '',
+  discountType: 'amount',
+  discountValue: '',
+  maxDiscount: '',
+  freeShipping: false,
+  freePackaging: false,
+  scopeType: 'all',
+  scopeValue: '',
+  minOrderAmount: '',
+  usageLimit: '',
+  startsAt: '',
+  endsAt: '',
+  isActive: true,
+};
 
 const AdminSettings = () => {
   const { adminEmail } = useAdminStore();
   const { settings, updateSettings, updateNotifications, updateSocialLinks, updateAnnouncementMessages } = useSettingsStore();
+  const { products, categories, loadFromApi } = useProductStore();
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState('store');
   const logoRef = useRef<HTMLInputElement>(null);
@@ -39,6 +75,10 @@ const AdminSettings = () => {
   const [heroBadges, setHeroBadges] = useState<string[]>(settings.heroBadges || []);
   const [newHeroBadge, setNewHeroBadge] = useState('');
   const [testEmail, setTestEmail] = useState('');
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponForm, setCouponForm] = useState<CouponFormState>(emptyCouponForm);
+  const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
 
   const [socialLinks, setSocialLinks] = useState(settings.socialLinks);
   const sanitizeBadges = (badges?: string[]) =>
@@ -85,6 +125,24 @@ const AdminSettings = () => {
     load();
     return () => { active = false; };
   }, []);
+
+  const loadCoupons = async () => {
+    setCouponLoading(true);
+    try {
+      const data = await fetchCoupons();
+      setCoupons(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load coupons');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'payments') return;
+    loadCoupons();
+    loadFromApi({ force: true }).catch(() => undefined);
+  }, [activeTab, loadFromApi]);
 
   const handleSave = async () => {
     setLoading(true);
@@ -166,6 +224,87 @@ const AdminSettings = () => {
 
   const removeHeroBadge = (i: number) => {
     setHeroBadges(heroBadges.filter((_, idx) => idx !== i));
+  };
+
+  const resetCouponForm = () => {
+    setCouponForm(emptyCouponForm);
+    setEditingCouponId(null);
+  };
+
+  const toCouponPayload = () => ({
+    code: couponForm.code,
+    title: couponForm.title,
+    discountType: couponForm.discountType,
+    discountValue: Number(couponForm.discountValue || 0),
+    maxDiscount: couponForm.maxDiscount ? Number(couponForm.maxDiscount) : null,
+    freeShipping: couponForm.freeShipping,
+    freePackaging: couponForm.freePackaging,
+    scopeType: couponForm.scopeType,
+    scopeValue: couponForm.scopeType === 'all' ? null : couponForm.scopeValue,
+    minOrderAmount: couponForm.minOrderAmount ? Number(couponForm.minOrderAmount) : 0,
+    usageLimit: couponForm.usageLimit ? Number(couponForm.usageLimit) : null,
+    startsAt: couponForm.startsAt || null,
+    endsAt: couponForm.endsAt || null,
+    isActive: couponForm.isActive,
+  });
+
+  const handleSaveCoupon = async () => {
+    const code = couponForm.code.trim().toUpperCase();
+    const hasMoneyDiscount = Number(couponForm.discountValue || 0) > 0;
+    if (!code) return toast.error('Enter coupon code');
+    if (!hasMoneyDiscount && !couponForm.freeShipping && !couponForm.freePackaging) {
+      return toast.error('Add a discount, free shipping, or free packaging');
+    }
+    if (couponForm.scopeType !== 'all' && !couponForm.scopeValue) {
+      return toast.error(`Select a ${couponForm.scopeType} for this coupon`);
+    }
+    setCouponLoading(true);
+    try {
+      const payload = toCouponPayload();
+      if (editingCouponId) await updateCoupon(editingCouponId, payload);
+      else await createCoupon(payload);
+      await loadCoupons();
+      resetCouponForm();
+      toast.success(editingCouponId ? 'Coupon updated' : 'Coupon created');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save coupon');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleEditCoupon = (coupon: any) => {
+    setEditingCouponId(String(coupon.id));
+    setCouponForm({
+      code: String(coupon.code || ''),
+      title: String(coupon.title || ''),
+      discountType: coupon.discountType === 'percent' ? 'percent' : 'amount',
+      discountValue: coupon.discountValue ? String(coupon.discountValue) : '',
+      maxDiscount: coupon.maxDiscount ? String(coupon.maxDiscount) : '',
+      freeShipping: Boolean(coupon.freeShipping),
+      freePackaging: Boolean(coupon.freePackaging),
+      scopeType: coupon.scopeType === 'product' || coupon.scopeType === 'category' ? coupon.scopeType : 'all',
+      scopeValue: String(coupon.scopeValue || ''),
+      minOrderAmount: coupon.minOrderAmount ? String(coupon.minOrderAmount) : '',
+      usageLimit: coupon.usageLimit ? String(coupon.usageLimit) : '',
+      startsAt: coupon.startsAt ? String(coupon.startsAt).slice(0, 16) : '',
+      endsAt: coupon.endsAt ? String(coupon.endsAt).slice(0, 16) : '',
+      isActive: Boolean(coupon.isActive),
+    });
+  };
+
+  const handleDeleteCoupon = async (id: string) => {
+    setCouponLoading(true);
+    try {
+      await deleteCoupon(id);
+      setCoupons((list) => list.filter((coupon) => String(coupon.id) !== String(id)));
+      if (editingCouponId === id) resetCouponForm();
+      toast.success('Coupon deleted');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete coupon');
+    } finally {
+      setCouponLoading(false);
+    }
   };
 
   const tabs = [
@@ -310,6 +449,175 @@ const AdminSettings = () => {
               <p className="text-xs text-slate-400">Enable PayU cards as a secondary checkout option</p>
             </div>
             <Toggle value={cardEnabled} onChange={setCardEnabled} />
+          </div>
+
+          <div className="border-t border-slate-800 pt-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-white flex items-center gap-2"><Tag size={16} /> Coupons</h3>
+                <p className="text-xs text-slate-400">Create checkout coupons for products, categories, or the full store.</p>
+              </div>
+              <button
+                type="button"
+                onClick={resetCouponForm}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-amber-500/50 hover:text-amber-300"
+              >
+                <Plus size={14} /> New Coupon
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <InputField label="Coupon Code" value={couponForm.code} onChange={(v) => setCouponForm((s) => ({ ...s, code: v.toUpperCase().replace(/\s+/g, '') }))} />
+              <InputField label="Title" value={couponForm.title} onChange={(v) => setCouponForm((s) => ({ ...s, title: v }))} />
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Status</label>
+                <div className="flex h-[42px] items-center justify-between rounded-xl border border-slate-700 bg-slate-800 px-4">
+                  <span className={couponForm.isActive ? 'text-emerald-300 text-sm font-medium' : 'text-slate-400 text-sm font-medium'}>
+                    {couponForm.isActive ? 'Active' : 'Paused'}
+                  </span>
+                  <Toggle value={couponForm.isActive} onChange={(v) => setCouponForm((s) => ({ ...s, isActive: v }))} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Discount Type</label>
+                <select
+                  value={couponForm.discountType}
+                  onChange={(e) => setCouponForm((s) => ({ ...s, discountType: e.target.value as CouponFormState['discountType'] }))}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+                >
+                  <option value="amount">Flat Amount</option>
+                  <option value="percent">Percentage</option>
+                </select>
+              </div>
+              <InputField label={couponForm.discountType === 'percent' ? 'Discount (%)' : 'Discount (INR)'} value={couponForm.discountValue} onChange={(v) => setCouponForm((s) => ({ ...s, discountValue: v }))} type="number" />
+              <InputField label="Max Discount (optional)" value={couponForm.maxDiscount} onChange={(v) => setCouponForm((s) => ({ ...s, maxDiscount: v }))} type="number" />
+              <div>
+                <label className="block text-sm text-slate-300 mb-1">Applies To</label>
+                <select
+                  value={couponForm.scopeType}
+                  onChange={(e) => setCouponForm((s) => ({ ...s, scopeType: e.target.value as CouponFormState['scopeType'], scopeValue: '' }))}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+                >
+                  <option value="all">Whole Store</option>
+                  <option value="category">Category</option>
+                  <option value="product">Product</option>
+                </select>
+              </div>
+              {couponForm.scopeType === 'category' && (
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Category</label>
+                  <select
+                    value={couponForm.scopeValue}
+                    onChange={(e) => setCouponForm((s) => ({ ...s, scopeValue: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+                  >
+                    <option value="">Select category</option>
+                    {categories.map((category: any) => (
+                      <option key={category.id || category.name} value={category.name}>{category.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {couponForm.scopeType === 'product' && (
+                <div>
+                  <label className="block text-sm text-slate-300 mb-1">Product</label>
+                  <select
+                    value={couponForm.scopeValue}
+                    onChange={(e) => setCouponForm((s) => ({ ...s, scopeValue: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
+                  >
+                    <option value="">Select product</option>
+                    {products.map((product: any) => (
+                      <option key={product.id} value={product.id}>{product.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <InputField label="Min Order (optional)" value={couponForm.minOrderAmount} onChange={(v) => setCouponForm((s) => ({ ...s, minOrderAmount: v }))} type="number" />
+              <InputField label="Usage Limit (optional)" value={couponForm.usageLimit} onChange={(v) => setCouponForm((s) => ({ ...s, usageLimit: v }))} type="number" />
+              <InputField label="Starts At" value={couponForm.startsAt} onChange={(v) => setCouponForm((s) => ({ ...s, startsAt: v }))} type="datetime-local" />
+              <InputField label="Ends At" value={couponForm.endsAt} onChange={(v) => setCouponForm((s) => ({ ...s, endsAt: v }))} type="datetime-local" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-white">Free Shipping</p>
+                  <p className="text-xs text-slate-400">Remove shipping charge when code applies.</p>
+                </div>
+                <Toggle value={couponForm.freeShipping} onChange={(v) => setCouponForm((s) => ({ ...s, freeShipping: v }))} />
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-800 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-white">Free Packaging</p>
+                  <p className="text-xs text-slate-400">Remove packaging cost when code applies.</p>
+                </div>
+                <Toggle value={couponForm.freePackaging} onChange={(v) => setCouponForm((s) => ({ ...s, freePackaging: v }))} />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleSaveCoupon}
+                disabled={couponLoading}
+                className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                <Save size={15} /> {editingCouponId ? 'Update Coupon' : 'Create Coupon'}
+              </button>
+              {editingCouponId && (
+                <button type="button" onClick={resetCouponForm} className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-200">
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-800">
+              <table className="w-full min-w-[760px] text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 bg-slate-950/50 text-left text-slate-400">
+                    <th className="px-4 py-3 font-medium">Code</th>
+                    <th className="px-4 py-3 font-medium">Benefit</th>
+                    <th className="px-4 py-3 font-medium">Scope</th>
+                    <th className="px-4 py-3 font-medium">Usage</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coupons.map((coupon) => (
+                    <tr key={coupon.id} className="border-b border-slate-800/70 text-slate-200 last:border-b-0">
+                      <td className="px-4 py-3">
+                        <p className="font-mono font-semibold text-amber-300">{coupon.code}</p>
+                        {coupon.title && <p className="mt-0.5 text-slate-500">{coupon.title}</p>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <p>{coupon.discountType === 'percent' ? `${coupon.discountValue}% off` : `INR ${Number(coupon.discountValue || 0).toLocaleString('en-IN')} off`}</p>
+                        <p className="mt-0.5 text-slate-500">{[coupon.freeShipping ? 'Free shipping' : '', coupon.freePackaging ? 'Free packaging' : ''].filter(Boolean).join(' + ') || 'Product discount'}</p>
+                      </td>
+                      <td className="px-4 py-3 capitalize">{coupon.scopeType === 'all' ? 'Whole store' : `${coupon.scopeType}: ${coupon.scopeValue}`}</td>
+                      <td className="px-4 py-3">{Number(coupon.usedCount || 0)}{coupon.usageLimit ? ` / ${coupon.usageLimit}` : ''}</td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${coupon.isActive ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700 text-slate-300'}`}>
+                          {coupon.isActive ? 'Active' : 'Paused'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => handleEditCoupon(coupon)} className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:text-amber-300"><Pencil size={14} /></button>
+                          <button type="button" onClick={() => handleDeleteCoupon(String(coupon.id))} className="rounded-lg border border-red-500/30 p-2 text-red-300 hover:bg-red-500/10"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {coupons.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-8 text-center text-slate-500">{couponLoading ? 'Loading coupons...' : 'No coupons created yet.'}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

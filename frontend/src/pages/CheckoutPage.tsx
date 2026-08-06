@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Minus, Plus, Trash2, Landmark, WalletCards, Truck } from 'lucide-react';
+import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Minus, Plus, Trash2, Landmark, WalletCards, Truck, Tag, X } from 'lucide-react';
 import { SiRazorpay } from 'react-icons/si';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '@/store/cartStore';
@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createOrder, createPayuOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDtdcPincode } from '@/lib/api';
+import { fetchPublicSettings, createOrder, createPayuOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDtdcPincode, validateCoupon } from '@/lib/api';
 import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
@@ -150,6 +150,9 @@ const CheckoutPage = () => {
   const [serviceability, setServiceability] = useState<ServiceabilityState | null>(null);
   const [checkingPincode, setCheckingPincode] = useState(false);
   const [wantsCodService, setWantsCodService] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
 
   const freeShippingThreshold = Number(settings.freeShippingThreshold) > 0 ? Number(settings.freeShippingThreshold) : DEFAULT_FREE_SHIPPING_THRESHOLD;
   const shippingFee = Number(settings.shippingFee) > 0 ? Number(settings.shippingFee) : DEFAULT_SHIPPING_FEE;
@@ -188,7 +191,9 @@ const CheckoutPage = () => {
   const codAvailable = Boolean(serviceability?.pincode === effectivePincode && serviceability.serviceable && serviceability.codAvailable);
   const canUseCodService = Boolean(settings.codEnabled && codAvailable && !hasPrasadamItems);
   const codCharge = wantsCodService && canUseCodService ? COD_CHARGE : 0;
-  const grandTotal = totalPrice() + packagingCost + shipping + codCharge;
+  const couponDiscount = Number(appliedCoupon?.discountAmount || 0);
+  const grandTotalBeforeCoupon = totalPrice() + packagingCost + shipping + codCharge;
+  const grandTotal = Math.max(0, grandTotalBeforeCoupon - couponDiscount);
 
   // Payment status is now handled on the dedicated Payment Status page.
 
@@ -252,6 +257,50 @@ const CheckoutPage = () => {
     if (payuChannel === 'upi' && !settings.upiEnabled && settings.cardEnabled) setPayuChannel('card');
     if (payuChannel === 'card' && !settings.cardEnabled && settings.upiEnabled) setPayuChannel('upi');
   }, [payuChannel, settings.upiEnabled, settings.cardEnabled]);
+
+  const couponItemSignature = items
+    .map((i) => `${i.product.id}:${i.quantity}:${i.product.selectedSize || ''}:${i.product.selectedPieces || ''}`)
+    .join('|');
+
+  useEffect(() => {
+    setAppliedCoupon((current) => current ? null : current);
+  }, [couponItemSignature]);
+
+  const checkoutItemsPayload = () => items.map((i) => ({
+    productId: i.product.id,
+    name: i.product.name,
+    image: i.product.image,
+    quantity: i.quantity,
+    price: i.product.price,
+    selectedSize: i.product.selectedSize,
+    selectedPieces: i.product.selectedPieces,
+    selectedAttributes: i.product.selectedAttributes,
+  }));
+
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) {
+      toast.error('Enter coupon code');
+      return;
+    }
+    setCouponLoading(true);
+    try {
+      const result: any = await validateCoupon({ code, items: checkoutItemsPayload() });
+      setAppliedCoupon(result.coupon);
+      setCouponCode(result.coupon?.code || code);
+      toast.success(result.message || 'Coupon applied');
+    } catch (err: any) {
+      setAppliedCoupon(null);
+      toast.error(err?.message || 'Coupon is not valid for this order');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+  };
 
   useEffect(() => {
     if (!/^\d{6}$/.test(effectivePincode)) return;
@@ -463,6 +512,7 @@ const CheckoutPage = () => {
         paymentMethod: method === 'upi' ? 'PayU UPI' : 'PayU Card',
         codRequested: false,
         codAmount: 0,
+        couponCode: appliedCoupon?.code || undefined,
       };
       const result = await createPayuOrder({
         amount: grandTotal,
@@ -510,6 +560,7 @@ const CheckoutPage = () => {
         paymentMethod: 'Razorpay',
         codRequested: false,
         codAmount: 0,
+        couponCode: appliedCoupon?.code || undefined,
       };
 
       const result = await createRazorpayOrder({
@@ -662,6 +713,7 @@ const CheckoutPage = () => {
           codAmount: COD_CHARGE,
           codPincode: effectivePincode,
           codMessage: serviceability?.message || `COD available for ${effectivePincode}`,
+          couponCode: appliedCoupon?.code || undefined,
           statusHistory: [{ status: 'confirmed', date: new Date().toISOString(), note: 'Order confirmed with Cash on Delivery' }],
         }) as CreatedOrderResponse;
         setPlacedOrderId(String(order?.orderId || order?._id || order?.id || ''));
@@ -1165,6 +1217,46 @@ const CheckoutPage = () => {
                     </div>
                   ))}
                 </div>
+                <div className="mb-5 rounded-xl border border-border bg-background/60 p-3">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Tag size={14} />
+                    <span>Coupon Code</span>
+                  </div>
+                  {appliedCoupon ? (
+                    <div className="flex items-start justify-between gap-3 rounded-lg border border-tulsi/25 bg-tulsi/5 p-3">
+                      <div className="min-w-0">
+                        <p className="font-mono text-sm font-bold text-tulsi">{appliedCoupon.code}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{appliedCoupon.description || 'Coupon benefit applied'}</p>
+                        <p className="mt-1 text-xs font-semibold text-tulsi">Saved {formatPrice(couponDiscount)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveCoupon}
+                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
+                        aria-label="Remove coupon"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/\s+/g, ''))}
+                        placeholder="Enter code"
+                        className="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold uppercase outline-none focus:ring-2 focus:ring-saffron/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyCoupon}
+                        disabled={couponLoading}
+                        className="shrink-0 rounded-lg bg-saffron px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+                      >
+                        {couponLoading ? 'Checking' : 'Apply'}
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="space-y-2 text-sm border-t border-border pt-3">
                   <div className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     <span>Price Details</span>
@@ -1192,6 +1284,12 @@ const CheckoutPage = () => {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">COD Handle Fee</span>
                       <span>{formatPrice(codCharge)}</span>
+                    </div>
+                  )}
+                  {couponDiscount > 0 && (
+                    <div className="flex justify-between text-tulsi">
+                      <span>Coupon discount</span>
+                      <span>-{formatPrice(couponDiscount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-bold text-base border-t border-border pt-3">

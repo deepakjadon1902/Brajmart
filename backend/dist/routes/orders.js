@@ -25,6 +25,9 @@ const mapOrderRow = (row) => ({
     codAvailable: row.cod_available == null ? undefined : Boolean(Number(row.cod_available)),
     codPincode: row.cod_pincode ?? undefined,
     codMessage: row.cod_message ?? undefined,
+    couponCode: row.coupon_code ?? undefined,
+    couponDiscount: row.coupon_discount == null ? undefined : Number(row.coupon_discount),
+    couponDetails: (0, dbHelpers_1.parseJson)(row.coupon_details, null),
     status: row.status,
     customerName: row.customer_name ?? undefined,
     customerEmail: row.customer_email ?? undefined,
@@ -255,7 +258,16 @@ router.post('/', auth_1.optionalAuth, async (req, res) => {
             }
             codAmount = COD_CHARGE;
         }
-        const totals = { ...baseTotals, cod: codAmount, total: baseTotals.total + codAmount };
+        const totalsBeforeCoupon = { ...baseTotals, cod: codAmount, total: baseTotals.total + codAmount };
+        let totals = totalsBeforeCoupon;
+        let couponDetails = null;
+        if (data.couponCode) {
+            const couponResult = await (0, orderPricing_1.applyCouponToTotals)(data.couponCode, priced.items, totalsBeforeCoupon);
+            if (!couponResult.valid)
+                return res.status(400).json({ message: couponResult.message });
+            totals = { ...totalsBeforeCoupon, total: couponResult.totals.total };
+            couponDetails = couponResult.coupon;
+        }
         if (settings.minOrderAmount && totals.total < settings.minOrderAmount) {
             return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
         }
@@ -269,7 +281,7 @@ router.post('/', auth_1.optionalAuth, async (req, res) => {
         const statusHistory = Array.isArray(data.statusHistory) && data.statusHistory.length
             ? data.statusHistory
             : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
-        const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const result = await (0, db_1.dbExecute)('INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, coupon_code, coupon_discount, coupon_details, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             req.user?.id || null,
             JSON.stringify(priced.items),
             totals.itemsSubtotal,
@@ -280,6 +292,9 @@ router.post('/', auth_1.optionalAuth, async (req, res) => {
             codAvailable,
             codPincode,
             codMessage,
+            couponDetails?.code || null,
+            couponDetails?.discountAmount || 0,
+            couponDetails ? JSON.stringify(couponDetails) : null,
             totals.total,
             status,
             data.customerName || null,
@@ -293,6 +308,9 @@ router.post('/', auth_1.optionalAuth, async (req, res) => {
             JSON.stringify(statusHistory),
         ]);
         const orderId = result.insertId;
+        if (couponDetails?.code) {
+            await (0, orderPricing_1.markCouponUsed)(couponDetails.code);
+        }
         // Persist latest checkout address as the user's default address (best-effort).
         const numericUserId = Number(req.user?.id);
         if (Number.isFinite(numericUserId)) {
@@ -317,6 +335,9 @@ router.post('/', auth_1.optionalAuth, async (req, res) => {
                 codAvailable: order.codAvailable,
                 codMessage: order.codMessage,
                 paymentMethod: order.paymentMethod,
+                couponCode: order.couponCode,
+                couponDiscount: order.couponDiscount,
+                couponDetails: order.couponDetails,
                 shippingAddress: order.shippingAddress,
                 billingAddress: order.billingAddress,
             }).catch(() => { });

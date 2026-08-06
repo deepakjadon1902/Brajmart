@@ -4,7 +4,7 @@ import { sendOrderConfirmation, sendShippingUpdate } from '../lib/email';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { auth, adminOnly, optionalAuth, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
-import { computeTotals, getCheckoutSettings, hasPrasadamItems, priceAndValidateOrderItems } from '../lib/orderPricing';
+import { applyCouponToTotals, computeTotals, getCheckoutSettings, hasPrasadamItems, markCouponUsed, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { upsertUserDefaultAddress } from '../lib/userAddress';
 import { checkDtdcPincode, trackDtdcShipment } from '../lib/dtdc';
 
@@ -25,6 +25,9 @@ const mapOrderRow = (row: any) => ({
   codAvailable: row.cod_available == null ? undefined : Boolean(Number(row.cod_available)),
   codPincode: row.cod_pincode ?? undefined,
   codMessage: row.cod_message ?? undefined,
+  couponCode: row.coupon_code ?? undefined,
+  couponDiscount: row.coupon_discount == null ? undefined : Number(row.coupon_discount),
+  couponDetails: parseJson(row.coupon_details, null),
   status: row.status,
   customerName: row.customer_name ?? undefined,
   customerEmail: row.customer_email ?? undefined,
@@ -260,7 +263,15 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
       codAmount = COD_CHARGE;
     }
 
-    const totals = { ...baseTotals, cod: codAmount, total: baseTotals.total + codAmount };
+    const totalsBeforeCoupon = { ...baseTotals, cod: codAmount, total: baseTotals.total + codAmount };
+    let totals = totalsBeforeCoupon;
+    let couponDetails: any = null;
+    if (data.couponCode) {
+      const couponResult = await applyCouponToTotals(data.couponCode, priced.items, totalsBeforeCoupon);
+      if (!couponResult.valid) return res.status(400).json({ message: couponResult.message });
+      totals = { ...totalsBeforeCoupon, total: couponResult.totals.total };
+      couponDetails = couponResult.coupon;
+    }
     if (settings.minOrderAmount && totals.total < settings.minOrderAmount) {
       return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
     }
@@ -277,7 +288,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
       : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
 
     const result: any = await dbExecute(
-      'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, coupon_code, coupon_discount, coupon_details, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         req.user?.id || null,
         JSON.stringify(priced.items),
@@ -289,6 +300,9 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
         codAvailable,
         codPincode,
         codMessage,
+        couponDetails?.code || null,
+        couponDetails?.discountAmount || 0,
+        couponDetails ? JSON.stringify(couponDetails) : null,
         totals.total,
         status,
         data.customerName || null,
@@ -304,6 +318,9 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
     );
 
     const orderId = result.insertId;
+    if (couponDetails?.code) {
+      await markCouponUsed(couponDetails.code);
+    }
 
     // Persist latest checkout address as the user's default address (best-effort).
     const numericUserId = Number(req.user?.id);
@@ -331,6 +348,9 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
         codAvailable: order.codAvailable,
         codMessage: order.codMessage,
         paymentMethod: order.paymentMethod,
+        couponCode: order.couponCode,
+        couponDiscount: order.couponDiscount,
+        couponDetails: order.couponDetails,
         shippingAddress: order.shippingAddress,
         billingAddress: order.billingAddress,
       }).catch(() => {});

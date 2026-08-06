@@ -1,4 +1,4 @@
-import { dbQuery } from './db';
+import { dbExecute, dbQuery } from './db';
 import { boolFromDb } from './dbHelpers';
 
 export type RawOrderItem = {
@@ -68,6 +68,110 @@ export const computeTotals = (itemsSubtotal: number, settings: { freeShippingThr
   const packaging = Math.round(itemsSubtotal * Math.max(0, settings.packagingRate) / 100);
   const total = itemsSubtotal + packaging + shipping;
   return { itemsSubtotal, packaging, shipping, total };
+};
+
+const normalizeCouponCode = (value: unknown) => String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
+
+export const markCouponUsed = async (rawCode: unknown) => {
+  const code = normalizeCouponCode(rawCode);
+  if (!code) return false;
+  const result = await dbExecute(
+    'UPDATE coupons SET used_count = used_count + 1, updated_at = NOW() WHERE code = ? AND (usage_limit IS NULL OR used_count < usage_limit)',
+    [code]
+  );
+  return Number(result?.affectedRows || 0) > 0;
+};
+
+export const applyCouponToTotals = async (
+  rawCode: unknown,
+  items: PricedOrderItem[],
+  totals: { itemsSubtotal: number; packaging: number; shipping: number; total: number }
+) => {
+  const code = normalizeCouponCode(rawCode);
+  if (!code) {
+    return {
+      valid: false as const,
+      message: 'Enter a coupon code',
+      totals,
+      coupon: null,
+    };
+  }
+
+  const rows = await dbQuery<any>('SELECT * FROM coupons WHERE code = ? AND is_active = 1 LIMIT 1', [code]);
+  const coupon = rows[0];
+  if (!coupon) {
+    return { valid: false as const, message: 'Invalid or inactive coupon code', totals, coupon: null };
+  }
+
+  const now = Date.now();
+  if (coupon.starts_at && new Date(coupon.starts_at).getTime() > now) {
+    return { valid: false as const, message: 'This coupon is not active yet', totals, coupon: null };
+  }
+  if (coupon.ends_at && new Date(coupon.ends_at).getTime() < now) {
+    return { valid: false as const, message: 'This coupon has expired', totals, coupon: null };
+  }
+  if (coupon.usage_limit !== null && coupon.usage_limit !== undefined && Number(coupon.used_count || 0) >= Number(coupon.usage_limit)) {
+    return { valid: false as const, message: 'This coupon usage limit has been reached', totals, coupon: null };
+  }
+
+  const scopeType = String(coupon.scope_type || 'all');
+  const scopeValue = String(coupon.scope_value || '');
+  const eligibleItems = items.filter((item) => {
+    if (scopeType === 'all') return true;
+    if (scopeType === 'product') return String(item.productId) === scopeValue;
+    if (scopeType === 'category') return String(item.category || '').trim().toLowerCase() === scopeValue.trim().toLowerCase();
+    return false;
+  });
+  if (eligibleItems.length === 0) {
+    return { valid: false as const, message: 'Coupon is not applicable to these products', totals, coupon: null };
+  }
+
+  const eligibleSubtotal = eligibleItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const minOrderAmount = Number(coupon.min_order_amount || 0);
+  if (minOrderAmount > 0 && totals.itemsSubtotal < minOrderAmount) {
+    return { valid: false as const, message: `Minimum order amount for this coupon is ${minOrderAmount}`, totals, coupon: null };
+  }
+
+  let productDiscount = 0;
+  const discountType = String(coupon.discount_type || 'amount');
+  const discountValue = Math.max(0, Number(coupon.discount_value || 0));
+  if (discountType === 'percent') {
+    productDiscount = Math.round(eligibleSubtotal * discountValue / 100);
+  } else {
+    productDiscount = Math.min(discountValue, eligibleSubtotal);
+  }
+
+  const maxDiscount = Number(coupon.max_discount || 0);
+  if (maxDiscount > 0) productDiscount = Math.min(productDiscount, maxDiscount);
+
+  const freeShipping = Boolean(Number(coupon.free_shipping)) ? totals.shipping : 0;
+  const freePackaging = Boolean(Number(coupon.free_packaging)) ? totals.packaging : 0;
+  const discountAmount = Math.min(totals.total, productDiscount + freeShipping + freePackaging);
+  const nextTotals = {
+    ...totals,
+    couponDiscount: discountAmount,
+    total: Math.max(0, totals.total - discountAmount),
+  };
+  const description = [
+    productDiscount > 0 ? `${discountType === 'percent' ? `${discountValue}%` : `₹${productDiscount}`} off` : '',
+    freeShipping > 0 ? 'free shipping' : '',
+    freePackaging > 0 ? 'free packaging' : '',
+  ].filter(Boolean).join(', ');
+
+  return {
+    valid: true as const,
+    message: 'Coupon applied',
+    totals: nextTotals,
+    coupon: {
+      id: Number(coupon.id),
+      code,
+      discountAmount,
+      productDiscount,
+      freeShipping,
+      freePackaging,
+      description: description || 'Coupon benefit applied',
+    },
+  };
 };
 
 export const priceAndValidateOrderItems = async (items: any[]) => {

@@ -5,7 +5,7 @@ import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { sendOrderConfirmation, sendPaymentFailed, sendPaymentReceipt, sendAdminPaymentNotice } from '../lib/email';
 import { parseJson } from '../lib/dbHelpers';
-import { computeTotals, getCheckoutSettings, hasPrasadamItems, priceAndValidateOrderItems } from '../lib/orderPricing';
+import { applyCouponToTotals, computeTotals, getCheckoutSettings, hasPrasadamItems, markCouponUsed, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { upsertUserDefaultAddress } from '../lib/userAddress';
 import { resolveCodHandleFee } from '../lib/cod';
 
@@ -146,7 +146,7 @@ const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
     : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
 
   const result: any = await dbExecute(
-    'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, coupon_code, coupon_discount, coupon_details, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
       orderData.userId || null,
       JSON.stringify(orderData.items || []),
@@ -158,6 +158,9 @@ const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
       orderData.codAvailable,
       orderData.codPincode || null,
       orderData.codMessage || null,
+      orderData.couponCode || null,
+      orderData.couponDiscount || 0,
+      orderData.couponDetails ? JSON.stringify(orderData.couponDetails) : null,
       orderData.total,
       status,
       orderData.customerName || null,
@@ -197,7 +200,15 @@ router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
     const settings = await getCheckoutSettings();
     const baseTotals = computeTotals(priced.itemsSubtotal, settings);
     const cod = await resolveCodHandleFee(order, settings);
-    const totals = { ...baseTotals, cod: cod.amount, total: baseTotals.total + cod.amount };
+    const totalsBeforeCoupon = { ...baseTotals, cod: cod.amount, total: baseTotals.total + cod.amount };
+    let totals = totalsBeforeCoupon;
+    let couponDetails: any = null;
+    if (order?.couponCode) {
+      const couponResult = await applyCouponToTotals(order.couponCode, priced.items, totalsBeforeCoupon);
+      if (!couponResult.valid) return res.status(400).json({ message: couponResult.message });
+      totals = { ...totalsBeforeCoupon, total: couponResult.totals.total };
+      couponDetails = couponResult.coupon;
+    }
     if (settings.minOrderAmount && totals.total < settings.minOrderAmount) {
       return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
     }
@@ -235,6 +246,9 @@ router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
       codAvailable: cod.available,
       codPincode: cod.pincode,
       codMessage: cod.message,
+      couponCode: couponDetails?.code || null,
+      couponDiscount: couponDetails?.discountAmount || 0,
+      couponDetails,
       total: totals.total,
       status: 'processing',
       statusHistory: [{ status: 'processing', date: new Date().toISOString(), note: 'Payment initiated via PayU' }],
@@ -265,7 +279,7 @@ router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
       amount: Number(totals.total),
       method: method === 'card' ? 'card' : 'upi',
       customer: { name: customer.name, email: customerEmail, phone: customer.phone },
-      order: { ...order, items: priced.items, itemsSubtotal: totals.itemsSubtotal, packagingAmount: totals.packaging, packagingRate: settings.packagingRate, shippingAmount: totals.shipping, codAmount: cod.amount, codAvailable: cod.available, codPincode: cod.pincode, codMessage: cod.message, total: totals.total, customerEmail },
+      order: { ...order, items: priced.items, itemsSubtotal: totals.itemsSubtotal, packagingAmount: totals.packaging, packagingRate: settings.packagingRate, shippingAmount: totals.shipping, codAmount: cod.amount, codAvailable: cod.available, codPincode: cod.pincode, codMessage: cod.message, couponCode: couponDetails?.code || null, couponDiscount: couponDetails?.discountAmount || 0, couponDetails, total: totals.total, customerEmail },
       orderId,
     });
 
@@ -377,7 +391,7 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
   }
 
   const draft = removeDraft(txnid);
-  const statusRows = await dbQuery<any>('SELECT order_id, method, amount FROM payment_status WHERE token = ? LIMIT 1', [txnid]);
+  const statusRows = await dbQuery<any>('SELECT order_id, method, amount, status FROM payment_status WHERE token = ? LIMIT 1', [txnid]);
   const statusRow = statusRows[0];
   const linkedOrderId = statusRow?.order_id || draft?.orderId;
 
@@ -424,6 +438,9 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
         codAvailable: orderRow.cod_available == null ? undefined : Boolean(Number(orderRow.cod_available)),
         codPincode: orderRow.cod_pincode ?? undefined,
         codMessage: orderRow.cod_message ?? undefined,
+        couponCode: orderRow.coupon_code ?? undefined,
+        couponDiscount: orderRow.coupon_discount == null ? undefined : Number(orderRow.coupon_discount),
+        couponDetails: parseJson(orderRow.coupon_details, null),
         paymentMethod: methodLabel,
         shippingAddress: parseJson(orderRow.shipping_address, {}),
         billingAddress: parseJson(orderRow.billing_address, {}),
@@ -462,6 +479,9 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
           codAvailable: orderRow.cod_available == null ? undefined : Boolean(Number(orderRow.cod_available)),
           codPincode: orderRow.cod_pincode ?? undefined,
           codMessage: orderRow.cod_message ?? undefined,
+          couponCode: orderRow.coupon_code ?? undefined,
+          couponDiscount: orderRow.coupon_discount == null ? undefined : Number(orderRow.coupon_discount),
+          couponDetails: parseJson(orderRow.coupon_details, null),
           paymentMethod: methodLabel,
           shippingAddress: parseJson(orderRow.shipping_address, {}),
           billingAddress: parseJson(orderRow.billing_address, {}),
@@ -481,6 +501,10 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
       'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
       [txnid, 'paid', orderId, payment.amount, payment.method, payment.transaction_id]
     );
+
+    if (String(statusRow?.status || '') !== 'paid' && orderRow.coupon_code) {
+      await markCouponUsed(orderRow.coupon_code);
+    }
 
     return res.redirect(`${frontendUrl}/payment-status/${txnid}`);
   }
@@ -540,6 +564,9 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
           codAvailable: orderRow.cod_available == null ? undefined : Boolean(Number(orderRow.cod_available)),
           codPincode: orderRow.cod_pincode ?? undefined,
           codMessage: orderRow.cod_message ?? undefined,
+          couponCode: orderRow.coupon_code ?? undefined,
+          couponDiscount: orderRow.coupon_discount == null ? undefined : Number(orderRow.coupon_discount),
+          couponDetails: parseJson(orderRow.coupon_details, null),
           paymentMethod: orderRow.payment_method,
           shippingAddress: parseJson(orderRow.shipping_address, {}),
           billingAddress: parseJson(orderRow.billing_address, {}),

@@ -76,6 +76,50 @@ const ensureOrderCodSchema = async () => {
   await setMigrationDone(MIGRATION_KEY);
 };
 
+const ensureCouponSchema = async () => {
+  const MIGRATION_KEY = '2026-08-06_coupon_system';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS coupons (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      code VARCHAR(80) NOT NULL,
+      title VARCHAR(255) NULL,
+      discount_type ENUM('amount','percent') NOT NULL DEFAULT 'amount',
+      discount_value DECIMAL(10,2) NOT NULL DEFAULT 0,
+      max_discount DECIMAL(10,2) NULL,
+      free_shipping TINYINT(1) NOT NULL DEFAULT 0,
+      free_packaging TINYINT(1) NOT NULL DEFAULT 0,
+      scope_type ENUM('all','product','category') NOT NULL DEFAULT 'all',
+      scope_value VARCHAR(255) NULL,
+      min_order_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+      usage_limit INT NULL,
+      used_count INT NOT NULL DEFAULT 0,
+      starts_at DATETIME NULL,
+      ends_at DATETIME NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_coupons_code (code),
+      KEY idx_coupons_active_code (is_active, code)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  const orderColumns = [
+    ['coupon_code', 'VARCHAR(80) NULL AFTER cod_message'],
+    ['coupon_discount', 'DECIMAL(10,2) NULL AFTER coupon_code'],
+    ['coupon_details', 'JSON NULL AFTER coupon_discount'],
+  ] as const;
+  for (const [column, definition] of orderColumns) {
+    if (!(await columnExists('orders', column))) {
+      await dbExecute(`ALTER TABLE orders ADD COLUMN ${column} ${definition}`);
+    }
+  }
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
 const ensureFreeShippingThresholdDefault = async () => {
   const MIGRATION_KEY = '2026-07-07_free_shipping_threshold_299';
   if (await isMigrationDone(MIGRATION_KEY)) return;
@@ -201,6 +245,7 @@ export const runDataMigrations = async () => {
   await syncAdminFromEnv();
   await ensureOrderPricingSchema();
   await ensureOrderCodSchema();
+  await ensureCouponSchema();
   await ensureFreeShippingThresholdDefault();
   await migrateDeityShringarIntoIdolsSubcategory();
 };

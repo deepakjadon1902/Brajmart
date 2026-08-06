@@ -82,7 +82,13 @@ const getJson = async <T>(path: string, options: RequestOptions = {}): Promise<T
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
     const text = await resClone.text().catch(() => '');
-    throw new Error(text.trim() || `Expected JSON response (${res.status})`);
+    const cleaned = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const missingRoute = /cannot\s+(get|post|put|delete)\s+\/api\//i.test(cleaned);
+    throw new Error(
+      missingRoute
+        ? 'Backend API is not updated yet. Please redeploy the backend service and try again.'
+        : cleaned || `Expected JSON response (${res.status})`
+    );
   }
   const data = await res.json().catch(async () => {
     const text = await resClone.text().catch(() => '');
@@ -251,6 +257,17 @@ export const updatePaymentStatus = (id: string, status: string) =>
   getJson(`/payments/${id}`, { method: 'PUT', body: { status } });
 export const createPayment = (payload: Record<string, unknown>) =>
   getJson('/payments', { method: 'POST', body: payload });
+
+// Coupons
+export const fetchCoupons = () => getJson('/coupons');
+export const createCoupon = (payload: Record<string, unknown>) =>
+  getJson('/coupons', { method: 'POST', body: payload });
+export const updateCoupon = (id: string, payload: Record<string, unknown>) =>
+  getJson(`/coupons/${id}`, { method: 'PUT', body: payload });
+export const deleteCoupon = (id: string) =>
+  getJson(`/coupons/${id}`, { method: 'DELETE' });
+export const validateCoupon = (payload: { code: string; items: unknown[] }) =>
+  getJson('/coupons/validate', { method: 'POST', body: payload });
 
 // Users
 export const fetchUsers = () => getJson('/users');

@@ -190,7 +190,14 @@ const AdminOrders = () => {
                   <td className="px-5 py-3 text-amber-400 font-mono text-xs">{o.id}</td>
                   <td className="px-5 py-3 text-white">{o.shippingAddress?.fullName || o.customerName || '-'}</td>
                   <td className="px-5 py-3 text-slate-300 hidden sm:table-cell">{o.items.length} items</td>
-                  <td className="px-5 py-3 text-white font-medium">INR {o.total.toLocaleString('en-IN')}</td>
+                  <td className="px-5 py-3 text-white font-medium">
+                    <div>INR {o.total.toLocaleString('en-IN')}</div>
+                    {o.couponCode && (
+                      <div className="mt-1 text-xs font-normal text-emerald-300">
+                        {o.couponCode}: -INR {Number(o.couponDiscount || 0).toLocaleString('en-IN')}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-5 py-3 text-slate-300 hidden sm:table-cell">{o.paymentMethod}</td>
                   <td className="px-5 py-3"><StatusBadge status={o.status} /></td>
                   <td className="px-5 py-3 text-slate-400 text-xs hidden md:table-cell">{new Date(o.createdAt).toLocaleDateString('en-IN')}</td>
@@ -238,6 +245,27 @@ const AdminOrders = () => {
                   <p>Phone: {detail.shippingAddress?.mobile || '-'}</p>
                 </div>
               </div>
+
+              {/* Coupon */}
+              {detail.couponCode && (
+                <div>
+                  <h3 className="text-sm font-medium text-slate-400 mb-2">Coupon Details</h3>
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-mono font-semibold text-emerald-300">{detail.couponCode}</span>
+                      <span className="font-semibold text-emerald-300">-INR {Number(detail.couponDiscount || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                    {detail.couponDetails?.description && (
+                      <p className="mt-1 text-xs text-slate-300">{detail.couponDetails.description}</p>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                      {Number(detail.couponDetails?.freeShipping || 0) > 0 && <span className="rounded-full bg-slate-900/70 px-2 py-1 text-emerald-200">Free shipping</span>}
+                      {Number(detail.couponDetails?.freePackaging || 0) > 0 && <span className="rounded-full bg-slate-900/70 px-2 py-1 text-emerald-200">Free packaging</span>}
+                      {Number(detail.couponDetails?.productDiscount || 0) > 0 && <span className="rounded-full bg-slate-900/70 px-2 py-1 text-emerald-200">Product discount</span>}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Tracking ID */}
               <div>
