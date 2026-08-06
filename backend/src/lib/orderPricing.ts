@@ -72,6 +72,37 @@ export const computeTotals = (itemsSubtotal: number, settings: { freeShippingThr
 
 const normalizeCouponCode = (value: unknown) => String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
 
+const STORE_TIME_ZONE = process.env.STORE_TIME_ZONE || 'Asia/Kolkata';
+
+const padDatePart = (value: number) => String(value).padStart(2, '0');
+
+const storeNowDateTime = () => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: STORE_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const byType = new Map(parts.map((part) => [part.type, part.value]));
+  return `${byType.get('year')}-${byType.get('month')}-${byType.get('day')} ${byType.get('hour')}:${byType.get('minute')}:${byType.get('second')}`;
+};
+
+const couponDateTime = (value: unknown) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return `${value.getUTCFullYear()}-${padDatePart(value.getUTCMonth() + 1)}-${padDatePart(value.getUTCDate())} ${padDatePart(value.getUTCHours())}:${padDatePart(value.getUTCMinutes())}:${padDatePart(value.getUTCSeconds())}`;
+  }
+  const text = String(value).trim();
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::(\d{2}))?/);
+  if (!match) return null;
+  return `${match[1]} ${match[2]}:${match[3] || '00'}`;
+};
+
 export const markCouponUsed = async (rawCode: unknown) => {
   const code = normalizeCouponCode(rawCode);
   if (!code) return false;
@@ -103,11 +134,13 @@ export const applyCouponToTotals = async (
     return { valid: false as const, message: 'Invalid or inactive coupon code', totals, coupon: null };
   }
 
-  const now = Date.now();
-  if (coupon.starts_at && new Date(coupon.starts_at).getTime() > now) {
+  const now = storeNowDateTime();
+  const startsAt = couponDateTime(coupon.starts_at);
+  const endsAt = couponDateTime(coupon.ends_at);
+  if (startsAt && startsAt > now) {
     return { valid: false as const, message: 'This coupon is not active yet', totals, coupon: null };
   }
-  if (coupon.ends_at && new Date(coupon.ends_at).getTime() < now) {
+  if (endsAt && endsAt < now) {
     return { valid: false as const, message: 'This coupon has expired', totals, coupon: null };
   }
   if (coupon.usage_limit !== null && coupon.usage_limit !== undefined && Number(coupon.used_count || 0) >= Number(coupon.usage_limit)) {

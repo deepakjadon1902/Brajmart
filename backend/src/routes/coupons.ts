@@ -14,9 +14,29 @@ const asNonNegativeNumber = (value: unknown, label: string) => {
 };
 const asOptionalDate = (value: unknown, label: string) => {
   if (!value) return null;
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) throw new Error(`${label} is invalid`);
-  return date;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new Error(`${label} is invalid`);
+    return value.toISOString().slice(0, 19).replace('T', ' ');
+  }
+
+  const text = String(value).trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) throw new Error(`${label} is invalid`);
+
+  const [, year, month, day, hour, minute, second = '00'] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+  if (
+    date.getFullYear() !== Number(year) ||
+    date.getMonth() !== Number(month) - 1 ||
+    date.getDate() !== Number(day) ||
+    date.getHours() !== Number(hour) ||
+    date.getMinutes() !== Number(minute) ||
+    date.getSeconds() !== Number(second)
+  ) {
+    throw new Error(`${label} is invalid`);
+  }
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 };
 
 const mapCoupon = (row: any) => ({
@@ -61,7 +81,7 @@ const payloadValues = (data: any) => {
     throw new Error('Add a discount, free shipping, or free packaging');
   }
   if (discountType === 'percent' && discountValue > 100) throw new Error('Percentage discount cannot exceed 100');
-  if (startsAt && endsAt && startsAt.getTime() > endsAt.getTime()) throw new Error('End date must be after start date');
+  if (startsAt && endsAt && startsAt > endsAt) throw new Error('End date must be after start date');
   return [
     code,
     String(data.title || '').trim() || null,
