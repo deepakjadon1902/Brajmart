@@ -78,7 +78,7 @@ const PaymentStatusPage = () => {
       } catch {
         // ignore polling errors
       }
-    }, 5000);
+    }, 2000);
     return () => clearInterval(interval);
   }, [token, status]);
 

@@ -43,6 +43,8 @@ const AdminOrders = () => {
       }
     };
     load();
+    const t = setInterval(() => load(), 2_000);
+    return () => clearInterval(t);
   }, []);
 
   const normalizeOrder = (o: any) => ({

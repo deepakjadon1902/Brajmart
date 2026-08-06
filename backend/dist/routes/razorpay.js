@@ -169,6 +169,41 @@ const updateOrderForPayment = async (params) => {
     }).catch(() => { });
     return { orderId: statusRow.order_id, paymentId: transactionId, status: params.status };
 };
+const resolveRazorpayStatusToken = async (payment, order) => {
+    const razorpayOrderId = String(payment?.order_id || order?.id || '').trim();
+    if (razorpayOrderId)
+        return razorpayOrderId;
+    const notes = payment?.notes || {};
+    const noteOrderId = String(notes?.brajmart_order_id || notes?.order_id || notes?.orderId || '').trim();
+    if (/^\d+$/.test(noteOrderId)) {
+        const rows = await (0, db_1.dbQuery)("SELECT token FROM payment_status WHERE order_id = ? AND method = 'Razorpay' ORDER BY updated_at DESC LIMIT 1", [Number(noteOrderId)]);
+        if (rows[0]?.token)
+            return String(rows[0].token);
+    }
+    const paymentId = String(payment?.id || '').trim();
+    if (paymentId) {
+        const rows = await (0, db_1.dbQuery)('SELECT token FROM payment_status WHERE payment_id = ? LIMIT 1', [paymentId]);
+        if (rows[0]?.token)
+            return String(rows[0].token);
+    }
+    const amountPaise = Number(payment?.amount);
+    const createdAt = Number(payment?.created_at || 0);
+    if (Number.isFinite(amountPaise) && amountPaise > 0 && Number.isFinite(createdAt) && createdAt > 0) {
+        const rows = await (0, db_1.dbQuery)(`SELECT ps.token
+       FROM payment_status ps
+       JOIN payments p ON p.order_id = ps.order_id
+       WHERE ps.status = 'pending'
+         AND ps.method = 'Razorpay'
+         AND ROUND(p.amount * 100) = ?
+         AND p.created_at BETWEEN DATE_SUB(FROM_UNIXTIME(?), INTERVAL 45 MINUTE)
+                              AND DATE_ADD(FROM_UNIXTIME(?), INTERVAL 15 MINUTE)
+       ORDER BY p.created_at DESC, p.id DESC
+       LIMIT 2`, [amountPaise, createdAt, createdAt]);
+        if (rows.length === 1 && rows[0]?.token)
+            return String(rows[0].token);
+    }
+    return '';
+};
 router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
@@ -346,7 +381,7 @@ router.post('/webhook', async (req, res) => {
         const event = String(req.body?.event || '');
         const payment = req.body?.payload?.payment?.entity || null;
         const order = req.body?.payload?.order?.entity || null;
-        const razorpayOrderId = String(payment?.order_id || order?.id || '');
+        const razorpayOrderId = await resolveRazorpayStatusToken(payment, order);
         const razorpayPaymentId = payment?.id ? String(payment.id) : undefined;
         if (!razorpayOrderId)
             return res.status(200).json({ ok: true, ignored: true, reason: 'No order id' });

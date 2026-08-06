@@ -18,7 +18,7 @@ const AdminPayments = () => {
       }
     };
     load();
-    const t = setInterval(() => load(), 20_000);
+    const t = setInterval(() => load(), 2_000);
     return () => clearInterval(t);
   }, []);
   const totalRevenue = payments.reduce((s, p) => s + p.amount, 0);
