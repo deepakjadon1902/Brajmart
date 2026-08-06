@@ -33,6 +33,49 @@ const mapPaymentStatusRow = (row) => ({
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
 });
+const getAdminPaymentRows = async () => {
+    const paymentRows = await (0, db_1.dbQuery)('SELECT * FROM payments ORDER BY created_at DESC');
+    const statusRows = await (0, db_1.dbQuery)(`SELECT
+       ps.token,
+       ps.status,
+       ps.order_id,
+       ps.amount,
+       ps.method,
+       ps.payment_id,
+       ps.created_at,
+       ps.updated_at,
+       o.customer_name,
+       o.customer_email,
+       o.payment_method,
+       o.total,
+       p.id AS payment_row_id
+     FROM payment_status ps
+     LEFT JOIN orders o ON o.id = ps.order_id
+     LEFT JOIN payments p
+       ON p.order_id = ps.order_id
+       OR p.transaction_id = ps.token
+       OR (ps.payment_id IS NOT NULL AND p.transaction_id = ps.payment_id)
+     WHERE p.id IS NULL
+     ORDER BY ps.created_at DESC`);
+    const mappedPayments = paymentRows.map(mapPaymentRow);
+    const mappedStatusPayments = statusRows.map((row) => ({
+        _id: `status:${row.token}`,
+        orderId: row.order_id,
+        customerName: row.customer_name || '',
+        customerEmail: row.customer_email || '',
+        method: row.method || row.payment_method || 'Unknown',
+        amount: Number(row.amount ?? row.total ?? 0),
+        status: row.status,
+        transactionId: row.payment_id || row.token,
+        createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
+        updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
+    }));
+    return [...mappedPayments, ...mappedStatusPayments].sort((a, b) => {
+        const left = new Date(b.createdAt || b.updatedAt || 0).getTime();
+        const right = new Date(a.createdAt || a.updatedAt || 0).getTime();
+        return left - right;
+    });
+};
 const sha512 = (value) => crypto_1.default.createHash('sha512').update(value).digest('hex');
 const getPayuVerifyEndpoint = () => {
     const env = String(process.env.PAYU_ENV || 'test').toLowerCase();
@@ -150,6 +193,15 @@ const reconcilePendingPayuToken = async (token) => {
             const refreshed = await (0, db_1.dbQuery)('SELECT * FROM payments WHERE id = ? LIMIT 1', [paymentRow.id]);
             paymentRow = refreshed[0] || paymentRow;
         }
+        if (!paymentRow) {
+            const orderRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
+            const orderRow = orderRows[0];
+            if (orderRow) {
+                const inserted = await (0, db_1.dbExecute)('INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [orderId, orderRow.customer_name || '', orderRow.customer_email || '', method || orderRow.payment_method || 'PayU', Number(amount || orderRow.total || 0), nextStatus, paymentId || token]);
+                const refreshed = await (0, db_1.dbQuery)('SELECT * FROM payments WHERE id = ? LIMIT 1', [inserted.insertId]);
+                paymentRow = refreshed[0] || null;
+            }
+        }
         const orderRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
         const orderRow = orderRows[0];
         if (orderRow) {
@@ -222,6 +274,19 @@ const applyRazorpayStatus = async (params) => {
             await (0, db_1.dbExecute)('UPDATE orders SET status = ?, status_history = ?, updated_at = NOW() WHERE id = ?', [orderStatus, JSON.stringify(history), orderId]);
             orderData = await getPaymentOrderDetails(orderId);
         }
+    }
+    if (!paymentRow && orderData?.orderRow) {
+        const inserted = await (0, db_1.dbExecute)('INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [
+            orderId,
+            orderData.orderRow.customer_name || '',
+            orderData.orderRow.customer_email || '',
+            current.method || orderData.orderRow.payment_method || 'Razorpay',
+            Number(current.amount || orderData.orderRow.total || 0),
+            params.status,
+            transactionId,
+        ]);
+        const refreshedPayments = await (0, db_1.dbQuery)('SELECT * FROM payments WHERE id = ? LIMIT 1', [inserted.insertId]);
+        paymentRow = refreshedPayments[0] || null;
     }
     try {
         const { min, max } = await (0, eta_1.getEtaConfig)();
@@ -348,8 +413,7 @@ router.get('/', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
                 // ignore per-token failures
             }
         }
-        const rows = await (0, db_1.dbQuery)('SELECT * FROM payments ORDER BY created_at DESC');
-        res.json(rows.map(mapPaymentRow));
+        res.json(await getAdminPaymentRows());
     }
     catch (err) {
         res.status(500).json({ message: err.message });

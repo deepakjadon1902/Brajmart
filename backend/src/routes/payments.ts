@@ -32,6 +32,54 @@ const mapPaymentStatusRow = (row: any) => ({
   updatedAt: toIsoString(row.updated_at),
 });
 
+const getAdminPaymentRows = async () => {
+  const paymentRows = await dbQuery<any>('SELECT * FROM payments ORDER BY created_at DESC');
+  const statusRows = await dbQuery<any>(
+    `SELECT
+       ps.token,
+       ps.status,
+       ps.order_id,
+       ps.amount,
+       ps.method,
+       ps.payment_id,
+       ps.created_at,
+       ps.updated_at,
+       o.customer_name,
+       o.customer_email,
+       o.payment_method,
+       o.total,
+       p.id AS payment_row_id
+     FROM payment_status ps
+     LEFT JOIN orders o ON o.id = ps.order_id
+     LEFT JOIN payments p
+       ON p.order_id = ps.order_id
+       OR p.transaction_id = ps.token
+       OR (ps.payment_id IS NOT NULL AND p.transaction_id = ps.payment_id)
+     WHERE p.id IS NULL
+     ORDER BY ps.created_at DESC`
+  );
+
+  const mappedPayments = paymentRows.map(mapPaymentRow);
+  const mappedStatusPayments = statusRows.map((row: any) => ({
+    _id: `status:${row.token}`,
+    orderId: row.order_id,
+    customerName: row.customer_name || '',
+    customerEmail: row.customer_email || '',
+    method: row.method || row.payment_method || 'Unknown',
+    amount: Number(row.amount ?? row.total ?? 0),
+    status: row.status,
+    transactionId: row.payment_id || row.token,
+    createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at),
+  }));
+
+  return [...mappedPayments, ...mappedStatusPayments].sort((a, b) => {
+    const left = new Date(b.createdAt || b.updatedAt || 0).getTime();
+    const right = new Date(a.createdAt || a.updatedAt || 0).getTime();
+    return left - right;
+  });
+};
+
 const sha512 = (value: string) => crypto.createHash('sha512').update(value).digest('hex');
 
 const getPayuVerifyEndpoint = () => {
@@ -160,6 +208,18 @@ const reconcilePendingPayuToken = async (token: string) => {
       const refreshed = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [paymentRow.id]);
       paymentRow = refreshed[0] || paymentRow;
     }
+    if (!paymentRow) {
+      const orderRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
+      const orderRow = orderRows[0];
+      if (orderRow) {
+        const inserted: any = await dbExecute(
+          'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [orderId, orderRow.customer_name || '', orderRow.customer_email || '', method || orderRow.payment_method || 'PayU', Number(amount || orderRow.total || 0), nextStatus, paymentId || token]
+        );
+        const refreshed = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [inserted.insertId]);
+        paymentRow = refreshed[0] || null;
+      }
+    }
 
     const orderRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
     const orderRow = orderRows[0];
@@ -255,6 +315,23 @@ const applyRazorpayStatus = async (params: {
       );
       orderData = await getPaymentOrderDetails(orderId);
     }
+  }
+
+  if (!paymentRow && orderData?.orderRow) {
+    const inserted: any = await dbExecute(
+      'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        orderId,
+        orderData.orderRow.customer_name || '',
+        orderData.orderRow.customer_email || '',
+        current.method || orderData.orderRow.payment_method || 'Razorpay',
+        Number(current.amount || orderData.orderRow.total || 0),
+        params.status,
+        transactionId,
+      ]
+    );
+    const refreshedPayments = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [inserted.insertId]);
+    paymentRow = refreshedPayments[0] || null;
   }
 
   try {
@@ -388,8 +465,7 @@ router.get('/', auth, adminOnly, async (_req, res) => {
       }
     }
 
-    const rows = await dbQuery<any>('SELECT * FROM payments ORDER BY created_at DESC');
-    res.json(rows.map(mapPaymentRow));
+    res.json(await getAdminPaymentRows());
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
