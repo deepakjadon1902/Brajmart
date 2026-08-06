@@ -8,8 +8,6 @@ const AdminPayments = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        // Auto-reconcile PayU pending payments on page open so status updates without manual marking.
-        await reconcilePayments().catch(() => {});
         const data = await fetchPayments();
         const mapped = (Array.isArray(data) ? data : []).map((p: any) => ({ ...p, id: p.id || p._id }));
         setPayments(mapped);
@@ -18,7 +16,7 @@ const AdminPayments = () => {
       }
     };
     load();
-    const t = setInterval(() => load(), 2_000);
+    const t = setInterval(() => load(), 5_000);
     return () => clearInterval(t);
   }, []);
   const totalRevenue = payments.reduce((s, p) => s + p.amount, 0);

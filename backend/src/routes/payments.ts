@@ -33,51 +33,56 @@ const mapPaymentStatusRow = (row: any) => ({
 });
 
 const getAdminPaymentRows = async () => {
-  const paymentRows = await dbQuery<any>('SELECT * FROM payments ORDER BY created_at DESC');
-  const statusRows = await dbQuery<any>(
+  const rows = await dbQuery<any>(
     `SELECT
-       ps.token,
-       ps.status,
+       CONCAT('payment:', p.id) AS id,
+       p.order_id,
+       p.customer_name,
+       p.customer_email,
+       p.method,
+       p.amount,
+       p.status,
+       p.transaction_id,
+       p.created_at,
+       p.updated_at
+     FROM payments p
+     UNION ALL
+     SELECT
+       CONCAT('status:', ps.token) AS id,
        ps.order_id,
-       ps.amount,
-       ps.method,
-       ps.payment_id,
+       COALESCE(o.customer_name, '') AS customer_name,
+       COALESCE(o.customer_email, '') AS customer_email,
+       COALESCE(ps.method, o.payment_method, 'Unknown') AS method,
+       COALESCE(ps.amount, o.total, 0) AS amount,
+       ps.status,
+       COALESCE(ps.payment_id, ps.token) AS transaction_id,
        ps.created_at,
-       ps.updated_at,
-       o.customer_name,
-       o.customer_email,
-       o.payment_method,
-       o.total,
-       p.id AS payment_row_id
+       ps.updated_at
      FROM payment_status ps
      LEFT JOIN orders o ON o.id = ps.order_id
-     LEFT JOIN payments p
-       ON p.order_id = ps.order_id
-       OR p.transaction_id = ps.token
-       OR (ps.payment_id IS NOT NULL AND p.transaction_id = ps.payment_id)
-     WHERE p.id IS NULL
-     ORDER BY ps.created_at DESC`
+     WHERE NOT EXISTS (
+       SELECT 1
+       FROM payments p
+       WHERE p.order_id = ps.order_id
+          OR p.transaction_id = ps.token
+          OR (ps.payment_id IS NOT NULL AND p.transaction_id = ps.payment_id)
+       LIMIT 1
+     )
+     ORDER BY created_at DESC`
   );
 
-  const mappedPayments = paymentRows.map(mapPaymentRow);
-  const mappedStatusPayments = statusRows.map((row: any) => ({
-    _id: `status:${row.token}`,
+  return rows.map((row: any) => ({
+    _id: String(row.id),
     orderId: row.order_id,
-    customerName: row.customer_name || '',
-    customerEmail: row.customer_email || '',
-    method: row.method || row.payment_method || 'Unknown',
-    amount: Number(row.amount ?? row.total ?? 0),
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    method: row.method,
+    amount: Number(row.amount),
     status: row.status,
-    transactionId: row.payment_id || row.token,
+    transactionId: row.transaction_id,
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   }));
-
-  return [...mappedPayments, ...mappedStatusPayments].sort((a, b) => {
-    const left = new Date(b.createdAt || b.updatedAt || 0).getTime();
-    const right = new Date(a.createdAt || a.updatedAt || 0).getTime();
-    return left - right;
-  });
 };
 
 const sha512 = (value: string) => crypto.createHash('sha512').update(value).digest('hex');
@@ -435,36 +440,6 @@ const reconcilePendingRazorpayToken = async (token: string) => {
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-
-    // Automatically reconcile a few most-recent pending PayU payments so admin panel updates automatically.
-    if (process.env.PAYU_KEY && process.env.PAYU_SALT) {
-      const pending = await dbQuery<any>(
-        "SELECT token FROM payment_status WHERE status = 'pending' AND method LIKE 'PayU%' ORDER BY updated_at DESC LIMIT 10"
-      );
-      for (const row of pending) {
-        const token = String(row?.token || '').trim();
-        if (!token) continue;
-        try {
-          await reconcilePendingPayuToken(token);
-        } catch {
-          // ignore per-token failures
-        }
-      }
-    }
-
-    const pendingRazorpay = await dbQuery<any>(
-      "SELECT token FROM payment_status WHERE status = 'pending' AND method = 'Razorpay' ORDER BY updated_at DESC LIMIT 10"
-    );
-    for (const row of pendingRazorpay) {
-      const token = String(row?.token || '').trim();
-      if (!token) continue;
-      try {
-        await reconcilePendingRazorpayToken(token);
-      } catch {
-        // ignore per-token failures
-      }
-    }
-
     res.json(await getAdminPaymentRows());
   } catch (err: any) {
     res.status(500).json({ message: err.message });
