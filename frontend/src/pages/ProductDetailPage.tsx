@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus } from 'lucide-react';
+import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useProductStore } from '@/store/productStore';
 import { useCartStore } from '@/store/cartStore';
@@ -789,22 +789,26 @@ const ProductDetailPage = () => {
             </div>
 
             {/* Rating */}
-            <div className="flex items-center gap-2">
-              <div className="flex gap-0.5">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} size={16} className={i < Math.floor(product.rating) ? 'fill-gold text-gold' : 'text-border'} />
-                ))}
-              </div>
-              <span className="text-sm text-muted-foreground">{product.rating} ({product.reviewCount} reviews)</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {Number(product.rating || 0) > 0 && (
+                <span className="inline-flex h-6 items-center gap-1 rounded-sm bg-[#388e3c] px-2 font-sans text-xs font-semibold leading-none text-white">
+                  {Number(product.rating).toFixed(1).replace(/\.0$/, '')}
+                  <Star size={12} strokeWidth={2.4} className="fill-white text-white" aria-hidden="true" />
+                </span>
+              )}
+              <span className="font-sans text-sm font-medium text-[#878787]">
+                {Number(product.reviewCount || 0).toLocaleString('en-IN')} reviews
+              </span>
             </div>
 
             {/* Price */}
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="price-current font-playfair text-3xl font-bold text-brand-gold">{formatPrice(computedPrice)}</span>
+            <div className="flex flex-wrap items-baseline gap-3">
+              <span className="product-detail-price-current font-sans text-[28px] font-bold leading-none text-[#212121] md:text-[30px]">{formatPrice(computedPrice)}</span>
               {product.originalPrice && (
                 <>
-                  <span className="price-original text-lg text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>
-                  <span className="save-text rounded bg-tulsi/10 px-2 py-0.5 text-sm font-semibold text-tulsi">Save {formatPrice(product.originalPrice - computedPrice)}</span>
+                  <span className="product-detail-price-original font-sans text-[16px] font-medium leading-none text-[#878787] line-through">{formatPrice(product.originalPrice)}</span>
+                  <span className="product-detail-price-save font-sans text-[14px] font-semibold leading-none text-[#388e3c]">{discount}% off</span>
+                  <span className="rounded-sm bg-[#e6f4ea] px-2 py-1 font-sans text-[13px] font-semibold leading-none text-[#388e3c]">Save {formatPrice(product.originalPrice - computedPrice)}</span>
                 </>
               )}
               {!product.inStock && (
@@ -981,24 +985,27 @@ const ProductDetailPage = () => {
             </div>
 
             {/* Action buttons */}
-            <div className="flex gap-3">
+            <div className="product-detail-actions grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_52px] sm:gap-3">
               <button
                 onClick={handleAddToCart}
                 disabled={!product.inStock}
-                className={`add-to-cart-btn btn-action flex-1 ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                className={`add-to-cart-btn btn-action w-full ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
               >
-                <ShoppingCart size={18} className="inline mr-2 -mt-0.5" />Add to Cart
+                <ShoppingCart size={18} className="shrink-0" aria-hidden="true" />
+                <span>Add to Cart</span>
               </button>
               <button
                 onClick={handleBuyNow}
                 disabled={!product.inStock}
-                className={`buy-now-btn btn-action-secondary flex-1 ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                className={`buy-now-btn btn-action-secondary w-full ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
               >
-                Buy Now
+                <Zap size={17} className="shrink-0 fill-current" aria-hidden="true" />
+                <span>Buy Now</span>
               </button>
               <button
                 onClick={handleToggleWishlist}
-                className={`px-4 py-3.5 rounded-xl border-2 transition-colors active:scale-[0.97] ${inWishlist ? 'border-saffron bg-saffron/10 text-saffron' : 'border-border text-foreground hover:border-saffron hover:text-saffron'}`}
+                className={`wishlist-action inline-flex min-h-[42px] items-center justify-center rounded border transition-colors active:scale-[0.97] sm:min-h-[50px] ${inWishlist ? 'border-[#ff9f00] bg-[#fff7e6] text-[#fb641b]' : 'border-[#e0e0e0] bg-white text-[#212121] hover:border-[#ff9f00] hover:text-[#fb641b]'}`}
+                aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
               >
                 <Heart size={18} className={inWishlist ? 'fill-current' : ''} />
               </button>

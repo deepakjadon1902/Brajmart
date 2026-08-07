@@ -7,6 +7,9 @@ import SEO from '@/components/seo/SEO';
 import { breadcrumbSchema, categorySeo } from '@/lib/seo';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
 
+const displayCategoryName = (name: string) =>
+  (name || '').trim().toLowerCase() === 'best selling' ? 'Most Selling Products' : name;
+
 const CategoriesPage = () => {
   const categories = useProductStore((s) => s.categories);
 
@@ -39,7 +42,8 @@ const CategoriesPage = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {categories.map((cat) => {
-              const seo = categorySeo(cat.name);
+              const visibleName = displayCategoryName(cat.name);
+              const seo = categorySeo(visibleName);
               return (
                 <Link
                   key={cat.id}
@@ -48,7 +52,7 @@ const CategoriesPage = () => {
                 >
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gold/30 bg-pearl text-3xl">
                     {cat.icon && (cat.icon.startsWith('data:') || cat.icon.startsWith('http') || cat.icon.startsWith('/uploads')) ? (
-                      <img src={cat.icon} alt={cat.name} className="w-full h-full object-cover" />
+                      <img src={cat.icon} alt={visibleName} className="w-full h-full object-cover" />
                     ) : (
                       cat.icon
                     )}

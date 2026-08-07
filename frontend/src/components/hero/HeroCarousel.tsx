@@ -51,6 +51,14 @@ const HeroCarousel = () => {
   };
 
   useEffect(() => {
+    if (!canNavigateSlides) return;
+    const interval = window.setInterval(() => {
+      setSelectedIndex((current) => (current + 1) % displaySlides.length);
+    }, 3000);
+    return () => window.clearInterval(interval);
+  }, [canNavigateSlides, displaySlides.length]);
+
+  useEffect(() => {
     if (selectedIndex >= displaySlides.length) setSelectedIndex(0);
   }, [displaySlides.length, selectedIndex]);
 
@@ -67,7 +75,7 @@ const HeroCarousel = () => {
     <section className="relative bg-background">
       <div className="relative w-full">
         <div className="relative overflow-hidden bg-brand-raised">
-          <div className="relative aspect-[480/133] min-h-[205px] w-full sm:min-h-[260px] md:min-h-0">
+          <div className="relative aspect-[480/168] w-full sm:aspect-[480/133] sm:min-h-[260px] md:min-h-0">
             {visibleSlide?.image ? (
               <img
                 src={toResponsiveImageUrl(visibleSlide.image, { width: 1920, height: 532, quality: 76 })}
@@ -76,7 +84,7 @@ const HeroCarousel = () => {
                 decoding="async"
                 {...({ fetchpriority: 'high' } as Record<string, string>)}
                 sizes="100vw"
-                className="absolute inset-0 h-full w-full object-cover object-center sm:object-center"
+                className="absolute inset-0 h-full w-full object-contain object-center sm:object-cover"
                 onError={() => {
                   if (visibleSlide.id === fallbackSlide.id) return;
                   setFailedSlideIds((current) => {
@@ -90,20 +98,20 @@ const HeroCarousel = () => {
               <div className="absolute inset-0 bg-brand-soft" aria-hidden="true" />
             )}
 
-            <div className="absolute inset-0 bg-gradient-to-r from-black/38 via-black/5 to-transparent sm:from-black/50 sm:via-black/10 md:from-black/42" aria-hidden="true" />
+            <div className="absolute inset-0 hidden bg-gradient-to-r from-black/50 via-black/10 to-transparent sm:block md:from-black/42" aria-hidden="true" />
 
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-start px-3 pb-12 pt-12 sm:px-7 sm:pb-9 md:px-14 md:pb-10 lg:px-20">
-              <div className="max-w-[10.75rem] px-0 py-0 text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.55)] sm:max-w-xs sm:rounded-md sm:bg-white/76 sm:px-3.5 sm:py-2.5 sm:text-black sm:shadow-lg sm:backdrop-blur-sm md:max-w-[21rem] md:px-4 md:py-3">
+            <div className="absolute inset-x-0 bottom-0 hidden items-end justify-start px-3 pb-6 pt-8 sm:flex sm:px-7 sm:pb-9 md:px-14 md:pb-10 lg:px-20">
+              <div className="max-w-[12.5rem] px-0 py-0 text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.55)] sm:max-w-xs sm:rounded-md sm:bg-white/76 sm:px-3.5 sm:py-2.5 sm:text-black sm:shadow-lg sm:backdrop-blur-sm md:max-w-[21rem] md:px-4 md:py-3">
                 {visibleSlide.tag && (
-                  <span className="block text-[0.48rem] font-bold uppercase tracking-[0.14em] text-brand-gold sm:text-[0.58rem] md:text-[0.66rem]">
+                  <span className="block text-[0.44rem] font-semibold uppercase tracking-[0.1em] text-brand-gold sm:text-[0.58rem] sm:font-bold sm:tracking-[0.14em] md:text-[0.66rem]">
                     {visibleSlide.tag}
                   </span>
                 )}
-                <h1 className="mt-0.5 font-cinzel text-sm font-bold leading-tight sm:text-xl md:text-2xl">
+                <h1 className="mt-0.5 line-clamp-1 font-cinzel text-[0.8rem] font-bold leading-tight sm:text-xl md:line-clamp-none md:text-2xl">
                   {visibleSlide.title}
                 </h1>
                 {visibleSlide.subtitle && (
-                  <p className="mt-0.5 line-clamp-1 text-[0.58rem] font-semibold leading-snug text-white sm:mt-1 sm:text-xs sm:text-brand-primary md:line-clamp-2 md:text-sm">
+                  <p className="mt-0.5 line-clamp-2 text-[0.54rem] font-medium leading-[1.15] text-white sm:mt-1 sm:text-xs sm:font-semibold sm:text-brand-primary md:text-sm">
                     {visibleSlide.subtitle}
                   </p>
                 )}

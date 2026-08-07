@@ -24,7 +24,7 @@ const ProductCarousel = ({ products, priority = false }: ProductCarouselProps) =
       <div className="overflow-hidden" ref={emblaRef}>
         <div className="flex gap-2.5 sm:gap-3 md:gap-4">
           {products.map((product, i) => (
-            <div key={product.id} className="flex-none w-[43vw] min-w-[158px] sm:w-[218px] md:w-[236px] lg:w-[250px]">
+            <div key={product.id} className="flex-none w-[48vw] min-w-[176px] sm:w-[218px] md:w-[236px] lg:w-[250px]">
               <ProductCard product={product} index={i} variant="compact" priority={priority} />
             </div>
           ))}

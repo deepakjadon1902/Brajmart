@@ -101,6 +101,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
   const isCompact = variant === 'compact';
   const mediaAspectClass = 'aspect-square';
   const mediaFitClass = isCompact ? 'object-contain p-2.5' : 'object-cover';
+  const ratingValue = Number(product.rating || 0);
 
   useEffect(() => {
     if (!isHovered) {
@@ -163,32 +164,34 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
         </div>
 
         {discount > 0 && (
-          <span className="discount-badge absolute bottom-3 left-3 rounded bg-brand-structure px-2 py-0.5 text-xs font-bold text-primary-foreground">
+          <span className="discount-badge absolute bottom-3 right-3 rounded bg-brand-structure px-2 py-0.5 text-xs font-bold text-primary-foreground">
             -{discount}%
+          </span>
+        )}
+
+        {ratingValue > 0 && (
+          <span className="absolute bottom-3 left-3 inline-flex h-[22px] items-center gap-0.5 rounded-sm bg-[#388e3c] px-1.5 text-[11px] font-semibold leading-none text-white shadow-sm">
+            <span>{ratingValue.toFixed(1).replace(/\.0$/, '')}</span>
+            <Star size={10} strokeWidth={2.4} className="fill-white text-white" aria-hidden="true" />
           </span>
         )}
       </Link>
 
-      <div className={`flex flex-col ${isCompact ? 'gap-0.5 p-2.5' : 'gap-1 p-2.5'} sm:p-3 flex-1`}>
-        <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-muted-foreground line-clamp-1 min-h-[1rem]">{product.category}</span>
-
-        <div className="flex items-center gap-1 mt-1">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Star key={i} size={12} className={i < Math.floor(product.rating) ? 'fill-gold text-gold' : 'text-border'} />
-          ))}
-          <span className="text-[0.65rem] text-muted-foreground ml-1">({product.reviewCount})</span>
-        </div>
-
-        <div className="mt-auto flex items-start justify-between gap-2">
-          <Link to={`/product/${product.slug}`} className="min-w-0 flex-1">
-            <h3 className="font-playfair text-[0.8rem] sm:text-[0.86rem] font-semibold text-foreground line-clamp-2 leading-snug hover:text-saffron transition-colors">
+      <div className={`flex flex-col ${isCompact ? 'gap-1.5 p-2.5' : 'gap-2 p-2.5'} sm:p-3 flex-1`}>
+        <Link to={`/product/${product.slug}`} className="min-w-0">
+          <h3 className="font-sans text-[13px] font-medium leading-[1.25] text-[#212121] line-clamp-2 transition-colors hover:text-[#2874f0] sm:text-[14px]">
               {product.name}
-            </h3>
-          </Link>
-          <div className="shrink-0 text-right leading-tight">
-            <div className="price-current font-playfair text-base sm:text-lg font-bold text-brand-gold">{formatPrice(product.price)}</div>
-            {product.originalPrice && <div className="price-original text-muted-foreground line-through text-[0.65rem]">{formatPrice(product.originalPrice)}</div>}
-          </div>
+          </h3>
+        </Link>
+
+        <div className="mt-auto flex items-baseline gap-1.5 leading-tight">
+          <div className="price-current font-sans text-[15px] font-bold text-[#212121] sm:text-[16px]">{formatPrice(product.price)}</div>
+          {product.originalPrice && (
+            <div className="price-original font-sans text-[11px] text-[#878787] line-through sm:text-[12px]">{formatPrice(product.originalPrice)}</div>
+          )}
+          {discount > 0 && (
+            <div className="font-sans text-[11px] font-semibold text-[#388e3c] sm:text-[12px]">{discount}% off</div>
+          )}
         </div>
 
         {!isCompact && (
@@ -203,20 +206,20 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
       </div>
 
       <div className={`px-2.5 sm:px-3 ${isCompact ? 'pb-2.5' : 'pb-3'}`}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-1 sm:gap-2">
           <button
             onClick={handleAddToCart}
             disabled={!product.inStock}
-            className={`add-to-cart-btn btn-action w-full ${isCompact ? 'px-2 py-2' : 'px-2.5 py-2'} text-[12px] sm:text-[13px] ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            className={`add-to-cart-btn btn-action w-full !min-h-[34px] !px-1 !py-2 !text-[9.5px] sm:!min-h-[38px] sm:!px-2.5 sm:!text-[12px] ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
           >
-            <ShoppingCart size={14} /> Add to Cart
+            <ShoppingCart size={11} className="shrink-0 sm:h-[13px] sm:w-[13px]" /> <span>Add to Cart</span>
           </button>
           <button
             onClick={handleBuyNow}
             disabled={!product.inStock}
-            className={`buy-now-btn btn-action-secondary w-full ${isCompact ? 'px-2 py-2' : 'px-2.5 py-2'} text-[12px] sm:text-[13px] bg-white text-orange-500 hover:bg-white ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            className={`buy-now-btn btn-action-secondary w-full !min-h-[34px] !px-1 !py-2 !text-[9.5px] sm:!min-h-[38px] sm:!px-2.5 sm:!text-[12px] ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
           >
-            Buy Now
+            <span>Buy Now</span>
           </button>
         </div>
       </div>

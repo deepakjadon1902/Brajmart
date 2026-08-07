@@ -11,6 +11,9 @@ import Footer from '@/components/layout/Footer';
 import SEO from '@/components/seo/SEO';
 import { breadcrumbSchema, categorySeo } from '@/lib/seo';
 
+const displayCategoryName = (name: string) =>
+  (name || '').trim().toLowerCase() === 'best selling' ? 'Most Selling Products' : name;
+
 const CategoryPage = () => {
   const { slug, subSlug } = useParams();
   const { getProductsByCategory, getProductsBySubcategory, categories, loading, lastFetchedAt, error, loadFromApi } = useProductStore();
@@ -32,7 +35,8 @@ const CategoryPage = () => {
   const hasAttemptedCatalogLoad = lastFetchedAt > 0 || Boolean(error);
   const categoryIsMissing = !loading && hasAttemptedCatalogLoad && !catMeta && products.length === 0;
   const subcategoryIsMissing = Boolean(subSlug) && !subMeta && !loading && hasAttemptedCatalogLoad;
-  const seo = categorySeo(categoryName || 'Devotional Products', subcategoryName, products.length);
+  const visibleCategoryName = displayCategoryName(categoryName || 'Devotional Products');
+  const seo = categorySeo(visibleCategoryName, subcategoryName, products.length);
   const pageName = seo.pageTitle;
   const path = subSlug ? `/category/${slug}/${subSlug}` : `/category/${slug || ''}`;
   const collectionSchema = {
@@ -78,7 +82,7 @@ const CategoryPage = () => {
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
               <Link to="/" className="hover:text-saffron">Home</Link>
               <span>/</span>
-              <span className="text-foreground">{categoryName || 'Category'}</span>
+              <span className="text-foreground">{displayCategoryName(categoryName || 'Category')}</span>
               {subSlug && (
                 <>
                   <span>/</span>
@@ -124,7 +128,7 @@ const CategoryPage = () => {
       {/* Products grid */}
       <div className="container mx-auto px-4 py-8">
         {products.length > 0 ? (
-          <div className="product-grid grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)]">
+          <div className="product-grid grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)] xl:grid-cols-5">
             {products.map((product, i) => (
               <ProductCard key={product.id} product={product} index={i} variant="compact" />
             ))}

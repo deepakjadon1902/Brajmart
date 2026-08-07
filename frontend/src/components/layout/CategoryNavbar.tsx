@@ -4,6 +4,9 @@ import { ChevronRight, Menu, X } from 'lucide-react';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
 import { brajDestinations } from '@/data/brajDestinations';
 
+const displayCategoryName = (name: string) =>
+  (name || '').trim().toLowerCase() === 'best selling' ? 'Most Selling Products' : name;
+
 const CategoryNavbar = () => {
   const categories = useProductStore((s) => s.categories);
   const [allOpen, setAllOpen] = useState(false);
@@ -84,7 +87,7 @@ const CategoryNavbar = () => {
                   className="inline-flex h-9 items-center whitespace-nowrap px-2.5 text-sm font-semibold text-foreground transition-colors hover:text-saffron"
                   onClick={closeMenus}
                 >
-                  {cat.name}
+                  {displayCategoryName(cat.name)}
                 </RouterLink>
               </div>
             ))}
@@ -134,7 +137,7 @@ const CategoryNavbar = () => {
                           }}
                           aria-expanded={subs.length ? expanded : undefined}
                         >
-                          <span>{cat.name}</span>
+                          <span>{displayCategoryName(cat.name)}</span>
                           {subs.length ? (
                             <ChevronRight size={15} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
                           ) : (
@@ -149,7 +152,7 @@ const CategoryNavbar = () => {
                               className="rounded px-2 py-1.5 text-xs font-bold text-maroon transition-colors hover:bg-brand-raised hover:text-saffron"
                               onClick={closeMenus}
                             >
-                              View all {cat.name}
+                              View all {displayCategoryName(cat.name)}
                             </RouterLink>
                             {subs.map((sub) => (
                               <RouterLink

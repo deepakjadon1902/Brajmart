@@ -16,9 +16,11 @@ const BrajYatra = lazy(() => import('@/components/sections/BrajYatra'));
 const Testimonials = lazy(() => import('@/components/sections/Testimonials'));
 const Footer = lazy(() => import('@/components/layout/Footer'));
 
+const displayCategoryName = (name: string) =>
+  (name || '').trim().toLowerCase() === 'best selling' ? 'Most Selling Products' : name;
+
 const Home = () => {
-  const { products, categories, getLatestProducts, getBestSellers, getByTag, getProductsByCategory } = useProductStore();
-  const latestProducts = getLatestProducts();
+  const { products, categories, getBestSellers, getByTag, getProductsByCategory } = useProductStore();
   const bestSellingProducts = getBestSellers();
   const devotionalAccessories = getByTag('accessories');
   // Show every category as a home-page section (even if a category currently has 0 products).
@@ -33,9 +35,9 @@ const Home = () => {
   const booksIndex = regularCategories.findIndex((c) => isBooks(c.name));
   const orderedCategories = prasadamCategory
     ? [
-        ...regularCategories.slice(0, booksIndex >= 0 ? booksIndex + 1 : regularCategories.length),
+        ...regularCategories.slice(0, booksIndex >= 0 ? booksIndex : regularCategories.length),
         prasadamCategory,
-        ...regularCategories.slice(booksIndex >= 0 ? booksIndex + 1 : regularCategories.length),
+        ...regularCategories.slice(booksIndex >= 0 ? booksIndex : regularCategories.length),
       ]
     : regularCategories;
   const homeSchema = [
@@ -90,20 +92,23 @@ const Home = () => {
       <TrustBar />
 
       <Suspense fallback={null}>
-        <DeferredMount minHeight={390}>
-          <CollectionSection
-            tag="BRAJMART COLLECTION"
-            title="Latest Products "
-            subtitle="Fresh arrivals from the divine lands of Braj"
-            products={latestProducts}
-            viewAllLink="/products?tag=latest"
-          />
-        </DeferredMount>
+        {brajmartSpecialCategory && (
+          <DeferredMount minHeight={390}>
+            <CollectionSection
+              tag="BRAJMART COLLECTION"
+              title={displayCategoryName(brajmartSpecialCategory.name)}
+              subtitle={`Explore ${displayCategoryName(brajmartSpecialCategory.name)} collection`}
+              products={getProductsByCategory(brajmartSpecialCategory.name)}
+              viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
+              priority
+            />
+          </DeferredMount>
+        )}
 
         <DeferredMount minHeight={390}>
           <CollectionSection
             tag="MOST LOVED"
-            title="Best-Selling Products"
+            title="Most Selling Products"
             subtitle="Top picks from our devotee community"
             products={bestSellingProducts}
             viewAllLink="/products?tag=bestseller"
@@ -114,8 +119,8 @@ const Home = () => {
           <DeferredMount key={cat.id} minHeight={390}>
             <CollectionSection
               tag="CATEGORY"
-              title={cat.name}
-              subtitle={`Explore ${cat.name} collection`}
+              title={displayCategoryName(cat.name)}
+              subtitle={`Explore ${displayCategoryName(cat.name)} collection`}
               products={getProductsByCategory(cat.name)}
               bgClass={idx % 2 === 0 ? 'bg-pearl' : ''}
               viewAllLink={`/category/${categoryToSlug(cat.name)}`}
@@ -141,18 +146,6 @@ const Home = () => {
         <DeferredMount minHeight={320}>
           <ExclusiveShop />
         </DeferredMount>
-        {brajmartSpecialCategory && (
-          <DeferredMount minHeight={390}>
-            <CollectionSection
-              tag="CATEGORY"
-              title={brajmartSpecialCategory.name}
-              subtitle={`Explore ${brajmartSpecialCategory.name} collection`}
-              products={getProductsByCategory(brajmartSpecialCategory.name)}
-              bgClass="bg-pearl"
-              viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
-            />
-          </DeferredMount>
-        )}
 
         <DeferredMount minHeight={360}>
           <BrajYatra />
