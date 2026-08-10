@@ -33,22 +33,16 @@ const imagekit = imagekitEnabled && imagekitConfigured ? new ImageKit(imagekitCo
 
 const maxFileSizeMb = Number(process.env.UPLOAD_MAX_MB || 25);
 const maxFileSizeBytes = Number.isFinite(maxFileSizeMb) && maxFileSizeMb > 0 ? Math.floor(maxFileSizeMb * 1024 * 1024) : 25 * 1024 * 1024;
+const allowedImageMimes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
+const imageFileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  if (allowedImageMimes.has(String(file.mimetype || '').toLowerCase())) return cb(null, true);
+  cb(new Error('Only image uploads are allowed'));
+};
 
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: maxFileSizeBytes },
-});
-
-const diskUpload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname || '').slice(0, 10) || '.jpg';
-      const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
-      cb(null, name);
-    },
-  }),
-  limits: { fileSize: maxFileSizeBytes },
+  fileFilter: imageFileFilter,
 });
 
 const getPublicOrigin = (req: any) => {
@@ -106,6 +100,13 @@ const uploadToImageKit = async (buffer: Buffer, originalName: string) => {
   return result.url;
 };
 
+const writeOptimizedLocalImage = async (req: any, file: Express.Multer.File) => {
+  const optimized = await optimizeImageBuffer(file.buffer as Buffer);
+  const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.webp`;
+  await fs.promises.writeFile(path.join(UPLOADS_DIR, filename), optimized);
+  return publicUrlForLocalFile(req, filename);
+};
+
 router.get('/status', auth, adminOnly, (_req, res) => {
   const provider = imagekitEnabled ? 'imagekit' : 'local';
   res.json({
@@ -122,12 +123,12 @@ router.get('/status', auth, adminOnly, (_req, res) => {
   });
 });
 
-router.post('/', (imagekitEnabled ? memoryUpload.single('image') : diskUpload.single('image')), async (req, res) => {
+router.post('/', auth, adminOnly, memoryUpload.single('image'), async (req, res) => {
   const file = req.file as Express.Multer.File | undefined;
   if (!file) return res.status(400).json({ message: 'No file uploaded' });
 
   try {
-    if (!imagekitEnabled) return res.json({ url: publicUrlForLocalFile(req, file.filename) });
+    if (!imagekitEnabled) return res.json({ url: await writeOptimizedLocalImage(req, file) });
     const url = await withTimeout(uploadToImageKit((file as any).buffer as Buffer, file.originalname), 15_000);
     return res.json({ url });
   } catch (err: any) {
@@ -137,26 +138,20 @@ router.post('/', (imagekitEnabled ? memoryUpload.single('image') : diskUpload.si
     }
     // ImageKit failed/slow: fallback to local so admin isn't blocked.
     try {
-      const fallback = await new Promise<string>((resolve, reject) => {
-        const ext = path.extname(file.originalname || '').slice(0, 10) || '.jpg';
-        const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
-        const outPath = path.join(UPLOADS_DIR, filename);
-        fs.writeFile(outPath, (file as any).buffer as Buffer, (e) => (e ? reject(e) : resolve(filename)));
-      });
-      return res.json({ url: publicUrlForLocalFile(req, fallback) });
+      return res.json({ url: await writeOptimizedLocalImage(req, file) });
     } catch {
       return res.status(500).json({ message: err?.message || 'Upload failed' });
     }
   }
 });
 
-router.post('/multiple', (imagekitEnabled ? memoryUpload.array('images', 12) : diskUpload.array('images', 12)), async (req, res) => {
+router.post('/multiple', auth, adminOnly, memoryUpload.array('images', 12), async (req, res) => {
   const files = (req.files as Express.Multer.File[] | undefined) || [];
   if (!files.length) return res.status(400).json({ message: 'No files uploaded' });
 
   try {
     if (!imagekitEnabled) {
-      return res.json({ urls: files.map((f) => publicUrlForLocalFile(req, f.filename)) });
+      return res.json({ urls: await Promise.all(files.map((f) => writeOptimizedLocalImage(req, f))) });
     }
 
     const urls = await withTimeout(
@@ -171,14 +166,7 @@ router.post('/multiple', (imagekitEnabled ? memoryUpload.array('images', 12) : d
     }
     // Fallback: store everything locally.
     try {
-      const urls: string[] = [];
-      for (const f of files as any[]) {
-        const ext = path.extname(f.originalname || '').slice(0, 10) || '.jpg';
-        const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
-        const outPath = path.join(UPLOADS_DIR, filename);
-        fs.writeFileSync(outPath, f.buffer as Buffer);
-        urls.push(publicUrlForLocalFile(req, filename));
-      }
+      const urls = await Promise.all(files.map((f) => writeOptimizedLocalImage(req, f)));
       return res.json({ urls });
     } catch {
       return res.status(500).json({ message: err?.message || 'Upload failed' });
@@ -188,6 +176,7 @@ router.post('/multiple', (imagekitEnabled ? memoryUpload.array('images', 12) : d
 
 router.use((err: any, _req: any, res: any, _next: any) => {
   if (err && err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ message: `Image too large. Max ${Math.round(maxFileSizeBytes / 1024 / 1024)}MB` });
+  if (err?.message === 'Only image uploads are allowed') return res.status(400).json({ message: err.message });
   return res.status(500).json({ message: err?.message || 'Upload failed' });
 });
 

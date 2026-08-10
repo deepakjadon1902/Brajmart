@@ -1,40 +1,82 @@
 import { useEffect, useState } from 'react';
-import { CreditCard, Wallet, DollarSign, AlertCircle } from 'lucide-react';
-import { fetchPayments, reconcilePayments } from '@/lib/api';
+import { CreditCard, Wallet, DollarSign, AlertCircle, type LucideIcon } from 'lucide-react';
+import { fetchOrders, fetchPayments, reconcilePayments } from '@/lib/api';
 import { toast } from 'sonner';
 
+type AdminPayment = {
+  id: string;
+  orderId?: number | string;
+  customerName?: string;
+  method: string;
+  amount: number;
+  status: string;
+  transactionId?: string;
+  createdAt?: string;
+  _id?: string;
+};
+
+type AdminOrder = {
+  paymentMethod?: string;
+  total?: number;
+};
+
+const errorMessage = (err: unknown, fallback: string) => err instanceof Error ? err.message : fallback;
+const isCodOrder = (order: AdminOrder) => /^cod$|cash\s*on\s*delivery/i.test(String(order.paymentMethod || ''));
+const normalizePayments = (data: unknown): AdminPayment[] =>
+  Array.isArray(data)
+    ? data.map((raw) => {
+      const p = raw as Partial<AdminPayment>;
+      return {
+        ...p,
+        id: String(p.id || p._id || ''),
+        method: String(p.method || 'Unknown'),
+        amount: Number(p.amount || 0),
+        status: String(p.status || ''),
+      };
+    })
+    : [];
+
 const AdminPayments = () => {
-  const [payments, setPayments] = useState<any[]>([]);
+  const [payments, setPayments] = useState<AdminPayment[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await fetchPayments();
-        const mapped = (Array.isArray(data) ? data : []).map((p: any) => ({ ...p, id: p.id || p._id }));
-        setPayments(mapped);
-      } catch (err: any) {
-        toast.error(err?.message || 'Failed to load payments');
+        const data: unknown = await fetchPayments();
+        setPayments(normalizePayments(data));
+        const orderData: unknown = await fetchOrders();
+        setOrders(Array.isArray(orderData) ? orderData : []);
+      } catch (err: unknown) {
+        toast.error(errorMessage(err, 'Failed to load payments'));
       }
     };
     load();
     const t = setInterval(() => load(), 5_000);
     return () => clearInterval(t);
   }, []);
-  const totalRevenue = payments.reduce((s, p) => s + p.amount, 0);
-  const paidRevenue = payments.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
+  const paidPayments = payments.filter((p) => p.status === 'paid');
+  const codOrders = orders.filter(isCodOrder);
+  const paidRevenue = paidPayments.reduce((s, p) => s + p.amount, 0);
+  const codRevenue = codOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+  const collectedRevenue = paidRevenue + codRevenue;
   const pendingRevenue = payments.filter((p) => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
 
-  const methodStats = payments.reduce<Record<string, { count: number; total: number }>>((acc, p) => {
+  const methodStats = paidPayments.reduce<Record<string, { count: number; total: number }>>((acc, p) => {
     if (!acc[p.method]) acc[p.method] = { count: 0, total: 0 };
     acc[p.method].count++;
     acc[p.method].total += p.amount;
     return acc;
   }, {});
+  if (codOrders.length) {
+    methodStats.COD = { count: codOrders.length, total: codRevenue };
+  }
 
-  const icons: Record<string, any> = {
+  const icons: Record<string, LucideIcon> = {
     UPI: Wallet,
     Card: CreditCard,
     'PayU UPI': Wallet,
     'PayU Card': CreditCard,
+    COD: Wallet,
   };
 
   return (
@@ -44,8 +86,8 @@ const AdminPayments = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-3"><DollarSign size={20} className="text-white" /></div>
-          <p className="text-2xl font-bold text-white">INR {totalRevenue.toLocaleString('en-IN')}</p>
-          <p className="text-sm text-slate-400">Total Revenue</p>
+          <p className="text-2xl font-bold text-white">INR {collectedRevenue.toLocaleString('en-IN')}</p>
+          <p className="text-sm text-slate-400">Collected Revenue</p>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-3"><CreditCard size={20} className="text-white" /></div>
@@ -59,8 +101,8 @@ const AdminPayments = () => {
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-3"><DollarSign size={20} className="text-white" /></div>
-          <p className="text-2xl font-bold text-white">{payments.length}</p>
-          <p className="text-sm text-slate-400">Total Transactions</p>
+          <p className="text-2xl font-bold text-white">{paidPayments.length + codOrders.length}</p>
+          <p className="text-sm text-slate-400">Valid Transactions</p>
         </div>
       </div>
 
@@ -90,12 +132,13 @@ const AdminPayments = () => {
             onClick={async () => {
               try {
                 await reconcilePayments();
-                const data = await fetchPayments();
-                const mapped = (Array.isArray(data) ? data : []).map((p: any) => ({ ...p, id: p.id || p._id }));
-                setPayments(mapped);
+                const data: unknown = await fetchPayments();
+                setPayments(normalizePayments(data));
+                const orderData: unknown = await fetchOrders();
+                setOrders(Array.isArray(orderData) ? orderData : []);
                 toast.success('Payment status refreshed');
-              } catch (err: any) {
-                toast.error(err?.message || 'Failed to refresh payments');
+              } catch (err: unknown) {
+                toast.error(errorMessage(err, 'Failed to refresh payments'));
               }
             }}
             className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white hover:bg-slate-700 transition"
@@ -143,7 +186,7 @@ const AdminPayments = () => {
                       }`}>{p.status}</span>
                     </td>
                     <td className="px-5 py-3">
-                      <span className="text-xs text-slate-500">{p.status === 'pending' ? 'Auto verifying…' : '-'}</span>
+                      <span className="text-xs text-slate-500">{p.status === 'pending' ? 'Auto verifying...' : '-'}</span>
                     </td>
                   </tr>
                 ))}

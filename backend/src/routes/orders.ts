@@ -7,9 +7,23 @@ import { parseJson, toIsoString } from '../lib/dbHelpers';
 import { applyCouponToTotals, computeTotals, getCheckoutSettings, hasPrasadamItems, markCouponUsed, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { upsertUserDefaultAddress } from '../lib/userAddress';
 import { checkDtdcPincode, trackDtdcShipment } from '../lib/dtdc';
+import { merchantOrderWhereSql } from '../lib/orderVisibility';
+import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
+import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
 
 const router = Router();
 const COD_CHARGE = 40;
+const codOrderLimiter = rateLimit('cod-order-create', {
+  windowMs: 15 * 60 * 1000,
+  max: 6,
+  key: rateLimitKeyByIpAndOrderEmail,
+  message: 'Too many order attempts. Please wait before trying again.',
+});
+const pincodeCheckLimiter = rateLimit('dtdc-pincode-check', {
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: 'Too many pincode checks. Please wait before trying again.',
+});
 
 const mapOrderRow = (row: any) => ({
   _id: String(row.id),
@@ -48,12 +62,21 @@ router.get('/my', auth, async (req: AuthRequest, res) => {
     const email = String(req.user?.email || '').trim().toLowerCase();
     if (email) {
       const rows = await dbQuery<any>(
-        'SELECT * FROM orders WHERE user_id = ? OR (user_id IS NULL AND LOWER(customer_email) = ?) ORDER BY created_at DESC',
+        `SELECT * FROM orders
+         WHERE (user_id = ? OR (user_id IS NULL AND LOWER(customer_email) = ?))
+           AND ${merchantOrderWhereSql('orders')}
+         ORDER BY created_at DESC`,
         [req.user?.id, email]
       );
       return res.json(rows.map(mapOrderRow));
     }
-    const rows = await dbQuery<any>('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC', [req.user?.id]);
+    const rows = await dbQuery<any>(
+      `SELECT * FROM orders
+       WHERE user_id = ?
+         AND ${merchantOrderWhereSql('orders')}
+       ORDER BY created_at DESC`,
+      [req.user?.id]
+    );
     res.json(rows.map(mapOrderRow));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -63,7 +86,11 @@ router.get('/my', auth, async (req: AuthRequest, res) => {
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    const rows = await dbQuery<any>('SELECT * FROM orders ORDER BY created_at DESC');
+    const rows = await dbQuery<any>(
+      `SELECT * FROM orders
+       WHERE ${merchantOrderWhereSql('orders')}
+       ORDER BY created_at DESC`
+    );
     res.json(rows.map(mapOrderRow));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -75,7 +102,8 @@ const findOrderByLookup = async (lookup: string) => {
   if (!input) return null;
   const rows = await dbQuery<any>(
     `SELECT * FROM orders
-     WHERE LOWER(tracking_id) = LOWER(?) OR id = ?
+     WHERE (LOWER(tracking_id) = LOWER(?) OR id = ?)
+       AND ${merchantOrderWhereSql('orders')}
      ORDER BY updated_at DESC, id DESC
      LIMIT 1`,
     [input, /^\d+$/.test(input) ? Number(input) : -1]
@@ -150,7 +178,7 @@ router.get('/admin/dtdc/track/:lookup', auth, adminOnly, async (req, res) => {
   }
 });
 
-router.post('/dtdc/pincode', async (req, res) => {
+router.post('/dtdc/pincode', pincodeCheckLimiter, async (req, res) => {
   try {
     const desPincode = String(req.body?.desPincode || '').trim();
     const orgPincode = req.body?.orgPincode ? String(req.body.orgPincode).trim() : undefined;
@@ -193,7 +221,13 @@ router.get('/track/:orderId', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const orderId = parseInt(req.params.orderId, 10);
-    const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
+    const rows = await dbQuery<any>(
+      `SELECT * FROM orders
+       WHERE id = ?
+         AND ${merchantOrderWhereSql('orders')}
+       LIMIT 1`,
+      [orderId]
+    );
     if (!rows[0]) return res.status(404).json({ message: 'Order not found' });
     res.json(mapOrderRow(rows[0]));
   } catch (err: any) {
@@ -206,7 +240,11 @@ router.get('/track-by-id/:trackingId', async (req, res) => {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const trackingId = req.params.trackingId;
     const rows = await dbQuery<any>(
-      'SELECT * FROM orders WHERE LOWER(tracking_id) = LOWER(?) ORDER BY updated_at DESC, id DESC LIMIT 1',
+      `SELECT * FROM orders
+       WHERE LOWER(tracking_id) = LOWER(?)
+         AND ${merchantOrderWhereSql('orders')}
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 1`,
       [trackingId]
     );
     if (!rows[0]) return res.status(404).json({ message: 'Order not found' });
@@ -216,7 +254,7 @@ router.get('/track-by-id/:trackingId', async (req, res) => {
   }
 });
 
-router.post('/', optionalAuth, async (req: AuthRequest, res) => {
+router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) => {
   try {
     const { min, max } = await getEtaConfig();
     const etaText = getEtaText(min, max);
@@ -227,8 +265,8 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
     const data = req.body || {};
     const customerEmail = String(data.customerEmail || '').trim().toLowerCase();
     if (!customerEmail) return res.status(400).json({ message: 'Customer email is required' });
-    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
-    if (!emailValid) return res.status(400).json({ message: 'Enter a valid customer email' });
+    const contact = validateCheckoutOrderContact(data, customerEmail);
+    if (!contact.ok) return res.status(400).json({ message: contact.message });
 
     const priced = await priceAndValidateOrderItems(data.items || []);
     if (!priced.ok) return res.status(400).json({ message: priced.message });
@@ -237,6 +275,11 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
     const baseTotals = computeTotals(priced.itemsSubtotal, settings);
     const paymentMethod = String(data.paymentMethod || '').trim();
     const wantsCod = /^cod$/i.test(paymentMethod) || /cash\s*on\s*delivery/i.test(paymentMethod);
+    if (!wantsCod) {
+      return res.status(400).json({
+        message: 'Online orders must be created through Razorpay or PayU verification routes.',
+      });
+    }
     let codAmount = 0;
     let codAvailable: boolean | null = null;
     let codPincode: string | null = null;
@@ -249,7 +292,7 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
       if (!settings.codEnabled) {
         return res.status(400).json({ message: 'COD is currently disabled' });
       }
-      const deliveryPincode = String(data.shippingAddress?.pincode || data.billingAddress?.pincode || '').trim();
+      const deliveryPincode = String(contact.shippingAddress.pincode || contact.billingAddress.pincode || '').trim();
       if (!/^\d{6}$/.test(deliveryPincode)) {
         return res.status(400).json({ message: 'A valid 6 digit delivery pincode is required for COD' });
       }
@@ -282,10 +325,8 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
       }
     }
 
-    const status = data.status || 'confirmed';
-    const statusHistory = Array.isArray(data.statusHistory) && data.statusHistory.length
-      ? data.statusHistory
-      : [{ status, date: new Date().toISOString(), note: 'Order placed successfully' }];
+    const status = 'confirmed';
+    const statusHistory = [{ status, date: new Date().toISOString(), note: 'COD order placed successfully' }];
 
     const result: any = await dbExecute(
       'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, coupon_code, coupon_discount, coupon_details, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, shipping_service, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -307,8 +348,8 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
         status,
         data.customerName || null,
         customerEmail,
-        JSON.stringify(data.shippingAddress || {}),
-        JSON.stringify(data.billingAddress || {}),
+        JSON.stringify(contact.shippingAddress),
+        JSON.stringify(contact.billingAddress),
         wantsCod ? 'COD' : paymentMethod,
         null,
         null,
@@ -325,11 +366,17 @@ router.post('/', optionalAuth, async (req: AuthRequest, res) => {
     // Persist latest checkout address as the user's default address (best-effort).
     const numericUserId = Number(req.user?.id);
     if (Number.isFinite(numericUserId)) {
-      const addrToSave = data.shippingAddress || data.billingAddress;
+      const addrToSave = contact.shippingAddress || contact.billingAddress;
       upsertUserDefaultAddress(numericUserId, addrToSave).catch(() => {});
     }
 
-    const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
+    const rows = await dbQuery<any>(
+      `SELECT * FROM orders
+       WHERE id = ?
+         AND ${merchantOrderWhereSql('orders')}
+       LIMIT 1`,
+      [orderId]
+    );
     const order = mapOrderRow(rows[0]);
 
     if (order.customerEmail) {
@@ -366,7 +413,13 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
     const { status, note, shippingService, trackingId } = req.body;
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
-    const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
+    const rows = await dbQuery<any>(
+      `SELECT * FROM orders
+       WHERE id = ?
+         AND ${merchantOrderWhereSql('orders')}
+       LIMIT 1`,
+      [req.params.id]
+    );
     const row = rows[0];
     if (!row) return res.status(404).json({ message: 'Order not found' });
 
@@ -441,7 +494,13 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
       }
     }
 
-    const updatedRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [req.params.id]);
+    const updatedRows = await dbQuery<any>(
+      `SELECT * FROM orders
+       WHERE id = ?
+         AND ${merchantOrderWhereSql('orders')}
+       LIMIT 1`,
+      [req.params.id]
+    );
     const order = mapOrderRow(updatedRows[0]);
 
     if (order.customerEmail) {

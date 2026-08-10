@@ -7,6 +7,7 @@ const express_1 = require("express");
 const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
+const orderVisibility_1 = require("../lib/orderVisibility");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const router = (0, express_1.Router)();
 const mapUserRow = (row) => ({
@@ -59,7 +60,7 @@ router.get('/', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
         COUNT(o.id) AS orders,
         COALESCE(SUM(o.total), 0) AS spent
       FROM users u
-      LEFT JOIN orders o ON o.user_id = u.id
+      LEFT JOIN orders o ON o.user_id = u.id AND ${(0, orderVisibility_1.merchantOrderWhereSql)('o')}
       GROUP BY u.id
 
       UNION ALL
@@ -87,6 +88,7 @@ router.get('/', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
       WHERE o.user_id IS NULL
         AND o.customer_email IS NOT NULL
         AND o.customer_email <> ''
+        AND ${(0, orderVisibility_1.merchantOrderWhereSql)('o')}
       GROUP BY LOWER(o.customer_email)
       ORDER BY updated_at DESC
     `);

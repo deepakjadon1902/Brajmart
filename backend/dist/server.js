@@ -52,6 +52,7 @@ const toPositiveInt = (value, fallback) => {
     const n = Number(value);
     return Number.isFinite(n) && n > 0 ? Math.min(Math.round(n), 4096) : fallback;
 };
+const allowedUploadExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif']);
 app.get('/uploads/:filename', async (req, res, next) => {
     const width = toPositiveInt(req.query.width, 0);
     const height = toPositiveInt(req.query.height, 0);
@@ -62,6 +63,9 @@ app.get('/uploads/:filename', async (req, res, next) => {
     if (!wantsResize)
         return next();
     const filename = path_1.default.basename(String(req.params.filename || ''));
+    const ext = path_1.default.extname(filename).toLowerCase();
+    if (!allowedUploadExtensions.has(ext))
+        return res.status(404).send('Not found');
     const filePath = path_1.default.join(UPLOADS_DIR, filename);
     if (!fs_1.default.existsSync(filePath))
         return res.status(404).send('Not found');
@@ -76,6 +80,7 @@ app.get('/uploads/:filename', async (req, res, next) => {
             });
         }
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
         res.type('image/webp');
         const stream = image.webp({ quality: Math.max(35, Math.min(quality, 85)) }).pipe(res);
         stream.on?.('error', (err) => {
@@ -144,10 +149,17 @@ app.get(['/product-category/:slug/:subSlug', '/product-category/:slug/:subSlug/'
     const subSlug = normalizeLegacySlug(req.params.subSlug);
     res.redirect(301, slug && subSlug ? `/category/${slug}/${subSlug}` : slug ? `/category/${slug}` : '/categories');
 });
-app.use('/uploads', express_1.default.static(UPLOADS_DIR, {
+app.use('/uploads', (req, res, next) => {
+    const ext = path_1.default.extname(String(req.path || '')).toLowerCase();
+    if (!allowedUploadExtensions.has(ext))
+        return res.status(404).send('Not found');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    next();
+}, express_1.default.static(UPLOADS_DIR, {
     maxAge: '7d',
     setHeaders: (res) => {
         res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
     },
 }));
 app.use('/api/auth', auth_1.default);

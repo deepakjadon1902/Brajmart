@@ -4,6 +4,7 @@ import { auth, adminOnly } from '../middleware/auth';
 import { sendOrderConfirmation, sendPaymentReceipt, sendPaymentFailed, sendAdminPaymentNotice } from '../lib/email';
 import { getEtaConfig, getEtaText } from '../lib/eta';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
+import { finalPaymentWhereSql } from '../lib/orderVisibility';
 import crypto from 'crypto';
 
 const router = Router();
@@ -46,6 +47,7 @@ const getAdminPaymentRows = async () => {
        p.created_at,
        p.updated_at
      FROM payments p
+     WHERE ${finalPaymentWhereSql('p')}
      UNION ALL
      SELECT
        CONCAT('status:', ps.token) AS id,
@@ -60,7 +62,8 @@ const getAdminPaymentRows = async () => {
        ps.updated_at
      FROM payment_status ps
      LEFT JOIN orders o ON o.id = ps.order_id
-     WHERE NOT EXISTS (
+     WHERE ps.status IN ('paid', 'failed', 'refunded')
+       AND NOT EXISTS (
        SELECT 1
        FROM payments p
        WHERE p.order_id = ps.order_id
@@ -526,77 +529,16 @@ router.get('/status/:token', async (req, res) => {
   }
 });
 
-router.post('/', auth, async (req, res) => {
-  try {
-    const { min, max } = await getEtaConfig();
-    const etaText = getEtaText(min, max);
-    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-
-    const data = req.body || {};
-    const result: any = await dbExecute(
-      'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [data.orderId, data.customerName, data.customerEmail, data.method, data.amount, data.status || 'pending', data.transactionId]
-    );
-
-    const rows = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [result.insertId]);
-    const payment = mapPaymentRow(rows[0]);
-
-    let orderDetails: any = null;
-    if (payment.orderId) {
-      const orderRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [payment.orderId]);
-      const orderRow = orderRows[0];
-      if (orderRow) {
-        orderDetails = {
-          items: parseJson(orderRow.items, []),
-          total: Number(orderRow.total),
-          itemsSubtotal: orderRow.items_subtotal == null ? undefined : Number(orderRow.items_subtotal),
-          shippingAmount: orderRow.shipping_amount == null ? undefined : Number(orderRow.shipping_amount),
-          packagingAmount: orderRow.packaging_amount == null ? undefined : Number(orderRow.packaging_amount),
-          packagingRate: orderRow.packaging_rate == null ? undefined : Number(orderRow.packaging_rate),
-          codAmount: orderRow.cod_amount == null ? undefined : Number(orderRow.cod_amount),
-          codAvailable: orderRow.cod_available == null ? undefined : Boolean(Number(orderRow.cod_available)),
-          codPincode: orderRow.cod_pincode ?? undefined,
-          codMessage: orderRow.cod_message ?? undefined,
-          paymentMethod: orderRow.payment_method,
-          shippingAddress: parseJson(orderRow.shipping_address, {}),
-          billingAddress: parseJson(orderRow.billing_address, {}),
-        };
-      }
-    }
-
-    if (payment.customerEmail) {
-      if (payment.status === 'paid') {
-        sendPaymentReceipt(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText, details: orderDetails }).catch(() => {});
-      } else if (payment.status === 'failed') {
-        sendPaymentFailed(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText, details: orderDetails }).catch(() => {});
-      }
-    }
-
-    await dbExecute(
-      'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
-      [payment.transactionId, payment.status, payment.orderId, payment.amount, payment.method, payment.transactionId]
-    );
-
-    if (payment.status === 'paid' || payment.status === 'failed') {
-      sendAdminPaymentNotice({
-        status: payment.status,
-        orderId: String(payment.orderId),
-        amount: payment.amount,
-        paymentId: payment.transactionId,
-        method: payment.method,
-        customerEmail: payment.customerEmail,
-      }).catch(() => {});
-    }
-
-    res.status(201).json(payment);
-  } catch (err: any) {
-    res.status(500).json({ message: err.message });
-  }
+router.post('/', auth, async (_req, res) => {
+  return res.status(403).json({ message: 'Payments are recorded only by verified gateway callbacks.' });
 });
 
 router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    if (String(req.body?.status || '').toLowerCase() === 'paid') {
+      return res.status(400).json({ message: 'Paid status can only be set by verified gateway confirmation.' });
+    }
 
     const { min, max } = await getEtaConfig();
     const etaText = getEtaText(min, max);

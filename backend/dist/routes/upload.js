@@ -36,20 +36,16 @@ const imagekitRequired = String(process.env.UPLOAD_PROVIDER || '').toLowerCase()
 const imagekit = imagekitEnabled && imagekitConfigured ? new imagekit_1.default(imagekitConfig) : null;
 const maxFileSizeMb = Number(process.env.UPLOAD_MAX_MB || 25);
 const maxFileSizeBytes = Number.isFinite(maxFileSizeMb) && maxFileSizeMb > 0 ? Math.floor(maxFileSizeMb * 1024 * 1024) : 25 * 1024 * 1024;
+const allowedImageMimes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
+const imageFileFilter = (_req, file, cb) => {
+    if (allowedImageMimes.has(String(file.mimetype || '').toLowerCase()))
+        return cb(null, true);
+    cb(new Error('Only image uploads are allowed'));
+};
 const memoryUpload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: { fileSize: maxFileSizeBytes },
-});
-const diskUpload = (0, multer_1.default)({
-    storage: multer_1.default.diskStorage({
-        destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-        filename: (_req, file, cb) => {
-            const ext = path_1.default.extname(file.originalname || '').slice(0, 10) || '.jpg';
-            const name = `${Date.now()}-${crypto_1.default.randomBytes(6).toString('hex')}${ext}`;
-            cb(null, name);
-        },
-    }),
-    limits: { fileSize: maxFileSizeBytes },
+    fileFilter: imageFileFilter,
 });
 const getPublicOrigin = (req) => {
     const envBase = String(process.env.BACKEND_URL || process.env.PUBLIC_BASE_URL || '').trim().replace(/\/$/, '');
@@ -104,6 +100,12 @@ const uploadToImageKit = async (buffer, originalName) => {
     });
     return result.url;
 };
+const writeOptimizedLocalImage = async (req, file) => {
+    const optimized = await optimizeImageBuffer(file.buffer);
+    const filename = `${Date.now()}-${crypto_1.default.randomBytes(6).toString('hex')}.webp`;
+    await fs_1.default.promises.writeFile(path_1.default.join(UPLOADS_DIR, filename), optimized);
+    return publicUrlForLocalFile(req, filename);
+};
 router.get('/status', auth_1.auth, auth_1.adminOnly, (_req, res) => {
     const provider = imagekitEnabled ? 'imagekit' : 'local';
     res.json({
@@ -119,13 +121,13 @@ router.get('/status', auth_1.auth, auth_1.adminOnly, (_req, res) => {
         },
     });
 });
-router.post('/', (imagekitEnabled ? memoryUpload.single('image') : diskUpload.single('image')), async (req, res) => {
+router.post('/', auth_1.auth, auth_1.adminOnly, memoryUpload.single('image'), async (req, res) => {
     const file = req.file;
     if (!file)
         return res.status(400).json({ message: 'No file uploaded' });
     try {
         if (!imagekitEnabled)
-            return res.json({ url: publicUrlForLocalFile(req, file.filename) });
+            return res.json({ url: await writeOptimizedLocalImage(req, file) });
         const url = await withTimeout(uploadToImageKit(file.buffer, file.originalname), 15000);
         return res.json({ url });
     }
@@ -136,26 +138,20 @@ router.post('/', (imagekitEnabled ? memoryUpload.single('image') : diskUpload.si
         }
         // ImageKit failed/slow: fallback to local so admin isn't blocked.
         try {
-            const fallback = await new Promise((resolve, reject) => {
-                const ext = path_1.default.extname(file.originalname || '').slice(0, 10) || '.jpg';
-                const filename = `${Date.now()}-${crypto_1.default.randomBytes(6).toString('hex')}${ext}`;
-                const outPath = path_1.default.join(UPLOADS_DIR, filename);
-                fs_1.default.writeFile(outPath, file.buffer, (e) => (e ? reject(e) : resolve(filename)));
-            });
-            return res.json({ url: publicUrlForLocalFile(req, fallback) });
+            return res.json({ url: await writeOptimizedLocalImage(req, file) });
         }
         catch {
             return res.status(500).json({ message: err?.message || 'Upload failed' });
         }
     }
 });
-router.post('/multiple', (imagekitEnabled ? memoryUpload.array('images', 12) : diskUpload.array('images', 12)), async (req, res) => {
+router.post('/multiple', auth_1.auth, auth_1.adminOnly, memoryUpload.array('images', 12), async (req, res) => {
     const files = req.files || [];
     if (!files.length)
         return res.status(400).json({ message: 'No files uploaded' });
     try {
         if (!imagekitEnabled) {
-            return res.json({ urls: files.map((f) => publicUrlForLocalFile(req, f.filename)) });
+            return res.json({ urls: await Promise.all(files.map((f) => writeOptimizedLocalImage(req, f))) });
         }
         const urls = await withTimeout(Promise.all(files.map((f) => uploadToImageKit(f.buffer, f.originalname))), 25000);
         return res.json({ urls });
@@ -167,14 +163,7 @@ router.post('/multiple', (imagekitEnabled ? memoryUpload.array('images', 12) : d
         }
         // Fallback: store everything locally.
         try {
-            const urls = [];
-            for (const f of files) {
-                const ext = path_1.default.extname(f.originalname || '').slice(0, 10) || '.jpg';
-                const filename = `${Date.now()}-${crypto_1.default.randomBytes(6).toString('hex')}${ext}`;
-                const outPath = path_1.default.join(UPLOADS_DIR, filename);
-                fs_1.default.writeFileSync(outPath, f.buffer);
-                urls.push(publicUrlForLocalFile(req, filename));
-            }
+            const urls = await Promise.all(files.map((f) => writeOptimizedLocalImage(req, f)));
             return res.json({ urls });
         }
         catch {
@@ -185,6 +174,8 @@ router.post('/multiple', (imagekitEnabled ? memoryUpload.array('images', 12) : d
 router.use((err, _req, res, _next) => {
     if (err && err.code === 'LIMIT_FILE_SIZE')
         return res.status(413).json({ message: `Image too large. Max ${Math.round(maxFileSizeBytes / 1024 / 1024)}MB` });
+    if (err?.message === 'Only image uploads are allowed')
+        return res.status(400).json({ message: err.message });
     return res.status(500).json({ message: err?.message || 'Upload failed' });
 });
 exports.default = router;

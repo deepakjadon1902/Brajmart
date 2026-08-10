@@ -1,11 +1,36 @@
 import { useEffect, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { DollarSign, ShoppingBag, Users, Package, TrendingUp, ArrowUpRight } from 'lucide-react';
-import { fetchOrders } from '@/lib/api';
+import { fetchOrders, fetchPayments, fetchUsers } from '@/lib/api';
 import { toast } from 'sonner';
 
+type AdminOrder = {
+  id: string;
+  orderId?: number | string;
+  _id?: string;
+  total: number;
+  status: string;
+  paymentMethod?: string;
+  createdAt?: string;
+  shippingAddress: { fullName?: string };
+};
+
+type AdminPayment = {
+  amount?: number;
+  status?: string;
+};
+
+type AdminUser = {
+  status?: string;
+};
+
+const errorMessage = (err: unknown, fallback: string) => err instanceof Error ? err.message : fallback;
+const isCodOrder = (order: Pick<AdminOrder, 'paymentMethod'>) => /^cod$|cash\s*on\s*delivery/i.test(String(order.paymentMethod || ''));
+
 const AdminDashboard = () => {
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [payments, setPayments] = useState<AdminPayment[]>([]);
   const products = useProductStore((s) => s.products);
   const loadProducts = useProductStore((s) => s.loadFromApi);
 
@@ -16,30 +41,46 @@ const AdminDashboard = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await fetchOrders();
-        const mapped = (Array.isArray(data) ? data : []).map((o: any) => ({
+        const data: unknown = await fetchOrders();
+        const mapped = (Array.isArray(data) ? data : []).map((raw) => {
+          const o = raw as Partial<AdminOrder>;
+          return {
           ...o,
-          id: o.orderId ? String(o.orderId) : o._id,
+          id: String(o.orderId || o._id || ''),
+          total: Number(o.total || 0),
+          status: String(o.status || ''),
           shippingAddress: o.shippingAddress || {},
-        }));
+          };
+        });
         setOrders(mapped);
-      } catch (err: any) {
-        toast.error(err?.message || 'Failed to load orders');
+        const paymentsData: unknown = await fetchPayments();
+        setPayments(Array.isArray(paymentsData) ? paymentsData : []);
+        const usersData: unknown = await fetchUsers();
+        setUsers(Array.isArray(usersData) ? usersData : []);
+      } catch (err: unknown) {
+        toast.error(errorMessage(err, 'Failed to load dashboard'));
       }
     };
     load();
   }, []);
 
-  const totalRevenue = orders.reduce((s, o) => s + o.total, 0);
+  const paidOnlineRevenue = payments
+    .filter((p) => p.status === 'paid')
+    .reduce((s, p) => s + Number(p.amount || 0), 0);
+  const codRevenue = orders
+    .filter(isCodOrder)
+    .reduce((s, o) => s + Number(o.total || 0), 0);
+  const totalRevenue = paidOnlineRevenue + codRevenue;
   const totalOrders = orders.length;
   const deliveredOrders = orders.filter((o) => o.status === 'delivered').length;
   const pendingOrders = orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled').length;
+  const activeUsers = users.filter((u) => String(u.status || '').toLowerCase() === 'active').length;
 
   const stats = [
     { label: 'Total Revenue', value: `INR ${totalRevenue.toLocaleString('en-IN')}`, icon: DollarSign, color: 'from-emerald-500 to-teal-600', change: '+12.5%' },
     { label: 'Total Orders', value: totalOrders, icon: ShoppingBag, color: 'from-blue-500 to-indigo-600', change: '+8.2%' },
     { label: 'Total Products', value: products.length, icon: Package, color: 'from-amber-500 to-orange-600', change: '+3' },
-    { label: 'Active Users', value: '1,284', icon: Users, color: 'from-purple-500 to-pink-600', change: '+15.3%' },
+    { label: 'Active Users', value: activeUsers.toLocaleString('en-IN'), icon: Users, color: 'from-purple-500 to-pink-600', change: '+15.3%' },
   ];
 
   return (

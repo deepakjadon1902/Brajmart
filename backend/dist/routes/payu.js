@@ -13,6 +13,8 @@ const dbHelpers_1 = require("../lib/dbHelpers");
 const orderPricing_1 = require("../lib/orderPricing");
 const userAddress_1 = require("../lib/userAddress");
 const cod_1 = require("../lib/cod");
+const checkoutValidation_1 = require("../lib/checkoutValidation");
+const rateLimit_1 = require("../middleware/rateLimit");
 const payuDrafts = new Map();
 const createDraft = (draft) => {
     payuDrafts.set(draft.txnid, draft);
@@ -24,6 +26,12 @@ const removeDraft = (txnid) => {
     return draft || null;
 };
 const router = (0, express_1.Router)();
+const payuCreateLimiter = (0, rateLimit_1.rateLimit)('payu-create-order', {
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    key: rateLimit_1.rateLimitKeyByIpAndOrderEmail,
+    message: 'Too many payment attempts. Please wait before trying again.',
+});
 const getBackendUrl = () => process.env.BACKEND_URL || process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
 const getFrontendUrl = () => process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:8080';
 const getPayuConfig = () => {
@@ -117,7 +125,7 @@ const insertOrder = async (orderData, estimatedDelivery) => {
     const rows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderId]);
     return rows[0];
 };
-router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
+router.post('/create-order', payuCreateLimiter, auth_1.optionalAuth, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
@@ -128,9 +136,9 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
         if (!order || !customer?.email || !customer?.name)
             return res.status(400).json({ message: 'Missing order details' });
         const customerEmail = String(customer.email || '').trim().toLowerCase();
-        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
-        if (!emailValid)
-            return res.status(400).json({ message: 'Enter a valid customer email' });
+        const contact = (0, checkoutValidation_1.validateCheckoutOrderContact)(order, customerEmail);
+        if (!contact.ok)
+            return res.status(400).json({ message: contact.message });
         const priced = await (0, orderPricing_1.priceAndValidateOrderItems)(order.items || []);
         if (!priced.ok)
             return res.status(400).json({ message: priced.message });
@@ -190,12 +198,14 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
             total: totals.total,
             status: 'processing',
             statusHistory: [{ status: 'processing', date: new Date().toISOString(), note: 'Payment initiated via PayU' }],
+            shippingAddress: contact.shippingAddress,
+            billingAddress: contact.billingAddress,
         }, estimatedDelivery);
         const orderId = orderRow.id;
         const methodLabel = method === 'card' ? 'PayU Card' : 'PayU UPI';
         // Persist latest checkout address as the user's default address (best-effort).
         if (numericUserId) {
-            const addrToSave = order?.shippingAddress || order?.billingAddress;
+            const addrToSave = contact.shippingAddress || contact.billingAddress;
             (0, userAddress_1.upsertUserDefaultAddress)(numericUserId, addrToSave).catch(() => { });
         }
         await (0, db_1.dbExecute)('INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [orderId, customer.name, customerEmail, methodLabel, Number(totals.total), 'pending', txnid]);
@@ -206,7 +216,7 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
             amount: Number(totals.total),
             method: method === 'card' ? 'card' : 'upi',
             customer: { name: customer.name, email: customerEmail, phone: customer.phone },
-            order: { ...order, items: priced.items, itemsSubtotal: totals.itemsSubtotal, packagingAmount: totals.packaging, packagingRate: settings.packagingRate, shippingAmount: totals.shipping, codAmount: cod.amount, codAvailable: cod.available, codPincode: cod.pincode, codMessage: cod.message, couponCode: couponDetails?.code || null, couponDiscount: couponDetails?.discountAmount || 0, couponDetails, total: totals.total, customerEmail },
+            order: { ...order, items: priced.items, itemsSubtotal: totals.itemsSubtotal, packagingAmount: totals.packaging, packagingRate: settings.packagingRate, shippingAmount: totals.shipping, codAmount: cod.amount, codAvailable: cod.available, codPincode: cod.pincode, codMessage: cod.message, couponCode: couponDetails?.code || null, couponDiscount: couponDetails?.discountAmount || 0, couponDetails, total: totals.total, customerEmail, shippingAddress: contact.shippingAddress, billingAddress: contact.billingAddress },
             orderId,
         });
         const surl = `${getBackendUrl()}/api/payu/success`;
@@ -480,7 +490,7 @@ const handlePayuCallback = async (req, res, statusOverride) => {
     return res.redirect(`${frontendUrl}/payment-status/${txnid}`);
 };
 router.post('/success', async (req, res) => {
-    handlePayuCallback(req, res, 'success').catch((err) => {
+    handlePayuCallback(req, res).catch((err) => {
         console.error(err);
         res.redirect(`${getFrontendUrl()}/payment-status/${req.body?.txnid || 'unknown'}`);
     });
@@ -490,7 +500,7 @@ router.get('/success', (req, res) => {
     res.redirect(`${getFrontendUrl()}/payment-status/${encodeURIComponent(txnid)}`);
 });
 router.post('/failure', async (req, res) => {
-    handlePayuCallback(req, res, 'failure').catch((err) => {
+    handlePayuCallback(req, res).catch((err) => {
         console.error(err);
         res.redirect(`${getFrontendUrl()}/payment-status/${req.body?.txnid || 'unknown'}`);
     });
@@ -522,7 +532,7 @@ router.post('/webhook', async (req, res) => {
     }
     try {
         // Reuse existing callback handler logic, but don't rely on browser redirect.
-        await handlePayuCallback({ body: payload }, { redirect: () => undefined }, status === 'success' ? 'success' : status === 'failure' ? 'failure' : undefined);
+        await handlePayuCallback({ body: payload }, { redirect: () => undefined });
         return res.status(200).json({ ok: true });
     }
     catch (err) {

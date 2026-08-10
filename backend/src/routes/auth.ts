@@ -2,16 +2,17 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
-import { auth, AuthRequest } from '../middleware/auth';
+import { auth, AuthRequest, getJwtSecret } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import bcrypt from 'bcryptjs';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 import { sendVerifyEmail, sendVerifyOtp, sendPasswordResetOtp } from '../lib/email';
+import { rateLimit, rateLimitKeyByIpAndEmail } from '../middleware/rateLimit';
 
 const router = Router();
 
 const signToken = (user: { id: string; email: string; role?: string }) =>
-  jwt.sign(user, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+  jwt.sign(user, getJwtSecret(), { expiresIn: '7d' });
 
 const getOauthClient = () => {
   const clientId = process.env.GOOGLE_CLIENT_ID || '';
@@ -42,7 +43,7 @@ const signInWithGooglePayload = async (payload: any) => {
   const rows = await dbQuery<any>('SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1', [email]);
   let row = rows[0];
   if (!row) {
-    const passwordHash = await bcrypt.hash(googleId + (process.env.JWT_SECRET || 'secret'), 12);
+    const passwordHash = await bcrypt.hash(googleId + getJwtSecret(), 12);
     const result: any = await dbExecute(
       'INSERT INTO users (name, email, password, phone, role, status, google_id, avatar, is_verified, verification_token, verification_token_expires, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [name, email, passwordHash, '', 'user', 'active', googleId, avatar, 1, null, null, JSON.stringify([])]
@@ -77,7 +78,7 @@ const createOtp = () => {
 const RESET_OTP_MINUTES = 10;
 const hashOtp = (otp: string) => crypto
   .createHash('sha256')
-  .update(`${otp}:${process.env.JWT_SECRET || 'secret'}`)
+  .update(`${otp}:${getJwtSecret()}`)
   .digest('hex');
 
 const ensurePasswordResetTable = async () => {
@@ -97,7 +98,7 @@ const ensurePasswordResetTable = async () => {
 };
 
 const signResetToken = (user: { id: string; email: string; role?: string }) =>
-  jwt.sign({ ...user, pwdReset: true }, process.env.JWT_SECRET || 'secret', { expiresIn: '15m' });
+  jwt.sign({ ...user, pwdReset: true }, getJwtSecret(), { expiresIn: '15m' });
 
 const mapUserRow = (row: any) => ({
   _id: String(row.id),
@@ -116,7 +117,12 @@ const mapUserRow = (row: any) => ({
   updatedAt: toIsoString(row.updated_at),
 });
 
-router.post('/register', async (req, res) => {
+const registerLimiter = rateLimit('auth-register', { windowMs: 60 * 60 * 1000, max: 8, key: rateLimitKeyByIpAndEmail(), message: 'Too many registration attempts. Please try again later.' });
+const loginLimiter = rateLimit('auth-login', { windowMs: 15 * 60 * 1000, max: 12, key: rateLimitKeyByIpAndEmail(), message: 'Too many login attempts. Please try again later.' });
+const otpLimiter = rateLimit('auth-otp', { windowMs: 15 * 60 * 1000, max: 10, key: rateLimitKeyByIpAndEmail(), message: 'Too many verification attempts. Please try again later.' });
+const adminLoginLimiter = rateLimit('admin-login', { windowMs: 15 * 60 * 1000, max: 8, message: 'Too many admin login attempts. Please try again later.' });
+
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password) return res.status(400).json({ message: 'Missing fields' });
@@ -153,7 +159,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
@@ -196,7 +202,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-router.post('/forgot-password/request', async (req, res) => {
+router.post('/forgot-password/request', otpLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ message: 'Email is required' });
@@ -240,7 +246,7 @@ router.post('/forgot-password/request', async (req, res) => {
   }
 });
 
-router.post('/forgot-password/verify', async (req, res) => {
+router.post('/forgot-password/verify', otpLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const otp = String(req.body?.otp || '').trim();
@@ -277,7 +283,7 @@ router.post('/forgot-password/verify', async (req, res) => {
 });
 
 // Admin login with env credentials
-router.post('/admin-login', async (req, res) => {
+router.post('/admin-login', adminLoginLimiter, async (req, res) => {
   const rawIdentifier = String(req.body?.email ?? req.body?.username ?? req.body?.identifier ?? '').trim();
   const identifier = rawIdentifier.toLowerCase();
   const password = String(req.body?.password ?? '');
@@ -428,7 +434,7 @@ router.get('/verify', async (req, res) => {
   }
 });
 
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', otpLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const otp = String(req.body?.otp || '').trim();
@@ -457,7 +463,7 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
-router.post('/resend-otp', async (req, res) => {
+router.post('/resend-otp', otpLimiter, async (req, res) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ message: 'Email is required' });

@@ -1,11 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { TrendingUp, BarChart3, PieChart, Activity } from 'lucide-react';
-import { fetchOrders } from '@/lib/api';
+import { fetchOrders, fetchPayments } from '@/lib/api';
 import { toast } from 'sonner';
 
+type AdminOrder = {
+  paymentMethod?: string;
+  total?: number;
+  createdAt?: string;
+  status?: string;
+};
+
+type AdminPayment = {
+  amount?: number;
+  status?: string;
+  createdAt?: string;
+};
+
+const errorMessage = (err: unknown, fallback: string) => err instanceof Error ? err.message : fallback;
+const isCodOrder = (order: AdminOrder) => /^cod$|cash\s*on\s*delivery/i.test(String(order.paymentMethod || ''));
+
 const AdminAnalytics = () => {
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [payments, setPayments] = useState<AdminPayment[]>([]);
   const products = useProductStore((s) => s.products);
   const loadProducts = useProductStore((s) => s.loadFromApi);
 
@@ -16,15 +33,31 @@ const AdminAnalytics = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await fetchOrders();
+        const data: unknown = await fetchOrders();
         setOrders(Array.isArray(data) ? data : []);
-      } catch (err: any) {
-        toast.error(err?.message || 'Failed to load orders');
+        const paymentsData: unknown = await fetchPayments();
+        setPayments(Array.isArray(paymentsData) ? paymentsData : []);
+      } catch (err: unknown) {
+        toast.error(errorMessage(err, 'Failed to load analytics'));
       }
     };
     load();
   }, []);
-  const totalRevenue = orders.reduce((s, o) => s + o.total, 0);
+  const paidOnlineRevenue = payments
+    .filter((p) => p.status === 'paid')
+    .reduce((s, p) => s + Number(p.amount || 0), 0);
+  const codRevenue = orders
+    .filter(isCodOrder)
+    .reduce((s, o) => s + Number(o.total || 0), 0);
+  const totalRevenue = paidOnlineRevenue + codRevenue;
+  const collectedEntries = [
+    ...payments
+      .filter((p) => p.status === 'paid')
+      .map((p) => ({ date: p.createdAt, amount: Number(p.amount || 0) })),
+    ...orders
+      .filter(isCodOrder)
+      .map((o) => ({ date: o.createdAt, amount: Number(o.total || 0) })),
+  ].filter((entry) => entry.amount > 0 && !Number.isNaN(new Date(entry.date).getTime()));
 
   const catBreakdown = products.reduce<Record<string, number>>((acc, p) => {
     acc[p.category] = (acc[p.category] || 0) + 1;
@@ -41,11 +74,24 @@ const AdminAnalytics = () => {
     return acc;
   }, {});
 
-  const monthlyData = [
-    { month: 'Jan', revenue: 24500, orders: 18 },
-    { month: 'Feb', revenue: 32100, orders: 24 },
-    { month: 'Mar', revenue: 28700, orders: 21 },
-  ];
+  const monthlyData = Object.values(
+    collectedEntries.reduce<Record<string, { month: string; sortKey: string; revenue: number; orders: number }>>((acc, entry) => {
+      const date = new Date(entry.date);
+      const sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!acc[sortKey]) {
+        acc[sortKey] = {
+          month: date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
+          sortKey,
+          revenue: 0,
+          orders: 0,
+        };
+      }
+      acc[sortKey].revenue += entry.amount;
+      acc[sortKey].orders += 1;
+      return acc;
+    }, {})
+  ).sort((a, b) => a.sortKey.localeCompare(b.sortKey)).slice(-3);
+  const maxMonthlyRevenue = Math.max(...monthlyData.map((m) => m.revenue), 1);
 
   return (
     <div className="space-y-6">
@@ -58,18 +104,23 @@ const AdminAnalytics = () => {
           <h2 className="text-lg font-semibold text-white">Revenue Overview</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          {monthlyData.map((m) => (
+          {monthlyData.length ? monthlyData.map((m) => (
             <div key={m.month} className="bg-slate-800/50 rounded-xl p-4">
-              <p className="text-slate-400 text-sm">{m.month} 2026</p>
+              <p className="text-slate-400 text-sm">{m.month}</p>
               <p className="text-xl font-bold text-white mt-1">INR {m.revenue.toLocaleString('en-IN')}</p>
               <p className="text-xs text-slate-500">{m.orders} orders</p>
             </div>
-          ))}
+          )) : (
+            <div className="bg-slate-800/50 rounded-xl p-4 sm:col-span-3">
+              <p className="text-slate-400 text-sm">No collected revenue yet</p>
+              <p className="text-xl font-bold text-white mt-1">INR 0</p>
+            </div>
+          )}
         </div>
         <div className="flex items-end gap-2 h-40">
           {monthlyData.map((m) => (
             <div key={m.month} className="flex-1 flex flex-col items-center gap-2">
-              <div className="w-full bg-gradient-to-t from-amber-500/30 to-amber-500/80 rounded-t-lg" style={{ height: `${(m.revenue / 35000) * 100}%` }} />
+              <div className="w-full bg-gradient-to-t from-amber-500/30 to-amber-500/80 rounded-t-lg" style={{ height: `${Math.max((m.revenue / maxMonthlyRevenue) * 100, 6)}%` }} />
               <span className="text-xs text-slate-400">{m.month}</span>
             </div>
           ))}

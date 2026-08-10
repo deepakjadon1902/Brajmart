@@ -13,7 +13,21 @@ const dbHelpers_1 = require("../lib/dbHelpers");
 const orderPricing_1 = require("../lib/orderPricing");
 const userAddress_1 = require("../lib/userAddress");
 const cod_1 = require("../lib/cod");
+const checkoutValidation_1 = require("../lib/checkoutValidation");
+const rateLimit_1 = require("../middleware/rateLimit");
 const router = (0, express_1.Router)();
+const razorpayCreateLimiter = (0, rateLimit_1.rateLimit)('razorpay-create-order', {
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    key: rateLimit_1.rateLimitKeyByIpAndOrderEmail,
+    message: 'Too many payment attempts. Please wait before trying again.',
+});
+const razorpayReportLimiter = (0, rateLimit_1.rateLimit)('razorpay-status-report', {
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    key: rateLimit_1.rateLimitKeyByIpAndOrderEmail,
+    message: 'Too many payment status attempts. Please wait before trying again.',
+});
 const getRazorpayConfig = () => {
     const keyId = process.env.RAZORPAY_PLATFORM_KEY_ID || process.env.RAZORPAY_KEY_ID || '';
     const keySecret = process.env.RAZORPAY_PLATFORM_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || '';
@@ -81,6 +95,40 @@ const createRazorpayOrder = async (params) => {
         throw new Error(message);
     }
     return data;
+};
+const fetchRazorpayPayment = async (paymentId) => {
+    const { keyId, keySecret } = getRazorpayConfig();
+    if (!keyId || !keySecret)
+        throw new Error('Razorpay credentials are not configured');
+    const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+    const response = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}`, {
+        headers: { Authorization: `Basic ${auth}` },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const message = data?.error?.description || data?.message || 'Unable to confirm Razorpay payment';
+        throw new Error(message);
+    }
+    return data;
+};
+const assertRazorpayPaymentCaptured = async (razorpayOrderId, razorpayPaymentId) => {
+    const statusRows = await (0, db_1.dbQuery)('SELECT amount FROM payment_status WHERE token = ? LIMIT 1', [razorpayOrderId]);
+    const statusRow = statusRows[0];
+    if (!statusRow)
+        throw new Error('Payment not found');
+    const payment = await fetchRazorpayPayment(razorpayPaymentId);
+    const paymentStatus = String(payment?.status || '').toLowerCase();
+    if (paymentStatus !== 'captured') {
+        throw new Error('Razorpay payment is not captured yet');
+    }
+    if (String(payment?.order_id || '') !== razorpayOrderId) {
+        throw new Error('Razorpay payment does not belong to this order');
+    }
+    const expectedAmount = Math.round(Number(statusRow.amount || 0) * 100);
+    if (expectedAmount <= 0 || Number(payment?.amount) !== expectedAmount) {
+        throw new Error('Razorpay payment amount does not match this order');
+    }
+    return payment;
 };
 const getOrderDetails = async (orderRow) => ({
     items: (0, dbHelpers_1.parseJson)(orderRow.items, []),
@@ -213,7 +261,7 @@ const resolveRazorpayStatusToken = async (payment, order) => {
     }
     return '';
 };
-router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
+router.post('/create-order', razorpayCreateLimiter, auth_1.optionalAuth, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
@@ -224,9 +272,9 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
         if (!order || !customer?.email || !customer?.name)
             return res.status(400).json({ message: 'Missing order details' });
         const customerEmail = String(customer.email || '').trim().toLowerCase();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
-            return res.status(400).json({ message: 'Enter a valid customer email' });
-        }
+        const contact = (0, checkoutValidation_1.validateCheckoutOrderContact)(order, customerEmail);
+        if (!contact.ok)
+            return res.status(400).json({ message: contact.message });
         const priced = await (0, orderPricing_1.priceAndValidateOrderItems)(order.items || []);
         if (!priced.ok)
             return res.status(400).json({ message: priced.message });
@@ -285,9 +333,11 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
             status: 'processing',
             statusHistory: [{ status: 'processing', date: new Date().toISOString(), note: 'Payment initiated via Razorpay' }],
             customerEmail,
+            shippingAddress: contact.shippingAddress,
+            billingAddress: contact.billingAddress,
         }, estimatedDelivery);
         if (numericUserId) {
-            const addrToSave = order?.shippingAddress || order?.billingAddress;
+            const addrToSave = contact.shippingAddress || contact.billingAddress;
             (0, userAddress_1.upsertUserDefaultAddress)(numericUserId, addrToSave).catch(() => { });
         }
         const amountPaise = Math.round(Number(totals.total) * 100);
@@ -323,7 +373,7 @@ router.post('/create-order', auth_1.optionalAuth, async (req, res) => {
         return res.status(500).json({ message: err?.message || 'Failed to create Razorpay order' });
     }
 });
-router.post('/verify', async (req, res) => {
+router.post('/verify', razorpayReportLimiter, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
@@ -338,6 +388,7 @@ router.post('/verify', async (req, res) => {
         if (!timingSafeEqual(expected, String(razorpay_signature))) {
             return res.status(400).json({ message: 'Invalid Razorpay signature' });
         }
+        await assertRazorpayPaymentCaptured(String(razorpay_order_id), String(razorpay_payment_id));
         const result = await updateOrderForPayment({
             razorpayOrderId: String(razorpay_order_id),
             razorpayPaymentId: String(razorpay_payment_id),
@@ -352,7 +403,7 @@ router.post('/verify', async (req, res) => {
         return res.status(500).json({ message: err?.message || 'Failed to verify Razorpay payment' });
     }
 });
-router.post('/failed', async (req, res) => {
+router.post('/failed', razorpayReportLimiter, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });

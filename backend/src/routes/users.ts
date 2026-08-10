@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
+import { merchantOrderWhereSql } from '../lib/orderVisibility';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
@@ -57,7 +58,7 @@ router.get('/', auth, adminOnly, async (_req, res) => {
         COUNT(o.id) AS orders,
         COALESCE(SUM(o.total), 0) AS spent
       FROM users u
-      LEFT JOIN orders o ON o.user_id = u.id
+      LEFT JOIN orders o ON o.user_id = u.id AND ${merchantOrderWhereSql('o')}
       GROUP BY u.id
 
       UNION ALL
@@ -85,6 +86,7 @@ router.get('/', auth, adminOnly, async (_req, res) => {
       WHERE o.user_id IS NULL
         AND o.customer_email IS NOT NULL
         AND o.customer_email <> ''
+        AND ${merchantOrderWhereSql('o')}
       GROUP BY LOWER(o.customer_email)
       ORDER BY updated_at DESC
     `);

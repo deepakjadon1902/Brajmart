@@ -5,12 +5,19 @@ export interface AuthRequest extends Request {
   user?: { id: string; email: string; role?: string; pwdReset?: boolean };
 }
 
+export const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET || '';
+  const isProduction = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+  if (!secret && isProduction) throw new Error('JWT_SECRET is not configured');
+  return secret || 'dev-secret-change-me';
+};
+
 export const auth = (req: AuthRequest, res: Response, next: NextFunction) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ message: 'No token, access denied' });
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any;
+    const decoded = jwt.verify(token, getJwtSecret()) as any;
     req.user = decoded as AuthRequest['user'];
     next();
   } catch {
@@ -23,7 +30,7 @@ export const optionalAuth = (req: AuthRequest, _res: Response, next: NextFunctio
   if (!token) return next();
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as any;
+    const decoded = jwt.verify(token, getJwtSecret()) as any;
     req.user = decoded as AuthRequest['user'];
   } catch {
     req.user = undefined;

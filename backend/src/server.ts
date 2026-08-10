@@ -52,6 +52,7 @@ const toPositiveInt = (value: unknown, fallback: number) => {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.min(Math.round(n), 4096) : fallback;
 };
+const allowedUploadExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif']);
 
 app.get('/uploads/:filename', async (req, res, next) => {
   const width = toPositiveInt(req.query.width, 0);
@@ -64,6 +65,8 @@ app.get('/uploads/:filename', async (req, res, next) => {
   if (!wantsResize) return next();
 
   const filename = path.basename(String(req.params.filename || ''));
+  const ext = path.extname(filename).toLowerCase();
+  if (!allowedUploadExtensions.has(ext)) return res.status(404).send('Not found');
   const filePath = path.join(UPLOADS_DIR, filename);
   if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
 
@@ -79,6 +82,7 @@ app.get('/uploads/:filename', async (req, res, next) => {
     }
 
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.type('image/webp');
     const stream = image.webp({ quality: Math.max(35, Math.min(quality, 85)) }).pipe(res);
     stream.on?.('error', (err: any) => {
@@ -153,10 +157,16 @@ app.get(['/product-category/:slug/:subSlug', '/product-category/:slug/:subSlug/'
   res.redirect(301, slug && subSlug ? `/category/${slug}/${subSlug}` : slug ? `/category/${slug}` : '/categories');
 });
 
-app.use('/uploads', express.static(UPLOADS_DIR, {
+app.use('/uploads', (req, res, next) => {
+  const ext = path.extname(String(req.path || '')).toLowerCase();
+  if (!allowedUploadExtensions.has(ext)) return res.status(404).send('Not found');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  next();
+}, express.static(UPLOADS_DIR, {
   maxAge: '7d',
   setHeaders: (res) => {
     res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
   },
 }));
 

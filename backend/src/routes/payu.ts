@@ -8,6 +8,8 @@ import { parseJson } from '../lib/dbHelpers';
 import { applyCouponToTotals, computeTotals, getCheckoutSettings, hasPrasadamItems, markCouponUsed, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { upsertUserDefaultAddress } from '../lib/userAddress';
 import { resolveCodHandleFee } from '../lib/cod';
+import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
+import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
 
 type PayuDraft = {
   txnid: string;
@@ -31,6 +33,12 @@ const removeDraft = (txnid: string) => {
 };
 
 const router = Router();
+const payuCreateLimiter = rateLimit('payu-create-order', {
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  key: rateLimitKeyByIpAndOrderEmail,
+  message: 'Too many payment attempts. Please wait before trying again.',
+});
 
 const getBackendUrl = () => process.env.BACKEND_URL || process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
 const getFrontendUrl = () => process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:8080';
@@ -179,7 +187,7 @@ const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
   return rows[0];
 };
 
-router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
+router.post('/create-order', payuCreateLimiter, optionalAuth, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const { key, salt, actionUrl } = getPayuConfig();
@@ -188,8 +196,8 @@ router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
     const { amount, method, order, customer } = req.body || {};
     if (!order || !customer?.email || !customer?.name) return res.status(400).json({ message: 'Missing order details' });
     const customerEmail = String(customer.email || '').trim().toLowerCase();
-    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
-    if (!emailValid) return res.status(400).json({ message: 'Enter a valid customer email' });
+    const contact = validateCheckoutOrderContact(order, customerEmail);
+    if (!contact.ok) return res.status(400).json({ message: contact.message });
 
     const priced = await priceAndValidateOrderItems(order.items || []);
     if (!priced.ok) return res.status(400).json({ message: priced.message });
@@ -252,6 +260,8 @@ router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
       total: totals.total,
       status: 'processing',
       statusHistory: [{ status: 'processing', date: new Date().toISOString(), note: 'Payment initiated via PayU' }],
+      shippingAddress: contact.shippingAddress,
+      billingAddress: contact.billingAddress,
     }, estimatedDelivery);
 
     const orderId = orderRow.id;
@@ -259,7 +269,7 @@ router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
 
     // Persist latest checkout address as the user's default address (best-effort).
     if (numericUserId) {
-      const addrToSave = order?.shippingAddress || order?.billingAddress;
+      const addrToSave = contact.shippingAddress || contact.billingAddress;
       upsertUserDefaultAddress(numericUserId, addrToSave).catch(() => {});
     }
 
@@ -279,7 +289,7 @@ router.post('/create-order', optionalAuth, async (req: AuthRequest, res) => {
       amount: Number(totals.total),
       method: method === 'card' ? 'card' : 'upi',
       customer: { name: customer.name, email: customerEmail, phone: customer.phone },
-      order: { ...order, items: priced.items, itemsSubtotal: totals.itemsSubtotal, packagingAmount: totals.packaging, packagingRate: settings.packagingRate, shippingAmount: totals.shipping, codAmount: cod.amount, codAvailable: cod.available, codPincode: cod.pincode, codMessage: cod.message, couponCode: couponDetails?.code || null, couponDiscount: couponDetails?.discountAmount || 0, couponDetails, total: totals.total, customerEmail },
+      order: { ...order, items: priced.items, itemsSubtotal: totals.itemsSubtotal, packagingAmount: totals.packaging, packagingRate: settings.packagingRate, shippingAmount: totals.shipping, codAmount: cod.amount, codAvailable: cod.available, codPincode: cod.pincode, codMessage: cod.message, couponCode: couponDetails?.code || null, couponDiscount: couponDetails?.discountAmount || 0, couponDetails, total: totals.total, customerEmail, shippingAddress: contact.shippingAddress, billingAddress: contact.billingAddress },
       orderId,
     });
 
@@ -589,7 +599,7 @@ const handlePayuCallback = async (req: any, res: any, statusOverride?: 'success'
 };
 
 router.post('/success', async (req, res) => {
-  handlePayuCallback(req, res, 'success').catch((err) => {
+  handlePayuCallback(req, res).catch((err) => {
     console.error(err);
     res.redirect(`${getFrontendUrl()}/payment-status/${req.body?.txnid || 'unknown'}`);
   });
@@ -601,7 +611,7 @@ router.get('/success', (req, res) => {
 });
 
 router.post('/failure', async (req, res) => {
-  handlePayuCallback(req, res, 'failure').catch((err) => {
+  handlePayuCallback(req, res).catch((err) => {
     console.error(err);
     res.redirect(`${getFrontendUrl()}/payment-status/${req.body?.txnid || 'unknown'}`);
   });
@@ -637,7 +647,7 @@ router.post('/webhook', async (req, res) => {
 
   try {
     // Reuse existing callback handler logic, but don't rely on browser redirect.
-    await handlePayuCallback({ body: payload }, { redirect: () => undefined }, status === 'success' ? 'success' : status === 'failure' ? 'failure' : undefined);
+    await handlePayuCallback({ body: payload }, { redirect: () => undefined });
     return res.status(200).json({ ok: true });
   } catch (err: any) {
     console.error(err);

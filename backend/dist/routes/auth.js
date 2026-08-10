@@ -12,8 +12,9 @@ const db_1 = require("../lib/db");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const dbHelpers_1 = require("../lib/dbHelpers");
 const email_1 = require("../lib/email");
+const rateLimit_1 = require("../middleware/rateLimit");
 const router = (0, express_1.Router)();
-const signToken = (user) => jsonwebtoken_1.default.sign(user, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+const signToken = (user) => jsonwebtoken_1.default.sign(user, (0, auth_1.getJwtSecret)(), { expiresIn: '7d' });
 const getOauthClient = () => {
     const clientId = process.env.GOOGLE_CLIENT_ID || '';
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
@@ -37,7 +38,7 @@ const signInWithGooglePayload = async (payload) => {
     const rows = await (0, db_1.dbQuery)('SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1', [email]);
     let row = rows[0];
     if (!row) {
-        const passwordHash = await bcryptjs_1.default.hash(googleId + (process.env.JWT_SECRET || 'secret'), 12);
+        const passwordHash = await bcryptjs_1.default.hash(googleId + (0, auth_1.getJwtSecret)(), 12);
         const result = await (0, db_1.dbExecute)('INSERT INTO users (name, email, password, phone, role, status, google_id, avatar, is_verified, verification_token, verification_token_expires, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [name, email, passwordHash, '', 'user', 'active', googleId, avatar, 1, null, null, JSON.stringify([])]);
         row = { id: result.insertId, name, email, role: 'user', status: 'active', google_id: googleId, avatar };
     }
@@ -63,7 +64,7 @@ const createOtp = () => {
 const RESET_OTP_MINUTES = 10;
 const hashOtp = (otp) => crypto_1.default
     .createHash('sha256')
-    .update(`${otp}:${process.env.JWT_SECRET || 'secret'}`)
+    .update(`${otp}:${(0, auth_1.getJwtSecret)()}`)
     .digest('hex');
 const ensurePasswordResetTable = async () => {
     await (0, db_1.dbExecute)(`
@@ -80,7 +81,7 @@ const ensurePasswordResetTable = async () => {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 };
-const signResetToken = (user) => jsonwebtoken_1.default.sign({ ...user, pwdReset: true }, process.env.JWT_SECRET || 'secret', { expiresIn: '15m' });
+const signResetToken = (user) => jsonwebtoken_1.default.sign({ ...user, pwdReset: true }, (0, auth_1.getJwtSecret)(), { expiresIn: '15m' });
 const mapUserRow = (row) => ({
     _id: String(row.id),
     name: row.name,
@@ -97,7 +98,11 @@ const mapUserRow = (row) => ({
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
 });
-router.post('/register', async (req, res) => {
+const registerLimiter = (0, rateLimit_1.rateLimit)('auth-register', { windowMs: 60 * 60 * 1000, max: 8, key: (0, rateLimit_1.rateLimitKeyByIpAndEmail)(), message: 'Too many registration attempts. Please try again later.' });
+const loginLimiter = (0, rateLimit_1.rateLimit)('auth-login', { windowMs: 15 * 60 * 1000, max: 12, key: (0, rateLimit_1.rateLimitKeyByIpAndEmail)(), message: 'Too many login attempts. Please try again later.' });
+const otpLimiter = (0, rateLimit_1.rateLimit)('auth-otp', { windowMs: 15 * 60 * 1000, max: 10, key: (0, rateLimit_1.rateLimitKeyByIpAndEmail)(), message: 'Too many verification attempts. Please try again later.' });
+const adminLoginLimiter = (0, rateLimit_1.rateLimit)('admin-login', { windowMs: 15 * 60 * 1000, max: 8, message: 'Too many admin login attempts. Please try again later.' });
+router.post('/register', registerLimiter, async (req, res) => {
     try {
         const { name, email, password } = req.body;
         if (!name || !email || !password)
@@ -130,7 +135,7 @@ router.post('/register', async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
         if (!(0, db_1.isDbConnected)())
@@ -169,7 +174,7 @@ router.post('/login', async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
-router.post('/forgot-password/request', async (req, res) => {
+router.post('/forgot-password/request', otpLimiter, async (req, res) => {
     try {
         const email = String(req.body?.email || '').trim().toLowerCase();
         if (!email)
@@ -205,7 +210,7 @@ router.post('/forgot-password/request', async (req, res) => {
         res.status(500).json({ message: err.message || 'Unable to send code' });
     }
 });
-router.post('/forgot-password/verify', async (req, res) => {
+router.post('/forgot-password/verify', otpLimiter, async (req, res) => {
     try {
         const email = String(req.body?.email || '').trim().toLowerCase();
         const otp = String(req.body?.otp || '').trim();
@@ -240,7 +245,7 @@ router.post('/forgot-password/verify', async (req, res) => {
     }
 });
 // Admin login with env credentials
-router.post('/admin-login', async (req, res) => {
+router.post('/admin-login', adminLoginLimiter, async (req, res) => {
     const rawIdentifier = String(req.body?.email ?? req.body?.username ?? req.body?.identifier ?? '').trim();
     const identifier = rawIdentifier.toLowerCase();
     const password = String(req.body?.password ?? '');
@@ -388,7 +393,7 @@ router.get('/verify', async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', otpLimiter, async (req, res) => {
     try {
         const email = String(req.body?.email || '').trim().toLowerCase();
         const otp = String(req.body?.otp || '').trim();
@@ -415,7 +420,7 @@ router.post('/verify-otp', async (req, res) => {
         res.status(500).json({ message: err.message || 'Verification failed' });
     }
 });
-router.post('/resend-otp', async (req, res) => {
+router.post('/resend-otp', otpLimiter, async (req, res) => {
     try {
         const email = String(req.body?.email || '').trim().toLowerCase();
         if (!email)

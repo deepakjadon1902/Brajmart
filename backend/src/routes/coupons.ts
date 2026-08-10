@@ -3,8 +3,14 @@ import { auth, adminOnly } from '../middleware/auth';
 import { dbExecute, dbQuery, isDbConnected } from '../lib/db';
 import { applyCouponToTotals, computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { toIsoString } from '../lib/dbHelpers';
+import { rateLimit } from '../middleware/rateLimit';
 
 const router = Router();
+const couponValidateLimiter = rateLimit('coupon-validate', {
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: 'Too many coupon checks. Please wait before trying again.',
+});
 
 const cleanCode = (value: unknown) => String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
 const asNonNegativeNumber = (value: unknown, label: string) => {
@@ -153,7 +159,7 @@ router.delete('/:id', auth, adminOnly, async (req, res) => {
   }
 });
 
-router.post('/validate', async (req, res) => {
+router.post('/validate', couponValidateLimiter, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const priced = await priceAndValidateOrderItems(req.body?.items || []);
