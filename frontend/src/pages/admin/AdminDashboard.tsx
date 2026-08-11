@@ -164,7 +164,7 @@ const AdminDashboard = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
           <h3 className="text-sm font-medium text-slate-400 mb-3">Payment Methods</h3>
           <div className="space-y-2">
-            {['PayU UPI', 'PayU Card'].map((m) => (
+            {['Razorpay', 'COD'].map((m) => (
               <div key={m} className="flex justify-between text-sm">
                 <span className="text-slate-300">{m}</span>
                 <span className="text-white font-medium">{orders.filter(o => o.paymentMethod === m).length} orders</span>

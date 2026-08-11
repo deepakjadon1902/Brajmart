@@ -266,7 +266,7 @@ router.post('/', codOrderLimiter, auth_1.optionalAuth, async (req, res) => {
         const wantsCod = /^cod$/i.test(paymentMethod) || /cash\s*on\s*delivery/i.test(paymentMethod);
         if (!wantsCod) {
             return res.status(400).json({
-                message: 'Online orders must be created through Razorpay or PayU verification routes.',
+                message: 'Online orders must be created through Razorpay verification routes.',
             });
         }
         let codAmount = 0;

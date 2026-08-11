@@ -137,17 +137,6 @@ export const requestPasswordResetOtp = (payload: { email: string }) =>
 export const verifyPasswordResetOtp = (payload: { email: string; otp: string }) =>
   getJson('/auth/forgot-password/verify', { method: 'POST', body: payload });
 
-export const createPayuOrder = (payload: {
-  amount: number;
-  method: 'upi' | 'card';
-  order: Record<string, unknown>;
-  customer: { name: string; email: string; phone?: string };
-}) =>
-  getJson<{
-    actionUrl: string;
-    fields: Record<string, string>;
-  }>('/payu/create-order', { method: 'POST', body: payload });
-
 export const createRazorpayOrder = (payload: {
   amount: number;
   order: Record<string, unknown>;

@@ -29,9 +29,9 @@ BACKEND_URL=http://localhost:5000
 
 Optional (Payments + Email):
 ```
-PAYU_KEY=your_key
-PAYU_SALT=your_salt
-PAYU_ENV=test   # or live
+RAZORPAY_PLATFORM_KEY_ID=your_key_id
+RAZORPAY_PLATFORM_KEY_SECRET=your_key_secret
+RAZORPAY_PLATFORM_WEBHOOK_SECRET=your_webhook_secret
 
 SMTP_HOST=your_smtp_host
 SMTP_PORT=587
@@ -155,6 +155,6 @@ npm run dev
 
 ## 8) Notes
 
-- Payments (PayU) will only work if PayU credentials are correct.
+- Online payments use Razorpay and require valid Razorpay credentials.
 - Email notifications will only work if SMTP credentials are correct.
 - DB is required. Backend will not run without a valid database connection.

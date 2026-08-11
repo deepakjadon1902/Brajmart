@@ -9,7 +9,6 @@ const methods = [
   { icon: CreditCard, title: 'Credit & Debit Cards', desc: 'We accept Visa, Mastercard, RuPay, and American Express. All transactions are 3D Secure protected.', tag: '' },
   { icon: Building2, title: 'Net Banking', desc: 'Pay directly from your bank account. All major Indian banks are supported including SBI, HDFC, ICICI, and more.', tag: '' },
   { icon: Wallet, title: 'Wallets', desc: 'Use Paytm Wallet, Amazon Pay, Mobikwik, Freecharge, and other popular digital wallets.', tag: '' },
-  { icon: Smartphone, title: 'PayU Fallback', desc: 'PayU UPI and card checkout remain available as secondary payment options.', tag: 'Secondary' },
 ];
 
 const PaymentMethodPage = () => (
@@ -48,7 +47,7 @@ const PaymentMethodPage = () => (
             <Shield size={32} className="text-gold mx-auto mb-4" />
             <h2 className="font-cinzel text-xl font-bold text-foreground mb-3">100% Secure Payments</h2>
             <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">
-              Razorpay is the primary checkout gateway, with PayU available as a secondary option. Payments are encrypted end-to-end, confirmed by server-side verification and webhooks, and BrajMart never stores your card details or UPI PIN.
+              Razorpay is the online checkout gateway for BrajMart. Payments are encrypted end-to-end, confirmed by server-side verification and webhooks, and BrajMart never stores your card details or UPI PIN.
             </p>
           </div>
         </ScrollReveal>

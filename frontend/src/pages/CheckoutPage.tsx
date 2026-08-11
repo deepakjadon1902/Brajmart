@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createOrder, createPayuOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDtdcPincode, validateCoupon } from '@/lib/api';
+import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDtdcPincode, validateCoupon } from '@/lib/api';
 import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
@@ -126,14 +126,6 @@ const RazorpayLogo = () => (
   </div>
 );
 
-const PayULogo = () => (
-  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#a7d500]/35 bg-white">
-    <span className="text-base font-black tracking-tight">
-      <span className="text-[#00a4e4]">Pay</span><span className="text-[#8cc63f]">U</span>
-    </span>
-  </div>
-);
-
 const CheckoutPage = () => {
   const { items, totalPrice, totalSavings, updateQuantity, removeItem, clearCart } = useCartStore();
   const { user, isAuthenticated } = useAuthStore();
@@ -142,7 +134,6 @@ const CheckoutPage = () => {
 
   const [step, setStep] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('razorpay');
-  const [payuChannel, setPayuChannel] = useState<'upi' | 'card'>('upi');
   const [placedOrderId, setPlacedOrderId] = useState('');
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -235,12 +226,8 @@ const CheckoutPage = () => {
   }, [updateSettings]);
 
   useEffect(() => {
-    const available: string[] = ['razorpay'];
-    if (settings.upiEnabled || settings.cardEnabled) available.push('payu');
-    if (available.length > 0 && !available.includes(paymentMethod)) {
-      setPaymentMethod(available[0]);
-    }
-  }, [settings.upiEnabled, settings.cardEnabled, paymentMethod]);
+    if (paymentMethod !== 'razorpay') setPaymentMethod('razorpay');
+  }, [paymentMethod]);
 
   useEffect(() => {
     if (serviceability && serviceability.pincode !== effectivePincode) {
@@ -252,11 +239,6 @@ const CheckoutPage = () => {
   useEffect(() => {
     if (wantsCodService && !canUseCodService) setWantsCodService(false);
   }, [canUseCodService, wantsCodService]);
-
-  useEffect(() => {
-    if (payuChannel === 'upi' && !settings.upiEnabled && settings.cardEnabled) setPayuChannel('card');
-    if (payuChannel === 'card' && !settings.cardEnabled && settings.upiEnabled) setPayuChannel('upi');
-  }, [payuChannel, settings.upiEnabled, settings.cardEnabled]);
 
   const couponItemSignature = items
     .map((i) => `${i.product.id}:${i.quantity}:${i.product.selectedSize || ''}:${i.product.selectedPieces || ''}`)
@@ -470,64 +452,6 @@ const CheckoutPage = () => {
     setStep(1);
   };
 
-  const submitPayuForm = (actionUrl: string, fields: Record<string, string>) => {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = actionUrl;
-    Object.entries(fields).forEach(([key, value]) => {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = key;
-      input.value = value;
-      form.appendChild(input);
-    });
-    document.body.appendChild(form);
-    form.submit();
-  };
-
-  const startPayuPayment = async (method: 'upi' | 'card') => {
-    if (!validateContactAndAddress()) return;
-    setProcessing(true);
-    try {
-      const cleanShippingAddress = cleanAddressForOrder(effectiveShipping);
-      const cleanBillingAddress = cleanAddressForOrder(billingAddress);
-      const orderPayload = {
-        userId: isAuthenticated ? user?.id : undefined,
-        items: items.map((i) => ({
-          productId: i.product.id,
-          name: i.product.name,
-          image: i.product.image,
-          quantity: i.quantity,
-          price: i.product.price,
-          selectedSize: i.product.selectedSize,
-          selectedPieces: i.product.selectedPieces,
-          selectedAttributes: i.product.selectedAttributes,
-        })),
-        total: grandTotal,
-        status: 'confirmed',
-        customerName: cleanBillingAddress.fullName,
-        customerEmail: effectiveEmail,
-        shippingAddress: cleanShippingAddress,
-        billingAddress: cleanBillingAddress,
-        paymentMethod: method === 'upi' ? 'PayU UPI' : 'PayU Card',
-        codRequested: false,
-        codAmount: 0,
-        couponCode: appliedCoupon?.code || undefined,
-      };
-      const result = await createPayuOrder({
-        amount: grandTotal,
-        method,
-        order: orderPayload,
-        customer: { name: cleanBillingAddress.fullName, email: effectiveEmail, phone: cleanBillingAddress.mobile },
-      });
-      submitPayuForm(result.actionUrl, result.fields);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : '';
-      toast.error(message || 'Unable to start payment. Please try again.');
-      setProcessing(false);
-    }
-  };
-
   const startRazorpayPayment = async () => {
     if (!validateContactAndAddress()) return;
     setProcessing(true);
@@ -536,7 +460,7 @@ const CheckoutPage = () => {
       const cleanBillingAddress = cleanAddressForOrder(billingAddress);
       const loaded = await loadRazorpayCheckout();
       if (!loaded || !window.Razorpay) {
-        throw new Error('Unable to load Razorpay checkout. Please disable browser shields/ad blockers for this payment page or try PayU.');
+        throw new Error('Unable to load Razorpay checkout. Please disable browser shields/ad blockers for this payment page and try again.');
       }
 
       const orderPayload = {
@@ -731,8 +655,6 @@ const CheckoutPage = () => {
 
     if (paymentMethod === 'razorpay') {
       startRazorpayPayment();
-    } else if (paymentMethod === 'payu') {
-      startPayuPayment(payuChannel);
     }
   };
 
@@ -757,15 +679,6 @@ const CheckoutPage = () => {
       badge: 'Primary',
       brandColor: 'text-[#0b72e7]',
     },
-    ...((settings.upiEnabled || settings.cardEnabled) ? [{
-      value: 'payu',
-      title: 'PayU',
-      subtitle: 'Secondary PayU fallback with UPI and card payments in one checkout',
-      logo: PayULogo,
-      pills: ['UPI', 'Cards', 'NetBanking', 'Wallets'],
-      badge: 'Secondary',
-      brandColor: 'text-[#00a4e4]',
-    }] : []),
   ];
 
   const renderAddressForm = (
@@ -983,28 +896,6 @@ const CheckoutPage = () => {
                                     </span>
                                   ))}
                                 </div>
-                                {m.value === 'payu' && selected && (
-                                  <div className="mt-3 inline-flex rounded-lg border border-border bg-background p-1">
-                                    {[
-                                      { value: 'upi' as const, label: 'UPI', disabled: !settings.upiEnabled },
-                                      { value: 'card' as const, label: 'Cards', disabled: !settings.cardEnabled },
-                                    ].map((option) => (
-                                      <button
-                                        key={option.value}
-                                        type="button"
-                                        disabled={option.disabled}
-                                        onClick={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          setPayuChannel(option.value);
-                                        }}
-                                        className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${payuChannel === option.value ? 'bg-[#00a4e4] text-white' : 'text-muted-foreground hover:bg-muted'}`}
-                                      >
-                                        {option.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
                               </div>
                               <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selected ? 'border-gold bg-gold/10' : 'border-border bg-background'}`}>
                                 {selected && <div className="w-3 h-3 rounded-full bg-gold" />}
@@ -1046,35 +937,6 @@ const CheckoutPage = () => {
                           >
                             {wantsCodService ? 'COD Selected' : 'Want COD'}
                           </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {paymentMethod === 'payu' && (
-                      <div className="mt-5 rounded-xl border border-border bg-pearl/50 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-bold uppercase tracking-wide text-[#00a4e4]">PayU Secure Checkout</p>
-                            <h3 className="text-sm font-semibold text-foreground">{payuChannel === 'upi' ? 'UPI payment selected' : 'Card payment selected'}</h3>
-                            <p className="text-xs text-muted-foreground mt-1">Complete payment through PayU using UPI, cards, netbanking, or wallets.</p>
-                          </div>
-                          <div className="rounded-lg bg-white px-3 py-1.5 text-sm font-black tracking-tight shadow-sm">
-                            <span className="text-[#00a4e4]">Pay</span><span className="text-[#8cc63f]">U</span>
-                          </div>
-                        </div>
-                        <div className="mt-4 grid sm:grid-cols-3 gap-3 text-foreground">
-                          {[
-                            payuChannel === 'upi' ? 'GPay, PhonePe, Paytm' : 'Visa, Mastercard, RuPay',
-                            'NetBanking & Wallets',
-                            'Bank authentication',
-                          ].map((t) => (
-                            <div key={t} className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
-                              {t}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-4 text-xs text-muted-foreground">
-                          PayU verifies the payment with bank authentication before order confirmation.
                         </div>
                       </div>
                     )}
@@ -1310,9 +1172,7 @@ const CheckoutPage = () => {
                       ? wantsCodService ? 'Confirming COD Order...' : 'Processing Payment...'
                       : wantsCodService
                         ? `Confirm COD Order - ${formatPrice(grandTotal)}`
-                        : paymentMethod === 'razorpay'
-                          ? `Pay with Razorpay - ${formatPrice(grandTotal)}`
-                          : `Pay with PayU - ${formatPrice(grandTotal)}`}
+                        : `Pay with Razorpay - ${formatPrice(grandTotal)}`}
                 </button>
               </div>
             </div>

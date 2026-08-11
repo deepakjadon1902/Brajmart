@@ -63,8 +63,6 @@ const AdminSettings = () => {
   const [deliveryEtaMinDays, setDeliveryEtaMinDays] = useState(settings.deliveryEtaMinDays);
   const [deliveryEtaMaxDays, setDeliveryEtaMaxDays] = useState(settings.deliveryEtaMaxDays);
   const [codEnabled, setCodEnabled] = useState(settings.codEnabled);
-  const [upiEnabled, setUpiEnabled] = useState(settings.upiEnabled);
-  const [cardEnabled, setCardEnabled] = useState(settings.cardEnabled);
   const [maintenanceMode, setMaintenanceMode] = useState(settings.maintenanceMode);
   const [metaTitle, setMetaTitle] = useState(settings.metaTitle);
   const [metaDescription, setMetaDescription] = useState(settings.metaDescription);
@@ -106,8 +104,6 @@ const AdminSettings = () => {
         setDeliveryEtaMinDays(data.deliveryEtaMinDays ?? settings.deliveryEtaMinDays);
         setDeliveryEtaMaxDays(data.deliveryEtaMaxDays ?? settings.deliveryEtaMaxDays);
         setCodEnabled(Boolean(data.codEnabled));
-        setUpiEnabled(data.upiEnabled);
-        setCardEnabled(data.cardEnabled);
         setMaintenanceMode(data.maintenanceMode);
         setMetaTitle(data.metaTitle);
         setMetaDescription(data.metaDescription);
@@ -151,7 +147,7 @@ const AdminSettings = () => {
         storeName, tagline, currency, storeEmail, storePhone, storeAddress,
         freeShippingThreshold, shippingFee, packagingRate, taxRate: packagingRate, minOrderAmount, maxOrderQuantity,
         deliveryEtaMinDays, deliveryEtaMaxDays,
-        codEnabled, upiEnabled, cardEnabled, maintenanceMode,
+        codEnabled, maintenanceMode,
         metaTitle, metaDescription, storeLogo,
         announcementBar: { enabled: announcementEnabled, messages: announcementMessages },
         socialLinks,
@@ -435,20 +431,6 @@ const AdminSettings = () => {
               </span>
               <Toggle value={codEnabled} onChange={setCodEnabled} />
             </div>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-white">UPI Payments (PayU)</p>
-              <p className="text-xs text-slate-400">Enable PayU UPI as a secondary checkout option</p>
-            </div>
-            <Toggle value={upiEnabled} onChange={setUpiEnabled} />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-white">Card Payments (PayU)</p>
-              <p className="text-xs text-slate-400">Enable PayU cards as a secondary checkout option</p>
-            </div>
-            <Toggle value={cardEnabled} onChange={setCardEnabled} />
           </div>
 
           <div className="border-t border-slate-800 pt-5 space-y-4">

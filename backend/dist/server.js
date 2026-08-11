@@ -17,7 +17,6 @@ const orders_1 = __importDefault(require("./routes/orders"));
 const payments_1 = __importDefault(require("./routes/payments"));
 const settings_1 = __importDefault(require("./routes/settings"));
 const upload_1 = __importDefault(require("./routes/upload"));
-const payu_1 = __importDefault(require("./routes/payu"));
 const razorpay_1 = __importDefault(require("./routes/razorpay"));
 const coupons_1 = __importDefault(require("./routes/coupons"));
 const cart_1 = __importDefault(require("./routes/cart"));
@@ -41,10 +40,6 @@ const corsOrigins = Array.from(new Set([
         .map((origin) => origin.trim())
         .filter(Boolean),
 ]));
-const PAYU_CALLBACK_ORIGINS = new Set([
-    'https://secure.payu.in',
-    'https://test.payu.in',
-]);
 const UPLOADS_DIR = path_1.default.join(__dirname, '..', 'uploads');
 if (!fs_1.default.existsSync(UPLOADS_DIR))
     fs_1.default.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -95,13 +90,9 @@ app.get('/uploads/:filename', async (req, res, next) => {
 app.use((0, compression_1.default)());
 app.use((0, cors_1.default)((req, callback) => {
     const origin = req.headers.origin;
-    const isPayuCallback = req.path === '/api/payu/success'
-        || req.path === '/api/payu/failure'
-        || req.path === '/api/payu/webhook';
     const allowed = !origin
         || origin === 'null'
-        || corsOrigins.includes(origin)
-        || (isPayuCallback && PAYU_CALLBACK_ORIGINS.has(origin));
+        || corsOrigins.includes(origin);
     if (!allowed)
         return callback(new Error(`CORS blocked origin: ${origin}`));
     callback(null, { origin: true, credentials: true });
@@ -170,7 +161,6 @@ app.use('/api/orders', orders_1.default);
 app.use('/api/payments', payments_1.default);
 app.use('/api/settings', settings_1.default);
 app.use('/api/upload', upload_1.default);
-app.use('/api/payu', payu_1.default);
 app.use('/api/razorpay', razorpay_1.default);
 app.use('/api/coupons', coupons_1.default);
 app.use('/api/cart', cart_1.default);

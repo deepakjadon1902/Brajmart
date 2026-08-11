@@ -74,8 +74,7 @@ const AdminPayments = () => {
   const icons: Record<string, LucideIcon> = {
     UPI: Wallet,
     Card: CreditCard,
-    'PayU UPI': Wallet,
-    'PayU Card': CreditCard,
+    Razorpay: CreditCard,
     COD: Wallet,
   };
 

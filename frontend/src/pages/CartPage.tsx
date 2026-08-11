@@ -186,7 +186,7 @@ const CartPage = () => {
               <div className="rounded-lg border border-border bg-card p-4">
                 <ShieldCheck size={18} className="mb-2 text-[#2E7D32]" />
                 <p className="text-sm font-bold text-foreground">Protected Payment</p>
-                <p className="mt-1 text-xs text-muted-foreground">Razorpay and PayU secure gateways.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Razorpay online checkout and COD support.</p>
               </div>
               <div className="rounded-lg border border-border bg-card p-4">
                 <Truck size={18} className="mb-2 text-saffron" />
