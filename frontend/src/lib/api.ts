@@ -247,6 +247,49 @@ export const updatePaymentStatus = (id: string, status: string) =>
 export const createPayment = (payload: Record<string, unknown>) =>
   getJson('/payments', { method: 'POST', body: payload });
 
+export type AnalyticsPeriod = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+
+export type AnalyticsReport = {
+  period: AnalyticsPeriod;
+  generatedAt: string;
+  range: {
+    label: string;
+    start: string;
+    end: string;
+  };
+  totals: {
+    periodRevenue: number;
+    previousRevenue: number;
+    revenueChange: number;
+    periodOrders: number;
+    deliveredOrders: number;
+    cancelledOrders: number;
+    averageOrderValue: number;
+    totalRevenue: number;
+    paidSalesCount: number;
+    onlineRevenue: number;
+    codRevenue: number;
+    completionRate: number;
+  };
+  buckets: Array<{
+    key: string;
+    label: string;
+    rangeLabel: string;
+    start: string;
+    end: string;
+    revenue: number;
+    orders: number;
+  }>;
+  breakdowns: {
+    categories: Array<{ category: string; count: number }>;
+    statuses: Record<string, number>;
+    payments: Record<string, number>;
+  };
+};
+
+export const fetchAnalyticsReport = (period: AnalyticsPeriod) =>
+  getJson<AnalyticsReport>(`/analytics?period=${encodeURIComponent(period)}&fresh=${Date.now()}`, { cache: 'no-store' });
+
 // Coupons
 export const fetchCoupons = () => getJson('/coupons');
 export const createCoupon = (payload: Record<string, unknown>) =>

@@ -18,6 +18,7 @@ import couponRoutes from './routes/coupons';
 import cartRoutes from './routes/cart';
 import heroSlidesRoutes from './routes/heroSlides';
 import blogRoutes from './routes/blogs';
+import analyticsRoutes from './routes/analytics';
 import { isDbConnected, dbQuery } from './lib/db';
 
 const app = express();
@@ -173,6 +174,7 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/hero-slides', heroSlidesRoutes);
 app.use('/api/blogs', blogRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

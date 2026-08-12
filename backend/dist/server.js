@@ -22,6 +22,7 @@ const coupons_1 = __importDefault(require("./routes/coupons"));
 const cart_1 = __importDefault(require("./routes/cart"));
 const heroSlides_1 = __importDefault(require("./routes/heroSlides"));
 const blogs_1 = __importDefault(require("./routes/blogs"));
+const analytics_1 = __importDefault(require("./routes/analytics"));
 const db_1 = require("./lib/db");
 const app = (0, express_1.default)();
 const SITE_URL = (process.env.SITE_URL || 'https://www.brajmart.com').replace(/\/$/, '');
@@ -166,6 +167,7 @@ app.use('/api/coupons', coupons_1.default);
 app.use('/api/cart', cart_1.default);
 app.use('/api/hero-slides', heroSlides_1.default);
 app.use('/api/blogs', blogs_1.default);
+app.use('/api/analytics', analytics_1.default);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 const xmlEscape = (value) => String(value ?? '')
     .replace(/&/g, '&amp;')
