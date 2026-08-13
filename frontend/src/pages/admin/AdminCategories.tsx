@@ -4,6 +4,7 @@ import { Category, Subcategory } from '@/types/product';
 import { Plus, Edit2, Trash2, X, Upload, Image } from 'lucide-react';
 import { createCategory, deleteCategory as deleteCategoryApi, updateCategory as updateCategoryApi, uploadImage, createSubcategory, updateSubcategory, deleteSubcategory as deleteSubcategoryApi } from '@/lib/api';
 import { toast } from 'sonner';
+import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 
 const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
 
@@ -11,12 +12,19 @@ const AdminCategories = () => {
   const { categories, addCategory, updateCategory, deleteCategory, loadFromApi, getProductsByCategory } = useProductStore();
   const [editing, setEditing] = useState<Category | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [page, setPage] = useState(1);
 
   const getCatCount = (name: string) => getProductsByCategory(name).length;
+  const paginatedCategories = categories.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
 
   useEffect(() => {
     loadFromApi();
   }, [loadFromApi]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(categories.length / ADMIN_PAGE_SIZE));
+    if (page > totalPages) setPage(totalPages);
+  }, [categories.length, page]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this category?')) return;
@@ -73,7 +81,7 @@ const AdminCategories = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {categories.map((cat) => (
+        {paginatedCategories.map((cat) => (
           <div key={cat.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition">
             <div className="flex items-start justify-between mb-3">
               {cat.icon && (cat.icon.startsWith('data:') || cat.icon.startsWith('http') || cat.icon.startsWith('/uploads')) ? (
@@ -92,6 +100,8 @@ const AdminCategories = () => {
           </div>
         ))}
       </div>
+
+      <AdminPagination page={page} totalItems={categories.length} onPageChange={setPage} itemLabel="categories" />
 
       {editing && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => { setEditing(null); setIsCreating(false); }}>

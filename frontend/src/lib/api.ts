@@ -220,8 +220,20 @@ export const updateSubcategory = (subId: string, payload: Record<string, unknown
 export const deleteSubcategory = (subId: string) =>
   getJson(`/categories/subcategories/${subId}`, { method: 'DELETE' });
 
+const queryString = (params?: Record<string, string | number | boolean | undefined | null>) => {
+  const searchParams = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      searchParams.set(key, String(value).trim());
+    }
+  });
+  const qs = searchParams.toString();
+  return qs ? `?${qs}` : '';
+};
+
 // Orders
-export const fetchOrders = () => getJson<any[]>('/orders');
+export const fetchOrders = (opts?: { search?: string }) => getJson<any[]>(`/orders${queryString({ search: opts?.search })}`);
+export const fetchPendingPaymentOrders = (opts?: { search?: string }) => getJson<Record<string, unknown>[]>(`/orders/admin/pending-payments${queryString({ search: opts?.search })}`);
 export const fetchMyOrders = () => getJson<any[]>('/orders/my');
 export const updateOrderStatus = (id: string, payload: { status: string; note?: string; shippingService?: string; trackingId?: string | null }) =>
   getJson<Record<string, any>>(`/orders/${id}/status`, { method: 'PUT', body: payload });
@@ -302,7 +314,8 @@ export const validateCoupon = (payload: { code: string; items: unknown[] }) =>
   getJson('/coupons/validate', { method: 'POST', body: payload });
 
 // Users
-export const fetchUsers = () => getJson('/users');
+export const fetchUsers = (opts?: { search?: string }) => getJson(`/users${queryString({ search: opts?.search })}`);
+export const fetchUsersCartFavorites = (opts?: { search?: string }) => getJson(`/users/admin/cart-favorites${queryString({ search: opts?.search })}`);
 export const updateUserRole = (id: string, role: string) =>
   getJson(`/users/${id}/role`, { method: 'PUT', body: { role } });
 export const updateUserStatus = (id: string, status: string) =>
@@ -325,9 +338,30 @@ export const updateMyPassword = (payload: { currentPassword?: string; newPasswor
 
 // Cart
 export const fetchCart = () => getJson('/cart');
-export const updateCart = (items: any[]) =>
+export type PersistedProductInterestItem = {
+  productId?: string;
+  id?: string;
+  _id?: string;
+  name?: string;
+  image?: string;
+  price?: number;
+  slug?: string;
+  category?: string;
+  quantity?: number;
+  selectedSize?: string;
+  selectedPieces?: string;
+  product?: Record<string, unknown>;
+};
+
+export const updateCart = (items: PersistedProductInterestItem[]) =>
   getJson('/cart', { method: 'PUT', body: { items } });
 export const clearCartApi = () => getJson('/cart', { method: 'DELETE' });
+
+// Wishlist
+export const fetchWishlist = () => getJson('/wishlist');
+export const updateWishlist = (items: PersistedProductInterestItem[]) =>
+  getJson('/wishlist', { method: 'PUT', body: { items } });
+export const clearWishlistApi = () => getJson('/wishlist', { method: 'DELETE' });
 
 export const uploadImage = async (file: File) => {
   const token = getAuthToken();

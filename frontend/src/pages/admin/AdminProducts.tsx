@@ -5,6 +5,7 @@ import { Product, Category, Subcategory } from '@/types/product';
 import { Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
 import { createProduct, deleteProduct as deleteProductApi, updateProduct as updateProductApi, uploadImage, uploadImages, fetchProductsSchema } from '@/lib/api';
 import { toast } from 'sonner';
+import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 
 const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
 
@@ -49,6 +50,7 @@ const AdminProducts = () => {
   const [filterCat, setFilterCat] = useState('all');
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [page, setPage] = useState(1);
   const firstCategory = categories[0];
 
   useEffect(() => {
@@ -84,6 +86,16 @@ const AdminProducts = () => {
     const matchCat = filterCat === 'all' || p.category === filterCat;
     return matchSearch && matchCat;
   });
+  const paginatedProducts = filtered.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterCat]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / ADMIN_PAGE_SIZE));
+    if (page > totalPages) setPage(totalPages);
+  }, [filtered.length, page]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this product?')) return;
@@ -253,7 +265,7 @@ const AdminProducts = () => {
               <th className="text-left px-5 py-3 font-medium">Actions</th>
             </tr></thead>
             <tbody>
-              {filtered.map((p) => (
+              {paginatedProducts.map((p) => (
                 <tr key={p.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
@@ -275,6 +287,7 @@ const AdminProducts = () => {
             </tbody>
           </table>
         </div>
+        <AdminPagination page={page} totalItems={filtered.length} onPageChange={setPage} itemLabel="products" />
       </div>
 
       {editProduct && (

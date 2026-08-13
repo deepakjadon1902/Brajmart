@@ -2,7 +2,7 @@ import * as React from "react";
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAdminStore } from '@/store/adminStore';
-import { Shield, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
 const AdminLogin = () => {
   const [identifier, setIdentifier] = useState('');
@@ -28,17 +28,17 @@ const AdminLogin = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div className="admin-light admin-login-screen min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-amber-500/20">
-            <Shield className="text-white" size={32} />
+          <div className="admin-login-logo mx-auto mb-4">
+            <img src="/logo.png" alt="BrajMart" />
           </div>
           <h1 className="text-3xl font-bold text-white">BrajMart Admin</h1>
           <p className="text-slate-400 mt-1">Control Panel Access</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-slate-800/50 backdrop-blur-xl border border-slate-700 rounded-2xl p-8 space-y-5">
+        <form onSubmit={handleSubmit} className="admin-login-card backdrop-blur-xl border border-slate-700 rounded-2xl p-8 space-y-5">
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-lg">{error}</div>
           )}
@@ -72,7 +72,7 @@ const AdminLogin = () => {
             </div>
           </div>
 
-          <button type="submit" className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold rounded-xl hover:from-amber-600 hover:to-orange-700 transition-all shadow-lg shadow-amber-500/20">
+          <button type="submit" className="admin-login-button w-full py-3 font-semibold rounded-xl transition-all">
             Access Admin Panel
           </button>
         </form>

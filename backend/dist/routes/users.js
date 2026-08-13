@@ -8,6 +8,7 @@ const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const orderVisibility_1 = require("../lib/orderVisibility");
+const customerInterest_1 = require("../lib/customerInterest");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const router = (0, express_1.Router)();
 const mapUserRow = (row) => ({
@@ -41,11 +42,22 @@ const mapCustomerRow = (row) => ({
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
 });
-router.get('/', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
+const getSearchTerm = (value) => String(value || '').trim().toLowerCase();
+const likeSearch = (term) => `%${term}%`;
+router.get('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        const search = getSearchTerm(req.query.search);
+        const params = [];
+        const searchSql = search
+            ? `WHERE LOWER(CONCAT_WS(' ', name, email, phone, CAST(addresses AS CHAR))) LIKE ?`
+            : '';
+        if (search)
+            params.push(likeSearch(search));
         const rows = await (0, db_1.dbQuery)(`
+      SELECT *
+      FROM (
       SELECT
         CAST(u.id AS CHAR) AS id,
         u.name,
@@ -90,9 +102,76 @@ router.get('/', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
         AND o.customer_email <> ''
         AND ${(0, orderVisibility_1.merchantOrderWhereSql)('o')}
       GROUP BY LOWER(o.customer_email)
+      ) customers
+      ${searchSql}
       ORDER BY updated_at DESC
-    `);
+    `, params);
         res.json(rows.map(mapCustomerRow));
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+router.get('/admin/cart-favorites', auth_1.auth, auth_1.adminOnly, async (req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        const search = getSearchTerm(req.query.search);
+        const interestSearchSql = search
+            ? `AND (
+          LOWER(u.name) LIKE ?
+          OR LOWER(u.email) LIKE ?
+          OR LOWER(COALESCE(u.phone, '')) LIKE ?
+          OR LOWER(CAST(__ITEM_ALIAS__.items AS CHAR)) LIKE ?
+        )`
+            : '';
+        const cartSearchSql = interestSearchSql.replace(/__ITEM_ALIAS__/g, 'c');
+        const wishlistSearchSql = interestSearchSql.replace(/__ITEM_ALIAS__/g, 'w');
+        const cartParams = search ? Array(4).fill(likeSearch(search)) : [];
+        const wishlistParams = search ? Array(4).fill(likeSearch(search)) : [];
+        const [cartRows, wishlistRows, orderRows] = await Promise.all([
+            (0, db_1.dbQuery)(`
+        SELECT
+          c.user_id,
+          c.items,
+          c.updated_at,
+          u.name AS user_name,
+          u.email AS user_email,
+          u.phone AS user_phone
+        FROM carts c
+        JOIN users u ON u.id = c.user_id
+        WHERE JSON_LENGTH(c.items) > 0
+        ${cartSearchSql}
+      `, cartParams),
+            (0, db_1.dbQuery)(`
+        SELECT
+          w.user_id,
+          w.items,
+          w.updated_at,
+          u.name AS user_name,
+          u.email AS user_email,
+          u.phone AS user_phone
+        FROM wishlists w
+        JOIN users u ON u.id = w.user_id
+        WHERE JSON_LENGTH(w.items) > 0
+        ${wishlistSearchSql}
+      `, wishlistParams).catch((err) => {
+                if (String(err?.message || '').includes("doesn't exist"))
+                    return [];
+                throw err;
+            }),
+            (0, db_1.dbQuery)(`
+        SELECT user_id, items
+        FROM orders
+        WHERE user_id IS NOT NULL
+          AND ${(0, orderVisibility_1.merchantOrderWhereSql)('orders')}
+      `),
+        ]);
+        const orderedProducts = (0, customerInterest_1.buildOrderedProductSet)(orderRows);
+        res.json((0, customerInterest_1.mergeCustomerInterestRows)([
+            { source: 'cart', rows: cartRows },
+            { source: 'favorite', rows: wishlistRows },
+        ], orderedProducts));
     }
     catch (err) {
         res.status(500).json({ message: err.message });

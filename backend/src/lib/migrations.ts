@@ -162,6 +162,19 @@ const ensureCoreTables = async () => {
   `);
 };
 
+const ensureCustomerInterestSchema = async () => {
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS wishlists (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+      items JSON NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_wishlists_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+};
+
 const syncAdminFromEnv = async () => {
   if (String(process.env.ADMIN_SYNC_ON_START || '').toLowerCase() === 'false') return;
 
@@ -242,6 +255,7 @@ export const runDataMigrations = async () => {
   if (String(process.env.RUN_DATA_MIGRATIONS || '').toLowerCase() === 'false') return;
 
   await ensureCoreTables();
+  await ensureCustomerInterestSchema();
   await syncAdminFromEnv();
   await ensureOrderPricingSchema();
   await ensureOrderCodSchema();

@@ -3,6 +3,7 @@ import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 import { merchantOrderWhereSql } from '../lib/orderVisibility';
+import { buildOrderedProductSet, mergeCustomerInterestRows } from '../lib/customerInterest';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
@@ -40,10 +41,22 @@ const mapCustomerRow = (row: any) => ({
   updatedAt: toIsoString(row.updated_at),
 });
 
-router.get('/', auth, adminOnly, async (_req, res) => {
+const getSearchTerm = (value: unknown) => String(value || '').trim().toLowerCase();
+const likeSearch = (term: string) => `%${term}%`;
+
+router.get('/', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const search = getSearchTerm(req.query.search);
+    const params: any[] = [];
+    const searchSql = search
+      ? `WHERE LOWER(CONCAT_WS(' ', name, email, phone, CAST(addresses AS CHAR))) LIKE ?`
+      : '';
+    if (search) params.push(likeSearch(search));
+
     const rows = await dbQuery<any>(`
+      SELECT *
+      FROM (
       SELECT
         CAST(u.id AS CHAR) AS id,
         u.name,
@@ -88,9 +101,76 @@ router.get('/', auth, adminOnly, async (_req, res) => {
         AND o.customer_email <> ''
         AND ${merchantOrderWhereSql('o')}
       GROUP BY LOWER(o.customer_email)
+      ) customers
+      ${searchSql}
       ORDER BY updated_at DESC
-    `);
+    `, params);
     res.json(rows.map(mapCustomerRow));
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/admin/cart-favorites', auth, adminOnly, async (req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const search = getSearchTerm(req.query.search);
+    const interestSearchSql = search
+      ? `AND (
+          LOWER(u.name) LIKE ?
+          OR LOWER(u.email) LIKE ?
+          OR LOWER(COALESCE(u.phone, '')) LIKE ?
+          OR LOWER(CAST(__ITEM_ALIAS__.items AS CHAR)) LIKE ?
+        )`
+      : '';
+    const cartSearchSql = interestSearchSql.replace(/__ITEM_ALIAS__/g, 'c');
+    const wishlistSearchSql = interestSearchSql.replace(/__ITEM_ALIAS__/g, 'w');
+    const cartParams = search ? Array(4).fill(likeSearch(search)) : [];
+    const wishlistParams = search ? Array(4).fill(likeSearch(search)) : [];
+
+    const [cartRows, wishlistRows, orderRows] = await Promise.all([
+      dbQuery<any>(`
+        SELECT
+          c.user_id,
+          c.items,
+          c.updated_at,
+          u.name AS user_name,
+          u.email AS user_email,
+          u.phone AS user_phone
+        FROM carts c
+        JOIN users u ON u.id = c.user_id
+        WHERE JSON_LENGTH(c.items) > 0
+        ${cartSearchSql}
+      `, cartParams),
+      dbQuery<any>(`
+        SELECT
+          w.user_id,
+          w.items,
+          w.updated_at,
+          u.name AS user_name,
+          u.email AS user_email,
+          u.phone AS user_phone
+        FROM wishlists w
+        JOIN users u ON u.id = w.user_id
+        WHERE JSON_LENGTH(w.items) > 0
+        ${wishlistSearchSql}
+      `, wishlistParams).catch((err: any) => {
+        if (String(err?.message || '').includes("doesn't exist")) return [];
+        throw err;
+      }),
+      dbQuery<any>(`
+        SELECT user_id, items
+        FROM orders
+        WHERE user_id IS NOT NULL
+          AND ${merchantOrderWhereSql('orders')}
+      `),
+    ]);
+
+    const orderedProducts = buildOrderedProductSet(orderRows);
+    res.json(mergeCustomerInterestRows([
+      { source: 'cart', rows: cartRows },
+      { source: 'favorite', rows: wishlistRows },
+    ], orderedProducts));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }

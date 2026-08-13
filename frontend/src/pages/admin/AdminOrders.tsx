@@ -4,6 +4,7 @@ import { StatusBadge } from './AdminDashboard';
 import { Search, Eye, X, RefreshCw, MapPin } from 'lucide-react';
 import { adminCheckDtdcPincode, adminTrackDtdcOrder, fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
 import { toast } from 'sonner';
+import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
 const shippingServices = ['DTDC', 'Shree Maruti', 'Delhivery', 'India Post', 'Ekart'];
@@ -11,6 +12,7 @@ const shippingServices = ['DTDC', 'Shree Maruti', 'Delhivery', 'India Post', 'Ek
 const AdminOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [editingTrackingId, setEditingTrackingId] = useState<string>('');
@@ -18,11 +20,17 @@ const AdminOrders = () => {
   const [dtdcLoading, setDtdcLoading] = useState(false);
   const [pincodeResult, setPincodeResult] = useState<any | null>(null);
   const [pincodeLoading, setPincodeLoading] = useState(false);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await fetchOrders();
+        const data = await fetchOrders({ search: debouncedSearch });
         const normalizeOrder = (o: any) => ({
           ...o,
           id: o.orderId ? String(o.orderId) : o._id,
@@ -45,7 +53,7 @@ const AdminOrders = () => {
     load();
     const t = setInterval(() => load(), 2_000);
     return () => clearInterval(t);
-  }, []);
+  }, [debouncedSearch]);
 
   const normalizeOrder = (o: any) => ({
     ...o,
@@ -82,6 +90,16 @@ const AdminOrders = () => {
     const matchStatus = filterStatus === 'all' || o.status === filterStatus;
     return matchSearch && matchStatus;
   });
+  const paginatedOrders = filtered.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterStatus]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filtered.length / ADMIN_PAGE_SIZE));
+    if (page > totalPages) setPage(totalPages);
+  }, [filtered.length, page]);
 
   const detail = selectedOrder ? orders.find((o) => o.id === selectedOrder) : null;
 
@@ -185,7 +203,7 @@ const AdminOrders = () => {
               <th className="text-left px-5 py-3 font-medium">Actions</th>
             </tr></thead>
             <tbody>
-              {filtered.map((o) => (
+              {paginatedOrders.map((o) => (
                 <tr key={o.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                   <td className="px-5 py-3 text-amber-400 font-mono text-xs">{o.id}</td>
                   <td className="px-5 py-3 text-white">{o.shippingAddress?.fullName || o.customerName || '-'}</td>
@@ -209,6 +227,7 @@ const AdminOrders = () => {
             </tbody>
           </table>
         </div>
+        <AdminPagination page={page} totalItems={filtered.length} onPageChange={setPage} itemLabel="orders" />
       </div>
 
       {/* Order Detail Modal */}
@@ -384,7 +403,7 @@ const AdminOrders = () => {
                         <button
                           key={s}
                           onClick={() => handleStatusUpdate(detail._id, s)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${detail.status === s ? 'bg-amber-500/20 border-amber-500/40 text-amber-400' : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
+                          className={`admin-status-option admin-status-${s} px-3 py-1.5 rounded-lg text-xs font-medium border transition ${detail.status === s ? 'is-active' : ''}`}
                         >
                           {s.replace(/_/g, ' ')}
                         </button>

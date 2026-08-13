@@ -55,6 +55,8 @@ const mapOrderRow = (row) => ({
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
 });
+const getSearchTerm = (value) => String(value || '').trim().toLowerCase();
+const likeSearch = (term) => `%${term}%`;
 router.get('/my', auth_1.auth, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
@@ -77,14 +79,90 @@ router.get('/my', auth_1.auth, async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
-router.get('/', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
+router.get('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        const search = getSearchTerm(req.query.search);
+        const params = [];
+        const searchSql = search
+            ? `AND (
+          CAST(id AS CHAR) LIKE ?
+          OR LOWER(COALESCE(customer_name, '')) LIKE ?
+          OR LOWER(COALESCE(customer_email, '')) LIKE ?
+          OR LOWER(COALESCE(tracking_id, '')) LIKE ?
+          OR LOWER(COALESCE(payment_method, '')) LIKE ?
+          OR LOWER(CAST(shipping_address AS CHAR)) LIKE ?
+          OR LOWER(CAST(billing_address AS CHAR)) LIKE ?
+          OR LOWER(CAST(items AS CHAR)) LIKE ?
+        )`
+            : '';
+        if (search)
+            params.push(...Array(8).fill(likeSearch(search)));
         const rows = await (0, db_1.dbQuery)(`SELECT * FROM orders
        WHERE ${(0, orderVisibility_1.merchantOrderWhereSql)('orders')}
-       ORDER BY created_at DESC`);
+       ${searchSql}
+       ORDER BY created_at DESC`, params);
         res.json(rows.map(mapOrderRow));
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+router.get('/admin/pending-payments', auth_1.auth, auth_1.adminOnly, async (req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        const search = getSearchTerm(req.query.search);
+        const params = [];
+        const searchSql = search
+            ? `AND (
+          CAST(o.id AS CHAR) LIKE ?
+          OR LOWER(COALESCE(o.customer_name, '')) LIKE ?
+          OR LOWER(COALESCE(o.customer_email, '')) LIKE ?
+          OR LOWER(COALESCE(o.payment_method, '')) LIKE ?
+          OR LOWER(COALESCE(ps.token, '')) LIKE ?
+          OR LOWER(COALESCE(p.transaction_id, '')) LIKE ?
+          OR LOWER(CAST(o.shipping_address AS CHAR)) LIKE ?
+          OR LOWER(CAST(o.billing_address AS CHAR)) LIKE ?
+          OR LOWER(CAST(o.items AS CHAR)) LIKE ?
+        )`
+            : '';
+        if (search)
+            params.push(...Array(9).fill(likeSearch(search)));
+        const rows = await (0, db_1.dbQuery)(`
+      SELECT
+        o.*,
+        ps.token AS payment_token,
+        ps.status AS payment_status,
+        ps.updated_at AS payment_updated_at,
+        p.transaction_id,
+        p.created_at AS payment_created_at
+      FROM orders o
+      JOIN payment_status ps ON ps.order_id = o.id
+      LEFT JOIN payments p ON p.order_id = o.id AND p.transaction_id = ps.token
+      WHERE ps.status = 'pending'
+        AND LOWER(o.payment_method) NOT IN ('cod', 'cash on delivery')
+        ${searchSql}
+      ORDER BY ps.updated_at DESC, o.updated_at DESC
+    `, params);
+        res.json(rows.map((row) => {
+            const order = mapOrderRow(row);
+            const shippingAddress = (order.shippingAddress || {});
+            const billingAddress = (order.billingAddress || {});
+            return {
+                ...order,
+                paymentToken: row.payment_token || undefined,
+                paymentStatus: row.payment_status || 'pending',
+                paymentUpdatedAt: (0, dbHelpers_1.toIsoString)(row.payment_updated_at),
+                paymentCreatedAt: (0, dbHelpers_1.toIsoString)(row.payment_created_at),
+                transactionId: row.transaction_id || undefined,
+                customerName: order.customerName || shippingAddress.fullName || billingAddress.fullName || '',
+                customerEmail: order.customerEmail || '',
+                customerPhone: shippingAddress.mobile || billingAddress.mobile || '',
+                customerAddress: shippingAddress,
+            };
+        }));
     }
     catch (err) {
         res.status(500).json({ message: err.message });

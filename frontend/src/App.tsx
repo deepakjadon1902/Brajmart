@@ -71,6 +71,8 @@ const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
 const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminCartFavorites = lazy(() => import("./pages/admin/AdminCartFavorites"));
+const AdminPendingPayments = lazy(() => import("./pages/admin/AdminPendingPayments"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 const AdminShipments = lazy(() => import("./pages/admin/AdminShipments"));
 const AdminPayments = lazy(() => import("./pages/admin/AdminPayments"));
@@ -152,6 +154,7 @@ const App = () => {
   const loadProducts = useProductStore((s) => s.loadFromApi);
   const loadCart = useCartStore((s) => s.loadFromApi);
   const clearWishlist = useWishlistStore((s) => s.clear);
+  const loadWishlist = useWishlistStore((s) => s.loadFromApi);
   const authToken = useAuthStore((s) => s.token);
   const brandImage = settings.storeLogo || DEFAULT_IMAGE;
   const favicon = settings.favicon || DEFAULT_FAVICON_URL;
@@ -252,7 +255,8 @@ const App = () => {
       return;
     }
     useWishlistStore.persist.rehydrate();
-  }, [authToken, clearWishlist]);
+    loadWishlist();
+  }, [authToken, clearWishlist, loadWishlist]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -319,6 +323,8 @@ const App = () => {
             <Route path="categories" element={<AdminCategories />} />
             <Route path="blogs" element={<AdminBlogs />} />
             <Route path="users" element={<AdminUsers />} />
+            <Route path="cart-favorites" element={<AdminCartFavorites />} />
+            <Route path="pending-payments" element={<AdminPendingPayments />} />
             <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="shipments" element={<AdminShipments />} />
             <Route path="payments" element={<AdminPayments />} />

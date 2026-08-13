@@ -3,11 +3,13 @@ import { StatusBadge } from './AdminDashboard';
 import { CheckCircle2, MapPin, RefreshCw, Truck } from 'lucide-react';
 import { adminCheckDtdcPincode, adminTrackDtdcOrder, fetchOrders } from '@/lib/api';
 import { toast } from 'sonner';
+import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 
 const AdminShipments = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [busyOrder, setBusyOrder] = useState('');
   const [dtdcPreview, setDtdcPreview] = useState<any | null>(null);
+  const [page, setPage] = useState(1);
   useEffect(() => {
     const load = async () => {
       try {
@@ -26,6 +28,12 @@ const AdminShipments = () => {
   }, []);
   const shipments = orders.filter((o) => o.status !== 'cancelled');
   const dtdcShipments = shipments.filter((o) => String(o.shippingService || '').toLowerCase().includes('dtdc'));
+  const paginatedShipments = shipments.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(shipments.length / ADMIN_PAGE_SIZE));
+    if (page > totalPages) setPage(totalPages);
+  }, [shipments.length, page]);
 
   const fetchDtdcStatus = async (order: any) => {
     const lookup = String(order.trackingId || '').trim();
@@ -142,7 +150,7 @@ const AdminShipments = () => {
               <th className="text-left px-5 py-3 font-medium">DTDC Tools</th>
             </tr></thead>
             <tbody>
-              {shipments.map((o) => (
+              {paginatedShipments.map((o) => (
                 <tr key={o.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
                   <td className="px-5 py-3 text-amber-400 font-mono text-xs">{o.id}</td>
                   <td className="px-5 py-3 text-white font-mono text-xs hidden sm:table-cell">{o.trackingId || '-'}</td>
@@ -175,6 +183,7 @@ const AdminShipments = () => {
             </tbody>
           </table>
         </div>
+        <AdminPagination page={page} totalItems={shipments.length} onPageChange={setPage} itemLabel="shipments" />
       </div>
     </div>
   );

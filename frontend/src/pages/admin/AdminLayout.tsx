@@ -2,7 +2,7 @@ import { Outlet, useNavigate, Link, useLocation, Navigate } from 'react-router-d
 import { useAdminStore } from '@/store/adminStore';
 import {
   LayoutDashboard, Users, ShoppingBag, Package, Truck, CreditCard,
-  Tags, BarChart3, LogOut, Settings, ChevronRight, Menu, X, PenLine,
+  Tags, BarChart3, LogOut, Settings, ChevronRight, Menu, X, PenLine, HeartHandshake,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -10,6 +10,8 @@ const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
   { label: 'Analytics', icon: BarChart3, path: '/admin/analytics' },
   { label: 'Users', icon: Users, path: '/admin/users' },
+  { label: 'Cart & Favorite', icon: HeartHandshake, path: '/admin/cart-favorites' },
+  { label: 'Pending Payments', icon: CreditCard, path: '/admin/pending-payments' },
   { label: 'Orders', icon: ShoppingBag, path: '/admin/orders' },
   { label: 'Products', icon: Package, path: '/admin/products' },
   { label: 'Categories', icon: Tags, path: '/admin/categories' },
@@ -39,14 +41,16 @@ const AdminLayout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex overflow-x-hidden">
+    <div className="admin-light h-screen bg-slate-950 flex overflow-hidden">
       {/* Mobile overlay */}
       {mobileOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />}
 
       {/* Sidebar */}
       <aside className={`fixed lg:sticky top-0 left-0 z-50 h-screen bg-slate-900 border-r border-slate-800 transition-all duration-300 flex flex-col ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} ${sidebarOpen ? 'w-72 lg:w-64' : 'w-20'} max-w-[85vw]`}>
-        <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-800 shrink-0">
-          <span className="text-2xl">BM</span>
+        <div className="admin-brand flex items-center gap-3 px-4 h-16 border-b border-slate-800 shrink-0">
+          <span className="admin-brand-mark">
+            <img src="/logo.png" alt="BrajMart" />
+          </span>
           {sidebarOpen && <span className="text-lg font-bold text-white">BrajMart Admin</span>}
         </div>
 
@@ -82,7 +86,7 @@ const AdminLayout = () => {
       </aside>
 
       {/* Main */}
-      <div className="flex-1 flex flex-col min-h-screen min-w-0">
+      <div className="flex-1 flex h-screen min-w-0 flex-col overflow-hidden">
         <header className="sticky top-0 z-30 h-16 bg-slate-900/80 backdrop-blur-xl border-b border-slate-800 flex items-center px-4 gap-4">
           <button onClick={() => setMobileOpen(true)} className="lg:hidden text-slate-400 hover:text-white">
             <Menu size={22} />
@@ -97,7 +101,7 @@ const AdminLayout = () => {
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 overflow-x-hidden">
+        <main className="admin-content flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">
           <Outlet />
         </main>
       </div>

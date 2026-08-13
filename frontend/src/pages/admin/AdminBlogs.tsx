@@ -4,6 +4,7 @@ import type { BlogPost } from '@/types/blog';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2, Image as ImageIcon, Link as LinkIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 
 const emptyBlog: BlogPost = {
   id: '',
@@ -36,6 +37,7 @@ const AdminBlogs = () => {
   const [editing, setEditing] = useState<BlogPost | null>(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('all');
+  const [page, setPage] = useState(1);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -141,6 +143,16 @@ const AdminBlogs = () => {
     if (filter === 'all') return sortedBlogs;
     return sortedBlogs.filter((b) => b.status === filter);
   }, [filter, sortedBlogs]);
+  const paginatedBlogs = filteredBlogs.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filter]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredBlogs.length / ADMIN_PAGE_SIZE));
+    if (page > totalPages) setPage(totalPages);
+  }, [filteredBlogs.length, page]);
 
   return (
     <div className="space-y-6">
@@ -257,7 +269,7 @@ const AdminBlogs = () => {
         {!filteredBlogs.length && (
           <div className="text-slate-400 text-sm">No posts found for this filter.</div>
         )}
-        {filteredBlogs.map((blog) => (
+        {paginatedBlogs.map((blog) => (
           <div key={blog.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
             <div className="h-40 bg-slate-800">
               {blog.coverImage && <img src={blog.coverImage} alt={blog.title} className="w-full h-full object-cover" />}
@@ -286,6 +298,8 @@ const AdminBlogs = () => {
           </div>
         ))}
       </div>
+
+      <AdminPagination page={page} totalItems={filteredBlogs.length} onPageChange={setPage} itemLabel="posts" />
     </div>
   );
 };

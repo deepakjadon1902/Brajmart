@@ -323,15 +323,19 @@ const AdminSettings = () => {
   );
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <h1 className="text-2xl font-bold text-white">Settings</h1>
-      <p className="text-sm text-slate-400">All changes here reflect instantly across the main application.</p>
+    <div className="admin-settings-page space-y-5">
+      <div className="admin-settings-header">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Settings</h1>
+          <p className="text-sm text-slate-400">All changes here reflect instantly across the main application.</p>
+        </div>
+      </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2">
+      <div className="admin-settings-tabs">
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeTab === t.id ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+            className={`admin-settings-tab ${activeTab === t.id ? 'is-active bg-amber-500 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
             <t.icon size={14} /> {t.label}
           </button>
         ))}
@@ -339,7 +343,7 @@ const AdminSettings = () => {
 
       {/* Store Settings */}
       {activeTab === 'store' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Store size={18} /> Store Information</h2>
           <p className="text-xs text-slate-400">Store name and tagline appear in navbar, footer, and page titles.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -352,7 +356,7 @@ const AdminSettings = () => {
           <div>
             <label className="block text-sm text-slate-300 mb-1">Currency</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none">
-              <option value="INR">₹ INR</option>
+              <option value="INR">INR</option>
               <option value="USD">$ USD</option>
             </select>
           </div>
@@ -394,13 +398,13 @@ const AdminSettings = () => {
 
       {/* Shipping & Orders */}
       {activeTab === 'shipping' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Truck size={18} /> Shipping & Order Settings</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <InputField label="Free Shipping Above (₹)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
-            <InputField label="Shipping Fee (₹)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
+            <InputField label="Free Shipping Above (INR)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
+            <InputField label="Shipping Fee (INR)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
             <InputField label="Packaging Cost (%)" value={String(packagingRate)} onChange={(v) => setPackagingRate(Math.max(0, Number(v)))} type="number" />
-            <InputField label="Min Order Amount (₹)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
+            <InputField label="Min Order Amount (INR)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
             <InputField label="Max Quantity Per Item" value={String(maxOrderQuantity)} onChange={(v) => setMaxOrderQuantity(Number(v))} type="number" />
             <InputField label="Delivery ETA Min Days" value={String(deliveryEtaMinDays)} onChange={(v) => setDeliveryEtaMinDays(Number(v))} type="number" />
             <InputField label="Delivery ETA Max Days" value={String(deliveryEtaMaxDays)} onChange={(v) => setDeliveryEtaMaxDays(Number(v))} type="number" />
@@ -410,7 +414,7 @@ const AdminSettings = () => {
 
       {/* Payments */}
       {activeTab === 'payments' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><CreditCard size={18} /> Payment Methods</h2>
           <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
             <p className="text-sm font-medium text-white">Razorpay Checkout</p>
@@ -606,7 +610,7 @@ const AdminSettings = () => {
 
       {/* Notifications */}
       {activeTab === 'notifications' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Bell size={18} /> Notifications</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {Object.entries(settings.notifications).map(([key, value]) => (
@@ -621,7 +625,7 @@ const AdminSettings = () => {
 
       {/* Announcements */}
       {activeTab === 'announcements' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Megaphone size={18} /> Announcement Bar</h2>
           <p className="text-xs text-slate-400">These messages rotate in the top banner of the main site.</p>
           <div className="flex items-center justify-between">
@@ -654,7 +658,7 @@ const AdminSettings = () => {
 
       {/* Social Links */}
       {activeTab === 'social' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Globe size={18} /> Social Links</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InputField label="Instagram" value={socialLinks.instagram} onChange={(v) => setSocialLinks({ ...socialLinks, instagram: v })} />
@@ -667,7 +671,7 @@ const AdminSettings = () => {
 
       {/* SEO */}
       {activeTab === 'seo' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Search size={18} /> SEO & Branding</h2>
           <InputField label="Meta Title" value={metaTitle} onChange={setMetaTitle} />
           <InputField label="Meta Description" value={metaDescription} onChange={setMetaDescription} />
@@ -677,14 +681,14 @@ const AdminSettings = () => {
 
       {/* Hero Badges */}
       {activeTab === 'hero' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Image size={18} /> Hero Badges</h2>
           <p className="text-xs text-slate-400">These appear below the hero section (e.g., Temple Authenticated, 100% Organic).</p>
           <div className="flex gap-2">
             <input
               value={newHeroBadge}
               onChange={(e) => setNewHeroBadge(e.target.value)}
-              placeholder="??? Temple Authenticated"
+              placeholder="Temple Authenticated"
               className="flex-1 px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
             />
             <button onClick={addHeroBadge} className="px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold">
@@ -704,7 +708,7 @@ const AdminSettings = () => {
 
       {/* Advanced */}
       {activeTab === 'advanced' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Settings2 size={18} /> Advanced</h2>
           <div className="flex items-center justify-between">
             <div>
@@ -718,14 +722,14 @@ const AdminSettings = () => {
 
       {/* Admin */}
       {activeTab === 'admin' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Shield size={18} /> Admin Account</h2>
           <div className="flex justify-between text-sm"><span className="text-slate-400">Email</span><span className="text-white">{adminEmail}</span></div>
           <div className="flex justify-between text-sm"><span className="text-slate-400">Role</span><span className="text-amber-400 font-medium">Super Admin</span></div>
         </div>
       )}
 
-      <div className="flex items-center gap-4">
+      <div className="admin-settings-actions">
         <button onClick={handleSave} disabled={loading} className="px-5 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold flex items-center gap-2">
           <Save size={16} /> Save Settings
         </button>

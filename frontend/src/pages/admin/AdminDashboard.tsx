@@ -77,38 +77,36 @@ const AdminDashboard = () => {
   const activeUsers = users.filter((u) => String(u.status || '').toLowerCase() === 'active').length;
 
   const stats = [
-    { label: 'Total Revenue', value: `INR ${totalRevenue.toLocaleString('en-IN')}`, icon: DollarSign, color: 'from-emerald-500 to-teal-600', change: '+12.5%' },
-    { label: 'Total Orders', value: totalOrders, icon: ShoppingBag, color: 'from-blue-500 to-indigo-600', change: '+8.2%' },
-    { label: 'Total Products', value: products.length, icon: Package, color: 'from-amber-500 to-orange-600', change: '+3' },
-    { label: 'Active Users', value: activeUsers.toLocaleString('en-IN'), icon: Users, color: 'from-purple-500 to-pink-600', change: '+15.3%' },
+    { label: 'Total Revenue', value: `INR ${totalRevenue.toLocaleString('en-IN')}`, icon: DollarSign, change: '+12.5%' },
+    { label: 'Total Orders', value: totalOrders, icon: ShoppingBag, change: '+8.2%' },
+    { label: 'Total Products', value: products.length, icon: Package, change: '+3' },
+    { label: 'Active Users', value: activeUsers.toLocaleString('en-IN'), icon: Users, change: '+15.3%' },
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="admin-dashboard-page space-y-5">
+      <div className="admin-dashboard-header">
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
         <p className="text-slate-400 text-sm">Welcome back, Admin. Here's what's happening.</p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((s) => (
-          <div key={s.label} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center`}>
-                <s.icon size={20} className="text-white" />
-              </div>
-              <span className="text-xs text-emerald-400 flex items-center gap-0.5"><TrendingUp size={12} /> {s.change}</span>
+          <div key={s.label} className="admin-kpi-card">
+            <div className="admin-kpi-icon"><s.icon size={16} /></div>
+            <div className="min-w-0 flex-1">
+              <p className="admin-kpi-value truncate">{s.value}</p>
+              <p className="admin-kpi-label">{s.label}</p>
             </div>
-            <p className="text-2xl font-bold text-white">{s.value}</p>
-            <p className="text-sm text-slate-400">{s.label}</p>
+            <span className="admin-dashboard-change"><TrendingUp size={12} /> {s.change}</span>
           </div>
         ))}
       </div>
 
       {/* Recent Orders */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl">
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800">
+      <div className="admin-dashboard-panel">
+        <div className="admin-dashboard-panel-header">
           <h2 className="text-lg font-semibold text-white">Recent Orders</h2>
           <a href="/admin/orders" className="text-xs text-amber-400 flex items-center gap-1 hover:underline">View All <ArrowUpRight size={12} /></a>
         </div>
@@ -125,7 +123,7 @@ const AdminDashboard = () => {
             </thead>
             <tbody>
               {orders.slice(0, 5).map((o) => (
-                <tr key={o.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                <tr key={o.id} className="admin-dashboard-table-row border-b border-slate-800/50 hover:bg-slate-800/30">
                   <td className="px-5 py-3 text-amber-400 font-mono text-xs">{o.id}</td>
                   <td className="px-5 py-3 text-white">{o.shippingAddress.fullName || 'Customer'}</td>
                   <td className="px-5 py-3 text-white">INR {o.total.toLocaleString('en-IN')}</td>
@@ -141,8 +139,8 @@ const AdminDashboard = () => {
       </div>
 
       {/* Quick Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="admin-dashboard-summary-card">
           <h3 className="text-sm font-medium text-slate-400 mb-3">Order Status</h3>
           <div className="space-y-2">
             <div className="flex justify-between text-sm"><span className="text-slate-300">Pending</span><span className="text-amber-400 font-medium">{pendingOrders}</span></div>
@@ -150,7 +148,7 @@ const AdminDashboard = () => {
             <div className="flex justify-between text-sm"><span className="text-slate-300">Cancelled</span><span className="text-red-400 font-medium">{orders.filter(o => o.status === 'cancelled').length}</span></div>
           </div>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
+        <div className="admin-dashboard-summary-card">
           <h3 className="text-sm font-medium text-slate-400 mb-3">Top Categories</h3>
           <div className="space-y-2">
             {['Prasadam', 'Spiritual Books', 'Idols & Shringar'].map((cat) => (
@@ -161,7 +159,7 @@ const AdminDashboard = () => {
             ))}
           </div>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
+        <div className="admin-dashboard-summary-card">
           <h3 className="text-sm font-medium text-slate-400 mb-3">Payment Methods</h3>
           <div className="space-y-2">
             {['Razorpay', 'COD'].map((m) => (
@@ -178,16 +176,9 @@ const AdminDashboard = () => {
 };
 
 export const StatusBadge = ({ status }: { status: string }) => {
-  const colors: Record<string, string> = {
-    confirmed: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    processing: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    shipped: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-    out_for_delivery: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    delivered: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    cancelled: 'bg-red-500/10 text-red-400 border-red-500/20',
-  };
+  const statusKey = String(status || '').trim().toLowerCase();
   return (
-    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border ${colors[status] || 'bg-slate-500/10 text-slate-400'}`}>
+    <span className={`admin-status-badge admin-status-${statusKey || 'unknown'} inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border`}>
       {status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
     </span>
   );
