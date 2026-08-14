@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Clock3, CreditCard, Mail, MapPin, Phone, RefreshCw, Search, UserRound } from 'lucide-react';
-import { fetchPendingPaymentOrders } from '@/lib/api';
+import { AlertCircle, CheckCircle2, Clock3, CreditCard, Mail, MapPin, Phone, RefreshCw, Search, UserRound } from 'lucide-react';
+import { confirmPendingPayment, fetchPendingPaymentOrders } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 
@@ -52,6 +52,7 @@ const AdminPendingPayments = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [confirmingOrderId, setConfirmingOrderId] = useState<string | number | null>(null);
   const [page, setPage] = useState(1);
 
   const load = async (query = debouncedSearch) => {
@@ -105,6 +106,30 @@ const AdminPendingPayments = () => {
     if (page > totalPages) setPage(totalPages);
   }, [filtered.length, page]);
 
+  const handleConfirmPayment = async (order: PendingPaymentOrder) => {
+    const orderId = order.orderId || order._id;
+    if (!orderId) {
+      toast.error('Order ID is missing');
+      return;
+    }
+    const ok = window.confirm(`Confirm payment for order #${orderId}?\n\nOnly use this after you have received the QR/manual payment.`);
+    if (!ok) return;
+
+    setConfirmingOrderId(orderId);
+    try {
+      await confirmPendingPayment(orderId, {
+        note: 'Payment manually confirmed by admin after QR payment',
+      });
+      setOrders((current) => current.filter((item) => String(item.orderId || item._id) !== String(orderId)));
+      toast.success(`Payment confirmed for order #${orderId}`);
+      load(debouncedSearch);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to confirm payment');
+    } finally {
+      setConfirmingOrderId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -113,7 +138,7 @@ const AdminPendingPayments = () => {
           <p className="mt-1 text-sm text-slate-400">Customers who reached online checkout but have not completed payment yet.</p>
         </div>
         <button
-          onClick={load}
+          onClick={() => load()}
           disabled={loading}
           className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-amber-500/50 hover:text-amber-300 disabled:opacity-60"
         >
@@ -204,6 +229,14 @@ const AdminPendingPayments = () => {
                     </span>
                     <p className="mt-2 flex items-center gap-2 text-xs text-slate-400"><CreditCard size={13} />{order.paymentMethod || 'Online'}</p>
                     <p className="mt-2 text-xs text-slate-500">Updated {formatDate(order.paymentUpdatedAt)}</p>
+                    <button
+                      onClick={() => handleConfirmPayment(order)}
+                      disabled={confirmingOrderId === (order.orderId || order._id)}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <CheckCircle2 size={14} />
+                      {confirmingOrderId === (order.orderId || order._id) ? 'Confirming...' : 'Confirm Payment'}
+                    </button>
                   </td>
                 </tr>
               ))}

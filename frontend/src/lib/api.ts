@@ -254,6 +254,8 @@ export const adminCheckDtdcPincode = (payload: { orgPincode?: string; desPincode
 
 // Payments
 export const fetchPayments = () => getJson('/payments');
+export const confirmPendingPayment = (orderId: string | number, payload?: { transactionId?: string; note?: string }) =>
+  getJson(`/payments/admin/confirm-pending/${encodeURIComponent(String(orderId))}`, { method: 'POST', body: payload || {} });
 export const updatePaymentStatus = (id: string, status: string) =>
   getJson(`/payments/${id}`, { method: 'PUT', body: { status } });
 export const createPayment = (payload: Record<string, unknown>) =>

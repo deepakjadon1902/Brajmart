@@ -5,6 +5,7 @@ import { sendOrderConfirmation, sendPaymentReceipt, sendPaymentFailed, sendAdmin
 import { getEtaConfig, getEtaText } from '../lib/eta';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
 import { finalPaymentWhereSql } from '../lib/orderVisibility';
+import { markCouponUsed } from '../lib/orderPricing';
 
 const router = Router();
 
@@ -139,6 +140,7 @@ const applyRazorpayStatus = async (params: {
   const rows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [params.token]);
   const current = rows[0];
   if (!current) return null;
+  if (String(current.status) === 'paid' && params.status === 'failed') return current;
   if (String(current.status) === params.status) return current;
 
   const orderId = current.order_id ?? null;
@@ -235,11 +237,11 @@ const applyRazorpayStatus = async (params: {
   return refreshed[0] || current;
 };
 
-const reconcilePendingRazorpayToken = async (token: string) => {
+const reconcileRazorpayToken = async (token: string) => {
   if (!token || !isDbConnected()) return null;
   const rows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
   const current = rows[0];
-  if (!current || String(current.status) !== 'pending') return current || null;
+  if (!current || String(current.status) === 'paid' || String(current.method || '') !== 'Razorpay') return current || null;
 
   let capturedPayment: any = null;
   let failedPayment: any = null;
@@ -307,18 +309,18 @@ router.post('/reconcile', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     let reconciled = 0;
-    const pendingRazorpay = await dbQuery<any>(
-      "SELECT token FROM payment_status WHERE status = 'pending' AND method = 'Razorpay' ORDER BY updated_at DESC LIMIT 25"
+    const razorpayRows = await dbQuery<any>(
+      "SELECT token, status FROM payment_status WHERE status IN ('pending', 'failed') AND method = 'Razorpay' ORDER BY updated_at DESC LIMIT 50"
     );
-    for (const row of pendingRazorpay) {
+    for (const row of razorpayRows) {
       const token = String(row?.token || '').trim();
       if (!token) continue;
       try {
         const beforeRows = await dbQuery<any>('SELECT status FROM payment_status WHERE token = ? LIMIT 1', [token]);
         const before = String(beforeRows?.[0]?.status || '');
-        const after = await reconcilePendingRazorpayToken(token);
+        const after = await reconcileRazorpayToken(token);
         const afterStatus = String(after?.status || '');
-        if (before === 'pending' && afterStatus !== 'pending') reconciled += 1;
+        if (before !== afterStatus) reconciled += 1;
       } catch {
         // ignore
       }
@@ -330,6 +332,98 @@ router.post('/reconcile', auth, adminOnly, async (_req, res) => {
   }
 });
 
+router.post('/admin/confirm-pending/:orderId', auth, adminOnly, async (req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const orderId = Number(req.params.orderId);
+    if (!Number.isFinite(orderId) || orderId <= 0) return res.status(400).json({ message: 'Invalid order ID' });
+
+    const orderData = await getPaymentOrderDetails(orderId);
+    if (!orderData?.orderRow) return res.status(404).json({ message: 'Order not found' });
+    const orderRow = orderData.orderRow;
+    if (/^cod$|cash\s*on\s*delivery/i.test(String(orderRow.payment_method || ''))) {
+      return res.status(400).json({ message: 'COD orders do not need manual payment confirmation' });
+    }
+
+    const statusRows = await dbQuery<any>(
+      "SELECT * FROM payment_status WHERE order_id = ? ORDER BY updated_at DESC LIMIT 1",
+      [orderId]
+    );
+    const statusRow = statusRows[0];
+    if (statusRow && String(statusRow.status || '') === 'paid') {
+      return res.json({ ok: true, orderId, status: 'paid', alreadyConfirmed: true });
+    }
+
+    const amount = Number(statusRow?.amount || orderRow.total || 0);
+    const transactionId = String(req.body?.transactionId || '').trim()
+      || `manual_qr_${orderId}_${Date.now()}`;
+    const method = 'Manual QR';
+    const note = String(req.body?.note || '').trim() || 'Payment manually confirmed by admin after QR payment';
+    const history = parseJson<Array<{ status: string; date: string; note?: string }>>(orderRow.status_history, []);
+    if (!history.some((entry) => String(entry.note || '') === note)) {
+      history.push({ status: 'confirmed', date: new Date().toISOString(), note });
+    }
+
+    await dbExecute(
+      'UPDATE orders SET status = ?, payment_method = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
+      ['confirmed', method, JSON.stringify(history), orderId]
+    );
+
+    const paymentRows = await dbQuery<any>('SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1', [orderId]);
+    const paymentRow = paymentRows[0];
+    if (paymentRow) {
+      await dbExecute(
+        'UPDATE payments SET status = ?, method = ?, amount = ?, transaction_id = ?, updated_at = NOW() WHERE id = ?',
+        ['paid', method, amount, transactionId, paymentRow.id]
+      );
+    } else {
+      await dbExecute(
+        'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [orderId, orderRow.customer_name || '', orderRow.customer_email || '', method, amount, 'paid', transactionId]
+      );
+    }
+
+    await dbExecute(
+      'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
+      [statusRow?.token || transactionId, 'paid', orderId, amount, method, transactionId]
+    );
+
+    if (orderRow.coupon_code) await markCouponUsed(orderRow.coupon_code);
+
+    const { min, max } = await getEtaConfig();
+    const etaText = getEtaText(min, max);
+    if (orderRow.customer_email) {
+      sendOrderConfirmation(orderRow.customer_email, {
+        ...orderData.details,
+        orderId: String(orderId),
+        total: Number(orderRow.total || amount),
+        itemsCount: orderData.details.items?.length || 0,
+        eta: etaText,
+        paymentMethod: method,
+      }).catch(() => {});
+      sendPaymentReceipt(orderRow.customer_email, {
+        orderId: String(orderId),
+        amount,
+        paymentId: transactionId,
+        eta: etaText,
+        details: { ...orderData.details, paymentMethod: method },
+      }).catch(() => {});
+    }
+    sendAdminPaymentNotice({
+      status: 'paid',
+      orderId: String(orderId),
+      amount,
+      paymentId: transactionId,
+      method,
+      customerEmail: orderRow.customer_email,
+    }).catch(() => {});
+
+    return res.json({ ok: true, orderId, status: 'paid', paymentId: transactionId });
+  } catch (err: any) {
+    return res.status(500).json({ message: err?.message || 'Failed to confirm payment' });
+  }
+});
+
 router.get('/status/:token', async (req, res) => {
   try {
     const token = req.params.token;
@@ -337,14 +431,14 @@ router.get('/status/:token', async (req, res) => {
     const rows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
     if (!rows[0]) return res.status(404).json({ message: 'Payment not found' });
 
-    // Auto-reconcile pending Razorpay payments while the customer views the status page.
+    // Auto-reconcile Razorpay payments while the customer views the status page.
     const current = rows[0];
-    if (String(current.status) === 'pending' && String(current.method || '') === 'Razorpay') {
+    if ((String(current.status) === 'pending' || String(current.status) === 'failed') && String(current.method || '') === 'Razorpay') {
       try {
-        const reconciled = await reconcilePendingRazorpayToken(token);
-        if (reconciled && String(reconciled.status) !== 'pending') return res.json(mapPaymentStatusRow(reconciled));
+        const reconciled = await reconcileRazorpayToken(token);
+        if (reconciled && String(reconciled.status) !== String(current.status)) return res.json(mapPaymentStatusRow(reconciled));
       } catch {
-        // ignore reconciliation errors; fall back to current pending status
+        // ignore reconciliation errors; fall back to current stored status
       }
     }
 

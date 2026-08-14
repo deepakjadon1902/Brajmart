@@ -42,8 +42,9 @@ const AdminPayments = () => {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [page, setPage] = useState(1);
   useEffect(() => {
-    const load = async () => {
+    const load = async (reconcile = false) => {
       try {
+        if (reconcile) await reconcilePayments();
         const data: unknown = await fetchPayments();
         setPayments(normalizePayments(data));
         const orderData: unknown = await fetchOrders();
@@ -52,7 +53,7 @@ const AdminPayments = () => {
         toast.error(errorMessage(err, 'Failed to load payments'));
       }
     };
-    load();
+    load(true);
     const t = setInterval(() => load(), 5_000);
     return () => clearInterval(t);
   }, []);

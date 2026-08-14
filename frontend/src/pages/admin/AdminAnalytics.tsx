@@ -128,7 +128,7 @@ const AdminAnalytics = () => {
             <div key={bucket.key} className="flex h-full min-w-12 flex-1 flex-col items-center justify-end gap-2">
               <div className="flex w-full flex-1 items-end">
                 <div
-                  className="w-full rounded-t-lg bg-gradient-to-t from-amber-500/30 to-amber-400"
+                  className="admin-chart-revenue-bar w-full rounded-t-lg shadow-sm"
                   title={`${bucket.rangeLabel}: ${currency(bucket.revenue)} from ${bucket.orders} sales`}
                   style={{ height: bucket.revenue ? `${Math.max((bucket.revenue / maxRevenue) * 100, 8)}%` : '4%' }}
                 />
@@ -148,7 +148,7 @@ const AdminAnalytics = () => {
               label={item.category}
               value={`${item.count}`}
               width={categoryTotal ? (item.count / categoryTotal) * 100 : 0}
-              barClass="from-amber-500 to-orange-500"
+              barClass="admin-chart-fill-category"
             />
           )) : <EmptyState label="No products found" />}
         </BreakdownCard>
@@ -156,12 +156,12 @@ const AdminAnalytics = () => {
         <BreakdownCard icon={BarChart3} iconClass="text-emerald-400" title="Order Status">
           {report && Object.entries(report.breakdowns.statuses).length ? Object.entries(report.breakdowns.statuses).map(([status, count]) => {
             const colors: Record<string, string> = {
-              confirmed: 'from-blue-500 to-blue-600',
-              processing: 'from-amber-500 to-amber-600',
-              shipped: 'from-indigo-500 to-indigo-600',
-              delivered: 'from-emerald-500 to-emerald-600',
-              cancelled: 'from-red-500 to-red-600',
-              out_for_delivery: 'from-purple-500 to-purple-600',
+              confirmed: 'admin-chart-fill-confirmed',
+              processing: 'admin-chart-fill-processing',
+              shipped: 'admin-chart-fill-shipped',
+              delivered: 'admin-chart-fill-delivered',
+              cancelled: 'admin-chart-fill-cancelled',
+              out_for_delivery: 'admin-chart-fill-out-for-delivery',
             };
             return (
               <ProgressRow
@@ -169,7 +169,7 @@ const AdminAnalytics = () => {
                 label={status.replace(/_/g, ' ')}
                 value={`${count}`}
                 width={totals?.periodOrders ? (count / totals.periodOrders) * 100 : 0}
-                barClass={colors[status] || 'from-slate-500 to-slate-600'}
+                barClass={colors[status] || 'admin-chart-fill-neutral'}
               />
             );
           }) : <EmptyState label={`No ${selectedPeriod?.shortLabel.toLowerCase()} orders`} />}
@@ -228,8 +228,8 @@ const ProgressRow = ({ label, value, width, barClass }: { label: string; value: 
       <span className="capitalize text-slate-300">{label}</span>
       <span className="font-medium text-white">{value}</span>
     </div>
-    <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-      <div className={`h-full rounded-full bg-gradient-to-r ${barClass}`} style={{ width: `${Math.min(Math.max(width, 0), 100)}%` }} />
+    <div className="admin-chart-progress-track h-2 overflow-hidden rounded-full">
+      <div className={`admin-chart-progress-fill h-full rounded-full ${barClass}`} style={{ width: `${Math.min(Math.max(width, 0), 100)}%` }} />
     </div>
   </div>
 );

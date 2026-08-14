@@ -344,6 +344,61 @@
     background-image: linear-gradient(135deg, #dbeafe, #fff1c2) !important;
   }
 
+  .admin-light .admin-chart-revenue-bar {
+    background-color: #b45309 !important;
+    background-image: linear-gradient(180deg, #d97706 0%, #92400e 100%) !important;
+    border: 1px solid rgba(146, 64, 14, 0.35);
+  }
+
+  .admin-light .admin-chart-progress-track {
+    background-color: #d7e0ea !important;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+  }
+
+  .admin-light .admin-chart-progress-fill {
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.16) !important;
+  }
+
+  .admin-light .admin-chart-fill-category {
+    background-color: #b45309 !important;
+    background-image: linear-gradient(90deg, #92400e 0%, #c2410c 100%) !important;
+  }
+
+  .admin-light .admin-chart-fill-confirmed {
+    background-color: #1d4ed8 !important;
+    background-image: linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%) !important;
+  }
+
+  .admin-light .admin-chart-fill-processing {
+    background-color: #b45309 !important;
+    background-image: linear-gradient(90deg, #92400e 0%, #d97706 100%) !important;
+  }
+
+  .admin-light .admin-chart-fill-shipped {
+    background-color: #4338ca !important;
+    background-image: linear-gradient(90deg, #312e81 0%, #4f46e5 100%) !important;
+  }
+
+  .admin-light .admin-chart-fill-delivered {
+    background-color: #047857 !important;
+    background-image: linear-gradient(90deg, #065f46 0%, #059669 100%) !important;
+  }
+
+  .admin-light .admin-chart-fill-cancelled {
+    background-color: #b91c1c !important;
+    background-image: linear-gradient(90deg, #7f1d1d 0%, #dc2626 100%) !important;
+  }
+
+  .admin-light .admin-chart-fill-out-for-delivery {
+    background-color: #c2410c !important;
+    background-image: linear-gradient(90deg, #9a3412 0%, #ea580c 100%) !important;
+  }
+
+  .admin-light .admin-chart-fill-neutral {
+    background-color: #334155 !important;
+    background-image: linear-gradient(90deg, #1e293b 0%, #475569 100%) !important;
+  }
+
   .admin-light img {
     border-color: #d7e0ea !important;
   }

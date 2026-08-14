@@ -127,6 +127,36 @@ const fetchRazorpayPayment = async (paymentId: string) => {
   return data;
 };
 
+const fetchRazorpayOrderPayments = async (razorpayOrderId: string) => {
+  const { keyId, keySecret } = getRazorpayConfig();
+  if (!keyId || !keySecret) throw new Error('Razorpay credentials are not configured');
+  const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+  const response = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(razorpayOrderId)}/payments`, {
+    headers: { Authorization: `Basic ${auth}` },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data?.error?.description || data?.message || 'Unable to fetch Razorpay order payments';
+    throw new Error(message);
+  }
+  return Array.isArray(data?.items) ? data.items : [];
+};
+
+const findCapturedRazorpayPayment = async (razorpayOrderId: string, razorpayPaymentId?: string) => {
+  if (razorpayPaymentId) {
+    const payment = await fetchRazorpayPayment(razorpayPaymentId);
+    if (
+      String(payment?.status || '').toLowerCase() === 'captured'
+      && String(payment?.order_id || '') === razorpayOrderId
+    ) {
+      return payment;
+    }
+  }
+
+  const payments = await fetchRazorpayOrderPayments(razorpayOrderId);
+  return payments.find((payment: any) => String(payment?.status || '').toLowerCase() === 'captured') || null;
+};
+
 const assertRazorpayPaymentCaptured = async (razorpayOrderId: string, razorpayPaymentId: string) => {
   const statusRows = await dbQuery<any>('SELECT amount FROM payment_status WHERE token = ? LIMIT 1', [razorpayOrderId]);
   const statusRow = statusRows[0];
@@ -176,6 +206,24 @@ const updateOrderForPayment = async (params: {
   const statusRows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [params.razorpayOrderId]);
   const statusRow = statusRows[0];
   if (!statusRow) return null;
+  if (String(statusRow.status || '') === 'paid' && params.status === 'failed') {
+    return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
+  }
+
+  if (params.status === 'failed') {
+    const paidRows = await dbQuery<any>(
+      "SELECT id FROM payments WHERE order_id = ? AND status = 'paid' LIMIT 1",
+      [statusRow.order_id]
+    );
+    if (paidRows.length) {
+      await dbExecute(
+        'UPDATE payment_status SET status = ?, updated_at = NOW() WHERE token = ?',
+        ['paid', params.razorpayOrderId]
+      );
+      return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
+    }
+  }
+
   const alreadyFinal = String(statusRow.status || '') === params.status;
   if (alreadyFinal) {
     if (params.razorpayPaymentId && String(statusRow.payment_id || '') !== params.razorpayPaymentId) {
@@ -497,6 +545,18 @@ router.post('/failed', razorpayReportLimiter, async (req, res) => {
       return res.status(403).json({ message: 'Payment does not match this customer' });
     }
 
+    const capturedPayment = await findCapturedRazorpayPayment(razorpayOrderId, razorpay_payment_id ? String(razorpay_payment_id) : undefined).catch(() => null);
+    if (capturedPayment) {
+      const result = await updateOrderForPayment({
+        razorpayOrderId,
+        razorpayPaymentId: String(capturedPayment.id),
+        status: 'paid',
+        note: 'Payment corrected from Razorpay captured status',
+      });
+      if (!result) return res.status(404).json({ message: 'Payment not found' });
+      return res.json({ ok: true, ...result });
+    }
+
     const noteReason = String(reason || '').trim();
     const result = await updateOrderForPayment({
       razorpayOrderId,
@@ -540,6 +600,16 @@ router.post('/webhook', async (req: any, res) => {
         note: 'Payment confirmed via Razorpay webhook',
       });
     } else if (event === 'payment.failed') {
+      const capturedPayment = await findCapturedRazorpayPayment(razorpayOrderId, razorpayPaymentId).catch(() => null);
+      if (capturedPayment) {
+        await updateOrderForPayment({
+          razorpayOrderId,
+          razorpayPaymentId: String(capturedPayment.id),
+          status: 'paid',
+          note: 'Payment corrected from Razorpay captured status',
+        });
+        return res.json({ ok: true });
+      }
       await updateOrderForPayment({
         razorpayOrderId,
         razorpayPaymentId,
