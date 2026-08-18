@@ -149,8 +149,16 @@ router.get('/admin/pending-payments', auth, adminOnly, async (req, res) => {
       FROM orders o
       JOIN payment_status ps ON ps.order_id = o.id
       LEFT JOIN payments p ON p.order_id = o.id AND p.transaction_id = ps.token
-      WHERE ps.status = 'pending'
+      WHERE ps.status IN ('pending', 'failed')
         AND LOWER(o.payment_method) NOT IN ('cod', 'cash on delivery')
+        AND NOT EXISTS (
+          SELECT 1 FROM payments paid_p
+          WHERE paid_p.order_id = o.id AND paid_p.status = 'paid'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM payment_status paid_ps
+          WHERE paid_ps.order_id = o.id AND paid_ps.status = 'paid'
+        )
         ${searchSql}
       ORDER BY ps.updated_at DESC, o.updated_at DESC
     `, params);

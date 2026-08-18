@@ -126,6 +126,19 @@ const getPaymentOrderDetails = async (orderId) => {
         },
     };
 };
+const hasPaidSettlement = async (orderId) => {
+    if (!orderId)
+        return false;
+    const rows = await (0, db_1.dbQuery)(`SELECT 1
+     FROM payments p
+     WHERE p.order_id = ? AND p.status = 'paid'
+     UNION ALL
+     SELECT 1
+     FROM payment_status ps
+     WHERE ps.order_id = ? AND ps.status = 'paid'
+     LIMIT 1`, [orderId, orderId]);
+    return rows.length > 0;
+};
 const applyRazorpayStatus = async (params) => {
     const rows = await (0, db_1.dbQuery)('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [params.token]);
     const current = rows[0];
@@ -136,8 +149,17 @@ const applyRazorpayStatus = async (params) => {
     if (String(current.status) === params.status)
         return current;
     const orderId = current.order_id ?? null;
+    if (params.status === 'failed' && await hasPaidSettlement(orderId)) {
+        await (0, db_1.dbExecute)('UPDATE payment_status SET status = ?, updated_at = NOW() WHERE token = ?', ['paid', params.token]);
+        const refreshed = await (0, db_1.dbQuery)('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [params.token]);
+        return refreshed[0] || current;
+    }
     const paymentRows = orderId
-        ? await (0, db_1.dbQuery)('SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1', [orderId])
+        ? await (0, db_1.dbQuery)(`SELECT *
+       FROM payments
+       WHERE order_id = ?
+       ORDER BY (status = 'paid') DESC, id DESC
+       LIMIT 1`, [orderId])
         : [];
     let paymentRow = paymentRows[0];
     const transactionId = params.paymentId || paymentRow?.transaction_id || params.token;
@@ -151,7 +173,7 @@ const applyRazorpayStatus = async (params) => {
     if (orderId) {
         orderData = await getPaymentOrderDetails(orderId);
         if (orderData?.orderRow) {
-            const orderStatus = params.status === 'paid' ? 'confirmed' : 'cancelled';
+            const orderStatus = params.status === 'paid' ? 'confirmed' : String(orderData.orderRow.status || 'processing');
             const history = (0, dbHelpers_1.parseJson)(orderData.orderRow.status_history, []);
             if (!history.some((entry) => String(entry.note || '') === params.note)) {
                 history.push({ status: orderStatus, date: new Date().toISOString(), note: params.note });

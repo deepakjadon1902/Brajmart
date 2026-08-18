@@ -197,6 +197,22 @@ const getOrderDetails = async (orderRow: any) => ({
   billingAddress: parseJson(orderRow.billing_address, {}),
 });
 
+const hasPaidSettlement = async (orderId: any) => {
+  if (!orderId) return false;
+  const rows = await dbQuery<any>(
+    `SELECT 1
+     FROM payments p
+     WHERE p.order_id = ? AND p.status = 'paid'
+     UNION ALL
+     SELECT 1
+     FROM payment_status ps
+     WHERE ps.order_id = ? AND ps.status = 'paid'
+     LIMIT 1`,
+    [orderId, orderId]
+  );
+  return rows.length > 0;
+};
+
 const updateOrderForPayment = async (params: {
   razorpayOrderId: string;
   razorpayPaymentId?: string;
@@ -210,18 +226,12 @@ const updateOrderForPayment = async (params: {
     return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
   }
 
-  if (params.status === 'failed') {
-    const paidRows = await dbQuery<any>(
-      "SELECT id FROM payments WHERE order_id = ? AND status = 'paid' LIMIT 1",
-      [statusRow.order_id]
+  if (params.status === 'failed' && await hasPaidSettlement(statusRow.order_id)) {
+    await dbExecute(
+      'UPDATE payment_status SET status = ?, updated_at = NOW() WHERE token = ?',
+      ['paid', params.razorpayOrderId]
     );
-    if (paidRows.length) {
-      await dbExecute(
-        'UPDATE payment_status SET status = ?, updated_at = NOW() WHERE token = ?',
-        ['paid', params.razorpayOrderId]
-      );
-      return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
-    }
+    return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
   }
 
   const alreadyFinal = String(statusRow.status || '') === params.status;
@@ -243,7 +253,7 @@ const updateOrderForPayment = async (params: {
   let orderRow = orderRows[0];
   if (!orderRow) return null;
 
-  const orderStatus = params.status === 'paid' ? 'confirmed' : 'cancelled';
+  const orderStatus = params.status === 'paid' ? 'confirmed' : String(orderRow.status || 'processing');
   const history = parseJson<Array<{ status: string; date: string; note?: string }>>(orderRow.status_history, []);
   const alreadyHasTerminalNote = history.some((entry) => String(entry.note || '') === params.note);
   if (!alreadyHasTerminalNote) {

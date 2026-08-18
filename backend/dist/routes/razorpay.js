@@ -174,6 +174,19 @@ const getOrderDetails = async (orderRow) => ({
     shippingAddress: (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {}),
     billingAddress: (0, dbHelpers_1.parseJson)(orderRow.billing_address, {}),
 });
+const hasPaidSettlement = async (orderId) => {
+    if (!orderId)
+        return false;
+    const rows = await (0, db_1.dbQuery)(`SELECT 1
+     FROM payments p
+     WHERE p.order_id = ? AND p.status = 'paid'
+     UNION ALL
+     SELECT 1
+     FROM payment_status ps
+     WHERE ps.order_id = ? AND ps.status = 'paid'
+     LIMIT 1`, [orderId, orderId]);
+    return rows.length > 0;
+};
 const updateOrderForPayment = async (params) => {
     const statusRows = await (0, db_1.dbQuery)('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [params.razorpayOrderId]);
     const statusRow = statusRows[0];
@@ -182,12 +195,9 @@ const updateOrderForPayment = async (params) => {
     if (String(statusRow.status || '') === 'paid' && params.status === 'failed') {
         return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
     }
-    if (params.status === 'failed') {
-        const paidRows = await (0, db_1.dbQuery)("SELECT id FROM payments WHERE order_id = ? AND status = 'paid' LIMIT 1", [statusRow.order_id]);
-        if (paidRows.length) {
-            await (0, db_1.dbExecute)('UPDATE payment_status SET status = ?, updated_at = NOW() WHERE token = ?', ['paid', params.razorpayOrderId]);
-            return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
-        }
+    if (params.status === 'failed' && await hasPaidSettlement(statusRow.order_id)) {
+        await (0, db_1.dbExecute)('UPDATE payment_status SET status = ?, updated_at = NOW() WHERE token = ?', ['paid', params.razorpayOrderId]);
+        return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
     }
     const alreadyFinal = String(statusRow.status || '') === params.status;
     if (alreadyFinal) {
@@ -201,7 +211,7 @@ const updateOrderForPayment = async (params) => {
     let orderRow = orderRows[0];
     if (!orderRow)
         return null;
-    const orderStatus = params.status === 'paid' ? 'confirmed' : 'cancelled';
+    const orderStatus = params.status === 'paid' ? 'confirmed' : String(orderRow.status || 'processing');
     const history = (0, dbHelpers_1.parseJson)(orderRow.status_history, []);
     const alreadyHasTerminalNote = history.some((entry) => String(entry.note || '') === params.note);
     if (!alreadyHasTerminalNote) {
