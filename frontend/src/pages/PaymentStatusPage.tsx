@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { fetchPaymentStatus, trackOrder } from '@/lib/api';
 import { toPositiveMetaValue, trackMetaPixelEvent } from '@/lib/metaPixel';
+import { useCartStore } from '@/store/cartStore';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
@@ -44,6 +45,7 @@ const PaymentStatusPage = () => {
   const [method, setMethod] = useState<string | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[] | null>(null);
   const purchasePushedRef = useRef<string>('');
+  const clearCart = useCartStore((state) => state.clearCart);
 
   useEffect(() => {
     let active = true;
@@ -97,6 +99,10 @@ const PaymentStatusPage = () => {
     if (status === 'paid' && orderId) loadOrder();
     return () => { active = false; };
   }, [status, orderId]);
+
+  useEffect(() => {
+    if (status === 'paid') clearCart();
+  }, [status, clearCart]);
 
   useEffect(() => {
     const purchaseValue = toPositiveMetaValue(META_PURCHASE_VALUE);
