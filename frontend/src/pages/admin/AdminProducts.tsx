@@ -2,8 +2,17 @@ import * as React from "react";
 import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Product, Category, Subcategory } from '@/types/product';
-import { Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
-import { createProduct, deleteProduct as deleteProductApi, updateProduct as updateProductApi, uploadImage, uploadImages, fetchProductsSchema } from '@/lib/api';
+import { AlertTriangle, Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
+import {
+  createProduct,
+  deleteProduct as deleteProductApi,
+  updateProduct as updateProductApi,
+  uploadImage,
+  uploadImages,
+  fetchProductAudit,
+  fetchProductsSchema,
+  type ProductAuditReport,
+} from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 
@@ -51,6 +60,8 @@ const AdminProducts = () => {
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [page, setPage] = useState(1);
+  const [auditReport, setAuditReport] = useState<ProductAuditReport | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
   const firstCategory = categories[0];
 
   useEffect(() => {
@@ -108,6 +119,23 @@ const AdminProducts = () => {
     }
   };
 
+  const runProductAudit = async () => {
+    setAuditLoading(true);
+    try {
+      const report = await fetchProductAudit();
+      setAuditReport(report);
+      if (report.productsWithIssues > 0) {
+        toast.warning(`${report.productsWithIssues} products need data cleanup`);
+      } else {
+        toast.success('Product data audit passed');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to run product audit');
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
   const handleSave = async (product: Product) => {
     try {
       if (!product.description || !product.description.trim()) {
@@ -117,6 +145,31 @@ const AdminProducts = () => {
       const price = Number((product as any).price);
       if (!Number.isFinite(price) || price <= 0) {
         toast.error('Price must be greater than 0');
+        return;
+      }
+      const originalPrice = (() => {
+        const mrp = (product as any).originalPrice;
+        if (mrp === undefined || mrp === null || mrp === '') return undefined;
+        const n = Number(mrp);
+        return Number.isFinite(n) && n > 0 ? n : undefined;
+      })();
+      if (originalPrice !== undefined && price > originalPrice) {
+        toast.error('Sale price cannot be higher than MRP');
+        return;
+      }
+      const rating = Number((product as any).rating ?? 0);
+      if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
+        toast.error('Rating must be between 0 and 5');
+        return;
+      }
+      const reviewCount = Number((product as any).reviewCount ?? 0);
+      if (!Number.isFinite(reviewCount) || reviewCount < 0) {
+        toast.error('Review count cannot be negative');
+        return;
+      }
+      const soldCount = Number((product as any).soldCount ?? 0);
+      if (!Number.isFinite(soldCount) || soldCount < 0) {
+        toast.error('Sold count cannot be negative');
         return;
       }
 
@@ -161,13 +214,10 @@ const AdminProducts = () => {
         metaTitle: product.metaTitle?.trim() || deriveProductMetaTitle(product.name, product.category),
         metaDescription: product.metaDescription?.trim() || deriveProductMetaDescription(product.description || '', product.name),
         price,
-        originalPrice: (() => {
-          const mrp = (product as any).originalPrice;
-          if (mrp === undefined || mrp === null || mrp === '') return undefined;
-          const n = Number(mrp);
-          if (!Number.isFinite(n) || n <= 0) return undefined;
-          return n;
-        })(),
+        originalPrice,
+        rating,
+        reviewCount: Math.floor(reviewCount),
+        soldCount: Math.floor(soldCount),
         tags: Array.isArray(product.tags) ? product.tags : (product.badge ? [product.badge] : []),
         // Always send these keys so backend always persists them (never reverts to NULL).
         attributes: normalizedAttributes,
@@ -208,38 +258,107 @@ const AdminProducts = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Products</h1>
-        <button onClick={() => {
-          setIsCreating(true);
-          setEditProduct({
-            id: '',
-            name: '',
-            slug: '',
-            price: 0,
-            originalPrice: undefined,
-            image: '',
-            images: [],
-            colorVariants: [],
-            description: '',
-            metaTitle: '',
-            metaDescription: '',
-            categoryId: firstCategory ? Number(firstCategory.id) : undefined,
-            category: firstCategory?.name || '',
-            subcategoryId: undefined,
-            subcategory: null,
-            rating: 4.5,
-            reviewCount: 0,
-            inStock: true,
-            tags: [],
-            sizes: [],
-            sizePricing: [],
-            piecePricing: [],
-            attributes: [],
-            variantPricing: [],
-          });
-        }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
-          <Plus size={16} /> Add Product
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            onClick={runProductAudit}
+            disabled={auditLoading}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+          >
+            <AlertTriangle size={16} /> {auditLoading ? 'Auditing...' : 'Audit Data'}
+          </button>
+          <button onClick={() => {
+            setIsCreating(true);
+            setEditProduct({
+              id: '',
+              name: '',
+              slug: '',
+              price: 0,
+              originalPrice: undefined,
+              image: '',
+              images: [],
+              colorVariants: [],
+              description: '',
+              metaTitle: '',
+              metaDescription: '',
+              categoryId: firstCategory ? Number(firstCategory.id) : undefined,
+              category: firstCategory?.name || '',
+              subcategoryId: undefined,
+              subcategory: null,
+              rating: 0,
+              reviewCount: 0,
+              inStock: true,
+              tags: [],
+              sizes: [],
+              sizePricing: [],
+              piecePricing: [],
+              attributes: [],
+              variantPricing: [],
+            });
+          }} className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition w-full sm:w-auto">
+            <Plus size={16} /> Add Product
+          </button>
+        </div>
       </div>
+
+      {auditReport && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Product Data Audit</h2>
+              <p className="mt-1 text-xs text-slate-400">
+                Checked {auditReport.totalProducts} products. {auditReport.productsWithIssues} need attention.
+              </p>
+            </div>
+            <div className="flex gap-2 text-xs">
+              <span className="rounded-full bg-red-500/10 px-3 py-1 font-semibold text-red-300">
+                {auditReport.errorCount} errors
+              </span>
+              <span className="rounded-full bg-amber-500/10 px-3 py-1 font-semibold text-amber-300">
+                {auditReport.warningCount} warnings
+              </span>
+            </div>
+          </div>
+
+          {auditReport.items.length > 0 && (
+            <div className="mt-4 max-h-72 overflow-auto rounded-xl border border-slate-800">
+              <table className="w-full min-w-[760px] text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 text-left text-slate-400">
+                    <th className="px-4 py-3 font-medium">Product</th>
+                    <th className="px-4 py-3 font-medium">Price</th>
+                    <th className="px-4 py-3 font-medium">Rating</th>
+                    <th className="px-4 py-3 font-medium">Main Issue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditReport.items.slice(0, 20).map((item) => {
+                    const firstIssue = item.issues[0];
+                    return (
+                      <tr key={item.id || item.name} className="border-b border-slate-800/60">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-white">{item.name || 'Missing product name'}</p>
+                          <p className="mt-0.5 text-slate-500">{item.category || 'No category'}</p>
+                        </td>
+                        <td className="px-4 py-3 text-slate-300">
+                          INR {item.price ?? 'invalid'} / MRP {item.originalPrice ?? 'unset'}
+                        </td>
+                        <td className="px-4 py-3 text-slate-300">
+                          {item.rating ?? 'invalid'} ({item.reviewCount ?? 'invalid'} reviews)
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={firstIssue?.severity === 'error' ? 'text-red-300' : 'text-amber-300'}>
+                            {firstIssue?.message || 'Needs review'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">

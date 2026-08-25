@@ -196,6 +196,29 @@ export const setAuthToken = (token: string) => {
 export const fetchProducts = (opts?: { fresh?: boolean }) => getJson(`/products${opts?.fresh ? '?fresh=1' : ''}`, { cache: opts?.fresh ? 'no-store' : 'default' });
 export const fetchProductBySlug = (slug: string) => getJson(`/products/${slug}`);
 export const fetchProductsSchema = () => getJson('/products/schema');
+export type ProductAuditReport = {
+  generatedAt: string;
+  totalProducts: number;
+  productsWithIssues: number;
+  errorCount: number;
+  warningCount: number;
+  issuesByCode: Record<string, number>;
+  items: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    category: string;
+    price: number | null;
+    originalPrice: number | null;
+    rating: number | null;
+    reviewCount: number | null;
+    inStock: boolean;
+    issueCount: number;
+    issues: Array<{ code: string; field: string; severity: 'error' | 'warning'; message: string }>;
+  }>;
+};
+export const fetchProductAudit = () =>
+  getJson<ProductAuditReport>(`/products/audit?fresh=${Date.now()}`, { cache: 'no-store' });
 export const createProduct = (payload: Record<string, unknown>) =>
   getJson('/products', { method: 'POST', body: payload });
 export const updateProduct = (id: string, payload: Record<string, unknown>) =>

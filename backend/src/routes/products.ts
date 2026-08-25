@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { auth, adminOnly } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
+import { buildProductAuditReport } from '../lib/productDataQuality';
 
 const router = Router();
 
@@ -24,6 +25,58 @@ const normalizeRequiredMoney = (value: any) => {
   const n = asFiniteNumber(value);
   if (n === null || n <= 0) return null;
   return n;
+};
+
+const normalizeRating = (value: any) => {
+  if (value === undefined || value === null || value === '') return 0;
+  const n = asFiniteNumber(value);
+  if (n === null || n < 0 || n > 5) return null;
+  return n;
+};
+
+const normalizeNonNegativeInt = (value: any, fallback = 0) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  const n = asFiniteNumber(value);
+  if (n === null || n < 0) return null;
+  return Math.floor(n);
+};
+
+const validateProductCommerceFields = (data: any, opts: { partial?: boolean } = {}) => {
+  const partial = Boolean(opts.partial);
+
+  if (!partial || data.price !== undefined) {
+    const normalizedPrice = normalizeRequiredMoney(data.price);
+    if (normalizedPrice === null) return { ok: false as const, message: 'Price must be greater than 0' };
+    data.price = normalizedPrice;
+  }
+
+  if (!partial || data.originalPrice !== undefined) {
+    data.originalPrice = normalizeMoneyOrNull(data.originalPrice);
+  }
+
+  if (data.price !== undefined && data.originalPrice !== undefined && data.originalPrice !== null && data.price > data.originalPrice) {
+    return { ok: false as const, message: 'Sale price cannot be higher than MRP' };
+  }
+
+  if (!partial || data.rating !== undefined) {
+    const rating = normalizeRating(data.rating);
+    if (rating === null) return { ok: false as const, message: 'Rating must be between 0 and 5' };
+    data.rating = rating;
+  }
+
+  if (!partial || data.reviewCount !== undefined) {
+    const reviewCount = normalizeNonNegativeInt(data.reviewCount);
+    if (reviewCount === null) return { ok: false as const, message: 'Review count cannot be negative' };
+    data.reviewCount = reviewCount;
+  }
+
+  if (!partial || data.soldCount !== undefined) {
+    const soldCount = normalizeNonNegativeInt(data.soldCount);
+    if (soldCount === null) return { ok: false as const, message: 'Sold count cannot be negative' };
+    data.soldCount = soldCount;
+  }
+
+  return { ok: true as const };
 };
 
 const isColorSelectionKey = (key: string) => String(key || '').toLowerCase().includes('color');
@@ -321,6 +374,26 @@ router.get('/schema', auth, adminOnly, async (_req, res) => {
   }
 });
 
+router.get('/audit', auth, adminOnly, async (_req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    await ensureProductCategorySchema();
+    await ensureProductSeoColumns();
+    const rows = await dbQuery<any>(
+      `SELECT p.*, c.name AS category_name, s.name AS subcategory_name
+       FROM products p
+       LEFT JOIN categories c ON p.category_id = c.id
+       LEFT JOIN subcategories s ON p.subcategory_id = s.id
+       ORDER BY p.created_at DESC`
+    );
+    res
+      .setHeader('Cache-Control', 'no-store, max-age=0')
+      .json(buildProductAuditReport(rows));
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Failed to audit products' });
+  }
+});
+
 router.get('/:slug', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
@@ -351,10 +424,8 @@ router.post('/', auth, adminOnly, async (req, res) => {
     await ensureProductSeoColumns();
 
     const data = req.body || {};
-    const normalizedPrice = normalizeRequiredMoney(data.price);
-    if (normalizedPrice === null) return res.status(400).json({ message: 'Price must be greater than 0' });
-    data.price = normalizedPrice;
-    data.originalPrice = normalizeMoneyOrNull(data.originalPrice);
+    const commerceValidation = validateProductCommerceFields(data);
+    if (!commerceValidation.ok) return res.status(400).json({ message: commerceValidation.message });
     if (process.env.NODE_ENV !== 'production') {
       console.log('POST /products payload keys:', Object.keys(data));
       console.log('POST /products attributes count:', Array.isArray(data.attributes) ? data.attributes.length : 'n/a');
@@ -529,13 +600,22 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
       if (found) body.categoryId = Number(found);
     }
 
-    if (body.price !== undefined) {
-      const normalizedPrice = normalizeRequiredMoney(body.price);
-      if (normalizedPrice === null) return res.status(400).json({ message: 'Price must be greater than 0' });
-      body.price = normalizedPrice;
+    let existingCommerceRow: any = null;
+    if (body.price !== undefined || body.originalPrice !== undefined) {
+      const rows = await dbQuery<any>('SELECT price, original_price FROM products WHERE id = ? LIMIT 1', [req.params.id]);
+      existingCommerceRow = rows?.[0] || null;
+      if (!existingCommerceRow) return res.status(404).json({ message: 'Product not found' });
     }
-    if (body.originalPrice !== undefined) {
-      body.originalPrice = normalizeMoneyOrNull(body.originalPrice);
+
+    const commerceValidation = validateProductCommerceFields(body, { partial: true });
+    if (!commerceValidation.ok) return res.status(400).json({ message: commerceValidation.message });
+    if (existingCommerceRow) {
+      const nextPrice = body.price !== undefined ? Number(body.price) : Number(existingCommerceRow.price);
+      const nextOriginalPrice =
+        body.originalPrice !== undefined ? body.originalPrice : normalizeMoneyOrNull(existingCommerceRow.original_price);
+      if (nextOriginalPrice !== null && Number.isFinite(nextPrice) && nextPrice > nextOriginalPrice) {
+        return res.status(400).json({ message: 'Sale price cannot be higher than MRP' });
+      }
     }
     if (process.env.NODE_ENV !== 'production') {
       console.log('PUT /products payload keys:', Object.keys(body));

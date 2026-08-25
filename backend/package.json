@@ -10,6 +10,7 @@
     "dev": "nodemon --watch src --ext ts --exec \"node -r ts-node/register src/index.ts\"",
     "seed:admin": "node -r ts-node/register scripts/seedAdmin.ts",
     "audit:images": "node -r ts-node/register scripts/auditLegacyImageUrls.ts",
+    "audit:products": "node -r ts-node/register scripts/auditProductDataQuality.ts",
     "migrate:images:imagekit": "node -r ts-node/register scripts/migrateLegacyLocalImagesToImageKit.ts"
   },
   "dependencies": {
