@@ -15,6 +15,7 @@ import { useWishlistStore } from "./store/wishlistStore";
 import { DEFAULT_IMAGE, SITE_URL } from "./lib/seo";
 import WhatsAppButton from "./components/layout/WhatsAppButton";
 import RouteSEO from "./components/seo/RouteSEO";
+import MobileBottomNav from "./components/layout/MobileBottomNav";
 
 const queryClient = new QueryClient();
 const DEFAULT_FAVICON_URL = "/favicon.ico";
@@ -336,6 +337,7 @@ const App = () => {
           </Routes>
           </Suspense>
           <NoIndexRoutes />
+          <MobileBottomNav />
           <StorefrontWhatsAppButton />
       </TooltipProvider>
     </QueryClientProvider>

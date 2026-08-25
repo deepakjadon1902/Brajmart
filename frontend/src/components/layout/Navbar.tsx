@@ -1,18 +1,20 @@
 import * as React from "react";
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Heart, ShoppingCart, Menu, X, User, LogOut, Package, MapPin, Newspaper } from 'lucide-react';
+import { Search, Heart, ShoppingCart, Menu, X, User, LogOut, Package, MapPin, BookOpen } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 import PublicBreadcrumbs from '@/components/seo/PublicBreadcrumbs';
+import { useProductStore, categoryToSlug } from '@/store/productStore';
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
@@ -20,6 +22,13 @@ const Navbar = () => {
   const wishlistCount = useWishlistStore(s => s.items.length);
   const { user, isAuthenticated, logout } = useAuthStore();
   const { settings } = useSettingsStore();
+  const categories = useProductStore((state) => state.categories);
+  const searchProducts = useProductStore((state) => state.searchProducts);
+  const trendingSearches = ['Prasadam', 'Bhagavad Gita', 'Prabhupad Books', 'Tulsi Mala', 'Japa Mala'];
+  const liveSuggestions = searchQuery.trim().length >= 2 ? searchProducts(searchQuery).slice(0, 5) : [];
+  const categorySuggestions = categories
+    .filter((category) => category.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    .slice(0, 3);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 80);
@@ -58,19 +67,88 @@ const Navbar = () => {
           )}
         </Link>
 
-        <form onSubmit={handleSearch} className="hidden md:flex flex-1 min-w-[360px] max-w-[760px] mx-auto">
+        <form onSubmit={handleSearch} className="relative hidden md:flex flex-1 min-w-[360px] max-w-[760px] mx-auto">
           <div className="flex w-full rounded-md border border-gold/40 overflow-hidden bg-card focus-within:border-saffron transition-colors shadow-sm">
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search Prasadam, Books, Shringar..."
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => window.setTimeout(() => setSearchFocused(false), 150)}
+              placeholder="Search Prasadam, Gita, Tulsi Mala..."
               className="flex-1 px-4 py-3 text-sm bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
             />
             <button type="submit" className="px-5 bg-saffron text-primary-foreground hover:bg-saffron-light transition-colors" aria-label="Search">
               <Search size={21} />
             </button>
           </div>
+          {searchFocused && (
+            <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[120] rounded-lg border border-border bg-card p-4 shadow-xl">
+              {searchQuery.trim().length < 2 ? (
+                <>
+                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">Trending Searches</p>
+                  <div className="flex flex-wrap gap-2">
+                    {trendingSearches.map((term) => (
+                      <button
+                        key={term}
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          navigate(`/search?q=${encodeURIComponent(term)}`);
+                        }}
+                        className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-gold hover:text-saffron"
+                      >
+                        {term}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="grid gap-3">
+                  {liveSuggestions.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">Products</p>
+                      <div className="grid gap-2">
+                        {liveSuggestions.map((product) => (
+                          <Link key={product.id} to={`/product/${product.slug}`} className="flex items-center gap-3 rounded-md p-2 hover:bg-muted premium-focus">
+                            <img src={product.image} alt="" className="h-10 w-10 rounded bg-brand-raised object-contain" />
+                            <span className="min-w-0 flex-1 text-sm font-semibold text-foreground line-clamp-1">{product.name}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {categorySuggestions.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">Categories</p>
+                      <div className="flex flex-wrap gap-2">
+                        {categorySuggestions.map((category) => (
+                          <Link key={category.id} to={`/category/${categoryToSlug(category.name)}`} className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-semibold hover:border-gold premium-focus">
+                            <BookOpen size={13} /> {category.name}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {liveSuggestions.length === 0 && categorySuggestions.length === 0 && (
+                    <div className="rounded-md bg-background p-4 text-sm text-muted-foreground">
+                      We could not find that yet. Try Prasadam, Tulsi Mala, Bhagavad Gita or Puja Items.
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+                    }}
+                    className="rounded-md bg-maroon px-4 py-2 text-sm font-bold text-white transition hover:bg-saffron"
+                  >
+                    See all results
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </form>
 
         <div className="flex items-center gap-3 sm:gap-5 ml-auto md:ml-0">

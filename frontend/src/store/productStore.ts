@@ -176,8 +176,31 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       },
       getProductById: (id) => get().products.find((p) => p.id === id),
       searchProducts: (query) => {
-        const q = query.toLowerCase();
-        return get().products.filter((p) => p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q));
+        const q = query.toLowerCase().trim();
+        const aliases: Record<string, string[]> = {
+          puja: ['puja', 'pooja', 'dhoop', 'diya', 'deepak', 'incense', 'chandan', 'itra', 'attar', 'tilak', 'shringar'],
+          pooja: ['puja', 'pooja', 'dhoop', 'diya', 'deepak', 'incense', 'chandan', 'itra', 'attar', 'tilak', 'shringar'],
+          gift: ['gift', 'combo', 'set', 'prasadam', 'gita', 'idol', 'bracelet', 'locket'],
+          accessories: ['accessories', 'bracelet', 'locket', 'bag', 'japa', 'mala', 'tulsi'],
+        };
+        const terms = aliases[q] || [q];
+
+        return get().products.filter((p) => {
+          const text = [
+            p.name,
+            p.category,
+            p.subcategory,
+            p.description,
+            p.badge,
+            ...(p.tags || []),
+            ...(p.attributes || []).flatMap((attribute) => [attribute.name, attribute.slug, ...(attribute.terms || [])]),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
+          return terms.some((term) => text.includes(term));
+        });
       },
       getLatestProducts: () => get().products.filter((p) => p.tags?.includes('latest')),
       getNewArrivals: () => get().products.filter((p) => p.tags?.includes('new')),

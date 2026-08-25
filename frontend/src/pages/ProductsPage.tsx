@@ -6,6 +6,7 @@ import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/product/ProductCard';
 import SEO from '@/components/seo/SEO';
 import { breadcrumbSchema } from '@/lib/seo';
+import type { Product } from '@/types/product';
 
 const tagLabels: Record<string, string> = {
   latest: 'Latest Products',
@@ -16,41 +17,140 @@ const tagLabels: Record<string, string> = {
   exclusive: 'BrajMart Exclusive',
 };
 
+const purposeCollections: Record<string, { title: string; description: string; categories?: string[]; terms: string[] }> = {
+  'daily-puja': {
+    title: 'Daily Puja Essentials',
+    description: 'Shop products commonly used for daily home worship, fragrance, offerings and altar care.',
+    categories: ['Incense/Pooja Items'],
+    terms: ['puja', 'pooja', 'dhoop', 'diya', 'deepak', 'agarbatti', 'incense', 'chandan', 'itra', 'attar', 'kumkum', 'roli', 'kapoor', 'camphor', 'thali', 'tilak'],
+  },
+  'japa-meditation': {
+    title: 'Japa & Meditation',
+    description: 'Shop malas, bead bags and simple devotional accessories for chanting and meditation.',
+    categories: ['Accessories'],
+    terms: ['japa', 'mala', 'tulsi', 'kanthi', 'kanti', 'bead', 'bag', 'rudraksha', 'chanting', 'meditation'],
+  },
+  'spiritual-reading': {
+    title: 'Spiritual Reading',
+    description: 'Shop Bhagavad Gita, Prabhupada books and short devotional study titles.',
+    categories: ['Books', 'Spiritual Books'],
+    terms: ['book', 'books', 'gita', 'bhagavad', 'srimad', 'prabhupad', 'prabhupada', 'reading', 'hindi', 'bengali', 'yoga'],
+  },
+  'devotional-gifting': {
+    title: 'Devotional Gifting',
+    description: 'Shop meaningful devotional gifts across books, prasadam, idols and accessories.',
+    categories: ['Prasadam', 'Books', 'Spiritual Books', 'Idols & Shringar', 'Accessories'],
+    terms: ['gift', 'combo', 'set', 'prasadam', 'gita', 'idol', 'laddu gopal', 'bracelet', 'locket', 'mala'],
+  },
+  'home-temple': {
+    title: 'Home Temple Essentials',
+    description: 'Shop Laddu Gopal products, shringar, idols and altar items for a home temple.',
+    categories: ['Idols & Shringar', 'Incense/Pooja Items'],
+    terms: ['laddu gopal', 'idol', 'idols', 'shringar', 'mukut', 'dress', 'altar', 'mandir', 'temple', 'brass', 'singhasan'],
+  },
+  prasadam: {
+    title: 'Prasadam',
+    description: 'Shop prasadam and devotional food offerings from the BrajMart catalog.',
+    categories: ['Prasadam'],
+    terms: ['prasadam', 'prasad', 'mahaprasadam', 'soan papdi', 'kuliya', 'temple prasadam'],
+  },
+  accessories: {
+    title: 'Devotional Accessories',
+    description: 'Shop bracelets, lockets, bags and everyday bhakti accessories.',
+    categories: ['Accessories'],
+    terms: ['accessories', 'bracelet', 'locket', 'bag', 'japa', 'mala', 'tulsi', 'ghungroo'],
+  },
+};
+
+const normalize = (value: unknown) => String(value || '').toLowerCase().trim();
+
+const productSearchText = (product: Product) =>
+  [
+    product.name,
+    product.category,
+    product.subcategory,
+    product.description,
+    product.badge,
+    ...(product.tags || []),
+    ...(product.attributes || []).flatMap((attribute) => [attribute.name, attribute.slug, ...(attribute.terms || [])]),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+const purposeProductScore = (
+  product: Product,
+  collection: { categories?: string[]; terms: string[] },
+) => {
+  const category = normalize(product.category);
+  const text = productSearchText(product);
+  const categoryScore = collection.categories?.some((item) => normalize(item) === category) ? 8 : 0;
+  const termScore = collection.terms.reduce((score, term) => score + (text.includes(normalize(term)) ? 2 : 0), 0);
+  return categoryScore + termScore;
+};
+
 const ProductsPage = () => {
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const tag = params.get('tag') || '';
   const category = params.get('category') || '';
+  const purpose = params.get('purpose') || '';
+  const purposeCollection = purposeCollections[purpose];
   const minPrice = Number(params.get('min') || 0);
   const maxPrice = Number(params.get('max') || 0);
   const minRating = Number(params.get('rating') || 0);
   const { products, categories, getByTag, lastFetchedAt, loading, error } = useProductStore();
 
   let filtered = products;
+  if (purposeCollection) {
+    filtered = filtered
+      .map((product) => ({ product, score: purposeProductScore(product, purposeCollection) }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => {
+        const stockDiff = Number(b.product.inStock) - Number(a.product.inStock);
+        if (stockDiff) return stockDiff;
+        if (b.score !== a.score) return b.score - a.score;
+        const soldDiff = Number(b.product.soldCount || 0) - Number(a.product.soldCount || 0);
+        if (soldDiff) return soldDiff;
+        return Number(b.product.rating || 0) - Number(a.product.rating || 0);
+      })
+      .map((item) => item.product);
+  }
   if (tag) filtered = filtered.filter((p) => p.tags?.includes(tag));
   if (category) filtered = filtered.filter((p) => p.category.toLowerCase() === category.toLowerCase());
   if (minPrice) filtered = filtered.filter((p) => Number(p.price) >= minPrice);
   if (maxPrice) filtered = filtered.filter((p) => Number(p.price) <= maxPrice);
   if (minRating) filtered = filtered.filter((p) => Number(p.rating || 0) >= minRating);
 
-  const title = tag ? (tagLabels[tag] || `Products: ${tag}`) : category ? `Category: ${category}` : 'All Products';
+  const title = purposeCollection
+    ? purposeCollection.title
+    : tag
+    ? (tagLabels[tag] || `Products: ${tag}`)
+    : category
+    ? `Category: ${category}`
+    : 'All Products';
   const pageTitle = tag
     ? `${title} | Brajmart`
+    : purposeCollection
+    ? `${title} Online | Brajmart`
     : category
     ? `${category} Online | Brajmart`
     : 'Shop Puja Items, Spiritual Books & Prasadam Online | Brajmart';
   const description = tag
     ? `Shop ${title.toLowerCase()} from Brajmart, including authentic puja items, devotional accessories, prasadam and spiritual essentials from Vrindavan.`
+    : purposeCollection
+    ? `${purposeCollection.description} Carefully selected spiritual products from Brajmart.`
     : category
     ? `Shop authentic ${category.toLowerCase()} online from Brajmart. Curated spiritual products from Vrindavan with reliable delivery across India.`
     : 'Shop authentic puja items, spiritual books, prasadam, deity idols and devotional accessories from Vrindavan. Delivered across India by Brajmart.';
   const indexableParams = new URLSearchParams();
+  if (purposeCollection) indexableParams.set('purpose', purpose);
   if (tag) indexableParams.set('tag', tag);
   if (category) indexableParams.set('category', category);
   const path = `${location.pathname}${indexableParams.toString() ? `?${indexableParams.toString()}` : ''}`;
   const hasFacetFilters = Boolean(minPrice || maxPrice || minRating);
   const hasAttemptedCatalogLoad = lastFetchedAt > 0 || Boolean(error);
-  const collectionIsMissing = !loading && hasAttemptedCatalogLoad && filtered.length === 0 && Boolean(tag || category);
+  const collectionIsMissing = !loading && hasAttemptedCatalogLoad && filtered.length === 0 && Boolean(tag || category || purposeCollection);
   const collectionSchema = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
@@ -92,6 +192,9 @@ const ProductsPage = () => {
           <span className="text-foreground">{title}</span>
         </div>
         <h1 className="font-cinzel text-2xl md:text-3xl font-bold text-maroon mb-6">{title}</h1>
+        {purposeCollection && (
+          <p className="-mt-4 mb-6 max-w-2xl text-sm leading-6 text-muted-foreground">{purposeCollection.description}</p>
+        )}
 
         <div className="flex flex-wrap gap-3 mb-6">
           <select

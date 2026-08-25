@@ -24,6 +24,12 @@ type ServiceabilityState = { pincode: string; serviceable: boolean; codAvailable
 type DtdcCheckResponse = Partial<Omit<ServiceabilityState, 'pincode'>>;
 type CreatedOrderResponse = { orderId?: string | number; _id?: string | number; id?: string | number };
 type AddressValidationResult = { valid: true } | { valid: false; message: string };
+type BundleSnapshot = {
+  name: string;
+  total: number;
+  savings: number;
+  products: Array<{ id: string; slug: string; name: string; category: string; price: number; image: string }>;
+};
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 const DUMMY_TEXT_PATTERN = /^(test|testing|demo|dummy|fake|sample|asdf|qwerty|abc|abcd|aaaa|xxxxx|none|null|unknown|na|n\/a)$/i;
@@ -144,6 +150,7 @@ const CheckoutPage = () => {
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
+  const [bundleSnapshot, setBundleSnapshot] = useState<BundleSnapshot | null>(null);
 
   const freeShippingThreshold = Number(settings.freeShippingThreshold) > 0 ? Number(settings.freeShippingThreshold) : DEFAULT_FREE_SHIPPING_THRESHOLD;
   const shippingFee = Number(settings.shippingFee) > 0 ? Number(settings.shippingFee) : DEFAULT_SHIPPING_FEE;
@@ -185,6 +192,21 @@ const CheckoutPage = () => {
   const couponDiscount = Number(appliedCoupon?.discountAmount || 0);
   const grandTotalBeforeCoupon = totalPrice() + packagingCost + shipping + codCharge;
   const grandTotal = Math.max(0, grandTotalBeforeCoupon - couponDiscount);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('brajmart-last-bundle');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as BundleSnapshot;
+      if (!parsed?.name || !Array.isArray(parsed.products) || parsed.products.length !== 5) return;
+      const cartIds = new Set(items.map((item) => item.product.id));
+      const bundleStillInCart = parsed.products.every((product) => cartIds.has(product.id));
+      setBundleSnapshot(bundleStillInCart ? parsed : null);
+      if (!bundleStillInCart) sessionStorage.removeItem('brajmart-last-bundle');
+    } catch {
+      setBundleSnapshot(null);
+    }
+  }, [items]);
 
   // Payment status is now handled on the dedicated Payment Status page.
 
@@ -641,6 +663,7 @@ const CheckoutPage = () => {
           statusHistory: [{ status: 'confirmed', date: new Date().toISOString(), note: 'Order confirmed with Cash on Delivery' }],
         }) as CreatedOrderResponse;
         setPlacedOrderId(String(order?.orderId || order?._id || order?.id || ''));
+        sessionStorage.removeItem('brajmart-last-bundle');
         clearCart();
         setStep(2);
         toast.success('COD order confirmed successfully');
@@ -757,6 +780,37 @@ const CheckoutPage = () => {
             </div>
           ))}
         </div>
+
+        {step < 2 && bundleSnapshot && (
+          <div className="mb-5 rounded-lg border border-gold/30 bg-card p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gold">Perfect Combo</p>
+                <h2 className="mt-1 font-playfair text-xl font-bold text-foreground">{bundleSnapshot.name}</h2>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="text-xs text-muted-foreground">Combo total</p>
+                <p className="font-playfair text-xl font-bold text-saffron">{formatPrice(bundleSnapshot.total)}</p>
+                {bundleSnapshot.savings > 0 && <p className="text-xs font-semibold text-tulsi">Saved {formatPrice(bundleSnapshot.savings)}</p>}
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-5">
+              {bundleSnapshot.products.map((product) => (
+                <Link
+                  key={product.id}
+                  to={`/product/${product.slug}`}
+                  className="grid grid-cols-[42px_1fr] items-center gap-2 rounded-md border border-border bg-background p-2 transition hover:border-gold/50 premium-focus sm:block"
+                >
+                  <img src={product.image} alt="" className="h-10 w-10 rounded border border-border bg-card object-contain p-1 sm:h-14 sm:w-full" />
+                  <span className="min-w-0 sm:mt-2 sm:block">
+                    <span className="block line-clamp-1 text-xs font-semibold text-foreground">{product.name}</span>
+                    <span className="mt-0.5 block text-xs font-bold text-saffron">{formatPrice(product.price)}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">

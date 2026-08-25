@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useHeroStore } from '@/store/heroStore';
 import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 
@@ -11,10 +12,10 @@ const HeroCarousel = () => {
   const fallbackSlide = useMemo(
     () => ({
       id: 'fallback-hero',
-      tag: 'BRAJMART COLLECTION',
-      title: 'Spiritual Books, Puja Items & Sacred Goods from Vrindavan',
-      subtitle: 'A faster, cleaner home experience for devotees discovering authentic BrajMart offerings.',
-      cta: 'Shop Now',
+      tag: 'AUTHENTIC BRAJ DEVOTIONAL GOODS',
+      title: 'Bring the Blessings of Vrindavan Home',
+      subtitle: 'Authentic devotional products, spiritual books, prasadam and sacred essentials, carefully selected from Braj.',
+      cta: 'Explore Divine Collection',
     }),
     []
   );
@@ -98,28 +99,37 @@ const HeroCarousel = () => {
               <div className="absolute inset-0 bg-brand-soft" aria-hidden="true" />
             )}
 
-            <div className="absolute inset-0 hidden bg-gradient-to-r from-black/50 via-black/10 to-transparent sm:block md:from-black/42" aria-hidden="true" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/62 via-black/22 to-transparent md:from-black/48" aria-hidden="true" />
 
-            <div className="absolute inset-x-0 bottom-0 hidden items-end justify-start px-3 pb-6 pt-8 sm:flex sm:px-7 sm:pb-9 md:px-14 md:pb-10 lg:px-20">
-              <div className="max-w-[12.5rem] px-0 py-0 text-white drop-shadow-[0_2px_5px_rgba(0,0,0,0.55)] sm:max-w-xs sm:rounded-md sm:bg-white/76 sm:px-3.5 sm:py-2.5 sm:text-black sm:shadow-lg sm:backdrop-blur-sm md:max-w-[21rem] md:px-4 md:py-3">
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-start px-4 pb-6 pt-8 sm:px-7 sm:pb-9 md:px-14 md:pb-10 lg:px-20">
+              <div className="max-w-[18rem] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] sm:max-w-sm md:max-w-[34rem]">
                 {visibleSlide.tag && (
-                  <span className="block text-[0.44rem] font-semibold uppercase tracking-[0.1em] text-brand-gold sm:text-[0.58rem] sm:font-bold sm:tracking-[0.14em] md:text-[0.66rem]">
+                  <span className="block text-[0.58rem] font-bold uppercase tracking-[0.16em] text-gold-light sm:text-[0.68rem] md:text-xs">
                     {visibleSlide.tag}
                   </span>
                 )}
-                <h1 className="mt-0.5 line-clamp-1 font-cinzel text-[0.8rem] font-bold leading-tight sm:text-xl md:line-clamp-none md:text-2xl">
+                <h1 className="mt-2 font-playfair text-2xl font-bold leading-[1.04] text-white sm:text-4xl md:text-5xl">
                   {visibleSlide.title}
                 </h1>
                 {visibleSlide.subtitle && (
-                  <p className="mt-0.5 line-clamp-2 text-[0.54rem] font-medium leading-[1.15] text-white sm:mt-1 sm:text-xs sm:font-semibold sm:text-brand-primary md:text-sm">
+                  <p className="mt-3 line-clamp-3 max-w-xl text-sm font-medium leading-6 text-white/88 sm:text-base md:text-lg">
                     {visibleSlide.subtitle}
                   </p>
                 )}
-                {visibleSlide.cta && (
-                  <button className="mt-1.5 max-w-full rounded bg-brand-accent px-2 py-1 text-[0.56rem] font-bold leading-snug text-primary-foreground shadow-sm transition-colors hover:bg-brand-structure sm:mt-2 sm:px-3 sm:py-1.5 sm:text-xs md:px-4 md:py-2 md:text-sm">
-                    {visibleSlide.cta}
-                  </button>
-                )}
+                <div className="mt-4 flex flex-wrap gap-2 sm:gap-3">
+                  <Link
+                    to="/products"
+                    className="rounded-lg bg-saffron px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-maroon sm:px-5 sm:py-3 sm:text-sm premium-focus"
+                  >
+                    {visibleSlide.cta || 'Explore Divine Collection'}
+                  </Link>
+                  <Link
+                    to="/products?tag=bestseller"
+                    className="rounded-lg border border-white/40 bg-white/10 px-4 py-2.5 text-xs font-bold text-white backdrop-blur transition hover:bg-white/18 sm:px-5 sm:py-3 sm:text-sm premium-focus"
+                  >
+                    Shop Best Sellers
+                  </Link>
+                </div>
               </div>
             </div>
           </div>

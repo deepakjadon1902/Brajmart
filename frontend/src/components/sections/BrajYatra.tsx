@@ -1,59 +1,44 @@
 import { Link } from 'react-router-dom';
-import { ScrollReveal } from '../ui/ScrollReveal';
-import { brajDestinations } from '@/data/brajDestinations';
 import { MapPin } from 'lucide-react';
+import { brajDestinations } from '@/data/brajDestinations';
+import { ScrollReveal } from '../ui/ScrollReveal';
 
 const BrajYatra = () => (
-  <section className="py-12 md:py-18 bg-white relative overflow-hidden">
+  <section className="bg-white py-6 md:py-8">
     <div className="container mx-auto px-4">
       <ScrollReveal>
-        <div className="text-center mb-10">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <span className="h-px w-12 bg-gold/40" />
-            <span className="text-gold text-2xl">✾</span>
-            <span className="h-px w-12 bg-gold/40" />
-          </div>
-          <h2 className="font-cinzel text-2xl md:text-3xl font-bold text-brand-deep mb-2">
-            Braj Darshan — Enter the Realm of the Divine
-          </h2>
-          <p className="text-brand-deep/70 text-sm max-w-xl mx-auto">
-            Explore the sacred Yatra circuits of Braj Bhumi — from the birthplace of Lord Krishna to the land of Radha Rani
+        <div className="mb-6 text-center">
+          <h2 className="mb-2 font-cinzel text-2xl font-bold text-brand-deep md:text-3xl">Braj Darshan</h2>
+          <p className="mx-auto max-w-xl text-sm text-brand-deep/70">
+            Short, clean guides to Vrindavan, Mathura, Govardhan, Barsana, Nandgaon and Gokul.
           </p>
         </div>
       </ScrollReveal>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 max-w-5xl mx-auto">
-        {brajDestinations.map((d, i) => (
-          <ScrollReveal key={d.id} delay={i * 0.08}>
+      <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
+        {brajDestinations.map((destination, index) => (
+          <ScrollReveal key={destination.id} delay={index * 0.08}>
             <Link
-              to={`/braj-darshan/${d.slug}`}
-              className="block rounded-2xl bg-brand-deep/8 border border-brand-deep/15 backdrop-blur overflow-hidden group hover:border-gold/40 hover:bg-brand-deep/12 transition-all"
+              to={`/braj-darshan/${destination.slug}`}
+              className="group block overflow-hidden rounded-lg border border-brand-deep/15 bg-brand-deep/5 transition-all hover:border-gold/40 hover:bg-brand-deep/10"
             >
               <div className="aspect-[4/3] overflow-hidden">
                 <img
-                  src={d.image}
-                  alt={d.name}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  src={destination.image}
+                  alt={destination.name}
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   loading="lazy"
                 />
               </div>
               <div className="p-4 text-center">
-                <div className="flex items-center justify-center gap-2">
-                  <img
-                    src={d.templeIcon}
-                    alt={`${d.name} temple icon`}
-                    className="w-6 h-6 rounded-full object-cover border border-gold/40"
-                    loading="lazy"
-                  />
-                  <h3 className="font-cinzel text-brand-deep font-semibold text-sm">{d.name}</h3>
-                </div>
-                <div className="flex items-center justify-center gap-1 mt-1">
+                <h3 className="font-cinzel text-sm font-semibold text-brand-deep">{destination.name}</h3>
+                <div className="mt-1 flex items-center justify-center gap-1">
                   <MapPin size={10} className="text-gold" />
-                  <span className="text-black text-xs">{d.distance}</span>
+                  <span className="text-xs text-black">{destination.distance}</span>
                 </div>
-                <p className="text-black text-xs mt-2 line-clamp-2">{d.shortDesc}</p>
-                <span className="text-gold text-xs mt-2 block opacity-0 group-hover:opacity-100 transition-opacity">
-                  Explore →
+                <p className="mt-2 line-clamp-2 text-xs text-black">{destination.shortDesc}</p>
+                <span className="mt-2 block text-xs text-gold opacity-0 transition-opacity group-hover:opacity-100">
+                  Explore
                 </span>
               </div>
             </Link>

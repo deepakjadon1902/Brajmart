@@ -4,37 +4,37 @@
 
 @layer base {
   :root {
-    --background: 38 78% 97%;
-    --foreground: 354 44% 18%;
+    --background: 42 68% 97%;
+    --foreground: 24 22% 14%;
     --card: 0 0% 100%;
     --card-foreground: 354 44% 18%;
     --popover: 0 0% 100%;
     --popover-foreground: 354 44% 18%;
-    --primary: 24 90% 45%;
+    --primary: 24 86% 43%;
     --primary-foreground: 0 0% 100%;
     --secondary: 354 50% 24%;
     --secondary-foreground: 0 0% 100%;
-    --muted: 36 48% 91%;
-    --muted-foreground: 20 18% 40%;
-    --accent: 43 82% 47%;
+    --muted: 38 46% 92%;
+    --muted-foreground: 24 13% 38%;
+    --accent: 43 78% 46%;
     --accent-foreground: 354 50% 18%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 35 32% 84%;
-    --input: 35 32% 84%;
+    --border: 34 28% 84%;
+    --input: 34 28% 84%;
     --ring: 24 90% 45%;
     --radius: 0.5rem;
 
     /* BrajMart 60:30:10 palette: ivory surfaces, maroon structure, saffron-gold accents */
-    --brand-60: 38 78% 97%;
-    --brand-60-soft: 36 74% 94%;
+    --brand-60: 42 68% 97%;
+    --brand-60-soft: 38 54% 93%;
     --brand-60-raised: 0 0% 100%;
-    --brand-30: 354 50% 24%;
-    --brand-30-deep: 354 52% 16%;
-    --brand-30-muted: 18 22% 34%;
-    --brand-10: 24 90% 45%;
-    --brand-10-soft: 31 88% 54%;
-    --brand-10-gold: 43 82% 47%;
+    --brand-30: 14 42% 24%;
+    --brand-30-deep: 24 28% 13%;
+    --brand-30-muted: 24 16% 34%;
+    --brand-10: 24 86% 43%;
+    --brand-10-soft: 31 82% 53%;
+    --brand-10-gold: 43 78% 46%;
 
     --saffron: var(--brand-10);
     --saffron-light: var(--brand-10-soft);
@@ -71,7 +71,7 @@
     @apply bg-background text-foreground font-sans antialiased;
     overflow-wrap: break-word;
     font-family: 'Inter', system-ui, sans-serif;
-    color: #4A4A4A;
+    color: hsl(var(--foreground));
   }
   h1, h2, h3, h4 {
     text-wrap: balance;
@@ -79,7 +79,7 @@
   }
   h1, h2, .hero-title, .section-title {
     font-family: 'Playfair Display', Georgia, serif;
-    color: #1A1A1A;
+    color: hsl(var(--brand-30-deep));
   }
   p {
     text-wrap: pretty;
@@ -1184,6 +1184,20 @@
     margin-left: 0 !important;
   }
 
+  .storefront-band {
+    padding-block: clamp(32px, 5vw, 72px);
+  }
+
+  .storefront-shell {
+    width: min(100% - 2rem, 1180px);
+    margin-inline: auto;
+  }
+
+  .premium-focus:focus-visible {
+    outline: 2px solid hsl(var(--brand-10));
+    outline-offset: 3px;
+  }
+
   .discount-badge {
     background-color: #C62828 !important;
     color: #FFFFFF !important;
@@ -1305,7 +1319,7 @@
     }
 
     .whatsapp-float {
-      bottom: 16px;
+      bottom: 78px;
       right: 16px;
       width: 52px !important;
       height: 52px !important;
