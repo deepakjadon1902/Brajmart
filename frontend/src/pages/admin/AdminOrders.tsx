@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { OrderStatus } from '@/store/orderStore';
 import { StatusBadge } from './AdminDashboard';
-import { Search, Eye, X, RefreshCw, MapPin } from 'lucide-react';
+import { Search, Eye, X, RefreshCw, MapPin, MessageCircle } from 'lucide-react';
 import { adminCheckDtdcPincode, adminTrackDtdcOrder, fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
@@ -20,6 +20,7 @@ const AdminOrders = () => {
   const [dtdcLoading, setDtdcLoading] = useState(false);
   const [pincodeResult, setPincodeResult] = useState<any | null>(null);
   const [pincodeLoading, setPincodeLoading] = useState(false);
+  const [whatsappNote, setWhatsappNote] = useState('');
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -73,12 +74,14 @@ const AdminOrders = () => {
       setEditingTrackingId('');
       setDtdcTracking(null);
       setPincodeResult(null);
+      setWhatsappNote('');
       return;
     }
     const found = orders.find((o) => o.id === selectedOrder);
     setEditingTrackingId(found?.trackingId || '');
     setDtdcTracking(null);
     setPincodeResult(null);
+    setWhatsappNote('');
   }, [selectedOrder, orders]);
 
   const filtered = orders.filter((o) => {
@@ -174,6 +177,63 @@ const AdminOrders = () => {
     }
   };
 
+  const normalizeWhatsAppPhone = (value: unknown) => {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.length === 10) return `91${digits}`;
+    if (digits.length === 11 && digits.startsWith('0')) return `91${digits.slice(1)}`;
+    return digits;
+  };
+
+  const formatOrderStatus = (value: unknown) =>
+    String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+
+  const buildWhatsAppMessage = (order: any) => {
+    const address = order.shippingAddress || {};
+    const items = Array.isArray(order.items) ? order.items : [];
+    const itemLines = items.map((item: any, index: number) => {
+      const name = item?.product?.name || item?.name || 'Item';
+      const qty = Number(item?.quantity || 1);
+      const price = Number(item?.price || 0);
+      return `${index + 1}. ${name} - Qty ${qty} - INR ${(price * qty).toLocaleString('en-IN')}`;
+    });
+
+    return [
+      `Hello ${address.fullName || order.customerName || 'Customer'},`,
+      '',
+      whatsappNote.trim() ? whatsappNote.trim() : 'Sharing the latest update for your BrajMart order.',
+      '',
+      `Order ID: ${order.id || order._id || '-'}`,
+      `Status: ${formatOrderStatus(order.status)}`,
+      `Payment: ${order.paymentMethod || '-'}`,
+      `Amount: INR ${Number(order.total || 0).toLocaleString('en-IN')}`,
+      order.shippingService ? `Shipping Service: ${order.shippingService}` : '',
+      order.trackingId ? `Tracking ID: ${order.trackingId}` : '',
+      '',
+      'Items:',
+      ...(itemLines.length ? itemLines : ['-']),
+      '',
+      'Shipping Address:',
+      address.fullName || order.customerName || '-',
+      [address.street, address.city].filter(Boolean).join(', ') || '-',
+      [address.state, address.pincode].filter(Boolean).join(' - ') || '-',
+      `Phone: ${address.mobile || '-'}`,
+      '',
+      'Thank you for shopping with BrajMart.',
+    ].filter((line) => line !== '').join('\n');
+  };
+
+  const handleOpenWhatsApp = () => {
+    if (!detail) return;
+    const phone = normalizeWhatsAppPhone(detail.shippingAddress?.mobile || detail.customerPhone || detail.phone);
+    if (!phone) {
+      toast.error('Customer phone number is missing');
+      return;
+    }
+    const message = buildWhatsAppMessage(detail);
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Orders Management</h1>
@@ -263,6 +323,30 @@ const AdminOrders = () => {
                   <p>{[detail.shippingAddress?.state, detail.shippingAddress?.pincode].filter(Boolean).join(' - ') || '-'}</p>
                   <p>Phone: {detail.shippingAddress?.mobile || '-'}</p>
                 </div>
+              </div>
+
+              {/* WhatsApp Update */}
+              <div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-slate-400 mb-2">Custom WhatsApp Message</label>
+                    <textarea
+                      value={whatsappNote}
+                      onChange={(e) => setWhatsappNote(e.target.value.slice(0, 500))}
+                      placeholder="Type a custom note for this customer..."
+                      className="min-h-24 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenWhatsApp}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/30"
+                  >
+                    <MessageCircle size={17} />
+                    WhatsApp
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Opens WhatsApp with this order's items, amount, status, tracking, address, and your custom note filled in.</p>
               </div>
 
               {/* Coupon */}
