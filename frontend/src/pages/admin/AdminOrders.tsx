@@ -8,6 +8,7 @@ import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagina
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
 const shippingServices = ['DTDC', 'Shree Maruti', 'Delhivery', 'India Post', 'Ekart'];
+const COMPANY_WHATSAPP_DISPLAY = '+91 96343 59003';
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -219,6 +220,7 @@ const AdminOrders = () => {
       [address.state, address.pincode].filter(Boolean).join(' - ') || '-',
       `Phone: ${address.mobile || '-'}`,
       '',
+      `For help, reply here or contact BrajMart on ${COMPANY_WHATSAPP_DISPLAY}.`,
       'Thank you for shopping with BrajMart.',
     ].filter((line) => line !== '').join('\n');
   };
@@ -231,7 +233,7 @@ const AdminOrders = () => {
       return;
     }
     const message = buildWhatsAppMessage(detail);
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    window.open(`https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -346,7 +348,7 @@ const AdminOrders = () => {
                     WhatsApp
                   </button>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">Opens WhatsApp with this order's items, amount, status, tracking, address, and your custom note filled in.</p>
+                <p className="mt-2 text-xs text-slate-500">Opens WhatsApp Web to the customer's number with this order's items, amount, status, tracking, address, and your custom note filled in. Keep WhatsApp Web logged in as {COMPANY_WHATSAPP_DISPLAY} so the message is sent from the company number.</p>
               </div>
 
               {/* Coupon */}
