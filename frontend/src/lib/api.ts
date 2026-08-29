@@ -139,6 +139,7 @@ export const verifyPasswordResetOtp = (payload: { email: string; otp: string }) 
 
 export const createRazorpayOrder = (payload: {
   amount: number;
+  idempotencyKey?: string;
   order: Record<string, unknown>;
   customer: { name: string; email: string; phone?: string };
 }) =>
@@ -213,6 +214,8 @@ export type ProductAuditReport = {
     rating: number | null;
     reviewCount: number | null;
     inStock: boolean;
+    stockQuantity: number | null;
+    reservedQuantity: number | null;
     issueCount: number;
     issues: Array<{ code: string; field: string; severity: 'error' | 'warning'; message: string }>;
   }>;
@@ -225,6 +228,20 @@ export const updateProduct = (id: string, payload: Record<string, unknown>) =>
   getJson(`/products/${id}`, { method: 'PUT', body: payload });
 export const deleteProduct = (id: string) =>
   getJson(`/products/${id}`, { method: 'DELETE' });
+
+export type PublicCollection = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  purposeKey?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+};
+
+export const fetchCollections = () => getJson<PublicCollection[]>('/collections');
+export const fetchCollectionProducts = (slug: string) =>
+  getJson<{ collection: PublicCollection; products: any[] }>(`/collections/${encodeURIComponent(slug)}/products`);
 
 // Categories
 export const fetchCategories = (opts?: { fresh?: boolean }) => getJson(`/categories${opts?.fresh ? '?fresh=1' : ''}`, { cache: opts?.fresh ? 'no-store' : 'default' });
@@ -242,6 +259,190 @@ export const updateSubcategory = (subId: string, payload: Record<string, unknown
   getJson(`/categories/subcategories/${subId}`, { method: 'PUT', body: payload });
 export const deleteSubcategory = (subId: string) =>
   getJson(`/categories/subcategories/${subId}`, { method: 'DELETE' });
+
+export type InventoryProduct = {
+  id: string;
+  name: string;
+  slug: string;
+  sku: string;
+  category: string;
+  image: string;
+  inStock: boolean;
+  stockQuantity: number | null;
+  reservedQuantity: number;
+  availableQuantity: number | null;
+  lowStockThreshold: number;
+  status: 'HEALTHY' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'UNMANAGED' | 'INVALID';
+  updatedAt?: string;
+};
+
+export type InventoryTransaction = {
+  id: string;
+  type: string;
+  quantity: number;
+  previousQuantity: number | null;
+  newQuantity: number | null;
+  previousReserved: number | null;
+  newReserved: number | null;
+  reason: string;
+  createdBy: string;
+  orderId: string | null;
+  orderStatus: string | null;
+  createdAt?: string;
+};
+
+export type InventoryAuditIssue = {
+  code: string;
+  field: string;
+  severity: 'error' | 'warning';
+  message: string;
+  currentValue?: unknown;
+  recommendedCorrection?: string;
+};
+
+export type InventoryAuditItem = {
+  id: string;
+  name: string;
+  slug: string;
+  category: string;
+  price: number | null;
+  originalPrice: number | null;
+  rating: number | null;
+  reviewCount: number | null;
+  inStock: boolean;
+  stockQuantity: number | null;
+  reservedQuantity: number | null;
+  lowStockThreshold: number | null;
+  sku: string;
+  issueCount: number;
+  issues: InventoryAuditIssue[];
+};
+
+export const fetchInventoryDashboard = () =>
+  getJson<{
+    generatedAt: string;
+    totals: { totalProducts: number; inStock: number; lowStock: number; outOfStock: number; invalid: number; reservedStock: number };
+    recentlyUpdated: InventoryProduct[];
+    alerts: InventoryProduct[];
+  }>('/inventory/dashboard', { cache: 'no-store' });
+
+export const fetchInventoryProducts = (params?: Record<string, string | number | boolean | undefined | null>) =>
+  getJson<{ page: number; limit: number; total: number; totalPages: number; items: InventoryProduct[] }>(
+    `/inventory/products${queryString(params)}`,
+    { cache: 'no-store' }
+  );
+
+export const fetchInventoryHistory = (productId: string) =>
+  getJson<{ product: InventoryProduct; transactions: InventoryTransaction[] }>(
+    `/inventory/products/${encodeURIComponent(productId)}/history`,
+    { cache: 'no-store' }
+  );
+
+export const adjustInventoryStock = (
+  productId: string,
+  payload: { type: 'INCREASE' | 'DECREASE' | 'SET'; quantity: number; reason: string; note?: string }
+) => getJson<{ ok: boolean; product: InventoryProduct }>(
+  `/inventory/products/${encodeURIComponent(productId)}/adjust`,
+  { method: 'POST', body: payload }
+);
+
+export const fetchInventoryAudit = () =>
+  getJson<{
+    generatedAt: string;
+    totalProducts: number;
+    productsWithIssues: number;
+    errorCount: number;
+    warningCount: number;
+    issuesByCode: Record<string, number>;
+    items: InventoryAuditItem[];
+  }>('/inventory/audit', { cache: 'no-store' });
+
+export const saveInventoryProductCorrection = (productId: string, payload: Record<string, unknown>) =>
+  getJson<{ ok: boolean; product: InventoryProduct }>(
+    `/inventory/products/${encodeURIComponent(productId)}/correction`,
+    { method: 'PUT', body: payload }
+  );
+
+export type AdminAuditLog = {
+  id: string;
+  adminId: string;
+  adminEmail: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  before: unknown;
+  after: unknown;
+  reason: string;
+  metadata: unknown;
+  createdAt?: string;
+};
+
+export const fetchAdminAuditLogs = (params?: Record<string, string | number | boolean | undefined | null>) =>
+  getJson<{ page: number; limit: number; total: number; totalPages: number; items: AdminAuditLog[] }>(
+    `/admin/audit-logs${queryString(params)}`,
+    { cache: 'no-store' }
+  );
+
+export type ReviewSummary = {
+  averageRating: number;
+  reviewCount: number;
+  distribution: Record<1 | 2 | 3 | 4 | 5, number>;
+};
+
+export type PublicReview = {
+  id: string;
+  productId: string;
+  rating: number;
+  title: string;
+  body: string;
+  status: string;
+  isVerifiedPurchase: boolean;
+  customerName: string;
+  createdAt?: string;
+};
+
+export type AdminReview = PublicReview & {
+  userId: string;
+  orderId: string;
+  productName: string;
+  productSlug: string;
+  productImage: string;
+  customerEmail: string;
+  helpfulCount: number;
+  reportCount: number;
+  approvedAt?: string;
+  rejectedAt?: string;
+  hiddenAt?: string;
+  rejectionReason: string;
+  updatedAt?: string;
+};
+
+export const fetchProductReviews = (productId: string, params?: Record<string, string | number | boolean | undefined | null>) =>
+  getJson<{ summary: ReviewSummary; page: number; limit: number; totalPages: number; reviews: PublicReview[] }>(
+    `/reviews/products/${encodeURIComponent(productId)}${queryString(params)}`,
+    { cache: 'no-store' }
+  );
+
+export const fetchReviewEligibility = (productId: string, params?: { orderId?: string }) =>
+  getJson<{ canReview: boolean; orderId?: string; reason?: string; existingReviewId?: string; status?: string }>(
+    `/reviews/eligibility/${encodeURIComponent(productId)}${queryString(params)}`,
+    { cache: 'no-store' }
+  );
+
+export const createReview = (payload: { productId: string; orderId?: string; rating: number; title?: string; body: string }) =>
+  getJson<{ message: string; review: PublicReview }>('/reviews', { method: 'POST', body: payload });
+
+export const fetchAdminReviews = (params?: Record<string, string | number | boolean | undefined | null>) =>
+  getJson<{ page: number; limit: number; total: number; totalPages: number; items: AdminReview[] }>(
+    `/reviews/admin${queryString(params)}`,
+    { cache: 'no-store' }
+  );
+
+export const updateReviewStatus = (id: string, payload: { status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'HIDDEN'; reason?: string }) =>
+  getJson<{ ok: boolean; review: AdminReview }>(`/reviews/admin/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    body: payload,
+  });
 
 const queryString = (params?: Record<string, string | number | boolean | undefined | null>) => {
   const searchParams = new URLSearchParams();
@@ -375,18 +576,106 @@ export type PersistedProductInterestItem = {
   quantity?: number;
   selectedSize?: string;
   selectedPieces?: string;
+  selectedAttributes?: Record<string, string>;
   product?: Record<string, unknown>;
 };
 
 export const updateCart = (items: PersistedProductInterestItem[]) =>
   getJson('/cart', { method: 'PUT', body: { items } });
 export const clearCartApi = () => getJson('/cart', { method: 'DELETE' });
+export type CartValidationResponse = {
+  items: Array<PersistedProductInterestItem & {
+    productId: string;
+    requestedQuantity?: number;
+    availableQuantity?: number | null;
+    originalPrice?: number | null;
+    inStock?: boolean;
+  }>;
+  subtotal: number;
+  discount: number;
+  shipping: number;
+  packaging: number;
+  codFee: number;
+  grandTotal: number;
+  currency: string;
+  changes: Array<{
+    productId: string;
+    type: 'price' | 'quantity' | 'stock' | 'unavailable';
+    message: string;
+    previousPrice?: number;
+    currentPrice?: number;
+    requestedQuantity?: number;
+    currentQuantity?: number;
+  }>;
+  unavailableItems: Array<{ productId: string; name?: string; reason: string; message: string }>;
+  pricingVersion: string;
+  validatedAt: string;
+};
+export const validateCart = (items: PersistedProductInterestItem[]) =>
+  getJson<CartValidationResponse>('/cart/validate', { method: 'POST', body: { items } });
 
 // Wishlist
 export const fetchWishlist = () => getJson('/wishlist');
 export const updateWishlist = (items: PersistedProductInterestItem[]) =>
   getJson('/wishlist', { method: 'PUT', body: { items } });
 export const clearWishlistApi = () => getJson('/wishlist', { method: 'DELETE' });
+
+export type RecommendationItem = {
+  product: any;
+  type: 'frequently_bought_together' | 'curated_bundle' | 'related_products' | 'popular_fallback';
+  label: string;
+  reason?: string;
+  confidence?: number;
+};
+
+export type RecommendationSection = {
+  type: string;
+  title: string;
+  items: RecommendationItem[];
+};
+
+export type ProductRecommendationsResponse = {
+  productId: string;
+  sections: RecommendationSection[];
+  recommendations: RecommendationItem[];
+};
+
+export type CommerceBundle = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  imageUrl?: string;
+  displayLocation: string;
+  sortOrder: number;
+  isActive: boolean;
+  products: any[];
+  productCount: number;
+  bundlePrice: number;
+  savings: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export const fetchProductRecommendations = (productId: string, limit = 8) =>
+  getJson<ProductRecommendationsResponse>(`/recommendations/product/${encodeURIComponent(productId)}?limit=${encodeURIComponent(String(limit))}`);
+
+export const fetchCartRecommendations = (productIds: string[], limit = 8) =>
+  getJson<{ productIds: string[]; recommendations: RecommendationItem[] }>('/recommendations/cart', {
+    method: 'POST',
+    body: { productIds, limit },
+  });
+
+export const fetchBundles = (opts?: { location?: string; limit?: number }) =>
+  getJson<CommerceBundle[]>(`/bundles${queryString({ location: opts?.location, limit: opts?.limit })}`);
+
+export const fetchAdminBundles = () => getJson<CommerceBundle[]>('/bundles/admin');
+export const createAdminBundle = (payload: Record<string, unknown>) =>
+  getJson<{ bundle: CommerceBundle | null }>('/bundles/admin', { method: 'POST', body: payload });
+export const updateAdminBundle = (id: string, payload: Record<string, unknown>) =>
+  getJson<{ bundle: CommerceBundle | null }>(`/bundles/admin/${id}`, { method: 'PUT', body: payload });
+export const updateAdminBundleStatus = (id: string, isActive: boolean) =>
+  getJson<{ bundle: CommerceBundle | null }>(`/bundles/admin/${id}/status`, { method: 'PATCH', body: { isActive } });
 
 export const uploadImage = async (file: File) => {
   const token = getAuthToken();

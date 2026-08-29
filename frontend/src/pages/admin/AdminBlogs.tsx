@@ -104,14 +104,14 @@ const AdminBlogs = () => {
   };
 
   const remove = async (id: string) => {
-    if (!window.confirm('Delete this blog post?')) return;
+    if (!window.confirm('Archive this blog post? It will be removed from public blog pages and SEO.')) return;
     setLoading(true);
     try {
       await deleteBlog(id);
       setBlogs((prev) => prev.filter((b) => b.id !== id));
-      toast.success('Blog deleted');
+      toast.success('Blog archived');
     } catch (err: any) {
-      toast.error(err?.message || 'Delete failed');
+      toast.error(err?.message || 'Archive failed');
     } finally {
       setLoading(false);
     }

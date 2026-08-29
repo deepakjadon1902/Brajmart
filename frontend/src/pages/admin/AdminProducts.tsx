@@ -109,13 +109,13 @@ const AdminProducts = () => {
   }, [filtered.length, page]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this product?')) return;
+    if (!confirm('Archive this product? It will be hidden from shoppers, carts, checkout, and SEO while historical orders stay intact.')) return;
     try {
       await deleteProductApi(id);
       deleteProduct(id);
-      toast.success('Product deleted');
+      toast.success('Product archived');
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to delete product');
+      toast.error(err?.message || 'Failed to archive product');
     }
   };
 
@@ -227,6 +227,10 @@ const AdminProducts = () => {
         sizePricing: Array.isArray(product.sizePricing) ? product.sizePricing : [],
         piecePricing: Array.isArray(product.piecePricing) ? product.piecePricing : [],
       };
+      delete (normalized as Partial<Product>).stockQuantity;
+      delete (normalized as Partial<Product>).reservedQuantity;
+      delete (normalized as Partial<Product>).lowStockThreshold;
+      delete (normalized as Partial<Product>).sku;
       if (isCreating) {
         const created: any = await createProduct(normalized as any);
         addProduct({ ...created, id: created.id || created._id, tags: normalized.tags });

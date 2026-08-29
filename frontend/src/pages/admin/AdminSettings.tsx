@@ -63,6 +63,7 @@ const AdminSettings = () => {
   const [deliveryEtaMinDays, setDeliveryEtaMinDays] = useState(settings.deliveryEtaMinDays);
   const [deliveryEtaMaxDays, setDeliveryEtaMaxDays] = useState(settings.deliveryEtaMaxDays);
   const [codEnabled, setCodEnabled] = useState(settings.codEnabled);
+  const [codFee, setCodFee] = useState(settings.codFee);
   const [maintenanceMode, setMaintenanceMode] = useState(settings.maintenanceMode);
   const [metaTitle, setMetaTitle] = useState(settings.metaTitle);
   const [metaDescription, setMetaDescription] = useState(settings.metaDescription);
@@ -104,6 +105,7 @@ const AdminSettings = () => {
         setDeliveryEtaMinDays(data.deliveryEtaMinDays ?? settings.deliveryEtaMinDays);
         setDeliveryEtaMaxDays(data.deliveryEtaMaxDays ?? settings.deliveryEtaMaxDays);
         setCodEnabled(Boolean(data.codEnabled));
+        setCodFee(Number(data.codFee ?? 40));
         setMaintenanceMode(data.maintenanceMode);
         setMetaTitle(data.metaTitle);
         setMetaDescription(data.metaDescription);
@@ -147,7 +149,7 @@ const AdminSettings = () => {
         storeName, tagline, currency, storeEmail, storePhone, storeAddress,
         freeShippingThreshold, shippingFee, packagingRate, taxRate: packagingRate, minOrderAmount, maxOrderQuantity,
         deliveryEtaMinDays, deliveryEtaMaxDays,
-        codEnabled, maintenanceMode,
+        codEnabled, codFee, maintenanceMode,
         metaTitle, metaDescription, storeLogo,
         announcementBar: { enabled: announcementEnabled, messages: announcementMessages },
         socialLinks,
@@ -295,9 +297,9 @@ const AdminSettings = () => {
       await deleteCoupon(id);
       setCoupons((list) => list.filter((coupon) => String(coupon.id) !== String(id)));
       if (editingCouponId === id) resetCouponForm();
-      toast.success('Coupon deleted');
+      toast.success('Coupon archived');
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to delete coupon');
+      toast.error(err?.message || 'Failed to archive coupon');
     } finally {
       setCouponLoading(false);
     }
@@ -436,6 +438,7 @@ const AdminSettings = () => {
               <Toggle value={codEnabled} onChange={setCodEnabled} />
             </div>
           </div>
+          <InputField label="COD Handle Fee (INR)" value={String(codFee)} onChange={(v) => setCodFee(Math.max(0, Number(v) || 0))} type="number" />
 
           <div className="border-t border-slate-800 pt-5 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

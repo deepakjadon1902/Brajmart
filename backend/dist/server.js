@@ -21,9 +21,15 @@ const razorpay_1 = __importDefault(require("./routes/razorpay"));
 const coupons_1 = __importDefault(require("./routes/coupons"));
 const cart_1 = __importDefault(require("./routes/cart"));
 const wishlist_1 = __importDefault(require("./routes/wishlist"));
+const collections_1 = __importDefault(require("./routes/collections"));
 const heroSlides_1 = __importDefault(require("./routes/heroSlides"));
 const blogs_1 = __importDefault(require("./routes/blogs"));
 const analytics_1 = __importDefault(require("./routes/analytics"));
+const inventory_1 = __importDefault(require("./routes/inventory"));
+const adminAuditLogs_1 = __importDefault(require("./routes/adminAuditLogs"));
+const reviews_1 = __importDefault(require("./routes/reviews"));
+const recommendations_1 = __importDefault(require("./routes/recommendations"));
+const bundles_1 = __importDefault(require("./routes/bundles"));
 const db_1 = require("./lib/db");
 const app = (0, express_1.default)();
 const SITE_URL = (process.env.SITE_URL || 'https://www.brajmart.com').replace(/\/$/, '');
@@ -167,9 +173,15 @@ app.use('/api/razorpay', razorpay_1.default);
 app.use('/api/coupons', coupons_1.default);
 app.use('/api/cart', cart_1.default);
 app.use('/api/wishlist', wishlist_1.default);
+app.use('/api/collections', collections_1.default);
 app.use('/api/hero-slides', heroSlides_1.default);
 app.use('/api/blogs', blogs_1.default);
 app.use('/api/analytics', analytics_1.default);
+app.use('/api/inventory', inventory_1.default);
+app.use('/api/admin/audit-logs', adminAuditLogs_1.default);
+app.use('/api/reviews', reviews_1.default);
+app.use('/api/recommendations', recommendations_1.default);
+app.use('/api/bundles', bundles_1.default);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 const xmlEscape = (value) => String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -264,10 +276,10 @@ app.get('/sitemap.xml', async (_req, res) => {
     if ((0, db_1.isDbConnected)()) {
         try {
             const [products, categories, subcategories, blogs] = await Promise.all([
-                (0, db_1.dbQuery)('SELECT slug, updated_at FROM products WHERE slug IS NOT NULL AND slug <> "" ORDER BY updated_at DESC'),
-                (0, db_1.dbQuery)('SELECT id, name, product_count, updated_at FROM categories WHERE name IS NOT NULL AND name <> "" ORDER BY updated_at DESC'),
-                (0, db_1.dbQuery)('SELECT s.name, s.updated_at, c.name AS category_name FROM subcategories s JOIN categories c ON s.category_id = c.id WHERE s.name IS NOT NULL AND s.name <> "" AND c.name IS NOT NULL AND c.name <> "" ORDER BY s.updated_at DESC').catch(() => []),
-                (0, db_1.dbQuery)("SELECT slug, updated_at FROM blogs WHERE slug IS NOT NULL AND slug <> '' AND status = 'published' ORDER BY updated_at DESC").catch(() => []),
+                (0, db_1.dbQuery)('SELECT slug, updated_at FROM products WHERE archived_at IS NULL AND slug IS NOT NULL AND slug <> "" ORDER BY updated_at DESC'),
+                (0, db_1.dbQuery)('SELECT id, name, product_count, updated_at FROM categories WHERE archived_at IS NULL AND name IS NOT NULL AND name <> "" ORDER BY updated_at DESC'),
+                (0, db_1.dbQuery)('SELECT s.name, s.updated_at, c.name AS category_name FROM subcategories s JOIN categories c ON s.category_id = c.id WHERE s.archived_at IS NULL AND c.archived_at IS NULL AND s.name IS NOT NULL AND s.name <> "" AND c.name IS NOT NULL AND c.name <> "" ORDER BY s.updated_at DESC').catch(() => []),
+                (0, db_1.dbQuery)("SELECT slug, updated_at FROM blogs WHERE archived_at IS NULL AND slug IS NOT NULL AND slug <> '' AND status = 'published' ORDER BY updated_at DESC").catch(() => []),
             ]);
             for (const row of categories || []) {
                 const slug = slugify(row.name);

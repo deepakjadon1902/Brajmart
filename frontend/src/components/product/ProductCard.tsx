@@ -1,14 +1,20 @@
-import { useState } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart, ShoppingCart, Star, Eye } from 'lucide-react';
 import { Product } from '@/types/product';
-import { formatPrice, calculateDiscount } from '@/utils/formatPrice';
+import { formatPrice } from '@/utils/formatPrice';
 import { toSquareImageUrl } from '@/utils/image';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { productToMetaPixelParams, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { toast } from 'sonner';
+import {
+  getValidDiscountPercent,
+  getValidMrp,
+  getValidSavings,
+  hasReviewRating,
+  isProductPurchasable,
+} from '@/utils/productPresentation';
 
 interface ProductCardProps {
   product: Product;
@@ -41,8 +47,10 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
   const baseImage = cardImages[0] || product.image;
   const isAboveTheFold = priority && index < 2;
 
-  const discount = product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
-  const savings = product.originalPrice ? Math.max(0, product.originalPrice - product.price) : 0;
+  const discount = getValidDiscountPercent(product);
+  const mrp = getValidMrp(product);
+  const savings = getValidSavings(product);
+  const purchasable = isProductPurchasable(product);
   const badge = product.tags?.includes('bestseller')
     ? 'bestseller'
     : product.tags?.includes('new')
@@ -54,6 +62,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
     : product.badge;
 
   const addToCart = useCartStore(s => s.addItem);
+  const openCartDrawer = useCartStore(s => s.openDrawer);
   const { toggleItem, isInWishlist } = useWishlistStore();
   const inWishlist = isInWishlist(product.id);
   const navigate = useNavigate();
@@ -61,11 +70,12 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!product.inStock) {
+    if (!purchasable) {
       toast.error('This product is out of stock');
       return;
     }
     addToCart(product);
+    openCartDrawer(product.id);
     trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product));
     toast.success(`${product.name} added to cart!`);
   };
@@ -83,7 +93,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
   const handleBuyNow = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!product.inStock) {
+    if (!purchasable) {
       toast.error('This product is out of stock');
       return;
     }
@@ -92,16 +102,11 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
     navigate('/checkout');
   };
 
-  const handleViewProduct = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    navigate(`/product/${product.slug}`);
-  };
-
   const isCompact = variant === 'compact';
   const mediaAspectClass = 'aspect-square';
   const mediaFitClass = isCompact ? 'object-contain p-2.5' : 'object-cover';
   const ratingValue = Number(product.rating || 0);
+  const reviewCount = Number(product.reviewCount || 0);
 
   useEffect(() => {
     if (!isHovered) {
@@ -119,11 +124,12 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
 
   return (
     <div
-      className={`product-card group relative flex flex-col h-full rounded-lg border border-border bg-card shadow-sm overflow-hidden gold-glow-hover cursor-pointer content-visibility-auto ${isCompact ? 'min-h-[278px] sm:min-h-[305px]' : 'min-h-[335px]'}`}
+      className={`product-card group relative flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-gold/50 hover:shadow-md content-visibility-auto ${isCompact ? 'min-h-[312px] sm:min-h-[335px]' : 'min-h-[375px]'}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Link to={`/product/${product.slug}`} className={`image-wrap relative ${mediaAspectClass} overflow-hidden bg-brand-raised`}>
+      <div className={`image-wrap relative ${mediaAspectClass} overflow-hidden bg-brand-raised`}>
+        <Link to={`/product/${product.slug}`} aria-label={`View ${product.name}`} className="block h-full w-full">
         <img
           src={toSquareImageUrl(displayImage)}
           alt={product.name}
@@ -132,8 +138,9 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
           {...({ fetchpriority: isAboveTheFold ? 'high' : 'low' } as Record<string, string>)}
           className={`w-full h-full ${mediaFitClass} transition-all duration-300 ease-out group-hover:scale-[1.02]`}
         />
+        </Link>
 
-        {!product.inStock && (
+        {!purchasable && (
           <span className="absolute bottom-2 right-2 px-2 py-0.5 text-[0.62rem] font-extrabold rounded-full bg-destructive text-primary-foreground tracking-wide">
             OUT OF STOCK
           </span>
@@ -145,22 +152,22 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
           </span>
         )}
 
-        <div className={`absolute top-2 right-2 flex flex-col gap-1.5 transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+        <div className="absolute top-2 right-2 flex flex-col gap-1.5">
           <button
+            type="button"
             onClick={handleToggleWishlist}
-            className={`w-8 h-8 rounded-full shadow flex items-center justify-center transition-colors ${inWishlist ? 'bg-saffron text-primary-foreground' : 'bg-card/90 hover:bg-saffron hover:text-primary-foreground'}`}
-            aria-label="Wishlist"
+            className={`flex h-11 w-11 items-center justify-center rounded-full shadow transition-colors sm:h-9 sm:w-9 ${inWishlist ? 'bg-saffron text-primary-foreground' : 'bg-card/95 text-foreground hover:bg-saffron hover:text-primary-foreground'}`}
+            aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
           >
             <Heart size={15} className={inWishlist ? 'fill-current' : ''} />
           </button>
-          <button
-            type="button"
-            onClick={handleViewProduct}
-            className="w-8 h-8 rounded-full bg-card/90 shadow flex items-center justify-center hover:bg-saffron hover:text-primary-foreground transition-colors"
-            aria-label="View product"
+          <Link
+            to={`/product/${product.slug}`}
+            className="hidden h-9 w-9 items-center justify-center rounded-full bg-card/95 text-foreground shadow transition-colors hover:bg-saffron hover:text-primary-foreground sm:flex"
+            aria-label={`Quick view ${product.name}`}
           >
             <Eye size={15} />
-          </button>
+          </Link>
         </div>
 
         {discount > 0 && (
@@ -169,25 +176,36 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
           </span>
         )}
 
-        {ratingValue > 0 && (
+        {hasReviewRating(product) && (
           <span className="absolute bottom-3 left-3 inline-flex h-[22px] items-center gap-0.5 rounded-sm bg-[#388e3c] px-1.5 text-[11px] font-semibold leading-none text-white shadow-sm">
             <span>{ratingValue.toFixed(1).replace(/\.0$/, '')}</span>
             <Star size={10} strokeWidth={2.4} className="fill-white text-white" aria-hidden="true" />
           </span>
         )}
-      </Link>
+      </div>
 
       <div className={`flex flex-col ${isCompact ? 'gap-1.5 p-2.5' : 'gap-2 p-2.5'} sm:p-3 flex-1`}>
         <Link to={`/product/${product.slug}`} className="min-w-0">
-          <h3 className="font-sans text-[13px] font-medium leading-[1.25] text-[#212121] line-clamp-2 transition-colors hover:text-[#2874f0] sm:text-[14px]">
+          <h3 className="min-h-[34px] font-sans text-[13px] font-semibold leading-[1.28] text-[#212121] line-clamp-2 transition-colors hover:text-maroon sm:text-[14px]">
               {product.name}
           </h3>
         </Link>
 
+        <div className="min-h-[18px]">
+          {hasReviewRating(product) ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+              <Star size={12} className="fill-[#d69a00] text-[#d69a00]" aria-hidden="true" />
+              {ratingValue.toFixed(1).replace(/\.0$/, '')} ({reviewCount})
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">No reviews yet</span>
+          )}
+        </div>
+
         <div className="mt-auto flex items-baseline gap-1.5 leading-tight">
           <div className="price-current font-sans text-[15px] font-bold text-[#212121] sm:text-[16px]">{formatPrice(product.price)}</div>
-          {product.originalPrice && (
-            <div className="price-original font-sans text-[11px] text-[#878787] line-through sm:text-[12px]">{formatPrice(product.originalPrice)}</div>
+          {mrp && (
+            <div className="price-original font-sans text-[11px] text-[#878787] line-through sm:text-[12px]">{formatPrice(mrp)}</div>
           )}
           {discount > 0 && (
             <div className="font-sans text-[11px] font-semibold text-[#388e3c] sm:text-[12px]">{discount}% off</div>
@@ -206,20 +224,25 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
       </div>
 
       <div className={`px-2.5 sm:px-3 ${isCompact ? 'pb-2.5' : 'pb-3'}`}>
-        <div className="grid grid-cols-2 gap-1 sm:gap-2">
+        <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
           <button
+            type="button"
             onClick={handleAddToCart}
-            disabled={!product.inStock}
-            className={`add-to-cart-btn btn-action w-full !min-h-[34px] !px-1 !py-2 !text-[9.5px] sm:!min-h-[38px] sm:!px-2.5 sm:!text-[12px] ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            disabled={!purchasable}
+            className={`add-to-cart-btn btn-action w-full !min-h-11 !px-1.5 !py-2 !text-[11px] sm:!px-2.5 sm:!text-[12px] ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            aria-label={purchasable ? `Add ${product.name} to cart` : `${product.name} is out of stock`}
           >
-            <ShoppingCart size={11} className="shrink-0 sm:h-[13px] sm:w-[13px]" /> <span>Add to Cart</span>
+            <ShoppingCart size={14} className="shrink-0" />
+            <span className="truncate">{purchasable ? 'Add Cart' : 'Out Stock'}</span>
           </button>
           <button
+            type="button"
             onClick={handleBuyNow}
-            disabled={!product.inStock}
-            className={`buy-now-btn btn-action-secondary w-full !min-h-[34px] !px-1 !py-2 !text-[9.5px] sm:!min-h-[38px] sm:!px-2.5 sm:!text-[12px] ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            disabled={!purchasable}
+            className={`buy-now-btn btn-action-secondary w-full !min-h-11 !px-1.5 !py-2 !text-[11px] sm:!px-2.5 sm:!text-[12px] ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            aria-label={purchasable ? `Buy ${product.name} now` : `${product.name} is out of stock`}
           >
-            <span>Buy Now</span>
+            <span className="truncate">Buy Now</span>
           </button>
         </div>
       </div>

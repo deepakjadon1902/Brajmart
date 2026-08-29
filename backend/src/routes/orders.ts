@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
+import { isDbConnected, dbQuery, dbExecute, withDbTransaction } from '../lib/db';
 import { sendOrderConfirmation, sendShippingUpdate } from '../lib/email';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { auth, adminOnly, optionalAuth, AuthRequest } from '../middleware/auth';
@@ -10,9 +10,10 @@ import { checkDtdcPincode, trackDtdcShipment } from '../lib/dtdc';
 import { merchantOrderWhereSql } from '../lib/orderVisibility';
 import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
+import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
+import { insertAdminAuditLog } from '../lib/adminAudit';
 
 const router = Router();
-const COD_CHARGE = 40;
 const codOrderLimiter = rateLimit('cod-order-create', {
   windowMs: 15 * 60 * 1000,
   max: 6,
@@ -55,6 +56,35 @@ const mapOrderRow = (row: any) => ({
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
 });
+
+const mapPublicTrackingOrder = (row: any) => {
+  const order = mapOrderRow(row);
+  return {
+    orderId: order.orderId,
+    status: order.status,
+    orderDate: order.createdAt,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    estimatedDelivery: order.estimatedDelivery,
+    trackingId: order.trackingId,
+    shippingService: order.shippingService,
+    paymentMethod: order.paymentMethod,
+    paymentStatus: String(order.paymentMethod || '').toLowerCase() === 'cod' ? 'cod' : undefined,
+    items: (Array.isArray(order.items) ? order.items : []).map((item: any) => ({
+      productId: item.productId || item.id || item._id,
+      slug: item.slug,
+      name: item.name,
+      image: item.image,
+      category: item.category,
+      quantity: item.quantity,
+    })),
+    statusHistory: (Array.isArray(order.statusHistory) ? order.statusHistory : []).map((entry: any) => ({
+      status: entry.status,
+      date: entry.date,
+      note: entry.note,
+    })),
+  };
+};
 
 const getSearchTerm = (value: unknown) => String(value || '').trim().toLowerCase();
 const likeSearch = (term: string) => `%${term}%`;
@@ -232,13 +262,13 @@ router.get('/dtdc/track/:lookup', async (req, res) => {
     if (!order.trackingId) return res.status(400).json({ message: 'DTDC tracking ID is not available yet' });
     if (!['shipped', 'out_for_delivery', 'delivered'].includes(String(order.status))) {
       return res.json({
-        order,
+        order: mapPublicTrackingOrder(row),
         tracking: buildDtdcOrderStatusTracking(order, 'DTDC live tracking will be available after dispatch.'),
       });
     }
 
     const tracking = await trackDtdcShipment({ trackingId: order.trackingId });
-    return res.json({ order, tracking });
+    return res.json({ order: mapPublicTrackingOrder(row), tracking });
   } catch (err: any) {
     res.status(500).json({ message: err?.message || 'Unable to fetch DTDC tracking' });
   }
@@ -317,7 +347,7 @@ router.get('/track/:orderId', async (req, res) => {
       [orderId]
     );
     if (!rows[0]) return res.status(404).json({ message: 'Order not found' });
-    res.json(mapOrderRow(rows[0]));
+    res.json(mapPublicTrackingOrder(rows[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -336,7 +366,7 @@ router.get('/track-by-id/:trackingId', async (req, res) => {
       [trackingId]
     );
     if (!rows[0]) return res.status(404).json({ message: 'Order not found' });
-    res.json(mapOrderRow(rows[0]));
+    res.json(mapPublicTrackingOrder(rows[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -391,7 +421,7 @@ router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) =>
       if (!codAvailable) {
         return res.status(400).json({ message: codMessage || 'COD is not available for this pincode' });
       }
-      codAmount = COD_CHARGE;
+      codAmount = Math.max(0, Number(settings.codFee ?? 40) || 0);
     }
 
     const totalsBeforeCoupon = { ...baseTotals, cod: codAmount, total: baseTotals.total + codAmount };
@@ -447,6 +477,15 @@ router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) =>
     );
 
     const orderId = result.insertId;
+    try {
+      await withDbTransaction((connection) => reserveInventoryForOrder(connection, Number(orderId), priced.items));
+    } catch (err) {
+      await dbExecute(
+        'UPDATE orders SET status = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
+        ['cancelled', JSON.stringify([...statusHistory, { status: 'cancelled', date: new Date().toISOString(), note: 'Inventory reservation failed' }]), orderId]
+      ).catch(() => {});
+      throw err;
+    }
     if (couponDetails?.code) {
       await markCouponUsed(couponDetails.code);
     }
@@ -496,7 +535,7 @@ router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) =>
   }
 });
 
-router.put('/:id/status', auth, adminOnly, async (req, res) => {
+router.put('/:id/status', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     const { status, note, shippingService, trackingId } = req.body;
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
@@ -582,6 +621,16 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
       }
     }
 
+    if (statusChanged) {
+      const orderItems = parseJson(row.items, []);
+      if (nextStatus === 'cancelled') {
+        await withDbTransaction((connection) => releaseInventoryForOrder(connection, Number(req.params.id), orderItems)).catch(() => {});
+      }
+      if (nextStatus === 'delivered' && String(row.status || '') !== 'delivered') {
+        await withDbTransaction((connection) => convertReservationToSale(connection, Number(req.params.id), orderItems)).catch(() => {});
+      }
+    }
+
     const updatedRows = await dbQuery<any>(
       `SELECT * FROM orders
        WHERE id = ?
@@ -590,6 +639,23 @@ router.put('/:id/status', auth, adminOnly, async (req, res) => {
       [req.params.id]
     );
     const order = mapOrderRow(updatedRows[0]);
+    await insertAdminAuditLog(null, {
+      req,
+      action: statusChanged ? 'ORDER_STATUS_UPDATE' : 'ORDER_FULFILLMENT_UPDATE',
+      entityType: 'order',
+      entityId: req.params.id,
+      before: {
+        status: row.status,
+        trackingId: row.tracking_id || null,
+        shippingService: row.shipping_service || null,
+      },
+      after: {
+        status: updatedRows[0].status,
+        trackingId: updatedRows[0].tracking_id || null,
+        shippingService: updatedRows[0].shipping_service || null,
+      },
+      reason: String(note || (statusChanged ? `Status changed to ${nextStatus}` : 'Order fulfillment details updated')).slice(0, 255),
+    }).catch(() => {});
 
     if (order.customerEmail) {
       const { min, max } = await getEtaConfig();

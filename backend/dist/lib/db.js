@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dbExecute = exports.dbQuery = exports.isDbConnected = exports.connectDb = exports.describeDbTarget = void 0;
+exports.withDbTransaction = exports.dbExecute = exports.dbQuery = exports.isDbConnected = exports.connectDb = exports.describeDbTarget = void 0;
 const promise_1 = __importDefault(require("mysql2/promise"));
 let pool = null;
 let connected = false;
@@ -87,3 +87,27 @@ const dbExecute = async (sql, params = []) => {
     return result;
 };
 exports.dbExecute = dbExecute;
+const withDbTransaction = async (fn) => {
+    if (!pool)
+        throw new Error('Database not initialized');
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const result = await fn(connection);
+        await connection.commit();
+        return result;
+    }
+    catch (err) {
+        try {
+            await connection.rollback();
+        }
+        catch {
+            // ignore rollback errors; original error is more useful
+        }
+        throw err;
+    }
+    finally {
+        connection.release();
+    }
+};
+exports.withDbTransaction = withDbTransaction;

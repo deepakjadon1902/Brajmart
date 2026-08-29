@@ -57,6 +57,7 @@ const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
 const PaymentMethodPage = lazy(() => import("./pages/PaymentMethodPage"));
 const TermsPage = lazy(() => import("./pages/TermsPage"));
 const ComparePage = lazy(() => import("./pages/ComparePage"));
+const CartDrawer = lazy(() => import("./components/cart/CartDrawer"));
 const ProductsPage = lazy(() => import("./pages/ProductsPage"));
 const CategoriesPage = lazy(() => import("./pages/CategoriesPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -70,6 +71,8 @@ const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
 const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
+const AdminInventory = lazy(() => import("./pages/admin/AdminInventory"));
+const AdminBundles = lazy(() => import("./pages/admin/AdminBundles"));
 const AdminCategories = lazy(() => import("./pages/admin/AdminCategories"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminCartFavorites = lazy(() => import("./pages/admin/AdminCartFavorites"));
@@ -80,6 +83,8 @@ const AdminPayments = lazy(() => import("./pages/admin/AdminPayments"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminHero = lazy(() => import("./pages/admin/AdminHero"));
 const AdminBlogs = lazy(() => import("./pages/admin/AdminBlogs"));
+const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
+const AdminReviews = lazy(() => import("./pages/admin/AdminReviews"));
 
 const LegacyCategoryRedirect = () => {
   const { slug } = useParams();
@@ -189,6 +194,7 @@ const App = () => {
           maxOrderQuantity: data.maxOrderQuantity,
           deliveryEtaMinDays: data.deliveryEtaMinDays ?? 3,
           deliveryEtaMaxDays: data.deliveryEtaMaxDays ?? 7,
+          codFee: data.codFee ?? 40,
           upiEnabled: data.upiEnabled,
           cardEnabled: data.cardEnabled,
           maintenanceMode: data.maintenanceMode,
@@ -321,6 +327,10 @@ const App = () => {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="products" element={<AdminProducts />} />
+            <Route path="inventory" element={<AdminInventory />} />
+            <Route path="bundles" element={<AdminBundles />} />
+            <Route path="reviews" element={<AdminReviews />} />
+            <Route path="audit-logs" element={<AdminAuditLogs />} />
             <Route path="categories" element={<AdminCategories />} />
             <Route path="blogs" element={<AdminBlogs />} />
             <Route path="users" element={<AdminUsers />} />
@@ -338,6 +348,9 @@ const App = () => {
           </Suspense>
           <NoIndexRoutes />
           <MobileBottomNav />
+          <Suspense fallback={null}>
+            <CartDrawer />
+          </Suspense>
           <StorefrontWhatsAppButton />
       </TooltipProvider>
     </QueryClientProvider>

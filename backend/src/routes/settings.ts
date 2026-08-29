@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { auth, adminOnly } from '../middleware/auth';
+import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 import { sendEmail } from '../lib/email';
+import { insertAdminAuditLog } from '../lib/adminAudit';
 
 const router = Router();
 
@@ -27,6 +28,7 @@ const mapSettingsRow = (row: any) => ({
   deliveryEtaMinDays: Number(row.delivery_eta_min_days ?? 3),
   deliveryEtaMaxDays: Number(row.delivery_eta_max_days ?? 7),
   codEnabled: boolFromDb(row.cod_enabled),
+  codFee: Number(row.cod_fee ?? 40),
   upiEnabled: boolFromDb(row.upi_enabled),
   cardEnabled: boolFromDb(row.card_enabled),
   maintenanceMode: boolFromDb(row.maintenance_mode),
@@ -69,6 +71,7 @@ const buildUpdate = (data: any) => {
   if (data.deliveryEtaMinDays !== undefined) set('delivery_eta_min_days', data.deliveryEtaMinDays);
   if (data.deliveryEtaMaxDays !== undefined) set('delivery_eta_max_days', data.deliveryEtaMaxDays);
   if (data.codEnabled !== undefined) set('cod_enabled', data.codEnabled ? 1 : 0);
+  if (data.codFee !== undefined) set('cod_fee', Math.max(0, Number(data.codFee) || 0));
   if (data.upiEnabled !== undefined) set('upi_enabled', data.upiEnabled ? 1 : 0);
   if (data.cardEnabled !== undefined) set('card_enabled', data.cardEnabled ? 1 : 0);
   if (data.maintenanceMode !== undefined) set('maintenance_mode', data.maintenanceMode ? 1 : 0);
@@ -107,7 +110,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.put('/', auth, adminOnly, async (req, res) => {
+router.put('/', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     let rows = await dbQuery<any>('SELECT * FROM settings LIMIT 1');
@@ -121,6 +124,15 @@ router.put('/', auth, adminOnly, async (req, res) => {
     }
     const refreshed = await dbQuery<any>('SELECT * FROM settings LIMIT 1');
     settingsCache = null;
+    await insertAdminAuditLog(null, {
+      req,
+      action: 'SETTINGS_UPDATE',
+      entityType: 'settings',
+      entityId: rows[0].id,
+      before: rows[0],
+      after: refreshed[0],
+      reason: 'Store settings updated',
+    }).catch(() => {});
     res.json(mapSettingsRow(refreshed[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });

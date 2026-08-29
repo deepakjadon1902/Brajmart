@@ -101,7 +101,14 @@ const PaymentStatusPage = () => {
   }, [status, orderId]);
 
   useEffect(() => {
-    if (status === 'paid') clearCart();
+    if (status === 'paid') {
+      clearCart();
+      try {
+        sessionStorage.removeItem('brajmart-checkout-idempotency');
+      } catch {
+        // ignore storage errors
+      }
+    }
   }, [status, clearCart]);
 
   useEffect(() => {

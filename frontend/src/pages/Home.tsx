@@ -28,7 +28,6 @@ const Home = () => {
   const { products, categories, getBestSellers, getByTag, getProductsByCategory } = useProductStore();
   const bestSellingProducts = getBestSellers();
   const devotionalAccessories = getByTag('accessories');
-  const comboProducts = bestSellingProducts.length ? bestSellingProducts : products;
   // Show every category as a home-page section (even if a category currently has 0 products).
   // This matches the "all categories on home" requirement and avoids hiding categories due to naming mismatches.
   const categorySections = categories || [];
@@ -170,11 +169,9 @@ const Home = () => {
         <ExclusiveShop />
       </DeferredMount>
 
-      {comboProducts.filter((product) => product.inStock !== false && product.price > 0).length >= 5 && (
-        <DeferredMount minHeight={220}>
-          <BundledFavorites products={comboProducts} />
-        </DeferredMount>
-      )}
+      <DeferredMount minHeight={220}>
+        <BundledFavorites />
+      </DeferredMount>
 
       <DeferredMount minHeight={120}>
         <BrajYatra />

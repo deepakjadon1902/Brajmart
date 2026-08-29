@@ -5,6 +5,7 @@ const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const email_1 = require("../lib/email");
+const adminAudit_1 = require("../lib/adminAudit");
 const router = (0, express_1.Router)();
 const SETTINGS_CACHE_TTL_MS = 5 * 60000;
 const SETTINGS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=600';
@@ -26,6 +27,7 @@ const mapSettingsRow = (row) => ({
     deliveryEtaMinDays: Number(row.delivery_eta_min_days ?? 3),
     deliveryEtaMaxDays: Number(row.delivery_eta_max_days ?? 7),
     codEnabled: (0, dbHelpers_1.boolFromDb)(row.cod_enabled),
+    codFee: Number(row.cod_fee ?? 40),
     upiEnabled: (0, dbHelpers_1.boolFromDb)(row.upi_enabled),
     cardEnabled: (0, dbHelpers_1.boolFromDb)(row.card_enabled),
     maintenanceMode: (0, dbHelpers_1.boolFromDb)(row.maintenance_mode),
@@ -78,6 +80,8 @@ const buildUpdate = (data) => {
         set('delivery_eta_max_days', data.deliveryEtaMaxDays);
     if (data.codEnabled !== undefined)
         set('cod_enabled', data.codEnabled ? 1 : 0);
+    if (data.codFee !== undefined)
+        set('cod_fee', Math.max(0, Number(data.codFee) || 0));
     if (data.upiEnabled !== undefined)
         set('upi_enabled', data.upiEnabled ? 1 : 0);
     if (data.cardEnabled !== undefined)
@@ -142,6 +146,15 @@ router.put('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         }
         const refreshed = await (0, db_1.dbQuery)('SELECT * FROM settings LIMIT 1');
         settingsCache = null;
+        await (0, adminAudit_1.insertAdminAuditLog)(null, {
+            req,
+            action: 'SETTINGS_UPDATE',
+            entityType: 'settings',
+            entityId: rows[0].id,
+            before: rows[0],
+            after: refreshed[0],
+            reason: 'Store settings updated',
+        }).catch(() => { });
         res.json(mapSettingsRow(refreshed[0]));
     }
     catch (err) {

@@ -1,15 +1,17 @@
 import { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Filter } from 'lucide-react';
 import { useProductStore, categorySlugMap, categoryToSlug } from '@/store/productStore';
 import ProductCard from '@/components/product/ProductCard';
+import ProductGridSkeleton from '@/components/product/ProductGridSkeleton';
+import CommerceEmptyState from '@/components/ui/CommerceEmptyState';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import CategoryNavbar from '@/components/layout/CategoryNavbar';
 import Footer from '@/components/layout/Footer';
 import SEO from '@/components/seo/SEO';
 import { breadcrumbSchema, categorySeo } from '@/lib/seo';
+import { compareProductsByQuality } from '@/utils/productPresentation';
 
 const displayCategoryName = (name: string) =>
   (name || '').trim().toLowerCase() === 'best selling' ? 'Most Selling Products' : name;
@@ -25,9 +27,9 @@ const CategoryPage = () => {
     : undefined;
   const subcategoryName = subMeta?.name || (subSlug ? subSlug.replace(/-/g, ' ') : '');
 
-  const products = subSlug
+  const products = (subSlug
     ? getProductsBySubcategory(categoryName, subcategoryName)
-    : getProductsByCategory(categoryName);
+    : getProductsByCategory(categoryName)).sort(compareProductsByQuality);
   useEffect(() => {
     if (products.length > 0 || loading || lastFetchedAt > 0) return;
     loadFromApi({ force: true }).catch(() => undefined);
@@ -127,21 +129,20 @@ const CategoryPage = () => {
 
       {/* Products grid */}
       <div className="container mx-auto px-4 py-8">
-        {products.length > 0 ? (
+        {loading ? (
+          <ProductGridSkeleton count={10} />
+        ) : products.length > 0 ? (
           <div className="product-grid grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)] xl:grid-cols-5">
             {products.map((product, i) => (
               <ProductCard key={product.id} product={product} index={i} variant="compact" />
             ))}
           </div>
         ) : (
-          <div className="text-center py-20">
-            <Filter size={48} className="mx-auto text-muted-foreground/30 mb-4" />
-            <h2 className="font-cinzel text-xl font-bold text-foreground mb-2">No Products Found</h2>
-            <p className="text-muted-foreground text-sm mb-6">This category is coming soon!</p>
-            <Link to="/" className="inline-block px-6 py-3 rounded-full bg-gold-gradient text-maroon-dark font-bold text-sm shimmer">
-              Back to Home
-            </Link>
-          </div>
+          <CommerceEmptyState
+            title="This collection is still being arranged"
+            message="Browse nearby devotional products while this category is updated."
+            suggestions={['Puja Items', 'Prasadam', 'Bhagavad Gita', 'Accessories']}
+          />
         )}
       </div>
       <Footer />

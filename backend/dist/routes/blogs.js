@@ -4,6 +4,7 @@ const express_1 = require("express");
 const auth_1 = require("../middleware/auth");
 const db_1 = require("../lib/db");
 const dbHelpers_1 = require("../lib/dbHelpers");
+const adminAudit_1 = require("../lib/adminAudit");
 const router = (0, express_1.Router)();
 const slugify = (value) => value
     .toLowerCase()
@@ -22,6 +23,9 @@ const mapBlogRow = (row) => ({
     author: row.author ?? 'BrajMart Team',
     readTime: Number(row.read_time ?? 5),
     status: row.status ?? 'draft',
+    archivedAt: (0, dbHelpers_1.toIsoString)(row.archived_at),
+    archivedBy: row.archived_by || '',
+    archiveReason: row.archive_reason || '',
     publishedAt: (0, dbHelpers_1.toIsoString)(row.published_at),
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
@@ -37,6 +41,9 @@ const mapBlogListRow = (row) => ({
     author: row.author ?? 'BrajMart Team',
     readTime: Number(row.read_time ?? 5),
     status: row.status ?? 'draft',
+    archivedAt: (0, dbHelpers_1.toIsoString)(row.archived_at),
+    archivedBy: row.archived_by || '',
+    archiveReason: row.archive_reason || '',
     publishedAt: (0, dbHelpers_1.toIsoString)(row.published_at),
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
@@ -77,7 +84,7 @@ router.get('/', async (_req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
-        const rows = await (0, db_1.dbQuery)("SELECT * FROM blogs WHERE status = 'published' ORDER BY COALESCE(published_at, created_at) DESC");
+        const rows = await (0, db_1.dbQuery)("SELECT * FROM blogs WHERE status = 'published' AND archived_at IS NULL ORDER BY COALESCE(published_at, created_at) DESC");
         res.json(rows.map(mapBlogListRow));
     }
     catch (err) {
@@ -113,7 +120,7 @@ router.get('/:slug', async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
-        const rows = await (0, db_1.dbQuery)("SELECT * FROM blogs WHERE slug = ? AND status = 'published' LIMIT 1", [req.params.slug]);
+        const rows = await (0, db_1.dbQuery)("SELECT * FROM blogs WHERE slug = ? AND status = 'published' AND archived_at IS NULL LIMIT 1", [req.params.slug]);
         const row = rows[0];
         if (!row)
             return res.status(404).json({ message: 'Blog not found' });
@@ -153,6 +160,14 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             publishedAt,
         ]);
         const rows = await (0, db_1.dbQuery)('SELECT * FROM blogs WHERE id = ? LIMIT 1', [result.insertId]);
+        await (0, adminAudit_1.insertAdminAuditLog)(null, {
+            req: req,
+            action: 'BLOG_CREATE',
+            entityType: 'blog',
+            entityId: result.insertId,
+            after: rows[0],
+            reason: 'Blog created',
+        }).catch(() => { });
         res.status(201).json(mapBlogRow(rows[0]));
     }
     catch (err) {
@@ -175,10 +190,23 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         const update = buildUpdate(data);
         if (!update)
             return res.status(400).json({ message: 'No fields to update' });
+        const beforeRows = await (0, db_1.dbQuery)('SELECT * FROM blogs WHERE id = ? LIMIT 1', [req.params.id]);
+        const before = beforeRows[0];
+        if (!before)
+            return res.status(404).json({ message: 'Blog not found' });
         await (0, db_1.dbExecute)(`UPDATE blogs SET ${update.sql} WHERE id = ?`, [...update.values, req.params.id]);
         const rows = await (0, db_1.dbQuery)('SELECT * FROM blogs WHERE id = ? LIMIT 1', [req.params.id]);
         if (!rows[0])
             return res.status(404).json({ message: 'Blog not found' });
+        await (0, adminAudit_1.insertAdminAuditLog)(null, {
+            req: req,
+            action: data.status === 'published' && before.status !== 'published' ? 'BLOG_PUBLISH' : 'BLOG_UPDATE',
+            entityType: 'blog',
+            entityId: req.params.id,
+            before,
+            after: rows[0],
+            reason: 'Blog updated',
+        }).catch(() => { });
         res.json(mapBlogRow(rows[0]));
     }
     catch (err) {
@@ -189,11 +217,68 @@ router.delete('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
-        await (0, db_1.dbExecute)('DELETE FROM blogs WHERE id = ?', [req.params.id]);
-        res.json({ message: 'Blog deleted' });
+        const reason = String(req.body?.reason || req.query.reason || 'Blog archived by admin').trim().slice(0, 255);
+        const actor = (0, adminAudit_1.actorFromRequest)(req);
+        let archived = null;
+        await (0, db_1.withDbTransaction)(async (connection) => {
+            const [rows] = await connection.execute('SELECT * FROM blogs WHERE id = ? FOR UPDATE', [req.params.id]);
+            const before = rows[0];
+            if (!before)
+                throw new Error('Blog not found');
+            await connection.execute('UPDATE blogs SET archived_at = COALESCE(archived_at, NOW()), archived_by = ?, archive_reason = ?, updated_at = NOW() WHERE id = ?', [actor.adminEmail || actor.adminId || 'admin', reason, req.params.id]);
+            const [afterRows] = await connection.execute('SELECT * FROM blogs WHERE id = ? LIMIT 1', [req.params.id]);
+            archived = afterRows[0];
+            await (0, adminAudit_1.insertAdminAuditLog)(connection, {
+                req,
+                action: 'BLOG_ARCHIVE',
+                entityType: 'blog',
+                entityId: req.params.id,
+                before,
+                after: archived,
+                reason,
+            });
+        });
+        res.json({ message: 'Blog archived', blog: mapBlogRow(archived) });
     }
     catch (err) {
-        res.status(500).json({ message: err.message });
+        const message = err?.message || 'Failed to archive blog';
+        res.status(message === 'Blog not found' ? 404 : 500).json({ message });
+    }
+});
+router.post('/:id/restore', auth_1.auth, auth_1.adminOnly, async (req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        const reason = String(req.body?.reason || 'Blog restored by admin').trim().slice(0, 255);
+        let restored = null;
+        await (0, db_1.withDbTransaction)(async (connection) => {
+            const [rows] = await connection.execute('SELECT * FROM blogs WHERE id = ? FOR UPDATE', [req.params.id]);
+            const before = rows[0];
+            if (!before)
+                throw new Error('Blog not found');
+            if (!before.title || !before.slug || !before.content)
+                throw new Error('Cannot restore blog until title, slug, and content are valid.');
+            const [dupes] = await connection.execute('SELECT id FROM blogs WHERE slug = ? AND id <> ? AND archived_at IS NULL LIMIT 1', [before.slug, req.params.id]);
+            if (dupes.length)
+                throw new Error('Cannot restore blog because another active blog uses this slug.');
+            await connection.execute('UPDATE blogs SET archived_at = NULL, archived_by = NULL, archive_reason = NULL, updated_at = NOW() WHERE id = ?', [req.params.id]);
+            const [afterRows] = await connection.execute('SELECT * FROM blogs WHERE id = ? LIMIT 1', [req.params.id]);
+            restored = afterRows[0];
+            await (0, adminAudit_1.insertAdminAuditLog)(connection, {
+                req,
+                action: 'BLOG_RESTORE',
+                entityType: 'blog',
+                entityId: req.params.id,
+                before,
+                after: restored,
+                reason,
+            });
+        });
+        res.json({ message: 'Blog restored', blog: mapBlogRow(restored) });
+    }
+    catch (err) {
+        const message = err?.message || 'Failed to restore blog';
+        res.status(message === 'Blog not found' ? 404 : 400).json({ message });
     }
 });
 exports.default = router;

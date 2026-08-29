@@ -4,6 +4,7 @@ import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 import { merchantOrderWhereSql } from '../lib/orderVisibility';
 import { buildOrderedProductSet, mergeCustomerInterestRows } from '../lib/customerInterest';
+import { insertAdminAuditLog } from '../lib/adminAudit';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
@@ -281,33 +282,70 @@ router.get('/:id', auth, adminOnly, async (req, res) => {
   }
 });
 
-router.put('/:id/role', auth, adminOnly, async (req, res) => {
+router.put('/:id/role', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const beforeRows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    const before = beforeRows[0];
+    if (!before) return res.status(404).json({ message: 'User not found' });
     await dbExecute('UPDATE users SET role = ?, updated_at = NOW() WHERE id = ?', [req.body.role, req.params.id]);
     const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    await insertAdminAuditLog(null, {
+      req,
+      action: 'USER_ROLE_UPDATE',
+      entityType: 'user',
+      entityId: req.params.id,
+      before,
+      after: rows[0],
+      reason: 'User role updated',
+    }).catch(() => {});
     res.json(rows[0] ? mapUserRow(rows[0]) : null);
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
 });
 
-router.put('/:id/status', auth, adminOnly, async (req, res) => {
+router.put('/:id/status', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const beforeRows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    const before = beforeRows[0];
+    if (!before) return res.status(404).json({ message: 'User not found' });
     await dbExecute('UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?', [req.body.status, req.params.id]);
     const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    await insertAdminAuditLog(null, {
+      req,
+      action: req.body.status === 'blocked' ? 'USER_BLOCK' : 'USER_STATUS_UPDATE',
+      entityType: 'user',
+      entityId: req.params.id,
+      before,
+      after: rows[0],
+      reason: 'User status updated',
+    }).catch(() => {});
     res.json(rows[0] ? mapUserRow(rows[0]) : null);
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
 });
 
-router.delete('/:id', auth, adminOnly, async (req, res) => {
+router.delete('/:id', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await dbExecute('DELETE FROM users WHERE id = ?', [req.params.id]);
-    res.json({ message: 'User deleted' });
+    const beforeRows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    const before = beforeRows[0];
+    if (!before) return res.status(404).json({ message: 'User not found' });
+    await dbExecute('UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?', ['blocked', req.params.id]);
+    const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    await insertAdminAuditLog(null, {
+      req,
+      action: 'USER_BLOCK',
+      entityType: 'user',
+      entityId: req.params.id,
+      before,
+      after: rows[0],
+      reason: String(req.body?.reason || req.query.reason || 'User blocked instead of deleted').slice(0, 255),
+    }).catch(() => {});
+    res.json({ message: 'User blocked. Historical orders and payments were preserved.', user: mapUserRow(rows[0]) });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }

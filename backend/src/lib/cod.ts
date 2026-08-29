@@ -1,10 +1,8 @@
 import { checkDtdcPincode } from './dtdc';
 
-export const COD_HANDLE_FEE = 40;
-
 export const resolveCodHandleFee = async (
   order: any,
-  settings: { codEnabled?: boolean }
+  settings: { codEnabled?: boolean; codFee?: number }
 ) => {
   const requested = Boolean(order?.codRequested) || Number(order?.codAmount || 0) > 0;
   if (!requested) {
@@ -27,7 +25,7 @@ export const resolveCodHandleFee = async (
   }
 
   return {
-    amount: COD_HANDLE_FEE,
+    amount: Math.max(0, Number(settings.codFee ?? 40) || 0),
     available,
     pincode: deliveryPincode,
     message,

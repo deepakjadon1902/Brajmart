@@ -10,11 +10,11 @@ export default defineConfig({
   use: {
     actionTimeout: 0,
     trace: "on-first-retry",
-    baseURL: "http://localhost:8080",
+    baseURL: "http://localhost:8081",
   },
   webServer: {
     command: "npm run dev",
-    url: "http://localhost:8080",
+    url: "http://localhost:8081",
     reuseExistingServer: !process.env.CI,
   },
 });

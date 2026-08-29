@@ -13,13 +13,13 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDtdcPincode, validateCoupon } from '@/lib/api';
+import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDtdcPincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
 import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
 const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
 const DEFAULT_SHIPPING_FEE = 49;
-const COD_CHARGE = 40;
+const CHECKOUT_IDEMPOTENCY_STORAGE_KEY = 'brajmart-checkout-idempotency';
 type ServiceabilityState = { pincode: string; serviceable: boolean; codAvailable: boolean; manualReview?: boolean; message?: string };
 type DtdcCheckResponse = Partial<Omit<ServiceabilityState, 'pincode'>>;
 type CreatedOrderResponse = { orderId?: string | number; _id?: string | number; id?: string | number };
@@ -29,6 +29,15 @@ type BundleSnapshot = {
   total: number;
   savings: number;
   products: Array<{ id: string; slug: string; name: string; category: string; price: number; image: string }>;
+};
+type AppliedCoupon = {
+  code: string;
+  discountAmount: number;
+  description?: string;
+};
+type CouponValidationResponse = {
+  coupon?: AppliedCoupon;
+  message?: string;
 };
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -133,7 +142,7 @@ const RazorpayLogo = () => (
 );
 
 const CheckoutPage = () => {
-  const { items, totalPrice, totalSavings, updateQuantity, removeItem, clearCart } = useCartStore();
+  const { items, totalPrice, totalSavings, updateQuantity, removeItem, clearCart, reconcileValidatedItems } = useCartStore();
   const { user, isAuthenticated } = useAuthStore();
   const { settings, updateSettings } = useSettingsStore();
   const navigate = useNavigate();
@@ -148,15 +157,20 @@ const CheckoutPage = () => {
   const [checkingPincode, setCheckingPincode] = useState(false);
   const [wantsCodService, setWantsCodService] = useState(false);
   const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<any | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
   const [bundleSnapshot, setBundleSnapshot] = useState<BundleSnapshot | null>(null);
+  const [checkoutValidation, setCheckoutValidation] = useState<CartValidationResponse | null>(null);
+  const [checkoutValidationError, setCheckoutValidationError] = useState('');
+  const [checkoutValidating, setCheckoutValidating] = useState(false);
 
   const freeShippingThreshold = Number(settings.freeShippingThreshold) > 0 ? Number(settings.freeShippingThreshold) : DEFAULT_FREE_SHIPPING_THRESHOLD;
   const shippingFee = Number(settings.shippingFee) > 0 ? Number(settings.shippingFee) : DEFAULT_SHIPPING_FEE;
-  const shipping = totalPrice() >= freeShippingThreshold ? 0 : shippingFee;
+  const localSubtotal = totalPrice();
+  const shipping = localSubtotal >= freeShippingThreshold ? 0 : shippingFee;
   const packagingRate = Math.max(0, Number(settings.packagingRate) || 0);
-  const packagingCost = Math.round(totalPrice() * packagingRate / 100);
+  const packagingCost = Math.round(localSubtotal * packagingRate / 100);
+  const codFee = Math.max(0, Number(settings.codFee ?? 40) || 0);
   const [billingAddress, setBillingAddress] = useState<Address>({
     fullName: user?.fullName || '',
     mobile: user?.mobile || '',
@@ -188,10 +202,17 @@ const CheckoutPage = () => {
   });
   const codAvailable = Boolean(serviceability?.pincode === effectivePincode && serviceability.serviceable && serviceability.codAvailable);
   const canUseCodService = Boolean(settings.codEnabled && codAvailable && !hasPrasadamItems);
-  const codCharge = wantsCodService && canUseCodService ? COD_CHARGE : 0;
+  const validatedSubtotal = checkoutValidation?.subtotal ?? localSubtotal;
+  const validatedShipping = checkoutValidation?.shipping ?? shipping;
+  const validatedPackaging = checkoutValidation?.packaging ?? packagingCost;
+  const validatedCodFee = checkoutValidation?.codFee ?? codFee;
+  const codCharge = wantsCodService && canUseCodService ? validatedCodFee : 0;
   const couponDiscount = Number(appliedCoupon?.discountAmount || 0);
-  const grandTotalBeforeCoupon = totalPrice() + packagingCost + shipping + codCharge;
+  const grandTotalBeforeCoupon = validatedSubtotal + validatedPackaging + validatedShipping + codCharge;
   const grandTotal = Math.max(0, grandTotalBeforeCoupon - couponDiscount);
+  const hasCheckoutValidationChanges = Boolean(checkoutValidation?.changes?.length);
+  const hasCheckoutUnavailableItems = Boolean(checkoutValidation?.unavailableItems?.length);
+  const checkoutValidatedCleanly = Boolean(checkoutValidation && !checkoutValidationError && !hasCheckoutValidationChanges && !hasCheckoutUnavailableItems);
 
   useEffect(() => {
     try {
@@ -229,6 +250,7 @@ const CheckoutPage = () => {
           minOrderAmount: data.minOrderAmount,
           maxOrderQuantity: data.maxOrderQuantity,
           codEnabled: data.codEnabled,
+          codFee: data.codFee ?? 40,
           upiEnabled: data.upiEnabled,
           cardEnabled: data.cardEnabled,
           maintenanceMode: data.maintenanceMode,
@@ -268,9 +290,11 @@ const CheckoutPage = () => {
 
   useEffect(() => {
     setAppliedCoupon((current) => current ? null : current);
+    setCheckoutValidation(null);
+    setCheckoutValidationError('');
   }, [couponItemSignature]);
 
-  const checkoutItemsPayload = () => items.map((i) => ({
+  const checkoutItemsPayload = (): PersistedProductInterestItem[] => items.map((i) => ({
     productId: i.product.id,
     name: i.product.name,
     image: i.product.image,
@@ -281,6 +305,53 @@ const CheckoutPage = () => {
     selectedAttributes: i.product.selectedAttributes,
   }));
 
+  const runCheckoutValidation = async (mode: 'silent' | 'submit' = 'submit') => {
+    setCheckoutValidating(true);
+    setCheckoutValidationError('');
+    try {
+      const result = await validateCart(checkoutItemsPayload());
+      setCheckoutValidation(result);
+
+      if (result.unavailableItems.length > 0) {
+        const message = result.unavailableItems[0]?.message || 'Some products are not available right now.';
+        if (mode === 'submit') toast.error(message);
+        return false;
+      }
+      if (result.changes.length > 0) {
+        const message = result.changes[0]?.message || 'Your cart changed. Please review the updated cart before payment.';
+        if (mode === 'submit') toast.info(message);
+        return false;
+      }
+      return true;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unable to validate your cart right now.';
+      setCheckoutValidationError(message);
+      if (mode === 'submit') toast.error(message);
+      return false;
+    } finally {
+      setCheckoutValidating(false);
+    }
+  };
+
+  const applyCheckoutUpdates = () => {
+    if (!checkoutValidation) return;
+    reconcileValidatedItems(checkoutValidation.items.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      price: item.price,
+      originalPrice: item.originalPrice,
+      name: item.name,
+      slug: item.slug,
+      image: item.image,
+      category: item.category,
+      inStock: item.inStock,
+      availableQuantity: item.availableQuantity,
+    })));
+    setCheckoutValidation(null);
+    setAppliedCoupon(null);
+    toast.success('Cart updated with current prices and availability.');
+  };
+
   const handleApplyCoupon = async () => {
     const code = couponCode.trim().toUpperCase();
     if (!code) {
@@ -289,13 +360,13 @@ const CheckoutPage = () => {
     }
     setCouponLoading(true);
     try {
-      const result: any = await validateCoupon({ code, items: checkoutItemsPayload() });
-      setAppliedCoupon(result.coupon);
+      const result = await validateCoupon({ code, items: checkoutItemsPayload() }) as CouponValidationResponse;
+      setAppliedCoupon(result.coupon || null);
       setCouponCode(result.coupon?.code || code);
       toast.success(result.message || 'Coupon applied');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setAppliedCoupon(null);
-      toast.error(err?.message || 'Coupon is not valid for this order');
+      toast.error(err instanceof Error ? err.message : 'Coupon is not valid for this order');
     } finally {
       setCouponLoading(false);
     }
@@ -412,6 +483,22 @@ const CheckoutPage = () => {
     email: cleanText(addr.email).toLowerCase(),
   });
 
+  const getCheckoutIdempotencyKey = (fingerprint: unknown) => {
+    const fingerprintText = JSON.stringify(fingerprint || null);
+    try {
+      const raw = sessionStorage.getItem(CHECKOUT_IDEMPOTENCY_STORAGE_KEY);
+      const existing = raw ? JSON.parse(raw) : null;
+      if (existing?.fingerprint === fingerprintText && existing?.key) return String(existing.key);
+      const key = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      sessionStorage.setItem(CHECKOUT_IDEMPOTENCY_STORAGE_KEY, JSON.stringify({ fingerprint: fingerprintText, key }));
+      return key;
+    } catch {
+      return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+  };
+
   const verifyDeliveryPincode = async () => {
     const pincode = String(effectiveShipping.pincode || '').trim();
     if (!isValidPincode(pincode)) {
@@ -464,6 +551,7 @@ const CheckoutPage = () => {
         minOrderAmount: data.minOrderAmount,
         maxOrderQuantity: data.maxOrderQuantity,
         codEnabled: data.codEnabled,
+        codFee: data.codFee ?? 40,
         upiEnabled: data.upiEnabled,
         cardEnabled: data.cardEnabled,
       });
@@ -471,13 +559,21 @@ const CheckoutPage = () => {
     } catch {
       // Keep current settings if the refresh fails; backend validation still protects the order.
     }
+    const cartIsCurrent = await runCheckoutValidation('submit');
+    if (!cartIsCurrent) return;
     setStep(1);
   };
 
   const startRazorpayPayment = async () => {
+    if (processing || checkoutValidating) return;
     if (!validateContactAndAddress()) return;
     setProcessing(true);
     try {
+      const cartIsCurrent = await runCheckoutValidation('submit');
+      if (!cartIsCurrent) {
+        setProcessing(false);
+        return;
+      }
       const cleanShippingAddress = cleanAddressForOrder(effectiveShipping);
       const cleanBillingAddress = cleanAddressForOrder(billingAddress);
       const loaded = await loadRazorpayCheckout();
@@ -511,6 +607,18 @@ const CheckoutPage = () => {
 
       const result = await createRazorpayOrder({
         amount: grandTotal,
+        idempotencyKey: getCheckoutIdempotencyKey({
+          email: effectiveEmail,
+          couponCode: appliedCoupon?.code || '',
+          codFee,
+          items: items.map((item) => ({
+            id: item.product.id,
+            quantity: item.quantity,
+            selectedSize: item.product.selectedSize || '',
+            selectedPieces: item.product.selectedPieces || '',
+            selectedAttributes: item.product.selectedAttributes || {},
+          })),
+        }),
         order: orderPayload,
         customer: { name: cleanBillingAddress.fullName, email: effectiveEmail, phone: cleanBillingAddress.mobile },
       });
@@ -591,9 +699,12 @@ const CheckoutPage = () => {
   };
 
   const handlePlaceOrder = async () => {
+    if (processing || checkoutValidating) return;
     if (!validateContactAndAddress()) return;
     const canDeliver = await verifyDeliveryPincode();
     if (!canDeliver) return;
+    const cartIsCurrent = await runCheckoutValidation('submit');
+    if (!cartIsCurrent) return;
 
     if (settings.minOrderAmount && grandTotal < settings.minOrderAmount) {
       toast.error(`Minimum order amount is ${formatPrice(settings.minOrderAmount)}.`);
@@ -605,6 +716,7 @@ const CheckoutPage = () => {
         const data = await fetchPublicSettings({ fresh: true });
         updateSettings({
           codEnabled: data.codEnabled,
+          codFee: data.codFee ?? 40,
           upiEnabled: data.upiEnabled,
           cardEnabled: data.cardEnabled,
         });
@@ -656,7 +768,7 @@ const CheckoutPage = () => {
           billingAddress: cleanBillingAddress,
           paymentMethod: 'COD',
           codRequested: true,
-          codAmount: COD_CHARGE,
+          codAmount: codFee,
           codPincode: effectivePincode,
           codMessage: serviceability?.message || `COD available for ${effectivePincode}`,
           couponCode: appliedCoupon?.code || undefined,
@@ -713,14 +825,17 @@ const CheckoutPage = () => {
     <div>
       <h3 className="text-sm font-semibold text-foreground mb-3">{label}</h3>
       <div className="grid md:grid-cols-2 gap-4">
-        {addressFields.map((f) => (
+        {addressFields.map((f) => {
+          const fieldId = `${label.replace(/\s+/g, '-').toLowerCase()}-${f.key}`;
+          return (
           <div key={f.key} className={f.full ? 'md:col-span-2' : ''}>
-            <label className="block text-sm font-medium mb-1">
+            <label htmlFor={fieldId} className="block text-sm font-medium mb-1">
               {f.label}
               {f.required ? <span className="text-saffron"> *</span> : <span className="text-muted-foreground"> (optional)</span>}
             </label>
             {f.multiline ? (
               <textarea
+                id={fieldId}
                 rows={3}
                 value={String(addr[f.key as keyof Address] || '')}
                 onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
@@ -730,6 +845,7 @@ const CheckoutPage = () => {
               />
             ) : f.key === 'state' ? (
               <select
+                id={fieldId}
                 value={String(addr.state || '')}
                 onChange={(e) => setAddr((a) => ({ ...a, state: e.target.value }))}
                 disabled={disabled}
@@ -742,6 +858,7 @@ const CheckoutPage = () => {
               </select>
             ) : (
               <input
+                id={fieldId}
                 type={f.type}
                 value={String(addr[f.key as keyof Address] || '')}
                 onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
@@ -751,7 +868,8 @@ const CheckoutPage = () => {
               />
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -812,12 +930,12 @@ const CheckoutPage = () => {
           </div>
         )}
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
+        <div className="grid min-w-0 lg:grid-cols-3 gap-8">
+          <div className="min-w-0 lg:col-span-2">
             <AnimatePresence mode="wait">
               {step === 0 && (
-                <motion.div key="delivery" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
-                  <div className="bg-card rounded-2xl border border-border p-6 space-y-6">
+                <motion.div key="delivery" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}>
+                  <div className="min-w-0 bg-card rounded-2xl border border-border p-6 space-y-6">
                     <div className="flex items-center gap-2">
                       <MapPin size={18} className="text-gold" />
                       <h2 className="font-cinzel text-lg font-bold">Delivery Details</h2>
@@ -850,7 +968,7 @@ const CheckoutPage = () => {
                             ? serviceability.message || 'Courier auto-check is unavailable. Our team will confirm dispatch.'
                             : serviceability.serviceable
                             ? serviceability.codAvailable
-                              ? `Delivery and COD available for ${serviceability.pincode}. COD Handle Fee ${formatPrice(COD_CHARGE)} applies only when COD is selected.`
+                              ? `Delivery and COD available for ${serviceability.pincode}. COD Handle Fee ${formatPrice(codFee)} applies only when COD is selected.`
                               : `Delivery available for ${serviceability.pincode}. COD is not available for this pincode.`
                             : serviceability.message || `Delivery needs review for ${serviceability.pincode}.`
                           : checkingPincode
@@ -864,10 +982,10 @@ const CheckoutPage = () => {
               )}
 
               {step === 1 && (
-                <motion.div key="payment" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
-                  <div className="bg-card rounded-2xl border border-border p-6 shadow-sm">
-                    <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
+                <motion.div key="payment" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}>
+                  <div className="min-w-0 bg-card rounded-2xl border border-border p-4 shadow-sm sm:p-6">
+                    <div className="flex min-w-0 flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <CreditCard size={18} className="text-gold" />
                           <h2 className="font-cinzel text-lg font-bold">Payment Method</h2>
@@ -918,7 +1036,7 @@ const CheckoutPage = () => {
                                   setPaymentMethod(m.value);
                                 }
                               }}
-                              className={`group flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all ${selected ? 'border-gold bg-gold/5 shadow-[0_0_0_1px_rgba(218,165,32,0.2)]' : 'border-border bg-background hover:border-gold/50 hover:bg-pearl/50'}`}
+                              className={`group flex min-w-0 items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all sm:gap-4 sm:p-4 ${selected ? 'border-gold bg-gold/5 shadow-[0_0_0_1px_rgba(218,165,32,0.2)]' : 'border-border bg-background hover:border-gold/50 hover:bg-pearl/50'}`}
                             >
                               <input
                                 type="radio"
@@ -929,7 +1047,7 @@ const CheckoutPage = () => {
                                 className="sr-only"
                               />
                               <Logo />
-                              <div className="flex-1">
+                              <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className={`text-sm font-semibold ${m.brandColor}`}>{m.title}</span>
                                   <span className={`text-[11px] px-2 py-0.5 rounded-full border bg-background ${selected ? 'border-gold text-gold' : 'border-border text-muted-foreground'}`}>
@@ -978,7 +1096,7 @@ const CheckoutPage = () => {
                                 {hasPrasadamItems
                                   ? 'COD is not available for Prasadam products. Please continue with online payment.'
                                   : canUseCodService
-                                    ? `Select COD to confirm this order without online payment. COD Handle Fee ${formatPrice(COD_CHARGE)} will be collected with the order total.`
+                                    ? `Select COD to confirm this order without online payment. COD Handle Fee ${formatPrice(codFee)} will be collected with the order total.`
                                     : 'Enter a DTDC COD serviceable pincode in delivery details to enable this service.'}
                               </p>
                             </div>
@@ -1009,7 +1127,7 @@ const CheckoutPage = () => {
                             </div>
                           </div>
                         </div>
-                        <div className="grid gap-3 p-5 sm:grid-cols-3">
+                        <div className="grid min-w-0 gap-3 p-4 sm:grid-cols-3 sm:p-5">
                           {[
                             { icon: Smartphone, title: 'UPI', text: 'GPay, PhonePe, Paytm, BHIM' },
                             { icon: WalletCards, title: 'Cards & EMI', text: 'Visa, Mastercard, RuPay, Amex' },
@@ -1081,15 +1199,43 @@ const CheckoutPage = () => {
 
           {/* Summary sidebar */}
           {step < 2 && (
-            <div className="lg:col-span-1">
-              <div className="bg-card rounded-2xl border border-border p-6 shadow-sm lg:sticky lg:top-24">
+            <div className="min-w-0 lg:col-span-1">
+              <div className="min-w-0 bg-card rounded-2xl border border-border p-4 shadow-sm sm:p-6 lg:sticky lg:top-24">
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <h3 className="font-cinzel text-lg font-bold">Order Summary</h3>
                     <p className="mt-1 text-xs text-muted-foreground">{items.length} item{items.length === 1 ? '' : 's'} in this order</p>
                   </div>
-                  <span className="rounded-full border border-tulsi/25 bg-tulsi/5 px-2.5 py-1 text-[11px] font-semibold text-tulsi">Verified</span>
+                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${checkoutValidatedCleanly ? 'border-tulsi/25 bg-tulsi/5 text-tulsi' : 'border-gold/30 bg-gold/5 text-gold'}`}>
+                    {checkoutValidatedCleanly ? 'Verified' : 'Preview'}
+                  </span>
                 </div>
+                {(checkoutValidationError || hasCheckoutValidationChanges || hasCheckoutUnavailableItems) && (
+                  <div className="mb-4 rounded-xl border border-gold/30 bg-gold/5 p-3 text-sm">
+                    <p className="font-semibold text-foreground">
+                      {checkoutValidationError
+                        ? 'Cart validation needed'
+                        : hasCheckoutUnavailableItems
+                          ? 'Some items need attention'
+                          : 'Cart updates available'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {checkoutValidationError
+                        || checkoutValidation?.unavailableItems?.[0]?.message
+                        || checkoutValidation?.changes?.[0]?.message
+                        || 'Review the latest prices and quantities before payment.'}
+                    </p>
+                    {checkoutValidation && (hasCheckoutValidationChanges || hasCheckoutUnavailableItems) && (
+                      <button
+                        type="button"
+                        onClick={applyCheckoutUpdates}
+                        className="mt-3 rounded-lg border border-maroon/30 bg-background px-3 py-2 text-xs font-bold text-maroon hover:bg-pearl"
+                      >
+                        Apply cart updates
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-3 mb-5">
                   {items.map((item) => (
                     <div key={item.product.id} className="flex gap-3">
@@ -1180,7 +1326,7 @@ const CheckoutPage = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Product price</span>
-                    <span>{formatPrice(totalPrice())}</span>
+                    <span>{formatPrice(validatedSubtotal)}</span>
                   </div>
                   {totalSavings() > 0 && (
                     <div className="flex justify-between text-tulsi">
@@ -1190,11 +1336,11 @@ const CheckoutPage = () => {
                   )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Packaging cost ({packagingRate}%)</span>
-                    <span>{formatPrice(packagingCost)}</span>
+                    <span>{formatPrice(validatedPackaging)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Shipping charge</span>
-                    <span className={shipping === 0 ? 'text-tulsi font-medium' : ''}>{shipping === 0 ? 'FREE' : formatPrice(shipping)}</span>
+                    <span className={validatedShipping === 0 ? 'text-tulsi font-medium' : ''}>{validatedShipping === 0 ? 'FREE' : formatPrice(validatedShipping)}</span>
                   </div>
                   {codCharge > 0 && (
                     <div className="flex justify-between">
@@ -1217,13 +1363,25 @@ const CheckoutPage = () => {
                 <button
                   type="button"
                   onClick={step === 0 ? handleContinueToPayment : handlePlaceOrder}
-                  disabled={step === 0 ? checkingPincode : processing || (!wantsCodService && paymentOptions.length === 0)}
+                  disabled={step === 0
+                    ? checkingPincode || checkoutValidating || hasCheckoutValidationChanges || hasCheckoutUnavailableItems
+                    : processing || checkoutValidating || !checkoutValidatedCleanly || (!wantsCodService && paymentOptions.length === 0)}
                   className="mt-4 w-full rounded-xl bg-gold-gradient px-4 py-3 text-sm font-bold text-maroon-dark shimmer transition-transform active:scale-[0.97] disabled:opacity-60"
                 >
                   {step === 0
-                    ? checkingPincode ? 'Checking Delivery...' : 'Continue to Payment'
+                    ? checkingPincode
+                      ? 'Checking Delivery...'
+                      : checkoutValidating
+                        ? 'Validating cart...'
+                        : hasCheckoutValidationChanges || hasCheckoutUnavailableItems
+                          ? 'Apply cart updates first'
+                          : 'Continue to Payment'
                     : processing
                       ? wantsCodService ? 'Confirming COD Order...' : 'Processing Payment...'
+                      : checkoutValidating
+                        ? 'Validating cart...'
+                        : !checkoutValidatedCleanly
+                          ? 'Validate cart before payment'
                       : wantsCodService
                         ? `Confirm COD Order - ${formatPrice(grandTotal)}`
                         : `Pay with Razorpay - ${formatPrice(grandTotal)}`}

@@ -19,6 +19,10 @@ export interface Product {
   badge?: 'new' | 'bestseller' | 'combo' | 'exclusive';
   tags?: string[];
   inStock: boolean;
+  stockQuantity?: number | null;
+  reservedQuantity?: number;
+  lowStockThreshold?: number;
+  sku?: string;
   soldCount?: number;
   sizes?: string[];
   sizePricing?: Array<{ size: string; price: number }>;
@@ -28,6 +32,8 @@ export interface Product {
   selectedSize?: string;
   selectedPieces?: number;
   selectedAttributes?: Record<string, string>;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Subcategory {
@@ -45,4 +51,16 @@ export interface Category {
   productCount: number;
   displayOrder?: number;
   subcategories?: Subcategory[];
+}
+
+export interface Collection {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  purposeKey?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }

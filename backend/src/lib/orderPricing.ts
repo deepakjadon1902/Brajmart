@@ -34,6 +34,7 @@ type SettingsRow = {
   min_order_amount?: any;
   max_order_quantity?: any;
   cod_enabled?: any;
+  cod_fee?: any;
 };
 
 const asInt = (value: any) => {
@@ -50,7 +51,7 @@ const asMoney = (value: any) => {
 };
 
 export const getCheckoutSettings = async () => {
-  const rows = await dbQuery<SettingsRow>('SELECT free_shipping_threshold, shipping_fee, packaging_rate, tax_rate, min_order_amount, max_order_quantity, cod_enabled FROM settings LIMIT 1');
+  const rows = await dbQuery<SettingsRow>('SELECT free_shipping_threshold, shipping_fee, packaging_rate, tax_rate, min_order_amount, max_order_quantity, cod_enabled, cod_fee FROM settings LIMIT 1');
   const row = rows?.[0] || ({} as SettingsRow);
   return {
     freeShippingThreshold: Number(row.free_shipping_threshold ?? 299) || 299,
@@ -60,6 +61,7 @@ export const getCheckoutSettings = async () => {
     minOrderAmount: Number(row.min_order_amount ?? 0) || 0,
     maxOrderQuantity: Number(row.max_order_quantity ?? 0) || 0,
     codEnabled: boolFromDb(row.cod_enabled ?? 1),
+    codFee: Math.max(0, Number(row.cod_fee ?? 40) || 0),
   };
 };
 
@@ -128,7 +130,7 @@ export const applyCouponToTotals = async (
     };
   }
 
-  const rows = await dbQuery<any>('SELECT * FROM coupons WHERE code = ? AND is_active = 1 LIMIT 1', [code]);
+  const rows = await dbQuery<any>('SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND archived_at IS NULL LIMIT 1', [code]);
   const coupon = rows[0];
   if (!coupon) {
     return { valid: false as const, message: 'Invalid or inactive coupon code', totals, coupon: null };
@@ -221,7 +223,12 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
   // De-duplicate ids for query.
   const uniqueIds = Array.from(new Set(ids));
   const placeholders = uniqueIds.map(() => '?').join(',');
-  const rows = await dbQuery<any>(`SELECT id, name, slug, price, image, category, in_stock FROM products WHERE id IN (${placeholders})`, uniqueIds);
+  const rows = await dbQuery<any>(
+    `SELECT id, name, slug, price, image, category, in_stock, stock_quantity, reserved_quantity
+     FROM products
+     WHERE id IN (${placeholders}) AND archived_at IS NULL`,
+    uniqueIds
+  );
   const byId = new Map<string, any>((rows || []).map((r) => [String(r.id), r]));
 
   const pricedItems: PricedOrderItem[] = [];
@@ -243,6 +250,14 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
 
     const inStock = boolFromDb(product.in_stock);
     if (!inStock) return { ok: false as const, message: `${product.name} is out of stock` };
+    if (product.stock_quantity !== null && product.stock_quantity !== undefined) {
+      const stockQuantity = asInt(product.stock_quantity);
+      const reservedQuantity = asInt(product.reserved_quantity ?? 0) || 0;
+      const availableStock = Math.max(0, (stockQuantity || 0) - reservedQuantity);
+      if (availableStock < quantity) {
+        return { ok: false as const, message: `Only ${availableStock} available for ${product.name}` };
+      }
+    }
 
     subtotal += quantity * price;
 

@@ -1,16 +1,17 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus, Zap } from 'lucide-react';
+import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus, Zap, MapPin, PackageCheck, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useProductStore } from '@/store/productStore';
 import { useCartStore } from '@/store/cartStore';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useSettingsStore } from '@/store/settingsStore';
-import { formatPrice, calculateDiscount } from '@/utils/formatPrice';
+import { formatPrice } from '@/utils/formatPrice';
 import { toSquareImageUrl } from '@/utils/image';
 import { toast } from 'sonner';
 import ProductCarousel from '@/components/product/ProductCarousel';
+import ProductReviews from '@/components/reviews/ProductReviews';
 import SectionHeader from '@/components/ui/SectionHeader';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
@@ -20,6 +21,15 @@ import { SITE_URL, breadcrumbSchema } from '@/lib/seo';
 import { categoryToSlug } from '@/store/productStore';
 import { getInitialData } from '@/lib/initialData';
 import { productToMetaPixelParams, trackMetaPixelEvent } from '@/lib/metaPixel';
+import { fetchProductRecommendations, RecommendationSection } from '@/lib/api';
+import {
+  getAvailableQuantity,
+  getValidDiscountPercent,
+  getValidMrp,
+  getValidSavings,
+  hasReviewRating,
+  isProductPurchasable,
+} from '@/utils/productPresentation';
 
 const absoluteUrl = (value: string) => {
   const raw = String(value || '').trim();
@@ -56,12 +66,30 @@ const truncateMeta = (value: string, maxLength: number) => {
 const safeJsonLd = (value: unknown) =>
   JSON.stringify(value).replace(/</g, '\\u003c');
 
+const makeHighlights = (product: NonNullable<ReturnType<typeof useProductStore.getState>['getProductBySlug']>) => {
+  const highlights = new Set<string>();
+  if (product.category) highlights.add(`Category: ${product.category}`);
+  if (product.subcategory) highlights.add(`Collection: ${product.subcategory}`);
+  if (Array.isArray(product.sizes) && product.sizes.length) highlights.add(`Available sizes: ${product.sizes.slice(0, 4).join(', ')}`);
+  if (Array.isArray(product.attributes)) {
+    product.attributes.slice(0, 3).forEach((attr) => {
+      const terms = Array.isArray(attr.terms) ? attr.terms.filter(Boolean).slice(0, 3) : [];
+      if (attr.name && terms.length) highlights.add(`${attr.name}: ${terms.join(', ')}`);
+    });
+  }
+  if (product.sku) highlights.add(`SKU: ${product.sku}`);
+  return Array.from(highlights).slice(0, 6);
+};
+
 const ProductDetailPage = () => {
   const { slug } = useParams();
   const { getProductBySlug, products, loading, lastFetchedAt, error, loadFromApi } = useProductStore();
   const settings = useSettingsStore((s) => s.settings);
   const product = getProductBySlug(slug || '');
   const [quantity, setQuantity] = useState(1);
+  const [pincode, setPincode] = useState('');
+  const [checkedPincode, setCheckedPincode] = useState('');
+  const [pincodeError, setPincodeError] = useState('');
   const baseGalleryImages = product?.images && product.images.length
     ? product.images
     : (product?.image ? [product.image] : []);
@@ -70,6 +98,7 @@ const ProductDetailPage = () => {
   const thumbsColRef = useRef<HTMLDivElement | null>(null);
   const thumbsRowRef = useRef<HTMLDivElement | null>(null);
   const addToCart = useCartStore(s => s.addItem);
+  const openCartDrawer = useCartStore(s => s.openDrawer);
   const { toggleItem, isInWishlist } = useWishlistStore();
   const navigate = useNavigate();
 
@@ -335,10 +364,23 @@ const ProductDetailPage = () => {
     return map[key] || null;
   };
 
-  const discount = useMemo(() => {
-    if (!product) return 0;
-    return product.originalPrice ? calculateDiscount(product.price, product.originalPrice) : 0;
-  }, [product]);
+  const discount = useMemo(() => product ? getValidDiscountPercent({ ...product, price: computedPrice }) : 0, [computedPrice, product]);
+  const validMrp = useMemo(() => product ? getValidMrp({ ...product, price: computedPrice }) : null, [computedPrice, product]);
+  const savings = useMemo(() => product ? getValidSavings({ ...product, price: computedPrice }) : 0, [computedPrice, product]);
+  const availableQuantity = product ? getAvailableQuantity(product) : null;
+  const purchasable = product ? isProductPurchasable(product) : false;
+  const maxOrderQuantity = Math.max(0, Number(settings.maxOrderQuantity || 0));
+  const quantityLimit = Math.max(1, availableQuantity !== null ? availableQuantity : (maxOrderQuantity || 99));
+  const deliveryMin = Math.max(1, positiveNumber(settings.deliveryEtaMinDays, 3));
+  const deliveryMax = Math.max(deliveryMin, positiveNumber(settings.deliveryEtaMaxDays, 7));
+  const shippingFee = positiveNumber(settings.shippingFee, 49);
+  const freeShippingThreshold = positiveNumber(settings.freeShippingThreshold, 299);
+  const qualifiesForFreeShipping = freeShippingThreshold > 0 && computedPrice * quantity >= freeShippingThreshold;
+  const productHighlights = product ? makeHighlights(product) : [];
+
+  useEffect(() => {
+    setQuantity((current) => Math.min(Math.max(1, current), quantityLimit));
+  }, [quantityLimit]);
 
   const inWishlist = useMemo(() => {
     if (!product) return false;
@@ -376,6 +418,26 @@ const ProductDetailPage = () => {
     .map((recentSlug) => products.find((item) => item.slug === recentSlug))
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
     .slice(0, 6), [products, recentSlugs]);
+  const [recommendationSections, setRecommendationSections] = useState<RecommendationSection[]>([]);
+
+  useEffect(() => {
+    if (!product?.id) {
+      setRecommendationSections([]);
+      return;
+    }
+    let active = true;
+    fetchProductRecommendations(product.id, 8)
+      .then((data) => {
+        if (!active) return;
+        setRecommendationSections(Array.isArray(data.sections) ? data.sections : []);
+      })
+      .catch(() => {
+        if (active) setRecommendationSections([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [product?.id]);
 
   const variantSuffix = useMemo(() => {
     const parts: string[] = [];
@@ -448,7 +510,7 @@ const ProductDetailPage = () => {
         url: productUrl,
         price,
         priceCurrency: 'INR',
-        availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        availability: purchasable ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
         itemCondition: 'https://schema.org/NewCondition',
         seller: {
           '@type': 'Organization',
@@ -484,10 +546,7 @@ const ProductDetailPage = () => {
         hasMerchantReturnPolicy: {
           '@type': 'MerchantReturnPolicy',
           applicableCountry: 'IN',
-          returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
-          merchantReturnDays: 7,
-          returnMethod: 'https://schema.org/ReturnByMail',
-          returnFees: 'https://schema.org/FreeReturn',
+          returnPolicyCategory: 'https://schema.org/MerchantReturnUnspecified',
           url: returnPolicyUrl,
         },
       },
@@ -505,6 +564,7 @@ const ProductDetailPage = () => {
     computedPrice,
     displayImages,
     product,
+    purchasable,
     settings.deliveryEtaMaxDays,
     settings.deliveryEtaMinDays,
     settings.freeShippingThreshold,
@@ -549,22 +609,32 @@ const ProductDetailPage = () => {
       `Buy authentic ${product.name} from Vrindavan. ${shortDescription}. Free shipping above ₹299. 100% genuine temple-sourced product. Order now at Brajmart.`,
       180
     );
-  }, [product]);
+  }, [deliveryMax, deliveryMin, product]);
+
+  const truthfulMetaDescription = useMemo(() => {
+    if (!product) return '';
+    const shortDescription = cleanText(product.metaDescription || product.description || `${product.category || 'devotional product'} from Vrindavan.`);
+    return truncateMeta(
+      `Buy ${product.name} from BrajMart. ${shortDescription}. Delivery estimate ${deliveryMin}-${deliveryMax} days. Secure checkout available.`,
+      180
+    );
+  }, [deliveryMax, deliveryMin, product]);
 
   const handleAddToCart = () => {
     if (!variantProduct) return;
-    if (!product?.inStock) {
+    if (!purchasable) {
       toast.error('This product is out of stock');
       return;
     }
     for (let i = 0; i < quantity; i++) addToCart(variantProduct);
+    openCartDrawer(variantProduct.id);
     trackMetaPixelEvent('AddToCart', productToMetaPixelParams(variantProduct, quantity));
     toast.success(`${variantProduct.name} added to cart!`);
   };
 
   const handleBuyNow = () => {
     if (!variantProduct) return;
-    if (!product?.inStock) {
+    if (!purchasable) {
       toast.error('This product is out of stock');
       return;
     }
@@ -580,6 +650,17 @@ const ProductDetailPage = () => {
       trackMetaPixelEvent('AddToWishlist', productToMetaPixelParams(product));
     }
     toast.success(inWishlist ? 'Removed from wishlist' : 'Added to wishlist ❤️');
+  };
+
+  const handlePincodeCheck = () => {
+    const clean = pincode.trim();
+    if (!/^[1-9][0-9]{5}$/.test(clean)) {
+      setCheckedPincode('');
+      setPincodeError('Enter a valid 6 digit Indian pincode.');
+      return;
+    }
+    setPincodeError('');
+    setCheckedPincode(clean);
   };
 
   if (!product) {
@@ -668,23 +749,23 @@ const ProductDetailPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-24 md:pb-0">
       <Helmet>
         <title>{metaTitle}</title>
-        <meta name="description" content={metaDescription} />
+        <meta name="description" content={truthfulMetaDescription || metaDescription} />
         <meta name="robots" content="index,follow" />
         <link rel="canonical" href={productUrl} />
         <meta property="og:type" content="product" />
         <meta property="og:site_name" content={settings.storeName || 'Brajmart'} />
         <meta property="og:title" content={metaTitle} />
-        <meta property="og:description" content={metaDescription} />
+        <meta property="og:description" content={truthfulMetaDescription || metaDescription} />
         <meta property="og:url" content={productUrl} />
         {primaryImage ? <meta property="og:image" content={primaryImage} /> : null}
         <meta property="product:price:amount" content={toSchemaPrice(computedPrice)} />
         <meta property="product:price:currency" content="INR" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={metaTitle} />
-        <meta name="twitter:description" content={metaDescription} />
+        <meta name="twitter:description" content={truthfulMetaDescription || metaDescription} />
         {primaryImage ? <meta name="twitter:image" content={primaryImage} /> : null}
         {productSchema ? (
           <script type="application/ld+json">
@@ -790,32 +871,99 @@ const ProductDetailPage = () => {
 
             {/* Rating */}
             <div className="flex flex-wrap items-center gap-2">
-              {Number(product.rating || 0) > 0 && (
+              {hasReviewRating(product) ? (
                 <span className="inline-flex h-6 items-center gap-1 rounded-sm bg-[#388e3c] px-2 font-sans text-xs font-semibold leading-none text-white">
                   {Number(product.rating).toFixed(1).replace(/\.0$/, '')}
                   <Star size={12} strokeWidth={2.4} className="fill-white text-white" aria-hidden="true" />
                 </span>
-              )}
+              ) : null}
               <span className="font-sans text-sm font-medium text-[#878787]">
-                {Number(product.reviewCount || 0).toLocaleString('en-IN')} reviews
+                {hasReviewRating(product) ? `${Number(product.reviewCount || 0).toLocaleString('en-IN')} reviews` : 'No reviews yet'}
               </span>
             </div>
 
             {/* Price */}
             <div className="flex flex-wrap items-baseline gap-3">
               <span className="product-detail-price-current font-sans text-[28px] font-bold leading-none text-[#212121] md:text-[30px]">{formatPrice(computedPrice)}</span>
-              {product.originalPrice && (
+              {validMrp && (
                 <>
-                  <span className="product-detail-price-original font-sans text-[16px] font-medium leading-none text-[#878787] line-through">{formatPrice(product.originalPrice)}</span>
+                  <span className="product-detail-price-original font-sans text-[16px] font-medium leading-none text-[#878787] line-through">{formatPrice(validMrp)}</span>
                   <span className="product-detail-price-save font-sans text-[14px] font-semibold leading-none text-[#388e3c]">{discount}% off</span>
-                  <span className="rounded-sm bg-[#e6f4ea] px-2 py-1 font-sans text-[13px] font-semibold leading-none text-[#388e3c]">Save {formatPrice(product.originalPrice - computedPrice)}</span>
+                  <span className="rounded-sm bg-[#e6f4ea] px-2 py-1 font-sans text-[13px] font-semibold leading-none text-[#388e3c]">Save {formatPrice(savings)}</span>
                 </>
               )}
-              {!product.inStock && (
+              {!purchasable && (
                 <span className="px-3 py-1 rounded-full bg-destructive text-primary-foreground text-sm font-extrabold tracking-wide">
                   OUT OF STOCK
                 </span>
               )}
+            </div>
+
+            <div className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm sm:grid-cols-3">
+              <div className="flex items-start gap-3">
+                <PackageCheck size={18} className="mt-0.5 text-tulsi" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-bold text-foreground">{purchasable ? 'Available' : 'Currently unavailable'}</p>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                    {availableQuantity !== null ? `${availableQuantity} ready for order` : 'Stock is checked before checkout'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Truck size={18} className="mt-0.5 text-saffron" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-bold text-foreground">Delivery estimate</p>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{deliveryMin}-{deliveryMax} working days after dispatch</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Shield size={18} className="mt-0.5 text-maroon" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-bold text-foreground">Secure checkout</p>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Payment options are confirmed at checkout</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-brand-soft p-4">
+              <label htmlFor="delivery-pincode" className="text-sm font-bold text-foreground">Check delivery</label>
+              <div className="mt-2 flex gap-2">
+                <div className="relative flex-1">
+                  <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <input
+                    id="delivery-pincode"
+                    value={pincode}
+                    onChange={(event) => setPincode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') handlePincodeCheck();
+                    }}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Enter pincode"
+                    className="min-h-11 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm outline-none transition focus:border-saffron"
+                    aria-describedby={pincodeError ? 'delivery-pincode-error' : checkedPincode ? 'delivery-pincode-result' : undefined}
+                  />
+                </div>
+                <button type="button" onClick={handlePincodeCheck} className="min-h-11 rounded-lg bg-maroon px-4 text-sm font-bold text-white transition hover:bg-saffron">
+                  Check
+                </button>
+              </div>
+              {pincodeError ? (
+                <p id="delivery-pincode-error" className="mt-2 text-xs font-medium text-destructive">{pincodeError}</p>
+              ) : checkedPincode ? (
+                <p id="delivery-pincode-result" className="mt-2 text-xs font-medium text-tulsi">
+                  Deliver to {checkedPincode}: expected {deliveryMin}-{deliveryMax} working days after dispatch.
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">Enter your pincode for a local delivery estimate.</p>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                {qualifiesForFreeShipping
+                  ? 'This selection qualifies for free shipping.'
+                  : freeShippingThreshold > 0
+                  ? `Shipping ${formatPrice(shippingFee)}. Free shipping above ${formatPrice(freeShippingThreshold)}.`
+                  : `Shipping fee: ${formatPrice(shippingFee)}.`}
+              </p>
             </div>
 
             {/* Size & Pieces */}
@@ -966,38 +1114,41 @@ const ProductDetailPage = () => {
               <div className="qty-selector flex h-11 w-[130px] items-center justify-between rounded-lg border border-border bg-brand-soft">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  disabled={!product.inStock}
-                  className={`qty-btn flex h-full w-11 items-center justify-center rounded-l-lg ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                  disabled={!purchasable || quantity <= 1}
+                  className={`qty-btn flex h-full w-11 items-center justify-center rounded-l-lg ${purchasable && quantity > 1 ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
                   aria-label="Decrease quantity"
                 >
                   <Minus size={16} />
                 </button>
                 <span id="qty-display" className="font-sans text-base font-bold text-brand-deep">{quantity}</span>
                 <button
-                  onClick={() => setQuantity(quantity + 1)}
-                  disabled={!product.inStock}
-                  className={`qty-btn flex h-full w-11 items-center justify-center rounded-r-lg ${product.inStock ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                  onClick={() => setQuantity(Math.min(quantityLimit, quantity + 1))}
+                  disabled={!purchasable || quantity >= quantityLimit}
+                  className={`qty-btn flex h-full w-11 items-center justify-center rounded-r-lg ${purchasable && quantity < quantityLimit ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
                   aria-label="Increase quantity"
                 >
                   <Plus size={16} />
                 </button>
               </div>
+              {availableQuantity !== null && (
+                <span className="text-xs text-muted-foreground">Max {availableQuantity} available</span>
+              )}
             </div>
 
             {/* Action buttons */}
             <div className="product-detail-actions grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_52px] sm:gap-3">
               <button
                 onClick={handleAddToCart}
-                disabled={!product.inStock}
-                className={`add-to-cart-btn btn-action w-full ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                disabled={!purchasable}
+                className={`add-to-cart-btn btn-action w-full ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
               >
                 <ShoppingCart size={18} className="shrink-0" aria-hidden="true" />
                 <span>Add to Cart</span>
               </button>
               <button
                 onClick={handleBuyNow}
-                disabled={!product.inStock}
-                className={`buy-now-btn btn-action-secondary w-full ${product.inStock ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                disabled={!purchasable}
+                className={`buy-now-btn btn-action-secondary w-full ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
               >
                 <Zap size={17} className="shrink-0 fill-current" aria-hidden="true" />
                 <span>Buy Now</span>
@@ -1011,35 +1162,74 @@ const ProductDetailPage = () => {
               </button>
             </div>
 
-            {/* Trust badges */}
             <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
               {[
-                { icon: Truck, label: 'Delivery', sub: 'Arrives in 3-7 days' },
-                { icon: Shield, label: 'Authentic', sub: 'Temple verified' },
-                { icon: RotateCcw, label: 'Easy Returns', sub: '7 day policy' },
-              ].map(b => (
-                <div key={b.label} className="text-center">
-                  <b.icon size={20} className="mx-auto text-gold mb-1" />
-                  <span className="block text-xs font-semibold text-foreground">{b.label}</span>
-                  <span className="block text-[0.6rem] text-muted-foreground">{b.sub}</span>
+                { icon: Truck, label: 'Delivery', sub: `${deliveryMin}-${deliveryMax} working days` },
+                { icon: PackageCheck, label: 'Packed carefully', sub: 'Checked before dispatch' },
+                { icon: RotateCcw, label: 'Returns', sub: 'Policy shown at checkout' },
+              ].map((badge) => (
+                <div key={badge.label} className="rounded-lg bg-brand-soft p-3 text-center">
+                  <badge.icon size={20} className="mx-auto mb-1 text-gold" aria-hidden="true" />
+                  <span className="block text-xs font-semibold text-foreground">{badge.label}</span>
+                  <span className="block text-[0.68rem] leading-4 text-muted-foreground">{badge.sub}</span>
                 </div>
               ))}
             </div>
 
-            {product.description && product.description.trim() ? (
-              <div className="space-y-3 pt-2">
-                {renderDescription(product.description)}
+            <div className="space-y-3 rounded-lg border border-border bg-card p-4">
+              <h2 className="font-playfair text-xl font-bold text-foreground">Product Details</h2>
+              {product.description && product.description.trim() ? (
+                <div className="line-clamp-4 space-y-2">{renderDescription(product.description)}</div>
+              ) : (
+                <p className="text-sm text-muted-foreground/70 italic">No detailed description has been added yet.</p>
+              )}
+              {productHighlights.length > 0 && (
+                <div className="pt-2">
+                  <h3 className="text-sm font-bold text-foreground">Highlights</h3>
+                  <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {productHighlights.map((item) => (
+                      <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-tulsi" aria-hidden="true" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="divide-y divide-border border-t border-border">
+                {[
+                  { title: 'Specifications', body: productHighlights.length ? productHighlights.join(' • ') : 'Specifications are based on the selected product and variants.' },
+                  { title: 'Shipping', body: checkedPincode ? `Deliver to ${checkedPincode}: expected ${deliveryMin}-${deliveryMax} working days after dispatch.` : `Estimated delivery is ${deliveryMin}-${deliveryMax} working days after dispatch.` },
+                  { title: 'Returns', body: 'Return and replacement eligibility is confirmed during checkout and follows the current BrajMart return policy.' },
+                  { title: 'Authenticity', body: 'BrajMart curates devotional products from the BrajMart catalog. Product-specific sourcing notes appear here when added by the team.' },
+                ].map((item) => (
+                  <details key={item.title} className="group py-3">
+                    <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold text-foreground">
+                      {item.title}
+                      <ChevronRight size={16} className="transition group-open:rotate-90" aria-hidden="true" />
+                    </summary>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
+                  </details>
+                ))}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground/70 italic pt-2">
-                No description yet.
-              </p>
-            )}
+            </div>
           </motion.div>
         </div>
 
-        {/* Related */}
-        {relatedProducts.length > 0 && (
+        {recommendationSections.map((section) => {
+          const sectionProducts = section.items.map((item) => item.product).filter(Boolean);
+          if (!sectionProducts.length) return null;
+          return (
+            <div key={section.type} className="mt-12">
+              <SectionHeader
+                title={section.title}
+                subtitle={section.type === 'frequently_bought_together' ? 'Products with a real purchase relationship to this item.' : 'Relevant products from the current BrajMart catalog.'}
+              />
+              <ProductCarousel products={sectionProducts} />
+            </div>
+          );
+        })}
+        {!recommendationSections.length && relatedProducts.length > 0 && (
           <div className="mt-16">
             <SectionHeader title="You May Also Like" subtitle={`More from ${product.category}`} />
             <ProductCarousel products={relatedProducts} />
@@ -1051,6 +1241,7 @@ const ProductDetailPage = () => {
             <ProductCarousel products={recentlyViewedProducts} />
           </div>
         )}
+        <ProductReviews productId={product.id} />
       </div>
       {zoomOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setZoomOpen(false)}>
@@ -1075,6 +1266,30 @@ const ProductDetailPage = () => {
           </div>
         </div>
       )}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-3 py-2 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur md:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
+          <div className="min-w-[70px]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Total</p>
+            <p className="font-sans text-base font-bold text-foreground">{formatPrice(computedPrice * quantity)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleAddToCart}
+            disabled={!purchasable}
+            className={`add-to-cart-btn min-h-11 rounded-lg px-2 text-xs font-bold ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+          >
+            Add Cart
+          </button>
+          <button
+            type="button"
+            onClick={handleBuyNow}
+            disabled={!purchasable}
+            className={`buy-now-btn min-h-11 rounded-lg px-2 text-xs font-bold ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+          >
+            Buy Now
+          </button>
+        </div>
+      </div>
       <Footer />
     </div>
   );

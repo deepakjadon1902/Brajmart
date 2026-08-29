@@ -17,9 +17,15 @@ import razorpayRoutes from './routes/razorpay';
 import couponRoutes from './routes/coupons';
 import cartRoutes from './routes/cart';
 import wishlistRoutes from './routes/wishlist';
+import collectionRoutes from './routes/collections';
 import heroSlidesRoutes from './routes/heroSlides';
 import blogRoutes from './routes/blogs';
 import analyticsRoutes from './routes/analytics';
+import inventoryRoutes from './routes/inventory';
+import adminAuditLogRoutes from './routes/adminAuditLogs';
+import reviewRoutes from './routes/reviews';
+import recommendationRoutes from './routes/recommendations';
+import bundleRoutes from './routes/bundles';
 import { isDbConnected, dbQuery } from './lib/db';
 
 const app = express();
@@ -174,9 +180,15 @@ app.use('/api/razorpay', razorpayRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/collections', collectionRoutes);
 app.use('/api/hero-slides', heroSlidesRoutes);
 app.use('/api/blogs', blogRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/admin/audit-logs', adminAuditLogRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/bundles', bundleRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
@@ -288,10 +300,10 @@ app.get('/sitemap.xml', async (_req, res) => {
   if (isDbConnected()) {
     try {
       const [products, categories, subcategories, blogs] = await Promise.all([
-        dbQuery<any>('SELECT slug, updated_at FROM products WHERE slug IS NOT NULL AND slug <> "" ORDER BY updated_at DESC'),
-        dbQuery<any>('SELECT id, name, product_count, updated_at FROM categories WHERE name IS NOT NULL AND name <> "" ORDER BY updated_at DESC'),
-        dbQuery<any>('SELECT s.name, s.updated_at, c.name AS category_name FROM subcategories s JOIN categories c ON s.category_id = c.id WHERE s.name IS NOT NULL AND s.name <> "" AND c.name IS NOT NULL AND c.name <> "" ORDER BY s.updated_at DESC').catch(() => []),
-        dbQuery<any>("SELECT slug, updated_at FROM blogs WHERE slug IS NOT NULL AND slug <> '' AND status = 'published' ORDER BY updated_at DESC").catch(() => []),
+        dbQuery<any>('SELECT slug, updated_at FROM products WHERE archived_at IS NULL AND slug IS NOT NULL AND slug <> "" ORDER BY updated_at DESC'),
+        dbQuery<any>('SELECT id, name, product_count, updated_at FROM categories WHERE archived_at IS NULL AND name IS NOT NULL AND name <> "" ORDER BY updated_at DESC'),
+        dbQuery<any>('SELECT s.name, s.updated_at, c.name AS category_name FROM subcategories s JOIN categories c ON s.category_id = c.id WHERE s.archived_at IS NULL AND c.archived_at IS NULL AND s.name IS NOT NULL AND s.name <> "" AND c.name IS NOT NULL AND c.name <> "" ORDER BY s.updated_at DESC').catch(() => []),
+        dbQuery<any>("SELECT slug, updated_at FROM blogs WHERE archived_at IS NULL AND slug IS NOT NULL AND slug <> '' AND status = 'published' ORDER BY updated_at DESC").catch(() => []),
       ]);
 
       for (const row of categories || []) {

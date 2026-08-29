@@ -1,13 +1,11 @@
+import { useEffect, useState } from 'react';
 import { ArrowUpRight, MessageCircle, ShieldCheck, Truck } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Category, Product } from '@/types/product';
+import { Link } from 'react-router-dom';
+import { Category } from '@/types/product';
 import SectionHeader from '@/components/ui/SectionHeader';
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
-import { formatPrice } from '@/utils/formatPrice';
-import { useCartStore } from '@/store/cartStore';
-import { productToMetaPixelParams, trackMetaPixelEvent } from '@/lib/metaPixel';
-import { toast } from 'sonner';
-import ProductCard from '@/components/product/ProductCard';
+import BundleShelf from '@/components/recommendations/BundleShelf';
+import { CommerceBundle, fetchBundles } from '@/lib/api';
 
 const purposeCards = [
   { title: 'Daily Puja', text: 'Dhoop, itra, chandan and sacred home-puja essentials.', purpose: 'daily-puja' },
@@ -167,173 +165,28 @@ export const NewsletterEngagement = () => (
   </section>
 );
 
-const pickBundleProducts = (products: Product[]) => {
-  const seen = new Set<string>();
-  const available = products
-    .filter((product) => product.inStock !== false && product.price > 0)
-    .filter((product) => {
-      const key = product.id || product.slug || product.name;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .filter((product) => String(product.category || '').trim());
+export const BundledFavorites = () => {
+  const [bundles, setBundles] = useState<CommerceBundle[]>([]);
 
-  const scoreProduct = (product: Product) => {
-    const bestsellerBoost = product.tags?.includes('bestseller') || product.badge === 'bestseller' ? 1000 : 0;
-    return Number(product.soldCount || 0) * 10 + bestsellerBoost + Number(product.rating || 0);
-  };
-
-  const twoDayBucket = Math.floor(Date.now() / (2 * 24 * 60 * 60 * 1000));
-  const grouped = available.reduce<Record<string, Product[]>>((acc, product) => {
-    const category = String(product.category || '').trim();
-    acc[category] = [...(acc[category] || []), product];
-    return acc;
-  }, {});
-
-  const eligibleGroups = Object.entries(grouped)
-    .filter(([, groupProducts]) => groupProducts.length >= 5)
-    .sort((a, b) => {
-      const scoreA = a[1].reduce((sum, product) => sum + scoreProduct(product), 0);
-      const scoreB = b[1].reduce((sum, product) => sum + scoreProduct(product), 0);
-      return scoreB - scoreA || a[0].localeCompare(b[0]);
-    });
-
-  if (eligibleGroups.length) {
-    const [category, groupProducts] = eligibleGroups[twoDayBucket % eligibleGroups.length];
-    const ranked = [...groupProducts].sort((a, b) => scoreProduct(b) - scoreProduct(a));
-    const offset = Math.floor(twoDayBucket / Math.max(1, eligibleGroups.length)) % ranked.length;
-    const rotated = [...ranked.slice(offset), ...ranked.slice(0, offset)];
-    return rotated.slice(0, 5).map((product) => ({ ...product, category }));
-  }
-
-  return [...available]
-    .sort((a, b) => scoreProduct(b) - scoreProduct(a))
-    .slice(0, 5);
-};
-
-const bundleNameForProducts = (products: Product[]) => {
-  const counts = products.reduce<Record<string, number>>((acc, product) => {
-    const category = String(product.category || '').trim();
-    if (!category) return acc;
-    acc[category] = (acc[category] || 0) + 1;
-    return acc;
-  }, {});
-  const [category = 'Devotional'] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0] || [];
-  const normalized = category.toLowerCase();
-  if (normalized.includes('prasadam') || normalized.includes('prasad')) return 'Braj Prasadam Favorites';
-  if (normalized.includes('book')) return 'Spiritual Reading Combo';
-  if (normalized.includes('accessor') || normalized.includes('mala') || normalized.includes('japa')) return 'Japa & Bhakti Essentials';
-  if (normalized.includes('idol') || normalized.includes('shringar')) return 'Home Temple Shringar Set';
-  if (normalized.includes('puja') || normalized.includes('pooja') || normalized.includes('incense')) return 'Daily Puja Essentials';
-  if (normalized.includes('cloth')) return 'Devotional Clothing Set';
-  return `${category} Perfect Combo`;
-};
-
-export const BundledFavorites = ({ products }: { products: Product[] }) => {
-  const navigate = useNavigate();
-  const addItem = useCartStore((state) => state.addItem);
-  const bundleProducts = pickBundleProducts(products);
-  if (bundleProducts.length < 5) return null;
-  const bundleTotal = bundleProducts.reduce((sum, product) => sum + product.price, 0);
-  const mrpTotal = bundleProducts.reduce((sum, product) => sum + (product.originalPrice || product.price), 0);
-  const savings = Math.max(0, mrpTotal - bundleTotal);
-  const bundleName = bundleNameForProducts(bundleProducts);
-  const saveBundleSnapshot = () => {
-    try {
-      sessionStorage.setItem('brajmart-last-bundle', JSON.stringify({
-        name: bundleName,
-        total: bundleTotal,
-        savings,
-        products: bundleProducts.map((product) => ({
-          id: product.id,
-          slug: product.slug,
-          name: product.name,
-          category: product.category,
-          price: product.price,
-          image: product.image,
-        })),
-      }));
-    } catch {
-      // Checkout still has the individual cart items if session storage is unavailable.
-    }
-  };
-  const addCompleteSet = () => {
-    bundleProducts.forEach((product) => {
-      addItem(product);
-      trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product));
-    });
-    saveBundleSnapshot();
-    toast.success('Complete set added to cart');
-  };
-  const buyCompleteSet = () => {
-    addCompleteSet();
-    navigate('/checkout');
-  };
+  useEffect(() => {
+    let active = true;
+    fetchBundles({ location: 'home', limit: 3 })
+      .then((data) => {
+        if (active) setBundles(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (active) setBundles([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
-    <section className="bg-pearl py-5 sm:py-6 md:py-7">
-      <div className="storefront-shell">
-        <SectionHeader
-          tag="PERFECT COMBO"
-          title="Frequently ordered together"
-          subtitle="Five popular products, refreshed automatically every 2 days from current product data."
-        />
-        <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
-          <div className="rounded-lg border border-border bg-card p-3 shadow-sm">
-            <h3 className="font-playfair text-xl font-bold leading-tight text-foreground">{bundleName}</h3>
-            <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-              Five frequently ordered products from one relevant category.
-            </p>
-            <div className="mt-3 max-h-[210px] space-y-1.5 overflow-y-auto pr-1">
-              {bundleProducts.map((product) => (
-                <Link key={product.id} to={`/product/${product.slug}`} className="grid grid-cols-[34px_1fr_auto] items-center gap-2 rounded-md p-1 transition hover:bg-muted/60 premium-focus">
-                  <img src={product.image} alt="" className="h-8 w-8 rounded border border-border bg-brand-raised object-contain p-0.5" />
-                  <span className="min-w-0">
-                    <span className="block line-clamp-1 text-xs font-semibold leading-snug text-foreground">{product.name}</span>
-                    <span className="mt-0.5 block text-[11px] text-muted-foreground">{product.category}</span>
-                  </span>
-                  <span className="shrink-0 text-xs font-bold text-foreground">{formatPrice(product.price)}</span>
-                </Link>
-              ))}
-            </div>
-            <div className="mt-3 border-t border-border pt-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Bundle price</span>
-                <span className="font-playfair text-xl font-bold text-saffron">
-                  {formatPrice(bundleTotal)}
-                </span>
-              </div>
-              {savings > 0 && <p className="mt-0.5 text-xs font-semibold text-tulsi">You save {formatPrice(savings)}</p>}
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={addCompleteSet}
-                className="min-h-10 rounded-lg border border-maroon bg-white px-3 py-2 text-xs font-bold text-maroon transition hover:bg-brand-soft premium-focus"
-              >
-                Add Set
-              </button>
-              <button
-                type="button"
-                onClick={buyCompleteSet}
-                className="min-h-10 rounded-lg bg-saffron px-3 py-2 text-xs font-bold text-white transition hover:bg-maroon premium-focus"
-              >
-                Buy Now
-              </button>
-            </div>
-          </div>
-          <div className="overflow-x-auto pb-3">
-            <div className="flex gap-3">
-            {bundleProducts.map((product) => (
-              <div key={product.id} className="w-[250px] flex-none sm:w-[248px] lg:w-[calc((100%_-_1.5rem)/3)] lg:min-w-[236px] lg:max-w-[260px]">
-                <ProductCard product={product} variant="compact" />
-              </div>
-            ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+    <BundleShelf
+      bundles={bundles}
+      title="Curated Devotional Sets"
+      subtitle="Ready-to-shop combinations selected by the BrajMart team from currently available products."
+    />
   );
 };

@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { auth, adminOnly } from '../middleware/auth';
+import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { dbExecute, dbQuery, isDbConnected } from '../lib/db';
+import { insertAdminAuditLog } from '../lib/adminAudit';
 
 const router = Router();
 
@@ -39,7 +40,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', auth, adminOnly, async (req, res) => {
+router.post('/', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const { tag, title, subtitle, cta, image, overlay, sortOrder, isActive } = req.body || {};
@@ -50,6 +51,14 @@ router.post('/', auth, adminOnly, async (req, res) => {
       [tag || '', title, subtitle || '', cta || '', image, overlay || '', sortOrder ?? 0, isActive === false ? 0 : 1]
     );
     const rows = await dbQuery<any>('SELECT * FROM hero_slides WHERE id = ? LIMIT 1', [result.insertId]);
+    await insertAdminAuditLog(null, {
+      req,
+      action: 'HERO_SLIDE_CREATE',
+      entityType: 'hero_slide',
+      entityId: result.insertId,
+      after: rows[0],
+      reason: 'Hero slide created',
+    }).catch(() => {});
     listCache = null;
     res.status(201).json(mapRow(rows[0]));
   } catch (err: any) {
@@ -57,16 +66,28 @@ router.post('/', auth, adminOnly, async (req, res) => {
   }
 });
 
-router.put('/:id', auth, adminOnly, async (req, res) => {
+router.put('/:id', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const { tag, title, subtitle, cta, image, overlay, sortOrder, isActive } = req.body || {};
+    const beforeRows = await dbQuery<any>('SELECT * FROM hero_slides WHERE id = ? LIMIT 1', [req.params.id]);
+    const before = beforeRows[0];
+    if (!before) return res.status(404).json({ message: 'Slide not found' });
     await dbExecute(
       'UPDATE hero_slides SET tag = ?, title = ?, subtitle = ?, cta = ?, image_url = ?, overlay = ?, sort_order = ?, is_active = ?, updated_at = NOW() WHERE id = ?',
       [tag || '', title || '', subtitle || '', cta || '', image || '', overlay || '', sortOrder ?? 0, isActive === false ? 0 : 1, req.params.id]
     );
     const rows = await dbQuery<any>('SELECT * FROM hero_slides WHERE id = ? LIMIT 1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ message: 'Slide not found' });
+    await insertAdminAuditLog(null, {
+      req,
+      action: rows[0].is_active ? 'HERO_SLIDE_UPDATE' : 'HERO_SLIDE_DISABLE',
+      entityType: 'hero_slide',
+      entityId: req.params.id,
+      before,
+      after: rows[0],
+      reason: 'Hero slide updated',
+    }).catch(() => {});
     listCache = null;
     res.json(mapRow(rows[0]));
   } catch (err: any) {
@@ -74,12 +95,25 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
   }
 });
 
-router.delete('/:id', auth, adminOnly, async (req, res) => {
+router.delete('/:id', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await dbExecute('DELETE FROM hero_slides WHERE id = ?', [req.params.id]);
+    const beforeRows = await dbQuery<any>('SELECT * FROM hero_slides WHERE id = ? LIMIT 1', [req.params.id]);
+    const before = beforeRows[0];
+    if (!before) return res.status(404).json({ message: 'Slide not found' });
+    await dbExecute('UPDATE hero_slides SET is_active = 0, updated_at = NOW() WHERE id = ?', [req.params.id]);
+    const rows = await dbQuery<any>('SELECT * FROM hero_slides WHERE id = ? LIMIT 1', [req.params.id]);
+    await insertAdminAuditLog(null, {
+      req,
+      action: 'HERO_SLIDE_DISABLE',
+      entityType: 'hero_slide',
+      entityId: req.params.id,
+      before,
+      after: rows[0],
+      reason: String(req.body?.reason || req.query.reason || 'Hero slide disabled instead of deleted').slice(0, 255),
+    }).catch(() => {});
     listCache = null;
-    res.json({ message: 'Slide deleted' });
+    res.json({ message: 'Slide disabled', slide: mapRow(rows[0]) });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }

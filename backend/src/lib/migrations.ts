@@ -1,5 +1,6 @@
 import { dbExecute, dbQuery, isDbConnected } from './db';
 import bcrypt from 'bcryptjs';
+import { ensureCommerceIntelligenceSchema } from './commerceIntelligence';
 
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
@@ -8,6 +9,15 @@ const columnExists = async (table: string, column: string) => {
     `SELECT 1 FROM information_schema.columns
      WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1`,
     [table, column]
+  );
+  return Boolean(rows.length);
+};
+
+const indexExists = async (table: string, indexName: string) => {
+  const rows = await dbQuery<any>(
+    `SELECT 1 FROM information_schema.statistics
+     WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? LIMIT 1`,
+    [table, indexName]
   );
   return Boolean(rows.length);
 };
@@ -76,6 +86,115 @@ const ensureOrderCodSchema = async () => {
   await setMigrationDone(MIGRATION_KEY);
 };
 
+const ensurePhaseZeroCommerceSchema = async () => {
+  const MIGRATION_KEY = '2026-08-25_phase_zero_commerce_integrity';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  if (!(await columnExists('settings', 'cod_fee'))) {
+    await dbExecute('ALTER TABLE settings ADD COLUMN cod_fee DECIMAL(10,2) NOT NULL DEFAULT 40 AFTER cod_enabled');
+  }
+
+  const productColumns = [
+    ['stock_quantity', 'INT NULL AFTER in_stock'],
+    ['reserved_quantity', 'INT NOT NULL DEFAULT 0 AFTER stock_quantity'],
+    ['low_stock_threshold', 'INT NOT NULL DEFAULT 3 AFTER reserved_quantity'],
+    ['sku', 'VARCHAR(120) NULL AFTER slug'],
+  ] as const;
+  for (const [column, definition] of productColumns) {
+    if (!(await columnExists('products', column))) {
+      await dbExecute(`ALTER TABLE products ADD COLUMN ${column} ${definition}`);
+    }
+  }
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS inventory_transactions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      product_id BIGINT UNSIGNED NOT NULL,
+      order_id BIGINT UNSIGNED NULL,
+      type ENUM('RESTOCK','RESERVE','RELEASE','SALE','ADJUSTMENT','CANCELLATION','RETURN') NOT NULL,
+      quantity INT NOT NULL,
+      previous_quantity INT NULL,
+      new_quantity INT NULL,
+      previous_reserved INT NULL,
+      new_reserved INT NULL,
+      reason VARCHAR(255) NOT NULL DEFAULT '',
+      created_by VARCHAR(120) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_inventory_transactions_product (product_id),
+      KEY idx_inventory_transactions_order (order_id),
+      CONSTRAINT fk_inventory_transactions_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+      CONSTRAINT fk_inventory_transactions_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS checkout_sessions (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      idempotency_key VARCHAR(120) NOT NULL,
+      user_id BIGINT UNSIGNED NULL,
+      customer_email VARCHAR(255) NOT NULL DEFAULT '',
+      cart_hash VARCHAR(64) NOT NULL,
+      order_id BIGINT UNSIGNED NULL,
+      payment_token VARCHAR(255) NULL,
+      amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+      status ENUM('active','paid','failed','cancelled','expired') NOT NULL DEFAULT 'active',
+      expires_at DATETIME NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_checkout_sessions_key (idempotency_key),
+      KEY idx_checkout_sessions_order (order_id),
+      KEY idx_checkout_sessions_token (payment_token),
+      KEY idx_checkout_sessions_status_expires (status, expires_at),
+      CONSTRAINT fk_checkout_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+      CONSTRAINT fk_checkout_sessions_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
+const ensurePurposeCollectionsSchema = async () => {
+  const MIGRATION_KEY = '2026-08-25_phase_one_purpose_collections';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS collections (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      slug VARCHAR(160) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT NULL,
+      purpose_key VARCHAR(120) NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_collections_slug (slug),
+      KEY idx_collections_active_sort (is_active, sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS collection_products (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      collection_id BIGINT UNSIGNED NOT NULL,
+      product_id BIGINT UNSIGNED NOT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_collection_products_item (collection_id, product_id),
+      KEY idx_collection_products_collection_sort (collection_id, sort_order),
+      KEY idx_collection_products_product (product_id),
+      CONSTRAINT fk_collection_products_collection FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
+      CONSTRAINT fk_collection_products_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
 const ensureCouponSchema = async () => {
   const MIGRATION_KEY = '2026-08-06_coupon_system';
   if (await isMigrationDone(MIGRATION_KEY)) return;
@@ -127,6 +246,106 @@ const ensureFreeShippingThresholdDefault = async () => {
   await dbExecute(
     'UPDATE settings SET free_shipping_threshold = 299 WHERE free_shipping_threshold IS NULL OR free_shipping_threshold = 0 OR free_shipping_threshold = 499'
   );
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
+const ensurePhase5bAdminSafetySchema = async () => {
+  const MIGRATION_KEY = '2026-08-27_phase_5b_admin_safety';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  const archiveTables = ['products', 'categories', 'subcategories', 'blogs', 'coupons', 'collections'] as const;
+  for (const table of archiveTables) {
+    if (!(await columnExists(table, 'archived_at'))) {
+      await dbExecute(`ALTER TABLE ${table} ADD COLUMN archived_at DATETIME NULL`);
+    }
+    if (!(await columnExists(table, 'archived_by'))) {
+      await dbExecute(`ALTER TABLE ${table} ADD COLUMN archived_by VARCHAR(120) NULL`);
+    }
+    if (!(await columnExists(table, 'archive_reason'))) {
+      await dbExecute(`ALTER TABLE ${table} ADD COLUMN archive_reason VARCHAR(255) NULL`);
+    }
+  }
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS admin_audit_logs (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      admin_id VARCHAR(80) NULL,
+      admin_email VARCHAR(255) NULL,
+      action VARCHAR(80) NOT NULL,
+      entity_type VARCHAR(80) NOT NULL,
+      entity_id VARCHAR(120) NOT NULL,
+      before_data JSON NULL,
+      after_data JSON NULL,
+      reason VARCHAR(255) NULL,
+      metadata JSON NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_admin_audit_created (created_at),
+      KEY idx_admin_audit_action (action),
+      KEY idx_admin_audit_entity (entity_type, entity_id),
+      KEY idx_admin_audit_admin (admin_email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  const archiveIndexes = [
+    ['products', 'idx_products_archived_at'],
+    ['categories', 'idx_categories_archived_at'],
+    ['blogs', 'idx_blogs_archived_status'],
+    ['coupons', 'idx_coupons_archived_active'],
+    ['collections', 'idx_collections_archived_active'],
+  ] as const;
+  for (const [table, indexName] of archiveIndexes) {
+    if (await indexExists(table, indexName)) continue;
+    if (table === 'blogs') {
+      await dbExecute(`CREATE INDEX ${indexName} ON blogs (archived_at, status)`);
+    } else if (table === 'coupons') {
+      await dbExecute(`CREATE INDEX ${indexName} ON coupons (archived_at, is_active)`);
+    } else if (table === 'collections') {
+      await dbExecute(`CREATE INDEX ${indexName} ON collections (archived_at, is_active)`);
+    } else {
+      await dbExecute(`CREATE INDEX ${indexName} ON ${table} (archived_at)`);
+    }
+  }
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
+const ensurePhase5cReviewsSchema = async () => {
+  const MIGRATION_KEY = '2026-08-27_phase_5c_reviews';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS reviews (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      product_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NOT NULL,
+      order_id BIGINT UNSIGNED NOT NULL,
+      rating TINYINT UNSIGNED NOT NULL,
+      title VARCHAR(120) NOT NULL DEFAULT '',
+      body TEXT NOT NULL,
+      status ENUM('PENDING','APPROVED','REJECTED','HIDDEN') NOT NULL DEFAULT 'PENDING',
+      is_verified_purchase TINYINT(1) NOT NULL DEFAULT 1,
+      helpful_count INT NOT NULL DEFAULT 0,
+      report_count INT NOT NULL DEFAULT 0,
+      approved_at DATETIME NULL,
+      rejected_at DATETIME NULL,
+      hidden_at DATETIME NULL,
+      rejection_reason VARCHAR(255) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_reviews_user_product_order (user_id, product_id, order_id),
+      KEY idx_reviews_product_status_created (product_id, status, created_at),
+      KEY idx_reviews_user_product (user_id, product_id),
+      KEY idx_reviews_status_created (status, created_at),
+      KEY idx_reviews_order (order_id),
+      CONSTRAINT chk_reviews_rating CHECK (rating BETWEEN 1 AND 5),
+      CONSTRAINT fk_reviews_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
+      CONSTRAINT fk_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+      CONSTRAINT fk_reviews_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
 
   await setMigrationDone(MIGRATION_KEY);
 };
@@ -260,7 +479,12 @@ export const runDataMigrations = async () => {
   await ensureOrderPricingSchema();
   await ensureOrderCodSchema();
   await ensureCouponSchema();
+  await ensurePhaseZeroCommerceSchema();
+  await ensurePurposeCollectionsSchema();
   await ensureFreeShippingThresholdDefault();
+  await ensurePhase5bAdminSafetySchema();
+  await ensurePhase5cReviewsSchema();
+  await ensureCommerceIntelligenceSchema();
   await migrateDeityShringarIntoIdolsSubcategory();
 };
 

@@ -1,8 +1,10 @@
 import { Router } from 'express';
-import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
-import { auth, adminOnly } from '../middleware/auth';
+import { isDbConnected, dbQuery, dbExecute, withDbTransaction } from '../lib/db';
+import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 import { buildProductAuditReport } from '../lib/productDataQuality';
+import { actorFromRequest, insertAdminAuditLog } from '../lib/adminAudit';
+import { approvedReviewAggregateSql } from '../lib/reviewAggregates';
 
 const router = Router();
 
@@ -235,7 +237,7 @@ const variantSchemaErrorMessage = (missing: Record<string, boolean>) => {
   return `Database schema missing product variant columns: ${missingCols.join(', ')}. Run backend/sql/migrate_products_all_variants.sql (safe migration section) and restart the backend.`;
 };
 
-const mapProductRow = (row: any) => ({
+export const mapProductRow = (row: any) => ({
   _id: String(row.id),
   name: row.name,
   slug: row.slug,
@@ -251,11 +253,15 @@ const mapProductRow = (row: any) => ({
   subcategoryId: row.subcategory_id !== undefined && row.subcategory_id !== null ? Number(row.subcategory_id) : undefined,
   category: String(row.category_name ?? row.category ?? ''),
   subcategory: row.subcategory_name !== undefined && row.subcategory_name !== null ? String(row.subcategory_name) : (row.subcategory ?? null),
-  rating: Number(row.rating ?? 0),
-  reviewCount: Number(row.review_count ?? 0),
+  rating: Number(row.real_review_count || 0) > 0 ? Number(row.real_rating ?? 0) : 0,
+  reviewCount: Number(row.real_review_count ?? 0),
   badge: row.badge ?? null,
   tags: parseJson(row.tags, []),
   inStock: boolFromDb(row.in_stock),
+  stockQuantity: row.stock_quantity === undefined || row.stock_quantity === null ? null : Number(row.stock_quantity),
+  reservedQuantity: row.reserved_quantity === undefined || row.reserved_quantity === null ? 0 : Number(row.reserved_quantity),
+  lowStockThreshold: row.low_stock_threshold === undefined || row.low_stock_threshold === null ? 3 : Number(row.low_stock_threshold),
+  sku: row.sku ?? '',
   soldCount: Number(row.sold_count ?? 0),
   description: row.description ?? '',
   metaTitle: row.meta_title ?? '',
@@ -268,6 +274,9 @@ const mapProductRow = (row: any) => ({
   colorVariants: sanitizeColorVariants(parseJson(row.color_variants, [])),
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
+  archivedAt: toIsoString(row.archived_at),
+  archivedBy: row.archived_by || '',
+  archiveReason: row.archive_reason || '',
 });
 
 const buildUpdate = (data: any) => {
@@ -301,6 +310,13 @@ const buildUpdate = (data: any) => {
   if (data.badge !== undefined) set('badge', data.badge);
   if (data.tags !== undefined) set('tags', JSON.stringify(data.tags || []));
   if (data.inStock !== undefined) set('in_stock', data.inStock ? 1 : 0);
+  if (data.stockQuantity !== undefined) {
+    const n = data.stockQuantity === null || data.stockQuantity === '' ? null : Math.max(0, Math.floor(Number(data.stockQuantity) || 0));
+    set('stock_quantity', n);
+  }
+  if (data.reservedQuantity !== undefined) set('reserved_quantity', Math.max(0, Math.floor(Number(data.reservedQuantity) || 0)));
+  if (data.lowStockThreshold !== undefined) set('low_stock_threshold', Math.max(0, Math.floor(Number(data.lowStockThreshold) || 0)));
+  if (data.sku !== undefined) set('sku', data.sku);
   if (data.soldCount !== undefined) set('sold_count', data.soldCount);
   if (data.description !== undefined) set('description', data.description);
   if (data.metaTitle !== undefined) set('meta_title', data.metaTitle);
@@ -339,10 +355,12 @@ router.get('/', async (req, res) => {
     await ensureProductCategorySchema();
     await ensureProductSeoColumns();
     const rows = await dbQuery<any>(
-      `SELECT p.*, c.name AS category_name, s.name AS subcategory_name
+      `SELECT p.*, c.name AS category_name, s.name AS subcategory_name, ra.real_rating, ra.real_review_count
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN subcategories s ON p.subcategory_id = s.id
+       LEFT JOIN (${approvedReviewAggregateSql}) ra ON ra.product_id = p.id
+       WHERE p.archived_at IS NULL
        ORDER BY p.created_at DESC`
     );
     const data = rows.map(mapProductRow);
@@ -384,6 +402,7 @@ router.get('/audit', auth, adminOnly, async (_req, res) => {
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN subcategories s ON p.subcategory_id = s.id
+       WHERE p.archived_at IS NULL
        ORDER BY p.created_at DESC`
     );
     res
@@ -401,11 +420,12 @@ router.get('/:slug', async (req, res) => {
     await ensureProductCategorySchema();
     await ensureProductSeoColumns();
     const rows = await dbQuery<any>(
-      `SELECT p.*, c.name AS category_name, s.name AS subcategory_name
+      `SELECT p.*, c.name AS category_name, s.name AS subcategory_name, ra.real_rating, ra.real_review_count
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN subcategories s ON p.subcategory_id = s.id
-       WHERE p.slug = ?
+       LEFT JOIN (${approvedReviewAggregateSql}) ra ON ra.product_id = p.id
+       WHERE p.slug = ? AND p.archived_at IS NULL
        LIMIT 1`,
       [req.params.slug]
     );
@@ -564,6 +584,14 @@ router.post('/', auth, adminOnly, async (req, res) => {
       [result.insertId]
     );
     clearListCache();
+    await insertAdminAuditLog(null, {
+      req: req as AuthRequest,
+      action: 'PRODUCT_CREATE',
+      entityType: 'product',
+      entityId: result.insertId,
+      after: rows[0],
+      reason: 'Product created',
+    }).catch(() => {});
     res.status(201).json(mapProductRow(rows[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -577,6 +605,9 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
     await ensureProductSeoColumns();
 
     const body = req.body || {};
+    if (body.stockQuantity !== undefined || body.reservedQuantity !== undefined) {
+      return res.status(400).json({ message: 'Use inventory adjustment controls to change stock quantities.' });
+    }
 
     const normalizedCategoryId = (() => {
       const raw = (body.categoryId ?? body.category_id);
@@ -654,7 +685,11 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
     const update = buildUpdate(body);
     if (!update) return res.status(400).json({ message: 'No fields to update' });
 
+    let beforeProduct: any = null;
     try {
+      const beforeRows = await dbQuery<any>('SELECT * FROM products WHERE id = ? LIMIT 1', [req.params.id]);
+      beforeProduct = beforeRows[0];
+      if (!beforeProduct) return res.status(404).json({ message: 'Product not found' });
       await dbExecute(`UPDATE products SET ${update.sql} WHERE id = ?`, [...update.values, req.params.id]);
     } catch (err: any) {
       const message = String(err?.message || '');
@@ -711,20 +746,105 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
       }
     }
     clearListCache();
+    await insertAdminAuditLog(null, {
+      req: req as AuthRequest,
+      action: 'PRODUCT_UPDATE',
+      entityType: 'product',
+      entityId: req.params.id,
+      before: beforeProduct,
+      after: rows[0],
+      reason: 'Product updated',
+    }).catch(() => {});
     res.json(mapProductRow(rows[0]));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
 });
 
-router.delete('/:id', auth, adminOnly, async (req, res) => {
+router.delete('/:id', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await dbExecute('DELETE FROM products WHERE id = ?', [req.params.id]);
+    const reason = String(req.body?.reason || req.query.reason || 'Product archived by admin').trim().slice(0, 255);
+    const actor = actorFromRequest(req);
+    let archived: any = null;
+    await withDbTransaction(async (connection) => {
+      const [rows] = await connection.execute('SELECT * FROM products WHERE id = ? FOR UPDATE', [req.params.id]);
+      const before = (rows as any[])[0];
+      if (!before) throw new Error('Product not found');
+      if (!before.archived_at) {
+        await connection.execute(
+          'UPDATE products SET archived_at = NOW(), archived_by = ?, archive_reason = ?, in_stock = 0, updated_at = NOW() WHERE id = ?',
+          [actor.adminEmail || actor.adminId || 'admin', reason, req.params.id]
+        );
+      }
+      const [afterRows] = await connection.execute('SELECT * FROM products WHERE id = ? LIMIT 1', [req.params.id]);
+      archived = (afterRows as any[])[0];
+      await insertAdminAuditLog(connection, {
+        req,
+        action: 'PRODUCT_ARCHIVE',
+        entityType: 'product',
+        entityId: req.params.id,
+        before,
+        after: archived,
+        reason,
+      });
+    });
     clearListCache();
-    res.json({ message: 'Product deleted' });
+    res.json({ message: 'Product archived', product: mapProductRow(archived) });
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    const message = err?.message || 'Failed to archive product';
+    res.status(message === 'Product not found' ? 404 : 500).json({ message });
+  }
+});
+
+router.post('/:id/restore', auth, adminOnly, async (req: AuthRequest, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const reason = String(req.body?.reason || 'Product restored by admin').trim().slice(0, 255);
+    let restored: any = null;
+    await withDbTransaction(async (connection) => {
+      const [rows] = await connection.execute('SELECT * FROM products WHERE id = ? FOR UPDATE', [req.params.id]);
+      const before = (rows as any[])[0];
+      if (!before) throw new Error('Product not found');
+      if (!before.name || !before.slug || Number(before.price) <= 0 || !before.image) {
+        throw new Error('Cannot restore product until name, slug, price, and image are valid.');
+      }
+      const [slugRows] = await connection.execute('SELECT id FROM products WHERE slug = ? AND id <> ? AND archived_at IS NULL LIMIT 1', [before.slug, req.params.id]);
+      if ((slugRows as any[]).length) throw new Error('Cannot restore product because another active product uses this slug.');
+      if (before.sku) {
+        const [skuRows] = await connection.execute('SELECT id FROM products WHERE sku = ? AND id <> ? AND archived_at IS NULL LIMIT 1', [before.sku, req.params.id]);
+        if ((skuRows as any[]).length) throw new Error('Cannot restore product because another active product uses this SKU.');
+      }
+      if (before.category_id) {
+        const [catRows] = await connection.execute('SELECT id FROM categories WHERE id = ? AND archived_at IS NULL LIMIT 1', [before.category_id]);
+        if (!(catRows as any[]).length) throw new Error('Cannot restore product because its category is archived or missing.');
+      }
+      const stock = before.stock_quantity === null || before.stock_quantity === undefined ? null : Number(before.stock_quantity);
+      const reserved = Number(before.reserved_quantity || 0);
+      if (stock !== null && (stock < 0 || reserved < 0 || reserved > stock)) {
+        throw new Error('Cannot restore product until inventory quantities are valid.');
+      }
+      await connection.execute(
+        'UPDATE products SET archived_at = NULL, archived_by = NULL, archive_reason = NULL, in_stock = IF(stock_quantity IS NULL OR stock_quantity - reserved_quantity > 0, 1, 0), updated_at = NOW() WHERE id = ?',
+        [req.params.id]
+      );
+      const [afterRows] = await connection.execute('SELECT * FROM products WHERE id = ? LIMIT 1', [req.params.id]);
+      restored = (afterRows as any[])[0];
+      await insertAdminAuditLog(connection, {
+        req,
+        action: 'PRODUCT_RESTORE',
+        entityType: 'product',
+        entityId: req.params.id,
+        before,
+        after: restored,
+        reason,
+      });
+    });
+    clearListCache();
+    res.json({ message: 'Product restored', product: mapProductRow(restored) });
+  } catch (err: any) {
+    const message = err?.message || 'Failed to restore product';
+    res.status(message === 'Product not found' ? 404 : 400).json({ message });
   }
 });
 

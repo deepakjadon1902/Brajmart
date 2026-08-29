@@ -1,4 +1,4 @@
-import mysql, { Pool } from 'mysql2/promise';
+import mysql, { Pool, PoolConnection } from 'mysql2/promise';
 
 let pool: Pool | null = null;
 let connected = false;
@@ -81,4 +81,24 @@ export const dbExecute = async (sql: string, params: any[] = []) => {
   if (!pool) throw new Error('Database not initialized');
   const [result] = await withRetry(() => pool!.execute(sql, params));
   return result as any;
+};
+
+export const withDbTransaction = async <T>(fn: (connection: PoolConnection) => Promise<T>): Promise<T> => {
+  if (!pool) throw new Error('Database not initialized');
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await fn(connection);
+    await connection.commit();
+    return result;
+  } catch (err) {
+    try {
+      await connection.rollback();
+    } catch {
+      // ignore rollback errors; original error is more useful
+    }
+    throw err;
+  } finally {
+    connection.release();
+  }
 };

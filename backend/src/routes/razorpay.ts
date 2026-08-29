@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { optionalAuth, AuthRequest } from '../middleware/auth';
-import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
+import { isDbConnected, dbQuery, dbExecute, withDbTransaction } from '../lib/db';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { sendAdminPaymentNotice, sendOrderConfirmation, sendPaymentFailed, sendPaymentReceipt } from '../lib/email';
 import { parseJson } from '../lib/dbHelpers';
@@ -10,6 +10,7 @@ import { upsertUserDefaultAddress } from '../lib/userAddress';
 import { resolveCodHandleFee } from '../lib/cod';
 import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
+import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
 
 const router = Router();
 const razorpayCreateLimiter = rateLimit('razorpay-create-order', {
@@ -39,6 +40,83 @@ const timingSafeEqual = (a: string, b: string) => {
   const left = Buffer.from(a || '', 'hex');
   const right = Buffer.from(b || '', 'hex');
   return left.length === right.length && crypto.timingSafeEqual(left, right);
+};
+
+const normalizeIdempotencyKey = (value: unknown) =>
+  String(value || '').trim().slice(0, 120);
+
+const buildCartHash = (input: unknown) =>
+  crypto.createHash('sha256').update(JSON.stringify(input || null)).digest('hex');
+
+const reuseCheckoutSession = async (keyId: string, idempotencyKey: string, cartHash: string) => {
+  if (!idempotencyKey) return null;
+  const rows = await dbQuery<any>(
+    `SELECT * FROM checkout_sessions
+     WHERE idempotency_key = ?
+       AND status = 'active'
+       AND expires_at > NOW()
+     LIMIT 1`,
+    [idempotencyKey]
+  );
+  const session = rows[0];
+  if (!session) return null;
+  if (String(session.cart_hash || '') !== cartHash) {
+    throw new Error('Checkout session changed. Please refresh your cart and try again.');
+  }
+  if (!session.payment_token) return null;
+  return {
+    keyId,
+    orderId: String(session.payment_token),
+    statusToken: String(session.payment_token),
+    amount: Math.round(Number(session.amount || 0) * 100),
+    currency: 'INR',
+    name: 'BrajMart',
+    description: `Order #${session.order_id}`,
+    prefill: { name: '', email: String(session.customer_email || ''), contact: '' },
+  };
+};
+
+const saveCheckoutSession = async (input: {
+  idempotencyKey: string;
+  userId: number | null;
+  customerEmail: string;
+  cartHash: string;
+  orderId: number;
+  paymentToken: string;
+  amount: number;
+}) => {
+  if (!input.idempotencyKey) return;
+  await dbExecute(
+    `INSERT INTO checkout_sessions
+      (idempotency_key, user_id, customer_email, cart_hash, order_id, payment_token, amount, status, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', DATE_ADD(NOW(), INTERVAL 45 MINUTE))
+     ON DUPLICATE KEY UPDATE
+      user_id = VALUES(user_id),
+      customer_email = VALUES(customer_email),
+      cart_hash = VALUES(cart_hash),
+      order_id = VALUES(order_id),
+      payment_token = VALUES(payment_token),
+      amount = VALUES(amount),
+      status = 'active',
+      expires_at = VALUES(expires_at),
+      updated_at = NOW()`,
+    [
+      input.idempotencyKey,
+      input.userId,
+      input.customerEmail,
+      input.cartHash,
+      input.orderId,
+      input.paymentToken,
+      input.amount,
+    ]
+  );
+};
+
+const markCheckoutSessionStatus = async (paymentToken: string, status: 'paid' | 'failed') => {
+  await dbExecute(
+    'UPDATE checkout_sessions SET status = ?, updated_at = NOW() WHERE payment_token = ?',
+    [status, paymentToken]
+  );
 };
 
 const insertOrder = async (orderData: any, estimatedDelivery: Date) => {
@@ -286,6 +364,15 @@ const updateOrderForPayment = async (params: {
     [params.razorpayOrderId, params.status, statusRow.order_id, Number(statusRow.amount || orderRow.total || 0), statusRow.method || 'Razorpay', transactionId]
   );
 
+  const orderItems = parseJson(orderRow.items, []);
+  if (params.status === 'paid') {
+    await withDbTransaction((connection) => convertReservationToSale(connection, Number(statusRow.order_id), orderItems));
+    await markCheckoutSessionStatus(params.razorpayOrderId, 'paid').catch(() => {});
+  } else {
+    await withDbTransaction((connection) => releaseInventoryForOrder(connection, Number(statusRow.order_id), orderItems));
+    await markCheckoutSessionStatus(params.razorpayOrderId, 'failed').catch(() => {});
+  }
+
   if (params.status === 'paid' && orderRow.coupon_code) {
     await markCouponUsed(orderRow.coupon_code);
   }
@@ -383,6 +470,7 @@ router.post('/create-order', razorpayCreateLimiter, optionalAuth, async (req: Au
     if (!keyId || !keySecret) return res.status(500).json({ message: 'Razorpay credentials are not configured' });
 
     const { amount, order, customer } = req.body || {};
+    const idempotencyKey = normalizeIdempotencyKey(req.body?.idempotencyKey || req.headers['idempotency-key']);
     if (!order || !customer?.email || !customer?.name) return res.status(400).json({ message: 'Missing order details' });
     const customerEmail = String(customer.email || '').trim().toLowerCase();
     const contact = validateCheckoutOrderContact(order, customerEmail);
@@ -421,6 +509,31 @@ router.post('/create-order', razorpayCreateLimiter, optionalAuth, async (req: Au
         return res.status(400).json({ message: 'Cart total changed. Please refresh and try again.' });
       }
     }
+    const cartHash = buildCartHash({
+      customerEmail,
+      items: priced.items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        selectedSize: item.selectedSize || '',
+        selectedPieces: item.selectedPieces || '',
+        selectedAttributes: item.selectedAttributes || {},
+        price: item.price,
+      })),
+      totals,
+      couponCode: couponDetails?.code || '',
+      codAmount: cod.amount,
+    });
+    const reused = await reuseCheckoutSession(keyId, idempotencyKey, cartHash);
+    if (reused) {
+      return res.json({
+        ...reused,
+        prefill: {
+          name: customer.name,
+          email: customerEmail,
+          contact: customer.phone || '',
+        },
+      });
+    }
 
     const { max } = await getEtaConfig();
     const estimatedDelivery = getEstimatedDeliveryDate(max);
@@ -455,18 +568,26 @@ router.post('/create-order', razorpayCreateLimiter, optionalAuth, async (req: Au
       upsertUserDefaultAddress(numericUserId, addrToSave).catch(() => {});
     }
 
+    await withDbTransaction((connection) => reserveInventoryForOrder(connection, Number(orderRow.id), priced.items));
+
     const amountPaise = Math.round(Number(totals.total) * 100);
-    const razorpayOrder = await createRazorpayOrder({
-      keyId,
-      keySecret,
-      amountPaise,
-      currency: 'INR',
-      receipt: `BM-${orderRow.id}-${Date.now()}`,
-      notes: {
-        brajmart_order_id: String(orderRow.id),
-        customer_email: customerEmail,
-      },
-    });
+    let razorpayOrder: any;
+    try {
+      razorpayOrder = await createRazorpayOrder({
+        keyId,
+        keySecret,
+        amountPaise,
+        currency: 'INR',
+        receipt: `BM-${orderRow.id}-${Date.now()}`,
+        notes: {
+          brajmart_order_id: String(orderRow.id),
+          customer_email: customerEmail,
+        },
+      });
+    } catch (err) {
+      await withDbTransaction((connection) => releaseInventoryForOrder(connection, Number(orderRow.id), priced.items)).catch(() => {});
+      throw err;
+    }
 
     await dbExecute(
       'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -476,6 +597,15 @@ router.post('/create-order', razorpayCreateLimiter, optionalAuth, async (req: Au
       'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
       [razorpayOrder.id, 'pending', orderRow.id, Number(totals.total), 'Razorpay', null]
     );
+    await saveCheckoutSession({
+      idempotencyKey,
+      userId: numericUserId,
+      customerEmail,
+      cartHash,
+      orderId: Number(orderRow.id),
+      paymentToken: String(razorpayOrder.id),
+      amount: Number(totals.total),
+    });
 
     return res.json({
       keyId,

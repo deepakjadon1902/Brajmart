@@ -7,6 +7,36 @@ import { brajDestinations } from '@/data/brajDestinations';
 const displayCategoryName = (name: string) =>
   (name || '').trim().toLowerCase() === 'best selling' ? 'Most Selling Products' : name;
 
+const isImageIcon = (icon?: string) => {
+  const value = String(icon || '').trim();
+  return value.startsWith('data:') || value.startsWith('http') || value.startsWith('/uploads');
+};
+
+const CategoryIcon = ({ icon, name }: { icon?: string; name: string }) => {
+  const value = String(icon || '').trim();
+  if (!value) return null;
+
+  return isImageIcon(value) ? (
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-200/80 bg-white shadow-sm">
+      <img
+        src={value}
+        alt=""
+        className="h-6 w-6 rounded-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+    </span>
+  ) : (
+    <span
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-200/80 bg-brand-soft text-[15px] leading-none shadow-sm"
+      aria-hidden="true"
+      title={name}
+    >
+      {value}
+    </span>
+  );
+};
+
 const CategoryNavbar = () => {
   const categories = useProductStore((s) => s.categories);
   const [allOpen, setAllOpen] = useState(false);
@@ -64,7 +94,7 @@ const CategoryNavbar = () => {
     <div className="sticky top-16 z-[70] md:top-[68px]" ref={rootRef}>
       <section className="relative overflow-visible border-b border-border bg-card shadow-sm">
         <div className="container mx-auto px-3 md:px-4">
-          <div className="flex h-10 items-center gap-2 overflow-x-auto scrollbar-hide md:h-11 md:justify-between md:gap-0">
+          <div className="flex h-11 items-center gap-2 overflow-x-auto scrollbar-hide md:h-12 md:justify-between md:gap-1">
             <button
               type="button"
               onClick={() => {
@@ -72,7 +102,7 @@ const CategoryNavbar = () => {
                 setExpandedCategoryId(null);
                 setBrajYatraOpen(false);
               }}
-              className="sticky left-0 z-[75] inline-flex h-10 w-[84px] shrink-0 items-center justify-center gap-2 border-r border-border bg-card text-sm font-bold text-maroon shadow-[8px_0_10px_-10px_rgba(0,0,0,0.4)] transition-colors hover:text-saffron md:h-11"
+              className="sticky left-0 z-[75] inline-flex h-11 w-[92px] shrink-0 items-center justify-center gap-2 border-r border-border bg-card text-[15px] font-bold text-maroon shadow-[8px_0_10px_-10px_rgba(0,0,0,0.4)] transition-colors hover:text-saffron md:h-12"
               aria-expanded={allOpen}
               aria-haspopup="menu"
             >
@@ -84,9 +114,10 @@ const CategoryNavbar = () => {
               <div key={cat.id} className="shrink-0 snap-start md:flex md:flex-1 md:justify-center">
                 <RouterLink
                   to={`/category/${categoryToSlug(cat.name)}`}
-                  className="inline-flex h-9 items-center whitespace-nowrap px-2.5 text-sm font-semibold text-foreground transition-colors hover:text-saffron"
+                  className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[15px] font-semibold text-foreground transition-colors hover:bg-brand-soft hover:text-saffron md:h-11 md:px-3.5"
                   onClick={closeMenus}
                 >
+                  <CategoryIcon icon={cat.icon} name={cat.name} />
                   {displayCategoryName(cat.name)}
                 </RouterLink>
               </div>
@@ -95,7 +126,7 @@ const CategoryNavbar = () => {
             <div className="shrink-0 snap-start md:flex md:flex-1 md:justify-center">
               <button
                 type="button"
-                className="inline-flex h-9 items-center whitespace-nowrap px-2.5 text-sm font-semibold text-foreground transition-colors hover:text-saffron"
+                className="inline-flex h-10 items-center whitespace-nowrap rounded-full px-3 text-[15px] font-semibold text-foreground transition-colors hover:bg-brand-soft hover:text-saffron md:h-11 md:px-3.5"
                 onClick={() => {
                   setBrajYatraOpen((open) => !open);
                   setAllOpen(false);
@@ -126,7 +157,7 @@ const CategoryNavbar = () => {
                       <div key={cat.id}>
                         <button
                           type="button"
-                          className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-bold text-foreground transition-colors hover:bg-brand-soft hover:text-saffron"
+                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[15px] font-bold text-foreground transition-colors hover:bg-brand-soft hover:text-saffron"
                           onClick={() => {
                             if (!subs.length) {
                               closeMenus();
@@ -137,7 +168,10 @@ const CategoryNavbar = () => {
                           }}
                           aria-expanded={subs.length ? expanded : undefined}
                         >
-                          <span>{displayCategoryName(cat.name)}</span>
+                          <span className="flex min-w-0 items-center gap-2.5">
+                            <CategoryIcon icon={cat.icon} name={cat.name} />
+                            <span className="truncate">{displayCategoryName(cat.name)}</span>
+                          </span>
                           {subs.length ? (
                             <ChevronRight size={15} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
                           ) : (

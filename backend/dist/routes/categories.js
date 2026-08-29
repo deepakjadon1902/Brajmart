@@ -4,6 +4,7 @@ const express_1 = require("express");
 const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
+const adminAudit_1 = require("../lib/adminAudit");
 const router = (0, express_1.Router)();
 const LIST_CACHE_TTL_MS = 60000;
 const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
@@ -35,6 +36,9 @@ const mapCategoryRow = (row) => ({
     displayOrder: Number(row.display_order ?? 0),
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
+    archivedAt: (0, dbHelpers_1.toIsoString)(row.archived_at),
+    archivedBy: row.archived_by || '',
+    archiveReason: row.archive_reason || '',
 });
 const mapSubcategoryRow = (row) => ({
     _id: String(row.id),
@@ -43,6 +47,9 @@ const mapSubcategoryRow = (row) => ({
     displayOrder: Number(row.display_order ?? 0),
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
+    archivedAt: (0, dbHelpers_1.toIsoString)(row.archived_at),
+    archivedBy: row.archived_by || '',
+    archiveReason: row.archive_reason || '',
 });
 const buildUpdate = (data) => {
     const fields = [];
@@ -76,8 +83,8 @@ router.get('/', async (req, res) => {
             return res.json(listCache.data);
         }
         await ensureSubcategoriesTable();
-        const rows = await (0, db_1.dbQuery)('SELECT * FROM categories ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
-        const subRows = await (0, db_1.dbQuery)('SELECT * FROM subcategories ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
+        const rows = await (0, db_1.dbQuery)('SELECT * FROM categories WHERE archived_at IS NULL ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
+        const subRows = await (0, db_1.dbQuery)('SELECT * FROM subcategories WHERE archived_at IS NULL ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
         // If "Deity Shringar Collection" is modeled as a subcategory under "Idols & Shringar",
         // hide the legacy category row from the public list (storefront navbar).
         const norm = (v) => String(v ?? '').trim().toLowerCase();
@@ -120,6 +127,14 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         const result = await (0, db_1.dbExecute)('INSERT INTO categories (name, icon, color, product_count, display_order) VALUES (?, ?, ?, ?, ?)', [data.name, data.icon, data.color ?? '#f59e0b', data.productCount ?? 0, data.displayOrder ?? 0]);
         const rows = await (0, db_1.dbQuery)('SELECT * FROM categories WHERE id = ? LIMIT 1', [result.insertId]);
         clearListCache();
+        await (0, adminAudit_1.insertAdminAuditLog)(null, {
+            req: req,
+            action: 'CATEGORY_CREATE',
+            entityType: 'category',
+            entityId: result.insertId,
+            after: rows[0],
+            reason: 'Category created',
+        }).catch(() => { });
         res.status(201).json(mapCategoryRow(rows[0]));
     }
     catch (err) {
@@ -164,6 +179,15 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             }
         }
         clearListCache();
+        await (0, adminAudit_1.insertAdminAuditLog)(null, {
+            req: req,
+            action: 'CATEGORY_UPDATE',
+            entityType: 'category',
+            entityId: req.params.id,
+            before: prev,
+            after: next,
+            reason: 'Category updated',
+        }).catch(() => { });
         res.json(mapCategoryRow(next));
     }
     catch (err) {
@@ -175,13 +199,71 @@ router.delete('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         await ensureSubcategoriesTable();
-        await (0, db_1.dbExecute)('DELETE FROM subcategories WHERE category_id = ?', [req.params.id]);
-        await (0, db_1.dbExecute)('DELETE FROM categories WHERE id = ?', [req.params.id]);
+        const reason = String(req.body?.reason || req.query.reason || 'Category archived by admin').trim().slice(0, 255);
+        const actor = (0, adminAudit_1.actorFromRequest)(req);
+        let archived = null;
+        await (0, db_1.withDbTransaction)(async (connection) => {
+            const [rows] = await connection.execute('SELECT * FROM categories WHERE id = ? FOR UPDATE', [req.params.id]);
+            const before = rows[0];
+            if (!before)
+                throw new Error('Category not found');
+            await connection.execute('UPDATE categories SET archived_at = COALESCE(archived_at, NOW()), archived_by = ?, archive_reason = ?, updated_at = NOW() WHERE id = ?', [actor.adminEmail || actor.adminId || 'admin', reason, req.params.id]);
+            await connection.execute('UPDATE subcategories SET archived_at = COALESCE(archived_at, NOW()), archived_by = ?, archive_reason = ?, updated_at = NOW() WHERE category_id = ? AND archived_at IS NULL', [actor.adminEmail || actor.adminId || 'admin', `Parent category archived: ${reason}`.slice(0, 255), req.params.id]);
+            const [afterRows] = await connection.execute('SELECT * FROM categories WHERE id = ? LIMIT 1', [req.params.id]);
+            archived = afterRows[0];
+            await (0, adminAudit_1.insertAdminAuditLog)(connection, {
+                req,
+                action: 'CATEGORY_ARCHIVE',
+                entityType: 'category',
+                entityId: req.params.id,
+                before,
+                after: archived,
+                reason,
+            });
+        });
         clearListCache();
-        res.json({ message: 'Category deleted' });
+        res.json({ message: 'Category archived', category: mapCategoryRow(archived) });
     }
     catch (err) {
-        res.status(500).json({ message: err.message });
+        const message = err?.message || 'Failed to archive category';
+        res.status(message === 'Category not found' ? 404 : 500).json({ message });
+    }
+});
+router.post('/:id/restore', auth_1.auth, auth_1.adminOnly, async (req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        const reason = String(req.body?.reason || 'Category restored by admin').trim().slice(0, 255);
+        let restored = null;
+        await (0, db_1.withDbTransaction)(async (connection) => {
+            const [rows] = await connection.execute('SELECT * FROM categories WHERE id = ? FOR UPDATE', [req.params.id]);
+            const before = rows[0];
+            if (!before)
+                throw new Error('Category not found');
+            if (!String(before.name || '').trim())
+                throw new Error('Cannot restore category without a name.');
+            const [dupes] = await connection.execute('SELECT id FROM categories WHERE LOWER(TRIM(name)) = LOWER(TRIM(?)) AND id <> ? AND archived_at IS NULL LIMIT 1', [before.name, req.params.id]);
+            if (dupes.length)
+                throw new Error('Cannot restore category because another active category uses this name.');
+            await connection.execute('UPDATE categories SET archived_at = NULL, archived_by = NULL, archive_reason = NULL, updated_at = NOW() WHERE id = ?', [req.params.id]);
+            const [afterRows] = await connection.execute('SELECT * FROM categories WHERE id = ? LIMIT 1', [req.params.id]);
+            restored = afterRows[0];
+            await (0, adminAudit_1.insertAdminAuditLog)(connection, {
+                req,
+                action: 'CATEGORY_RESTORE',
+                entityType: 'category',
+                entityId: req.params.id,
+                before,
+                after: restored,
+                reason,
+            });
+        });
+        clearListCache();
+        res.json({ message: 'Category restored', category: mapCategoryRow(restored) });
+    }
+    catch (err) {
+        const message = err?.message || 'Failed to restore category';
+        res.status(message === 'Category not found' ? 404 : 400).json({ message });
     }
 });
 router.get('/:id/subcategories', async (req, res) => {
@@ -189,7 +271,7 @@ router.get('/:id/subcategories', async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         await ensureSubcategoriesTable();
-        const rows = await (0, db_1.dbQuery)('SELECT * FROM subcategories WHERE category_id = ? ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC', [req.params.id]);
+        const rows = await (0, db_1.dbQuery)('SELECT * FROM subcategories WHERE category_id = ? AND archived_at IS NULL ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC', [req.params.id]);
         res.json(rows.map(mapSubcategoryRow));
     }
     catch (err) {
@@ -208,6 +290,14 @@ router.post('/:id/subcategories', auth_1.auth, auth_1.adminOnly, async (req, res
         const displayOrder = Number(data.displayOrder ?? 0) || 0;
         const result = await (0, db_1.dbExecute)('INSERT INTO subcategories (category_id, name, display_order) VALUES (?, ?, ?)', [req.params.id, name, displayOrder]);
         const rows = await (0, db_1.dbQuery)('SELECT * FROM subcategories WHERE id = ? LIMIT 1', [result.insertId]);
+        await (0, adminAudit_1.insertAdminAuditLog)(null, {
+            req,
+            action: 'SUBCATEGORY_CREATE',
+            entityType: 'subcategory',
+            entityId: result.insertId,
+            after: rows[0],
+            reason: 'Subcategory created',
+        }).catch(() => { });
         clearListCache();
         res.status(201).json(mapSubcategoryRow(rows[0]));
     }
@@ -237,10 +327,23 @@ router.put('/subcategories/:subId', auth_1.auth, auth_1.adminOnly, async (req, r
         if (!fields.length)
             return res.status(400).json({ message: 'No fields to update' });
         fields.push('updated_at = NOW()');
+        const beforeRows = await (0, db_1.dbQuery)('SELECT * FROM subcategories WHERE id = ? LIMIT 1', [req.params.subId]);
+        const before = beforeRows[0];
+        if (!before)
+            return res.status(404).json({ message: 'Subcategory not found' });
         await (0, db_1.dbExecute)(`UPDATE subcategories SET ${fields.join(', ')} WHERE id = ?`, [...values, req.params.subId]);
         const rows = await (0, db_1.dbQuery)('SELECT * FROM subcategories WHERE id = ? LIMIT 1', [req.params.subId]);
         if (!rows[0])
             return res.status(404).json({ message: 'Subcategory not found' });
+        await (0, adminAudit_1.insertAdminAuditLog)(null, {
+            req,
+            action: 'SUBCATEGORY_UPDATE',
+            entityType: 'subcategory',
+            entityId: req.params.subId,
+            before,
+            after: rows[0],
+            reason: 'Subcategory updated',
+        }).catch(() => { });
         clearListCache();
         res.json(mapSubcategoryRow(rows[0]));
     }
@@ -253,9 +356,27 @@ router.delete('/subcategories/:subId', auth_1.auth, auth_1.adminOnly, async (req
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         await ensureSubcategoriesTable();
-        await (0, db_1.dbExecute)('DELETE FROM subcategories WHERE id = ?', [req.params.subId]);
+        const beforeRows = await (0, db_1.dbQuery)('SELECT * FROM subcategories WHERE id = ? LIMIT 1', [req.params.subId]);
+        const before = beforeRows[0];
+        if (!before)
+            return res.status(404).json({ message: 'Subcategory not found' });
+        await (0, db_1.dbExecute)('UPDATE subcategories SET archived_at = COALESCE(archived_at, NOW()), archived_by = ?, archive_reason = ?, updated_at = NOW() WHERE id = ?', [
+            String(req.user?.email || req.user?.id || 'admin').slice(0, 120),
+            String(req.body?.reason || req.query.reason || 'Subcategory archived by admin').slice(0, 255),
+            req.params.subId,
+        ]);
+        const rows = await (0, db_1.dbQuery)('SELECT * FROM subcategories WHERE id = ? LIMIT 1', [req.params.subId]);
+        await (0, adminAudit_1.insertAdminAuditLog)(null, {
+            req,
+            action: 'SUBCATEGORY_ARCHIVE',
+            entityType: 'subcategory',
+            entityId: req.params.subId,
+            before,
+            after: rows[0],
+            reason: String(req.body?.reason || req.query.reason || 'Subcategory archived by admin').slice(0, 255),
+        }).catch(() => { });
         clearListCache();
-        res.json({ message: 'Subcategory deleted' });
+        res.json({ message: 'Subcategory archived', subcategory: mapSubcategoryRow(rows[0]) });
     }
     catch (err) {
         res.status(500).json({ message: err.message });

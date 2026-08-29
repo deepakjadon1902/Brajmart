@@ -2,7 +2,7 @@ import { Outlet, useNavigate, Link, useLocation, Navigate } from 'react-router-d
 import { useAdminStore } from '@/store/adminStore';
 import {
   LayoutDashboard, Users, ShoppingBag, Package, Truck, CreditCard,
-  Tags, BarChart3, LogOut, Settings, ChevronRight, Menu, X, PenLine, HeartHandshake,
+  Tags, BarChart3, LogOut, Settings, ChevronRight, Menu, X, PenLine, HeartHandshake, Boxes, ShieldCheck, MessageSquare, PackagePlus,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -14,6 +14,10 @@ const navItems = [
   { label: 'Pending Payments', icon: CreditCard, path: '/admin/pending-payments' },
   { label: 'Orders', icon: ShoppingBag, path: '/admin/orders' },
   { label: 'Products', icon: Package, path: '/admin/products' },
+  { label: 'Inventory', icon: Boxes, path: '/admin/inventory' },
+  { label: 'Bundles', icon: PackagePlus, path: '/admin/bundles' },
+  { label: 'Reviews', icon: MessageSquare, path: '/admin/reviews' },
+  { label: 'Audit Logs', icon: ShieldCheck, path: '/admin/audit-logs' },
   { label: 'Categories', icon: Tags, path: '/admin/categories' },
   { label: 'Blogs', icon: PenLine, path: '/admin/blogs' },
   { label: 'Shipments', icon: Truck, path: '/admin/shipments' },

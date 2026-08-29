@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { auth, adminOnly } from '../middleware/auth';
-import { dbExecute, dbQuery, isDbConnected } from '../lib/db';
+import { auth, adminOnly, AuthRequest } from '../middleware/auth';
+import { dbExecute, dbQuery, isDbConnected, withDbTransaction } from '../lib/db';
 import { applyCouponToTotals, computeTotals, getCheckoutSettings, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { toIsoString } from '../lib/dbHelpers';
 import { rateLimit } from '../middleware/rateLimit';
+import { actorFromRequest, insertAdminAuditLog } from '../lib/adminAudit';
 
 const router = Router();
 const couponValidateLimiter = rateLimit('coupon-validate', {
@@ -62,6 +63,9 @@ const mapCoupon = (row: any) => ({
   startsAt: toIsoString(row.starts_at),
   endsAt: toIsoString(row.ends_at),
   isActive: Boolean(Number(row.is_active)),
+  archivedAt: toIsoString(row.archived_at),
+  archivedBy: row.archived_by || '',
+  archiveReason: row.archive_reason || '',
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
 });
@@ -125,6 +129,14 @@ router.post('/', auth, adminOnly, async (req, res) => {
       values
     );
     const rows = await dbQuery<any>('SELECT * FROM coupons WHERE id = ? LIMIT 1', [result.insertId]);
+    await insertAdminAuditLog(null, {
+      req: req as AuthRequest,
+      action: 'COUPON_CREATE',
+      entityType: 'coupon',
+      entityId: result.insertId,
+      after: rows[0],
+      reason: 'Coupon created',
+    }).catch(() => {});
     res.status(201).json(mapCoupon(rows[0]));
   } catch (err: any) {
     const duplicate = String(err?.message || '').includes('Duplicate');
@@ -136,12 +148,24 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const values = payloadValues(req.body || {});
+    const beforeRows = await dbQuery<any>('SELECT * FROM coupons WHERE id = ? LIMIT 1', [req.params.id]);
+    const before = beforeRows[0];
+    if (!before) return res.status(404).json({ message: 'Coupon not found' });
     await dbExecute(
       'UPDATE coupons SET code = ?, title = ?, discount_type = ?, discount_value = ?, max_discount = ?, free_shipping = ?, free_packaging = ?, scope_type = ?, scope_value = ?, min_order_amount = ?, usage_limit = ?, starts_at = ?, ends_at = ?, is_active = ?, updated_at = NOW() WHERE id = ?',
       [...values, req.params.id]
     );
     const rows = await dbQuery<any>('SELECT * FROM coupons WHERE id = ? LIMIT 1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ message: 'Coupon not found' });
+    await insertAdminAuditLog(null, {
+      req: req as AuthRequest,
+      action: before.is_active && !rows[0].is_active ? 'COUPON_DISABLE' : 'COUPON_UPDATE',
+      entityType: 'coupon',
+      entityId: req.params.id,
+      before,
+      after: rows[0],
+      reason: 'Coupon updated',
+    }).catch(() => {});
     res.json(mapCoupon(rows[0]));
   } catch (err: any) {
     const duplicate = String(err?.message || '').includes('Duplicate');
@@ -149,13 +173,36 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
   }
 });
 
-router.delete('/:id', auth, adminOnly, async (req, res) => {
+router.delete('/:id', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await dbExecute('DELETE FROM coupons WHERE id = ?', [req.params.id]);
-    res.json({ ok: true });
+    const reason = String(req.body?.reason || req.query.reason || 'Coupon archived by admin').trim().slice(0, 255);
+    const actor = actorFromRequest(req);
+    let archived: any = null;
+    await withDbTransaction(async (connection) => {
+      const [rows] = await connection.execute('SELECT * FROM coupons WHERE id = ? FOR UPDATE', [req.params.id]);
+      const before = (rows as any[])[0];
+      if (!before) throw new Error('Coupon not found');
+      await connection.execute(
+        'UPDATE coupons SET is_active = 0, archived_at = COALESCE(archived_at, NOW()), archived_by = ?, archive_reason = ?, updated_at = NOW() WHERE id = ?',
+        [actor.adminEmail || actor.adminId || 'admin', reason, req.params.id]
+      );
+      const [afterRows] = await connection.execute('SELECT * FROM coupons WHERE id = ? LIMIT 1', [req.params.id]);
+      archived = (afterRows as any[])[0];
+      await insertAdminAuditLog(connection, {
+        req,
+        action: 'COUPON_ARCHIVE',
+        entityType: 'coupon',
+        entityId: req.params.id,
+        before,
+        after: archived,
+        reason,
+      });
+    });
+    res.json({ ok: true, coupon: mapCoupon(archived) });
   } catch (err: any) {
-    res.status(500).json({ message: err?.message || 'Failed to delete coupon' });
+    const message = err?.message || 'Failed to archive coupon';
+    res.status(message === 'Coupon not found' ? 404 : 500).json({ message });
   }
 });
 

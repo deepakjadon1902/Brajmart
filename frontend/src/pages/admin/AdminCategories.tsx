@@ -27,13 +27,13 @@ const AdminCategories = () => {
   }, [categories.length, page]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this category?')) return;
+    if (!confirm('Archive this category? It will be hidden from shoppers and SEO, along with its subcategories.')) return;
     try {
       await deleteCategoryApi(id);
       deleteCategory(id);
-      toast.success('Category deleted');
+      toast.success('Category archived');
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to delete category');
+      toast.error(err?.message || 'Failed to archive category');
     }
   };
 
@@ -318,7 +318,7 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
                           type="button"
                           disabled={subSaving}
                           onClick={async () => {
-                            if (!confirm('Delete this subcategory?')) return;
+                            if (!confirm('Archive this subcategory? It will be hidden from shoppers and SEO.')) return;
                             try {
                               setSubSaving(true);
                               await deleteSubcategoryApi(s.id);
@@ -332,16 +332,16 @@ const CategoryForm = ({ cat, onSave, onClose, isCreating }: { cat: Category; onS
                               } catch {
                                 // ignore
                               }
-                              toast.success('Subcategory deleted');
+                              toast.success('Subcategory archived');
                             } catch (err: any) {
-                              toast.error(err?.message || 'Failed to delete subcategory');
+                              toast.error(err?.message || 'Failed to archive subcategory');
                             } finally {
                               setSubSaving(false);
                             }
                           }}
                           className="px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm hover:bg-red-500/20 transition disabled:opacity-60"
                         >
-                          Delete
+                          Archive
                         </button>
                       </div>
                     </div>
