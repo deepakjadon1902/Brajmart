@@ -85,7 +85,7 @@ const AdminReviews = () => {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-400">Review Trust</p>
           <h1 className="mt-1 text-2xl font-bold text-white">Review Moderation</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-400">Approve only real customer reviews. Approved reviews become public and update product ratings.</p>
+          <p className="mt-1 max-w-2xl text-sm text-slate-400">Approve real customer feedback. Approved reviews become public and update product ratings; only delivered-order reviews show as verified purchases.</p>
         </div>
         <button type="button" onClick={() => load(page)} disabled={refreshing} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
           <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
@@ -133,14 +133,16 @@ const AdminReviews = () => {
                       <img src={review.productImage || '/placeholder.svg'} alt="" className="h-12 w-12 rounded-lg border border-slate-700 object-cover" />
                       <div>
                         <p className="font-medium text-white">{review.productName || 'Product'}</p>
-                        <p className="text-xs text-slate-500">Order #{review.orderId}</p>
+                        <p className="text-xs text-slate-500">{review.orderId ? `Order #${review.orderId}` : 'Open product feedback'}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-white">{review.customerName}</p>
                     <p className="text-xs text-slate-500">{review.customerEmail}</p>
-                    {review.isVerifiedPurchase && <p className="mt-1 text-xs font-semibold text-emerald-300">Verified Purchase</p>}
+                    <p className={`mt-1 text-xs font-semibold ${review.isVerifiedPurchase ? 'text-emerald-300' : 'text-amber-300'}`}>
+                      {review.isVerifiedPurchase ? 'Verified Purchase' : review.reviewerType === 'GUEST' ? 'Guest Review' : 'Open Review'}
+                    </p>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass[review.status] || statusClass.PENDING}`}>{review.status}</span>

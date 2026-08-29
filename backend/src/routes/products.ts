@@ -238,6 +238,7 @@ const variantSchemaErrorMessage = (missing: Record<string, boolean>) => {
 };
 
 export const mapProductRow = (row: any) => ({
+  id: String(row.id),
   _id: String(row.id),
   name: row.name,
   slug: row.slug,
@@ -253,8 +254,8 @@ export const mapProductRow = (row: any) => ({
   subcategoryId: row.subcategory_id !== undefined && row.subcategory_id !== null ? Number(row.subcategory_id) : undefined,
   category: String(row.category_name ?? row.category ?? ''),
   subcategory: row.subcategory_name !== undefined && row.subcategory_name !== null ? String(row.subcategory_name) : (row.subcategory ?? null),
-  rating: Number(row.real_review_count || 0) > 0 ? Number(row.real_rating ?? 0) : 0,
-  reviewCount: Number(row.real_review_count ?? 0),
+  rating: Number(row.real_review_count || 0) > 0 ? Number(row.real_rating ?? 0) : Number(row.rating ?? 0),
+  reviewCount: Number(row.real_review_count || 0) > 0 ? Number(row.real_review_count ?? 0) : Number(row.review_count ?? 0),
   badge: row.badge ?? null,
   tags: parseJson(row.tags, []),
   inStock: boolFromDb(row.in_stock),

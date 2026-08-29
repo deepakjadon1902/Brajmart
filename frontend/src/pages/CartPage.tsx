@@ -21,7 +21,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import FreeShippingProgress from '@/components/cart/FreeShippingProgress';
 import ProductCarousel from '@/components/product/ProductCarousel';
-import { fetchCartRecommendations, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
+import { fetchCartRecommendations, validateCart, type CartValidationResponse, type PersistedProductInterestItem, type RecommendationItem } from '@/lib/api';
 import { useProductStore } from '@/store/productStore';
 import { getValidMrp, getValidSavings, isProductPurchasable } from '@/utils/productPresentation';
 
@@ -53,7 +53,7 @@ const CartPage = () => {
   const serverPackaging = validation ? Number(validation.packaging || 0) : packagingCost;
   const serverTotal = validation ? Number(validation.grandTotal || 0) : grandTotal;
   const serverSavings = validation ? Number(validation.discount || 0) : totalSavings();
-  const [serverRecommendations, setServerRecommendations] = useState<any[]>([]);
+  const [serverRecommendations, setServerRecommendations] = useState<RecommendationItem[]>([]);
   const recommendedProducts = useMemo(() => {
     if (serverRecommendations.length) return serverRecommendations.map((item) => item.product).filter(Boolean);
     const cartIds = new Set(items.map((item) => String(item.product.id).split('::')[0]));
@@ -315,7 +315,7 @@ const CartPage = () => {
               <div className="rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5">
                 <div className="mb-4">
                   <h2 className="font-cinzel text-lg font-bold text-foreground">
-                    {serverRecommendations.some((item) => item.type === 'frequently_bought_together') ? 'Often Paired With Your Items' : 'Complete Your Order'}
+                    {serverRecommendations.some((item) => item.sourceType === 'CO_PURCHASE' || item.type === 'frequently_bought_together') ? 'Often Paired With Your Items' : 'Complete Your Order'}
                   </h2>
                   <p className="text-sm text-muted-foreground">Available products selected from current catalog and order signals.</p>
                 </div>

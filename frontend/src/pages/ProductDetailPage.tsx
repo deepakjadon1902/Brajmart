@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus, Zap, MapPin, PackageCheck, CheckCircle2 } from 'lucide-react';
+import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus, Zap, PackageCheck, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useProductStore } from '@/store/productStore';
 import { useCartStore } from '@/store/cartStore';
@@ -87,9 +87,6 @@ const ProductDetailPage = () => {
   const settings = useSettingsStore((s) => s.settings);
   const product = getProductBySlug(slug || '');
   const [quantity, setQuantity] = useState(1);
-  const [pincode, setPincode] = useState('');
-  const [checkedPincode, setCheckedPincode] = useState('');
-  const [pincodeError, setPincodeError] = useState('');
   const baseGalleryImages = product?.images && product.images.length
     ? product.images
     : (product?.image ? [product.image] : []);
@@ -373,14 +370,33 @@ const ProductDetailPage = () => {
   const quantityLimit = Math.max(1, availableQuantity !== null ? availableQuantity : (maxOrderQuantity || 99));
   const deliveryMin = Math.max(1, positiveNumber(settings.deliveryEtaMinDays, 3));
   const deliveryMax = Math.max(deliveryMin, positiveNumber(settings.deliveryEtaMaxDays, 7));
-  const shippingFee = positiveNumber(settings.shippingFee, 49);
-  const freeShippingThreshold = positiveNumber(settings.freeShippingThreshold, 299);
-  const qualifiesForFreeShipping = freeShippingThreshold > 0 && computedPrice * quantity >= freeShippingThreshold;
   const productHighlights = product ? makeHighlights(product) : [];
+  const lowStockThreshold = Math.max(1, Number(product?.lowStockThreshold || 3));
+  const availabilityText = !purchasable
+    ? 'Out of stock'
+    : availableQuantity === null
+    ? 'In stock'
+    : availableQuantity <= lowStockThreshold
+    ? `Only ${availableQuantity} left`
+    : 'In stock';
+  const availabilityDetail = !purchasable
+    ? 'This product cannot be added to cart right now.'
+    : availableQuantity === null
+    ? 'Stock is checked again before checkout.'
+    : `${availableQuantity} available for order`;
 
   useEffect(() => {
     setQuantity((current) => Math.min(Math.max(1, current), quantityLimit));
   }, [quantityLimit]);
+
+  useEffect(() => {
+    if (!zoomOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setZoomOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [zoomOpen]);
 
   const inWishlist = useMemo(() => {
     if (!product) return false;
@@ -649,18 +665,7 @@ const ProductDetailPage = () => {
     if (!inWishlist) {
       trackMetaPixelEvent('AddToWishlist', productToMetaPixelParams(product));
     }
-    toast.success(inWishlist ? 'Removed from wishlist' : 'Added to wishlist ❤️');
-  };
-
-  const handlePincodeCheck = () => {
-    const clean = pincode.trim();
-    if (!/^[1-9][0-9]{5}$/.test(clean)) {
-      setCheckedPincode('');
-      setPincodeError('Enter a valid 6 digit Indian pincode.');
-      return;
-    }
-    setPincodeError('');
-    setCheckedPincode(clean);
+    toast.success(inWishlist ? 'Removed from wishlist' : 'Added to wishlist');
   };
 
   if (!product) {
@@ -678,7 +683,7 @@ const ProductDetailPage = () => {
           <div className="container mx-auto px-4 py-20 text-center">
             <div className="inline-flex items-center gap-2 text-muted-foreground">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
-              <span>Loading product…</span>
+              <span>Loading product...</span>
             </div>
           </div>
           <Footer />
@@ -748,6 +753,46 @@ const ProductDetailPage = () => {
     return blocks;
   };
 
+  const productDetailsPanel = (
+    <div className="space-y-3 rounded-lg border border-border bg-card p-4">
+      <h2 className="font-playfair text-xl font-bold text-foreground">Product Details</h2>
+      {product.description && product.description.trim() ? (
+        <div className="line-clamp-4 space-y-2">{renderDescription(product.description)}</div>
+      ) : (
+        <p className="text-sm text-muted-foreground/70 italic">No detailed description has been added yet.</p>
+      )}
+      {productHighlights.length > 0 && (
+        <div className="pt-2">
+          <h3 className="text-sm font-bold text-foreground">Highlights</h3>
+          <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+            {productHighlights.map((item) => (
+              <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
+                <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-tulsi" aria-hidden="true" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="divide-y divide-border border-t border-border">
+        {[
+          { title: 'Specifications', body: productHighlights.length ? productHighlights.join(' / ') : 'Specifications are based on the selected product and variants.' },
+          { title: 'Shipping', body: `Estimated delivery is ${deliveryMin}-${deliveryMax} working days after dispatch.` },
+          { title: 'Returns', body: 'Return and replacement eligibility is confirmed during checkout and follows the current BrajMart return policy.' },
+          { title: 'Authenticity', body: 'BrajMart curates devotional products from the BrajMart catalog. Product-specific sourcing notes appear here when added by the team.' },
+        ].map((item) => (
+          <details key={item.title} className="group py-3">
+            <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold text-foreground">
+              {item.title}
+              <ChevronRight size={16} className="transition group-open:rotate-90" aria-hidden="true" />
+            </summary>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background pb-24 md:pb-0">
       <Helmet>
@@ -793,7 +838,7 @@ const ProductDetailPage = () => {
 
         <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
           {/* Image */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }} className="space-y-5">
             <div className="flex flex-col sm:flex-row gap-3">
               {thumbImages.length > 1 && (
                 <div className="sm:hidden">
@@ -849,7 +894,7 @@ const ProductDetailPage = () => {
               />
               {product.badge && (
                 <span className={`absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-bold ${product.badge === 'bestseller' ? 'bg-gold-gradient text-maroon-dark' : 'bg-saffron text-primary-foreground'}`}>
-                  {product.badge === 'bestseller' ? '🔥 Best Seller' : 'NEW'}
+                  {product.badge === 'bestseller' ? 'Featured' : 'New'}
                 </span>
               )}
               {discount > 0 && (
@@ -859,6 +904,7 @@ const ProductDetailPage = () => {
               )}
               </button>
             </div>
+            {productDetailsPanel}
           </motion.div>
 
           {/* Details */}
@@ -877,9 +923,9 @@ const ProductDetailPage = () => {
                   <Star size={12} strokeWidth={2.4} className="fill-white text-white" aria-hidden="true" />
                 </span>
               ) : null}
-              <span className="font-sans text-sm font-medium text-[#878787]">
+              <a href="#reviews" className="font-sans text-sm font-medium text-[#878787] underline-offset-4 hover:text-saffron hover:underline premium-focus">
                 {hasReviewRating(product) ? `${Number(product.reviewCount || 0).toLocaleString('en-IN')} reviews` : 'No reviews yet'}
-              </span>
+              </a>
             </div>
 
             {/* Price */}
@@ -903,9 +949,9 @@ const ProductDetailPage = () => {
               <div className="flex items-start gap-3">
                 <PackageCheck size={18} className="mt-0.5 text-tulsi" aria-hidden="true" />
                 <div>
-                  <p className="text-sm font-bold text-foreground">{purchasable ? 'Available' : 'Currently unavailable'}</p>
+                  <p className="text-sm font-bold text-foreground">{availabilityText}</p>
                   <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                    {availableQuantity !== null ? `${availableQuantity} ready for order` : 'Stock is checked before checkout'}
+                    {availabilityDetail}
                   </p>
                 </div>
               </div>
@@ -925,45 +971,81 @@ const ProductDetailPage = () => {
               </div>
             </div>
 
-            <div className="rounded-lg border border-border bg-brand-soft p-4">
-              <label htmlFor="delivery-pincode" className="text-sm font-bold text-foreground">Check delivery</label>
-              <div className="mt-2 flex gap-2">
-                <div className="relative flex-1">
-                  <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <input
-                    id="delivery-pincode"
-                    value={pincode}
-                    onChange={(event) => setPincode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') handlePincodeCheck();
-                    }}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    placeholder="Enter pincode"
-                    className="min-h-11 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm outline-none transition focus:border-saffron"
-                    aria-describedby={pincodeError ? 'delivery-pincode-error' : checkedPincode ? 'delivery-pincode-result' : undefined}
-                  />
+            <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="text-sm font-semibold text-foreground">Quantity:</span>
+                <div className="qty-selector flex h-11 w-[130px] items-center justify-between rounded-lg border border-border bg-brand-soft">
+                  <button
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    disabled={!purchasable || quantity <= 1}
+                    className={`qty-btn flex h-full w-11 items-center justify-center rounded-l-lg ${purchasable && quantity > 1 ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                    aria-label="Decrease quantity"
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <span id="qty-display" className="font-sans text-base font-bold text-brand-deep">{quantity}</span>
+                  <button
+                    onClick={() => setQuantity(Math.min(quantityLimit, quantity + 1))}
+                    disabled={!purchasable || quantity >= quantityLimit}
+                    className={`qty-btn flex h-full w-11 items-center justify-center rounded-r-lg ${purchasable && quantity < quantityLimit ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
+                    aria-label="Increase quantity"
+                  >
+                    <Plus size={16} />
+                  </button>
                 </div>
-                <button type="button" onClick={handlePincodeCheck} className="min-h-11 rounded-lg bg-maroon px-4 text-sm font-bold text-white transition hover:bg-saffron">
-                  Check
+                {availableQuantity !== null && (
+                  <span className="text-xs text-muted-foreground">Max {availableQuantity} available</span>
+                )}
+              </div>
+
+              <div className="product-detail-actions grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_52px] sm:gap-3">
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  disabled={!purchasable}
+                  className={`add-to-cart-btn btn-action w-full ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                >
+                  <ShoppingCart size={18} className="shrink-0" aria-hidden="true" />
+                  <span>Add to Cart</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBuyNow}
+                  disabled={!purchasable}
+                  className={`buy-now-btn btn-action-secondary w-full ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+                >
+                  <Zap size={17} className="shrink-0 fill-current" aria-hidden="true" />
+                  <span>Buy Now</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleToggleWishlist}
+                  className={`wishlist-action inline-flex min-h-[42px] items-center justify-center rounded border transition-colors active:scale-[0.97] sm:min-h-[50px] ${inWishlist ? 'border-[#ff9f00] bg-[#fff7e6] text-[#fb641b]' : 'border-[#e0e0e0] bg-white text-[#212121] hover:border-[#ff9f00] hover:text-[#fb641b]'}`}
+                  aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+                >
+                  <Heart size={18} className={inWishlist ? 'fill-current' : ''} />
                 </button>
               </div>
-              {pincodeError ? (
-                <p id="delivery-pincode-error" className="mt-2 text-xs font-medium text-destructive">{pincodeError}</p>
-              ) : checkedPincode ? (
-                <p id="delivery-pincode-result" className="mt-2 text-xs font-medium text-tulsi">
-                  Deliver to {checkedPincode}: expected {deliveryMin}-{deliveryMax} working days after dispatch.
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-muted-foreground">Enter your pincode for a local delivery estimate.</p>
-              )}
-              <p className="mt-1 text-xs text-muted-foreground">
-                {qualifiesForFreeShipping
-                  ? 'This selection qualifies for free shipping.'
-                  : freeShippingThreshold > 0
-                  ? `Shipping ${formatPrice(shippingFee)}. Free shipping above ${formatPrice(freeShippingThreshold)}.`
-                  : `Shipping fee: ${formatPrice(shippingFee)}.`}
-              </p>
+
+              <div className="grid grid-cols-3 gap-2 border-t border-border pt-3">
+                {[
+                  { icon: Truck, label: 'Delivery', sub: `${deliveryMin}-${deliveryMax} working days after dispatch`, href: '/shipping-delivery' },
+                  { icon: PackageCheck, label: 'Order check', sub: 'Items are checked before dispatch', href: '' },
+                  { icon: RotateCcw, label: 'Returns', sub: 'Review return policy', href: '/return-policy' },
+                ].map((badge) => (
+                  <div key={badge.label} className="rounded-lg bg-brand-soft p-2 text-center">
+                    <badge.icon size={18} className="mx-auto mb-1 text-gold" aria-hidden="true" />
+                    <span className="block text-xs font-semibold text-foreground">{badge.label}</span>
+                    {badge.href ? (
+                      <Link to={badge.href} className="mt-0.5 block text-[0.66rem] leading-4 text-muted-foreground underline-offset-4 hover:text-saffron hover:underline premium-focus">
+                        {badge.sub}
+                      </Link>
+                    ) : (
+                      <span className="block text-[0.66rem] leading-4 text-muted-foreground">{badge.sub}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Size & Pieces */}
@@ -1108,122 +1190,29 @@ const ProductDetailPage = () => {
               </div>
             )}
 
-            {/* Quantity */}
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium">Quantity:</span>
-              <div className="qty-selector flex h-11 w-[130px] items-center justify-between rounded-lg border border-border bg-brand-soft">
-                <button
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  disabled={!purchasable || quantity <= 1}
-                  className={`qty-btn flex h-full w-11 items-center justify-center rounded-l-lg ${purchasable && quantity > 1 ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
-                  aria-label="Decrease quantity"
-                >
-                  <Minus size={16} />
-                </button>
-                <span id="qty-display" className="font-sans text-base font-bold text-brand-deep">{quantity}</span>
-                <button
-                  onClick={() => setQuantity(Math.min(quantityLimit, quantity + 1))}
-                  disabled={!purchasable || quantity >= quantityLimit}
-                  className={`qty-btn flex h-full w-11 items-center justify-center rounded-r-lg ${purchasable && quantity < quantityLimit ? 'hover:bg-muted transition-colors' : 'cursor-not-allowed opacity-50'}`}
-                  aria-label="Increase quantity"
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-              {availableQuantity !== null && (
-                <span className="text-xs text-muted-foreground">Max {availableQuantity} available</span>
-              )}
-            </div>
-
-            {/* Action buttons */}
-            <div className="product-detail-actions grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_52px] sm:gap-3">
-              <button
-                onClick={handleAddToCart}
-                disabled={!purchasable}
-                className={`add-to-cart-btn btn-action w-full ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
-              >
-                <ShoppingCart size={18} className="shrink-0" aria-hidden="true" />
-                <span>Add to Cart</span>
-              </button>
-              <button
-                onClick={handleBuyNow}
-                disabled={!purchasable}
-                className={`buy-now-btn btn-action-secondary w-full ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
-              >
-                <Zap size={17} className="shrink-0 fill-current" aria-hidden="true" />
-                <span>Buy Now</span>
-              </button>
-              <button
-                onClick={handleToggleWishlist}
-                className={`wishlist-action inline-flex min-h-[42px] items-center justify-center rounded border transition-colors active:scale-[0.97] sm:min-h-[50px] ${inWishlist ? 'border-[#ff9f00] bg-[#fff7e6] text-[#fb641b]' : 'border-[#e0e0e0] bg-white text-[#212121] hover:border-[#ff9f00] hover:text-[#fb641b]'}`}
-                aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
-              >
-                <Heart size={18} className={inWishlist ? 'fill-current' : ''} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
-              {[
-                { icon: Truck, label: 'Delivery', sub: `${deliveryMin}-${deliveryMax} working days` },
-                { icon: PackageCheck, label: 'Packed carefully', sub: 'Checked before dispatch' },
-                { icon: RotateCcw, label: 'Returns', sub: 'Policy shown at checkout' },
-              ].map((badge) => (
-                <div key={badge.label} className="rounded-lg bg-brand-soft p-3 text-center">
-                  <badge.icon size={20} className="mx-auto mb-1 text-gold" aria-hidden="true" />
-                  <span className="block text-xs font-semibold text-foreground">{badge.label}</span>
-                  <span className="block text-[0.68rem] leading-4 text-muted-foreground">{badge.sub}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-3 rounded-lg border border-border bg-card p-4">
-              <h2 className="font-playfair text-xl font-bold text-foreground">Product Details</h2>
-              {product.description && product.description.trim() ? (
-                <div className="line-clamp-4 space-y-2">{renderDescription(product.description)}</div>
-              ) : (
-                <p className="text-sm text-muted-foreground/70 italic">No detailed description has been added yet.</p>
-              )}
-              {productHighlights.length > 0 && (
-                <div className="pt-2">
-                  <h3 className="text-sm font-bold text-foreground">Highlights</h3>
-                  <ul className="mt-2 grid gap-2 sm:grid-cols-2">
-                    {productHighlights.map((item) => (
-                      <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-tulsi" aria-hidden="true" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <div className="divide-y divide-border border-t border-border">
-                {[
-                  { title: 'Specifications', body: productHighlights.length ? productHighlights.join(' • ') : 'Specifications are based on the selected product and variants.' },
-                  { title: 'Shipping', body: checkedPincode ? `Deliver to ${checkedPincode}: expected ${deliveryMin}-${deliveryMax} working days after dispatch.` : `Estimated delivery is ${deliveryMin}-${deliveryMax} working days after dispatch.` },
-                  { title: 'Returns', body: 'Return and replacement eligibility is confirmed during checkout and follows the current BrajMart return policy.' },
-                  { title: 'Authenticity', body: 'BrajMart curates devotional products from the BrajMart catalog. Product-specific sourcing notes appear here when added by the team.' },
-                ].map((item) => (
-                  <details key={item.title} className="group py-3">
-                    <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold text-foreground">
-                      {item.title}
-                      <ChevronRight size={16} className="transition group-open:rotate-90" aria-hidden="true" />
-                    </summary>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.body}</p>
-                  </details>
-                ))}
-              </div>
-            </div>
           </motion.div>
         </div>
+
+        <ProductReviews productId={product.id} />
 
         {recommendationSections.map((section) => {
           const sectionProducts = section.items.map((item) => item.product).filter(Boolean);
           if (!sectionProducts.length) return null;
+          const sectionTitle = section.sourceType === 'CO_PURCHASE'
+            ? 'Often Paired With This'
+            : section.sourceType === 'CURATED'
+            ? 'You May Also Like'
+            : section.sourceType === 'SAME_CATEGORY'
+            ? 'More From This Category'
+            : section.title;
+          const sectionSubtitle = section.sourceType === 'CO_PURCHASE' || section.type === 'frequently_bought_together'
+            ? 'Products with a real purchase relationship to this item.'
+            : 'Relevant products from the current BrajMart catalog.';
           return (
             <div key={section.type} className="mt-12">
               <SectionHeader
-                title={section.title}
-                subtitle={section.type === 'frequently_bought_together' ? 'Products with a real purchase relationship to this item.' : 'Relevant products from the current BrajMart catalog.'}
+                title={sectionTitle}
+                subtitle={sectionSubtitle}
               />
               <ProductCarousel products={sectionProducts} />
             </div>
@@ -1241,12 +1230,12 @@ const ProductDetailPage = () => {
             <ProductCarousel products={recentlyViewedProducts} />
           </div>
         )}
-        <ProductReviews productId={product.id} />
       </div>
       {zoomOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setZoomOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`${product.name} image preview`} onClick={() => setZoomOpen(false)}>
           <div className="relative max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
             <button
+              type="button"
               onClick={() => setZoomOpen(false)}
               className="absolute -top-4 -right-4 bg-white text-black rounded-full w-9 h-9 flex items-center justify-center shadow"
               aria-label="Close zoom"
@@ -1266,7 +1255,7 @@ const ProductDetailPage = () => {
           </div>
         </div>
       )}
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-3 py-2 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur md:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 px-3 pt-2 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur md:hidden pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
         <div className="mx-auto grid max-w-md grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
           <div className="min-w-[70px]">
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Total</p>
@@ -1276,15 +1265,15 @@ const ProductDetailPage = () => {
             type="button"
             onClick={handleAddToCart}
             disabled={!purchasable}
-            className={`add-to-cart-btn min-h-11 rounded-lg px-2 text-xs font-bold ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            className={`add-to-cart-btn min-h-11 rounded-lg bg-maroon px-2 text-xs font-bold text-white transition hover:bg-saffron disabled:bg-muted disabled:text-muted-foreground ${purchasable ? '' : 'hover:bg-muted'}`}
           >
-            Add Cart
+            Add to Cart
           </button>
           <button
             type="button"
             onClick={handleBuyNow}
             disabled={!purchasable}
-            className={`buy-now-btn min-h-11 rounded-lg px-2 text-xs font-bold ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            className={`buy-now-btn min-h-11 rounded-lg border border-maroon bg-white px-2 text-xs font-bold text-maroon transition hover:border-saffron hover:text-saffron disabled:border-muted disabled:bg-muted disabled:text-muted-foreground ${purchasable ? '' : 'hover:bg-muted'}`}
           >
             Buy Now
           </button>

@@ -330,7 +330,7 @@ const ProductsPage = () => {
             </button>
             <select value={sort} onChange={(e) => updateParam('sort', e.target.value)} className="min-h-11 rounded-lg border border-border bg-card px-3 py-2 text-sm">
               <option value="featured">Featured</option>
-              <option value="popular">Popular</option>
+              <option value="popular">Recommended</option>
               <option value="newest">Newest</option>
               <option value="price_asc">Price: low to high</option>
               <option value="price_desc">Price: high to low</option>

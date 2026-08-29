@@ -8,7 +8,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { formatPrice } from '@/utils/formatPrice';
 import FreeShippingProgress from './FreeShippingProgress';
 import { compareProductsByQuality, isProductPurchasable } from '@/utils/productPresentation';
-import { fetchCartRecommendations } from '@/lib/api';
+import { fetchCartRecommendations, type RecommendationItem } from '@/lib/api';
 
 const CartDrawer = () => {
   const { items, drawerOpen, closeDrawer, lastAddedProductId, updateQuantity, removeItem, totalPrice, addItem } = useCartStore();
@@ -21,14 +21,17 @@ const CartDrawer = () => {
   const threshold = Number(settings.freeShippingThreshold) > 0 ? Number(settings.freeShippingThreshold) : 299;
   const lastAdded = items.find((item) => item.product.id === lastAddedProductId);
   const cartIds = useMemo(() => new Set(items.map((item) => String(item.product.id).split('::')[0])), [items]);
-  const [serverRecommendations, setServerRecommendations] = useState<any[]>([]);
-  const recommendation = useMemo(() => {
-    const serverProduct = serverRecommendations.map((item) => item.product).find(Boolean);
-    if (serverProduct) return serverProduct;
-    return products
+  const [serverRecommendations, setServerRecommendations] = useState<RecommendationItem[]>([]);
+  const recommendationItem = useMemo(() => {
+    const serverItem = serverRecommendations.find((item) => item?.product);
+    if (serverItem) return serverItem;
+    const fallback = products
       .filter((product) => !cartIds.has(String(product.id)) && isProductPurchasable(product))
       .sort(compareProductsByQuality)[0];
+    return fallback ? { product: fallback, type: 'popular_fallback', sourceType: 'FALLBACK', label: 'Complete your order' } : null;
   }, [cartIds, products, serverRecommendations]);
+  const recommendation = recommendationItem?.product;
+  const recommendationTitle = recommendationItem?.sourceType === 'CO_PURCHASE' || recommendationItem?.type === 'frequently_bought_together' ? 'Often paired' : 'Complete your order';
 
   useEffect(() => {
     if (!drawerOpen || !items.length) {
@@ -128,7 +131,7 @@ const CartDrawer = () => {
 
               {recommendation && (
                 <div className="mt-4 rounded-lg border border-border bg-card p-3">
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Pair it with</p>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">{recommendationTitle}</p>
                   <div className="flex gap-3">
                     <img src={recommendation.image} alt="" className="h-16 w-16 rounded-md bg-brand-raised object-contain p-1" />
                     <div className="min-w-0 flex-1">

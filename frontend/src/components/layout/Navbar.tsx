@@ -24,7 +24,7 @@ const Navbar = () => {
   const { settings } = useSettingsStore();
   const categories = useProductStore((state) => state.categories);
   const searchProducts = useProductStore((state) => state.searchProducts);
-  const trendingSearches = ['Prasadam', 'Bhagavad Gita', 'Prabhupad Books', 'Tulsi Mala', 'Japa Mala'];
+  const quickSearches = ['Prasadam', 'Bhagavad Gita', 'Prabhupad Books', 'Tulsi Mala', 'Japa Mala'];
   const liveSuggestions = searchQuery.trim().length >= 2 ? searchProducts(searchQuery).slice(0, 5) : [];
   const categorySuggestions = categories
     .filter((category) => category.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
@@ -86,9 +86,9 @@ const Navbar = () => {
             <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[120] rounded-lg border border-border bg-card p-4 shadow-xl">
               {searchQuery.trim().length < 2 ? (
                 <>
-                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">Trending Searches</p>
+                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">Quick Searches</p>
                   <div className="flex flex-wrap gap-2">
-                    {trendingSearches.map((term) => (
+                    {quickSearches.map((term) => (
                       <button
                         key={term}
                         type="button"

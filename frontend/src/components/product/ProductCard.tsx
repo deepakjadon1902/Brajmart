@@ -216,8 +216,6 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
           <div className="min-h-[14px]">
             {savings > 0 ? (
               <span className="save-text text-[13px] text-tulsi font-medium">Save {formatPrice(savings)}</span>
-            ) : product.soldCount ? (
-              <span className="text-[0.6rem] text-tulsi font-medium">{product.soldCount} sold this week</span>
             ) : null}
           </div>
         )}

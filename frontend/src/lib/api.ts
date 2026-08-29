@@ -1,3 +1,5 @@
+import type { Product } from '@/types/product';
+
 const normalizeApiBase = (value: unknown) => String(value || '').trim().replace(/\/$/, '');
 
 const isLocalHostname = (hostname: string) =>
@@ -397,6 +399,7 @@ export type PublicReview = {
   body: string;
   status: string;
   isVerifiedPurchase: boolean;
+  reviewerType?: 'USER' | 'GUEST';
   customerName: string;
   createdAt?: string;
 };
@@ -424,12 +427,12 @@ export const fetchProductReviews = (productId: string, params?: Record<string, s
   );
 
 export const fetchReviewEligibility = (productId: string, params?: { orderId?: string }) =>
-  getJson<{ canReview: boolean; orderId?: string; reason?: string; existingReviewId?: string; status?: string }>(
+  getJson<{ canReview: boolean; orderId?: string; isVerifiedPurchase?: boolean; reason?: string; existingReviewId?: string; status?: string }>(
     `/reviews/eligibility/${encodeURIComponent(productId)}${queryString(params)}`,
     { cache: 'no-store' }
   );
 
-export const createReview = (payload: { productId: string; orderId?: string; rating: number; title?: string; body: string }) =>
+export const createReview = (payload: { productId: string; orderId?: string; rating: number; title?: string; body: string; guestName?: string; guestEmail?: string }) =>
   getJson<{ message: string; review: PublicReview }>('/reviews', { method: 'POST', body: payload });
 
 export const fetchAdminReviews = (params?: Record<string, string | number | boolean | undefined | null>) =>
@@ -621,8 +624,9 @@ export const updateWishlist = (items: PersistedProductInterestItem[]) =>
 export const clearWishlistApi = () => getJson('/wishlist', { method: 'DELETE' });
 
 export type RecommendationItem = {
-  product: any;
+  product: Product;
   type: 'frequently_bought_together' | 'curated_bundle' | 'related_products' | 'popular_fallback';
+  sourceType?: 'CO_PURCHASE' | 'SAME_CATEGORY' | 'SIMILAR_PRODUCT' | 'CURATED' | 'RECENTLY_VIEWED' | 'POPULAR' | 'FALLBACK';
   label: string;
   reason?: string;
   confidence?: number;
@@ -630,6 +634,7 @@ export type RecommendationItem = {
 
 export type RecommendationSection = {
   type: string;
+  sourceType?: RecommendationItem['sourceType'];
   title: string;
   items: RecommendationItem[];
 };
@@ -649,7 +654,7 @@ export type CommerceBundle = {
   displayLocation: string;
   sortOrder: number;
   isActive: boolean;
-  products: any[];
+  products: Product[];
   productCount: number;
   bundlePrice: number;
   savings: number;

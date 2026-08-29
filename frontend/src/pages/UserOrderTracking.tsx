@@ -400,6 +400,11 @@ const UserOrderTracking = () => {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold text-foreground line-clamp-2">{item.product.name}</p>
                         <p className="mt-1 text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                        {String(selectedOrder.status) === 'delivered' && item.product.slug && (
+                          <Link to={`/product/${item.product.slug}#reviews`} className="mt-2 inline-flex min-h-9 items-center rounded-md border border-saffron/40 px-3 py-1.5 text-xs font-bold text-saffron transition hover:bg-saffron/10">
+                            Review or feedback
+                          </Link>
+                        )}
                       </div>
                       <p className="font-semibold text-foreground">{formatPrice(item.price * item.quantity)}</p>
                     </div>

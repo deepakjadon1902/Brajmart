@@ -16,7 +16,7 @@ const SearchPage = () => {
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const { searchProducts, products, loading, lastFetchedAt, loadFromApi } = useProductStore();
   const results = query.length >= 2 ? [...searchProducts(query)].sort(compareProductsByQuality) : [];
-  const trendingProducts = [...products].sort(compareProductsByQuality).slice(0, 8);
+  const featuredProducts = [...products].sort(compareProductsByQuality).slice(0, 8);
 
   useEffect(() => {
     if (products.length > 0 || loading || lastFetchedAt > 0) return;
@@ -60,7 +60,7 @@ const SearchPage = () => {
           />
         </div>
 
-        {/* Trending chips */}
+        {/* Quick search chips */}
         {query.length < 2 && (
           <div className="flex flex-wrap gap-2 justify-center mb-8">
             {['Prasadam', 'Bhagavad Gita', 'Tulsi Mala', 'Ghee', 'Incense', 'Dhoti'].map(t => (
@@ -91,15 +91,15 @@ const SearchPage = () => {
           </motion.div>
         )}
 
-        {/* Trending when no search */}
+        {/* Featured products when no search */}
         {query.length < 2 && (
           <div>
-            <h2 className="font-cinzel text-lg font-bold text-foreground mb-4 text-center">Popular Products</h2>
+            <h2 className="font-cinzel text-lg font-bold text-foreground mb-4 text-center">Featured Products</h2>
             {loading ? (
               <ProductGridSkeleton count={8} />
             ) : (
               <div className="product-grid grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)]">
-                {trendingProducts.map((p, i) => <ProductCard key={p.id} product={p} index={i} variant="compact" />)}
+                {featuredProducts.map((p, i) => <ProductCard key={p.id} product={p} index={i} variant="compact" />)}
               </div>
             )}
           </div>

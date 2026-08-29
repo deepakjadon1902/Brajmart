@@ -13,6 +13,15 @@ const columnExists = async (table: string, column: string) => {
   return Boolean(rows.length);
 };
 
+const columnIsNullable = async (table: string, column: string) => {
+  const rows = await dbQuery<any>(
+    `SELECT is_nullable FROM information_schema.columns
+     WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1`,
+    [table, column]
+  );
+  return String(rows[0]?.is_nullable || '').toUpperCase() === 'YES';
+};
+
 const indexExists = async (table: string, indexName: string) => {
   const rows = await dbQuery<any>(
     `SELECT 1 FROM information_schema.statistics
@@ -350,6 +359,32 @@ const ensurePhase5cReviewsSchema = async () => {
   await setMigrationDone(MIGRATION_KEY);
 };
 
+const ensureOpenModeratedReviewsSchema = async () => {
+  const MIGRATION_KEY = '2026-08-29_open_moderated_reviews';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  if (!(await columnIsNullable('reviews', 'user_id'))) {
+    await dbExecute('ALTER TABLE reviews MODIFY user_id BIGINT UNSIGNED NULL');
+  }
+  if (!(await columnIsNullable('reviews', 'order_id'))) {
+    await dbExecute('ALTER TABLE reviews MODIFY order_id BIGINT UNSIGNED NULL');
+  }
+  if (!(await columnExists('reviews', 'reviewer_type'))) {
+    await dbExecute("ALTER TABLE reviews ADD COLUMN reviewer_type ENUM('USER','GUEST') NOT NULL DEFAULT 'USER' AFTER is_verified_purchase");
+  }
+  if (!(await columnExists('reviews', 'guest_name'))) {
+    await dbExecute('ALTER TABLE reviews ADD COLUMN guest_name VARCHAR(120) NULL AFTER reviewer_type');
+  }
+  if (!(await columnExists('reviews', 'guest_email'))) {
+    await dbExecute('ALTER TABLE reviews ADD COLUMN guest_email VARCHAR(190) NULL AFTER guest_name');
+  }
+  if (!(await indexExists('reviews', 'idx_reviews_guest_product_email'))) {
+    await dbExecute('CREATE INDEX idx_reviews_guest_product_email ON reviews (product_id, guest_email, status, created_at)');
+  }
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
 const ensureCoreTables = async () => {
   await dbExecute(`
     CREATE TABLE IF NOT EXISTS subcategories (
@@ -484,6 +519,7 @@ export const runDataMigrations = async () => {
   await ensureFreeShippingThresholdDefault();
   await ensurePhase5bAdminSafetySchema();
   await ensurePhase5cReviewsSchema();
+  await ensureOpenModeratedReviewsSchema();
   await ensureCommerceIntelligenceSchema();
   await migrateDeityShringarIntoIdolsSubcategory();
 };

@@ -217,7 +217,7 @@ const main = async () => {
     assert(active.status === 200 && active.json?.bundle?.isActive === true, 'Bundle activation failed');
 
     const recs = await request(`/api/recommendations/product/${productA.id}?limit=5`);
-    assert(recs.status === 200, 'Recommendation endpoint failed');
+    assert(recs.status === 200, `Recommendation endpoint failed: status=${recs.status} body=${JSON.stringify(recs.json)}`);
     const recProducts = (recs.json?.recommendations || []).map((item: any) => String(item?.product?.id));
     assert(recProducts.includes(String(productB.id)), 'Real co-occurrence product missing');
     assert(!recProducts.includes(String(productA.id)), 'Self recommendation returned');

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { PoolConnection } from 'mysql2/promise';
-import { auth, adminOnly, AuthRequest } from '../middleware/auth';
+import { auth, adminOnly, AuthRequest, optionalAuth } from '../middleware/auth';
 import { dbExecute, dbQuery, isDbConnected, withDbTransaction } from '../lib/db';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 import { merchantOrderWhereSql } from '../lib/orderVisibility';
@@ -48,13 +48,16 @@ const ensureReviewsTable = async () => {
     CREATE TABLE IF NOT EXISTS reviews (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       product_id BIGINT UNSIGNED NOT NULL,
-      user_id BIGINT UNSIGNED NOT NULL,
-      order_id BIGINT UNSIGNED NOT NULL,
+      user_id BIGINT UNSIGNED NULL,
+      order_id BIGINT UNSIGNED NULL,
       rating TINYINT UNSIGNED NOT NULL,
       title VARCHAR(120) NOT NULL DEFAULT '',
       body TEXT NOT NULL,
       status ENUM('PENDING','APPROVED','REJECTED','HIDDEN') NOT NULL DEFAULT 'PENDING',
-      is_verified_purchase TINYINT(1) NOT NULL DEFAULT 1,
+      is_verified_purchase TINYINT(1) NOT NULL DEFAULT 0,
+      reviewer_type ENUM('USER','GUEST') NOT NULL DEFAULT 'USER',
+      guest_name VARCHAR(120) NULL,
+      guest_email VARCHAR(190) NULL,
       helpful_count INT NOT NULL DEFAULT 0,
       report_count INT NOT NULL DEFAULT 0,
       approved_at DATETIME NULL,
@@ -85,18 +88,19 @@ const mapPublicReview = (row: any) => ({
   body: row.body || '',
   status: row.status,
   isVerifiedPurchase: boolFromDb(row.is_verified_purchase),
-  customerName: publicName(row.customer_name || row.user_name || '', row.customer_email || row.user_email || ''),
+  reviewerType: row.reviewer_type || (row.user_id ? 'USER' : 'GUEST'),
+  customerName: publicName(row.guest_name || row.customer_name || row.user_name || '', row.guest_email || row.customer_email || row.user_email || ''),
   createdAt: toIsoString(row.created_at),
 });
 
 const mapAdminReview = (row: any) => ({
   ...mapPublicReview(row),
-  userId: String(row.user_id),
-  orderId: String(row.order_id),
+  userId: row.user_id ? String(row.user_id) : '',
+  orderId: row.order_id ? String(row.order_id) : '',
   productName: row.product_name || '',
   productSlug: row.product_slug || '',
   productImage: row.product_image || '',
-  customerEmail: row.customer_email || row.user_email || '',
+  customerEmail: row.guest_email || row.customer_email || row.user_email || '',
   helpfulCount: Number(row.helpful_count || 0),
   reportCount: Number(row.report_count || 0),
   approvedAt: toIsoString(row.approved_at),
@@ -138,6 +142,16 @@ const buildSummary = async (productId: number) => {
 const itemMatchesProduct = (items: any[], productId: number) =>
   items.some((item) => String(item?.productId || item?.id || item?._id || '') === String(productId));
 
+const emailLooksValid = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+const findReviewableProduct = async (productId: number) => {
+  const productRows = await dbQuery<any>('SELECT id, archived_at FROM products WHERE id = ? LIMIT 1', [productId]);
+  const product = productRows[0];
+  if (!product) return { ok: false as const, message: 'Product not found.' };
+  if (product.archived_at) return { ok: false as const, message: 'Archived products cannot receive new reviews.' };
+  return { ok: true as const };
+};
+
 const findEligibleOrder = async (user: NonNullable<AuthRequest['user']>, productId: number, requestedOrderId?: number | null) => {
   const userId = toPositiveId(user.id);
   if (!userId) return { ok: false as const, message: 'Please sign in again before reviewing.' };
@@ -147,10 +161,8 @@ const findEligibleOrder = async (user: NonNullable<AuthRequest['user']>, product
   if (!userRow) return { ok: false as const, message: 'User account not found.' };
   if (String(userRow.status || '').toLowerCase() === 'blocked') return { ok: false as const, message: 'This account cannot submit reviews.' };
 
-  const productRows = await dbQuery<any>('SELECT id, archived_at FROM products WHERE id = ? LIMIT 1', [productId]);
-  const product = productRows[0];
-  if (!product) return { ok: false as const, message: 'Product not found.' };
-  if (product.archived_at) return { ok: false as const, message: 'Archived products cannot receive new reviews.' };
+  const product = await findReviewableProduct(productId);
+  if (!product.ok) return product;
 
   const params: any[] = [userId, String(userRow.email || user.email || '').toLowerCase()];
   let orderIdSql = '';
@@ -217,44 +229,110 @@ router.get('/products/:productId', async (req, res) => {
   }
 });
 
-router.get('/eligibility/:productId', auth, async (req: AuthRequest, res) => {
+router.get('/eligibility/:productId', optionalAuth, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await ensureReviewsTable();
     const productId = toPositiveId(req.params.productId);
-    if (!productId || !req.user) return res.status(400).json({ message: 'Invalid product' });
+    if (!productId) return res.status(400).json({ message: 'Invalid product' });
+    const product = await findReviewableProduct(productId);
+    if (!product.ok) return res.json({ canReview: false, reason: product.message });
+    if (!req.user) {
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      return res.json({ canReview: true, isVerifiedPurchase: false, reason: 'Guest reviews are moderated before public display.' });
+    }
     const result = await findEligibleOrder(req.user, productId, toPositiveId(req.query.orderId));
+    const existingReviewId = 'existingReviewId' in result ? result.existingReviewId : undefined;
+    const status = 'status' in result ? result.status : undefined;
     res.setHeader('Cache-Control', 'no-store, max-age=0');
-    res.json(result.ok ? { canReview: true, orderId: String(result.orderId) } : { canReview: false, reason: result.message, existingReviewId: result.existingReviewId, status: result.status });
+    res.json(result.ok
+      ? { canReview: true, orderId: String(result.orderId), isVerifiedPurchase: true }
+      : { canReview: true, isVerifiedPurchase: false, reason: result.message, existingReviewId, status });
   } catch {
     res.status(500).json({ message: 'Failed to check review eligibility' });
   }
 });
 
-router.post('/', auth, reviewCreateLimiter, async (req: AuthRequest, res) => {
+router.post('/', optionalAuth, reviewCreateLimiter, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await ensureReviewsTable();
-    if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
     const productId = toPositiveId(req.body?.productId);
     const orderId = toPositiveId(req.body?.orderId);
     const rating = Number(req.body?.rating);
     const title = cleanPlainText(req.body?.title, 120);
     const body = cleanPlainText(req.body?.body, 2000);
+    const guestName = cleanPlainText(req.body?.guestName || req.body?.name, 120);
+    const guestEmail = cleanPlainText(req.body?.guestEmail || req.body?.email, 190).toLowerCase();
     if (!productId) return res.status(400).json({ message: 'Choose a valid product.' });
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ message: 'Rating must be between 1 and 5.' });
     if (body.length < 10) return res.status(400).json({ message: 'Review must be at least 10 characters.' });
     if (body.length > 2000) return res.status(400).json({ message: 'Review is too long.' });
+    if (!req.user && guestEmail && !emailLooksValid(guestEmail)) return res.status(400).json({ message: 'Please enter a valid email for moderation updates.' });
 
-    const eligibility = await findEligibleOrder(req.user, productId, orderId);
-    if (!eligibility.ok) return res.status(403).json({ message: eligibility.message });
+    const product = await findReviewableProduct(productId);
+    if (!product.ok) return res.status(400).json({ message: product.message });
+
+    let verified = false;
+    let verifiedUserId: number | null = null;
+    let verifiedOrderId: number | null = null;
+    if (req.user) {
+      const userId = toPositiveId(req.user.id);
+      if (!userId) return res.status(401).json({ message: 'Please sign in again before reviewing.' });
+      const userRows = await dbQuery<any>('SELECT id, status FROM users WHERE id = ? LIMIT 1', [userId]);
+      const userRow = userRows[0];
+      if (!userRow) return res.status(401).json({ message: 'User account not found.' });
+      if (String(userRow.status || '').toLowerCase() === 'blocked') return res.status(403).json({ message: 'This account cannot submit reviews.' });
+      verifiedUserId = userId;
+      if (orderId) {
+        const eligibility = await findEligibleOrder(req.user, productId, orderId);
+        if (!eligibility.ok) return res.status(403).json({ message: eligibility.message });
+        verified = true;
+        verifiedUserId = eligibility.userId;
+        verifiedOrderId = eligibility.orderId;
+      }
+    }
+
+    if (!verified && (req.user || guestEmail)) {
+      const duplicateRows = req.user && verifiedUserId
+        ? await dbQuery<any>(
+            `SELECT id, status FROM reviews
+             WHERE product_id = ? AND user_id = ? AND order_id IS NULL AND status IN ('PENDING','APPROVED')
+             LIMIT 1`,
+            [productId, verifiedUserId]
+          )
+        : await dbQuery<any>(
+            `SELECT id, status FROM reviews
+             WHERE product_id = ? AND guest_email = ? AND order_id IS NULL AND status IN ('PENDING','APPROVED')
+             LIMIT 1`,
+            [productId, guestEmail]
+          );
+      if (duplicateRows[0]) return res.status(409).json({ message: 'A review for this product is already awaiting moderation or approved.' });
+    }
 
     const result: any = await dbExecute(
-      `INSERT INTO reviews (product_id, user_id, order_id, rating, title, body, status, is_verified_purchase)
-       VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 1)`,
-      [productId, eligibility.userId, eligibility.orderId, rating, title, body]
+      `INSERT INTO reviews (product_id, user_id, order_id, rating, title, body, status, is_verified_purchase, reviewer_type, guest_name, guest_email)
+       VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?)`,
+      [
+        productId,
+        verifiedUserId,
+        verifiedOrderId,
+        rating,
+        title,
+        body,
+        verified ? 1 : 0,
+        req.user ? 'USER' : 'GUEST',
+        req.user ? null : (guestName || null),
+        req.user ? null : (guestEmail || null),
+      ]
     );
-    const rows = await dbQuery<any>('SELECT * FROM reviews WHERE id = ? LIMIT 1', [result.insertId]);
+    const rows = await dbQuery<any>(
+      `SELECT r.*, u.name AS user_name, u.email AS user_email
+       FROM reviews r
+       LEFT JOIN users u ON u.id = r.user_id
+       WHERE r.id = ? LIMIT 1`,
+      [result.insertId]
+    );
     res.status(201).json({ message: 'Your review has been submitted and is awaiting moderation.', review: mapPublicReview(rows[0]) });
   } catch (err: any) {
     if (String(err?.code || '') === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'You have already submitted a review for this purchase.' });
@@ -282,15 +360,15 @@ router.get('/admin', auth, adminOnly, async (req, res) => {
       params.push(rating);
     }
     if (q !== '%%') {
-      where.push('(LOWER(r.title) LIKE ? OR LOWER(r.body) LIKE ? OR LOWER(p.name) LIKE ? OR LOWER(u.email) LIKE ? OR LOWER(u.name) LIKE ?)');
-      params.push(q, q, q, q, q);
+      where.push('(LOWER(r.title) LIKE ? OR LOWER(r.body) LIKE ? OR LOWER(p.name) LIKE ? OR LOWER(u.email) LIKE ? OR LOWER(u.name) LIKE ? OR LOWER(r.guest_email) LIKE ? OR LOWER(r.guest_name) LIKE ?)');
+      params.push(q, q, q, q, q, q, q);
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const countRows = await dbQuery<any>(
       `SELECT COUNT(*) AS count
        FROM reviews r
        JOIN products p ON p.id = r.product_id
-       JOIN users u ON u.id = r.user_id
+       LEFT JOIN users u ON u.id = r.user_id
        ${whereSql}`,
       params
     );
@@ -300,7 +378,7 @@ router.get('/admin', auth, adminOnly, async (req, res) => {
       `SELECT r.*, p.name AS product_name, p.slug AS product_slug, p.image AS product_image, u.name AS user_name, u.email AS user_email
        FROM reviews r
        JOIN products p ON p.id = r.product_id
-       JOIN users u ON u.id = r.user_id
+       LEFT JOIN users u ON u.id = r.user_id
        ${whereSql}
        ORDER BY r.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -353,7 +431,7 @@ router.patch('/admin/:id/status', auth, adminOnly, async (req: AuthRequest, res)
         before,
         after,
         reason,
-        metadata: { productId: String(before.product_id), orderId: String(before.order_id) },
+        metadata: { productId: String(before.product_id), orderId: before.order_id ? String(before.order_id) : null, reviewerType: before.reviewer_type || (before.user_id ? 'USER' : 'GUEST') },
       });
       mapped = after;
     });

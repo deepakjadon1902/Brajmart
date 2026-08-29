@@ -219,6 +219,7 @@ const variantSchemaErrorMessage = (missing) => {
     return `Database schema missing product variant columns: ${missingCols.join(', ')}. Run backend/sql/migrate_products_all_variants.sql (safe migration section) and restart the backend.`;
 };
 const mapProductRow = (row) => ({
+    id: String(row.id),
     _id: String(row.id),
     name: row.name,
     slug: row.slug,
@@ -235,8 +236,8 @@ const mapProductRow = (row) => ({
     subcategoryId: row.subcategory_id !== undefined && row.subcategory_id !== null ? Number(row.subcategory_id) : undefined,
     category: String(row.category_name ?? row.category ?? ''),
     subcategory: row.subcategory_name !== undefined && row.subcategory_name !== null ? String(row.subcategory_name) : (row.subcategory ?? null),
-    rating: Number(row.real_review_count || 0) > 0 ? Number(row.real_rating ?? 0) : 0,
-    reviewCount: Number(row.real_review_count ?? 0),
+    rating: Number(row.real_review_count || 0) > 0 ? Number(row.real_rating ?? 0) : Number(row.rating ?? 0),
+    reviewCount: Number(row.real_review_count || 0) > 0 ? Number(row.real_review_count ?? 0) : Number(row.review_count ?? 0),
     badge: row.badge ?? null,
     tags: (0, dbHelpers_1.parseJson)(row.tags, []),
     inStock: (0, dbHelpers_1.boolFromDb)(row.in_stock),

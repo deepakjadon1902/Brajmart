@@ -1,7 +1,7 @@
 import { dbExecute, dbQuery, withDbTransaction } from './db';
 import { parseJson, toIsoString, boolFromDb } from './dbHelpers';
 import { approvedReviewAggregateSql } from './reviewAggregates';
-import { merchantOrderWhereSql } from './orderVisibility';
+import { paidOnlinePaymentExistsSql } from './orderVisibility';
 import { mapProductRow } from '../routes/products';
 import { AuthRequest } from '../middleware/auth';
 import { insertAdminAuditLog } from './adminAudit';
@@ -15,6 +15,12 @@ type OrderItem = {
 
 const RECOMMENDATION_CACHE_TTL_MS = 60_000;
 const recommendationCache = new Map<string, { at: number; data: any }>();
+const RECOMMENDATION_SOURCES = {
+  CO_PURCHASE: 'CO_PURCHASE',
+  CURATED: 'CURATED',
+  SAME_CATEGORY: 'SAME_CATEGORY',
+  FALLBACK: 'FALLBACK',
+} as const;
 
 export const clearCommerceIntelligenceCache = () => {
   recommendationCache.clear();
@@ -164,7 +170,7 @@ const fetchValidProducts = async (opts: { excludeIds?: number[]; category?: stri
      LEFT JOIN subcategories s ON p.subcategory_id = s.id
      LEFT JOIN (${approvedReviewAggregateSql}) ra ON ra.product_id = p.id
      WHERE ${where.join(' AND ')}
-     ORDER BY COALESCE(p.sold_count, 0) DESC, COALESCE(ra.real_rating, 0) DESC, p.created_at DESC, p.id DESC
+     ORDER BY COALESCE(ra.real_review_count, 0) DESC, COALESCE(ra.real_rating, 0) DESC, p.created_at DESC, p.id DESC
      LIMIT ?`,
     params
   );
@@ -204,7 +210,10 @@ export const getProductRecommendations = async (productId: number, limit = 8) =>
     `SELECT o.id, o.items
      FROM orders o
      WHERE o.status IN ('confirmed','processing','shipped','out_for_delivery','delivered')
-       AND ${merchantOrderWhereSql('o')}
+       AND (
+         ${paidOnlinePaymentExistsSql('o')}
+         OR (LOWER(o.payment_method) IN ('cod', 'cash on delivery') AND o.status = 'delivered')
+       )
      ORDER BY o.created_at DESC
      LIMIT 600`
   );
@@ -231,6 +240,7 @@ export const getProductRecommendations = async (productId: number, limit = 8) =>
     return {
       product,
       type: 'frequently_bought_together',
+      sourceType: RECOMMENDATION_SOURCES.CO_PURCHASE,
       label: 'Frequently bought together',
       reason: 'Purchased in valid orders with this product',
       confidence: anchorOrderCount ? Number((count / anchorOrderCount).toFixed(3)) : 0,
@@ -264,6 +274,7 @@ export const getProductRecommendations = async (productId: number, limit = 8) =>
   const curatedBundleItems = curatedProducts.map((product: any) => ({
     product,
     type: 'curated_bundle',
+    sourceType: RECOMMENDATION_SOURCES.CURATED,
     label: 'Complete the set',
     reason: 'Curated in an active BrajMart bundle',
     confidence: 1,
@@ -277,6 +288,7 @@ export const getProductRecommendations = async (productId: number, limit = 8) =>
   const relatedProducts = categoryProducts.map((product: any) => ({
     product,
     type: 'related_products',
+    sourceType: RECOMMENDATION_SOURCES.SAME_CATEGORY,
     label: 'Related products',
     reason: 'Same product category',
     confidence: 0,
@@ -284,9 +296,9 @@ export const getProductRecommendations = async (productId: number, limit = 8) =>
 
   const all = [...frequentlyBoughtTogether, ...curatedBundleItems, ...relatedProducts].slice(0, safeLimit);
   const sections = [
-    frequentlyBoughtTogether.length ? { type: 'frequently_bought_together', title: 'Frequently Bought Together', items: frequentlyBoughtTogether } : null,
-    curatedBundleItems.length ? { type: 'curated_bundle', title: 'Complete the Set', items: curatedBundleItems } : null,
-    relatedProducts.length ? { type: 'related_products', title: 'Related Products', items: relatedProducts.slice(0, Math.max(0, safeLimit - frequentlyBoughtTogether.length - curatedBundleItems.length)) } : null,
+    frequentlyBoughtTogether.length ? { type: 'frequently_bought_together', sourceType: RECOMMENDATION_SOURCES.CO_PURCHASE, title: 'Frequently Bought Together', items: frequentlyBoughtTogether } : null,
+    curatedBundleItems.length ? { type: 'curated_bundle', sourceType: RECOMMENDATION_SOURCES.CURATED, title: 'Complete the Set', items: curatedBundleItems } : null,
+    relatedProducts.length ? { type: 'related_products', sourceType: RECOMMENDATION_SOURCES.SAME_CATEGORY, title: 'Related Products', items: relatedProducts.slice(0, Math.max(0, safeLimit - frequentlyBoughtTogether.length - curatedBundleItems.length)) } : null,
   ].filter(Boolean);
 
   return cacheSet(cacheKey, { productId: String(productId), sections, recommendations: all });
@@ -308,7 +320,7 @@ export const getCartRecommendations = async (productIds: number[], limit = 8) =>
       const id = Number(item?.product?.id);
       if (!id || seen.has(id)) continue;
       seen.add(id);
-      if (item.type === 'frequently_bought_together') coPurchase.push({ ...item, label: 'Often paired with your items' });
+      if (item.sourceType === RECOMMENDATION_SOURCES.CO_PURCHASE || item.type === 'frequently_bought_together') coPurchase.push({ ...item, label: 'Often paired with your items' });
       else fallback.push({ ...item, label: 'Complete your order' });
     }
   }
@@ -320,6 +332,7 @@ export const getCartRecommendations = async (productIds: number[], limit = 8) =>
       ...products.map((product: any) => ({
         product,
         type: 'popular_fallback',
+        sourceType: RECOMMENDATION_SOURCES.FALLBACK,
         label: 'Complete your order',
         reason: 'Safe catalog fallback',
         confidence: 0,

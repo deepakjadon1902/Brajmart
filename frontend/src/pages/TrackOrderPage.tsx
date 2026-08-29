@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { OrderPaymentBreakdown } from '@/components/orders/OrderPaymentBreakdown';
@@ -244,6 +244,11 @@ const TrackOrderPage = () => {
                       <div>
                         <p className="text-sm font-medium text-foreground">{item.name}</p>
                         <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                        {String(order.status) === 'delivered' && item.slug && (
+                          <Link to={`/product/${item.slug}#reviews`} className="mt-2 inline-flex min-h-9 items-center rounded-md border border-saffron/40 px-3 py-1.5 text-xs font-bold text-saffron transition hover:bg-saffron/10">
+                            Review or feedback
+                          </Link>
+                        )}
                       </div>
                       <p className="text-sm font-semibold text-saffron">?{item.price * item.quantity}</p>
                     </div>

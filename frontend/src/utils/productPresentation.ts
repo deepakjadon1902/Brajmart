@@ -6,6 +6,11 @@ export const getAvailableQuantity = (product: Product): number | null => {
 };
 
 export const isProductPurchasable = (product: Product) => {
+  const price = Number(product.price || 0);
+  if (!Number.isFinite(price) || price <= 0) return false;
+  const stockQuantity = product.stockQuantity === null || product.stockQuantity === undefined ? null : Number(product.stockQuantity);
+  const reservedQuantity = Number(product.reservedQuantity || 0);
+  if (stockQuantity !== null && (!Number.isFinite(stockQuantity) || !Number.isFinite(reservedQuantity) || stockQuantity < 0 || reservedQuantity < 0 || reservedQuantity > stockQuantity)) return false;
   const available = getAvailableQuantity(product);
   if (available !== null) return available > 0;
   return product.inStock !== false;
@@ -33,8 +38,6 @@ export const hasReviewRating = (product: Product) =>
 export const compareProductsByQuality = (a: Product, b: Product) => {
   const stockDiff = Number(isProductPurchasable(b)) - Number(isProductPurchasable(a));
   if (stockDiff) return stockDiff;
-  const soldDiff = Number(b.soldCount || 0) - Number(a.soldCount || 0);
-  if (soldDiff) return soldDiff;
   const reviewsDiff = Number(b.reviewCount || 0) - Number(a.reviewCount || 0);
   if (reviewsDiff) return reviewsDiff;
   return Number(b.rating || 0) - Number(a.rating || 0);
