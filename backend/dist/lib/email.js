@@ -150,9 +150,9 @@ const getEmailBrand = async () => {
     const fallback = {
         storeName: 'BrajMart',
         tagline: 'Authentic Vrindavan Products',
-        storeAddress: '',
+        storeAddress: 'Keshav Kunj, Near ISKCON Vrindavan, Mathura, UP 281121, India',
         storeEmail: process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || '',
-        storePhone: '',
+        storePhone: '+91 9634359003',
         storeLogo: resolveAssetUrl(process.env.STORE_LOGO_URL || process.env.COMPANY_LOGO_URL || ''),
     };
     if (!(0, db_1.isDbConnected)())
@@ -193,10 +193,12 @@ const brandWrapper = async (title, body) => {
           ${body}
         </div>
       </div>
-      <div style="padding:14px 24px;border-top:1px solid #f0e6d6;color:#8a7b6a;font-size:12px;">
-        Need help? Reply to this email and our team will assist you.
+      <div style="padding:14px 24px;border-top:1px solid #f0e6d6;color:#8a7b6a;font-size:12px;line-height:1.6;">
+        <strong>Need</strong>
         ${brand.storePhone ? `<br/>Phone: ${escapeHtml(brand.storePhone)}` : ''}
         ${brand.storeAddress ? `<br/>${escapeHtml(brand.storeAddress)}` : ''}
+        <br/><br/>This is an automated email. Please do not reply.
+        <br/>For any queries or assistance, email support@brajmart.com or call/WhatsApp +91 9634359003 for faster support.
       </div>
     </div>
   </div>

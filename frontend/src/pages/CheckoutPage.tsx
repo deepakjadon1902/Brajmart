@@ -63,6 +63,7 @@ declare global {
   interface Window {
     Razorpay?: new (options: Record<string, unknown>) => {
       open: () => void;
+      close?: () => void;
       on: (event: string, handler: (response: unknown) => void) => void;
     };
   }
@@ -95,6 +96,9 @@ const loadRazorpayCheckout = () =>
     const timeoutId = window.setTimeout(() => finish(false), 12000);
     document.body.appendChild(script);
   });
+
+const isTransientRazorpayFailure = (reason: string) =>
+  /too many requests|rate limit|payment processing|request timed out|timeout|upi request/i.test(reason);
 
 const INDIA_STATES = [
   'Andhra Pradesh',
@@ -676,17 +680,25 @@ const CheckoutPage = () => {
           };
         };
         const reason = failure?.error?.description || failure?.error?.reason || 'Payment failed';
-        try {
-          await reportRazorpayPaymentFailed({
-            razorpay_order_id: failure?.error?.metadata?.order_id || result.orderId,
-            razorpay_payment_id: failure?.error?.metadata?.payment_id,
-            customer_email: effectiveEmail,
-            reason,
-          });
-        } catch {
-          // Webhooks may still reconcile this. Keep the user moving to the status page.
+        const isTransientFailure = isTransientRazorpayFailure(reason);
+        if (!isTransientFailure) {
+          try {
+            await reportRazorpayPaymentFailed({
+              razorpay_order_id: failure?.error?.metadata?.order_id || result.orderId,
+              razorpay_payment_id: failure?.error?.metadata?.payment_id,
+              customer_email: effectiveEmail,
+              reason,
+            });
+          } catch {
+            // Webhooks may still reconcile this. Keep the user moving to the status page.
+          }
         }
-        toast.error('Razorpay payment failed. Please try again.');
+        checkout.close?.();
+        toast[isTransientFailure ? 'info' : 'error'](
+          isTransientFailure
+            ? 'Payment is being verified. Please wait on the status page.'
+            : 'Razorpay payment failed. Please try again.'
+        );
         setProcessing(false);
         navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`);
       });
