@@ -1,7 +1,12 @@
 export const BRAJMART_CONTACT_PHONE_DISPLAY = '+91 96343 59003';
+export const BRAJMART_SITE_URL = 'https://www.brajmart.com/';
 export const BRAJMART_WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029VbCLKSwFy72HcIUcXy0u';
 export const BRAJMART_INSTAGRAM_URL = 'https://www.instagram.com/brajmart_official/';
 export const BRAJMART_GOOGLE_REVIEW_URL = 'https://g.page/r/CcB_tRBxPC-NEBM/review';
+
+const PRAYER_HANDS = '\u{1F64F}';
+const POINT_RIGHT = '\u{1F449}';
+const SEPARATOR = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
 
 type AddressLike = {
   fullName?: string;
@@ -76,6 +81,8 @@ const getAddress = (order: OrderLike) => order.shippingAddress || order.customer
 const getCustomerName = (order: OrderLike) =>
   cleanLine(getAddress(order).fullName || order.customerName || 'Customer');
 
+const getFirstName = (name: string) => cleanLine(name).split(/\s+/)[0] || 'Customer';
+
 export const getOrderWhatsAppPhone = (order: OrderLike) =>
   normalizeWhatsAppPhone(getAddress(order).mobile || order.customerPhone || order.phone);
 
@@ -105,54 +112,52 @@ const formatItemLines = (items?: ItemLike[]) => {
 
 export const buildDispatchedOrderWhatsAppMessage = (order: OrderLike, note?: string) => {
   const customerName = getCustomerName(order);
-  const address = getAddress(order);
+  const firstName = getFirstName(customerName);
   const orderId = getOrderId(order);
   const trackingLookup = cleanLine(order.trackingId || orderId);
   const trackingLink = getPublicUrl(`/track-orders?orderId=${encodeURIComponent(trackingLookup)}`);
   const extraNote = cleanLine(note);
 
   return [
-    `🙏 Hare Krishna Dear ${customerName},`,
-    `Your BrajMart order #${orderId} has been dispatched and is now on its way to you.`,
+    `${PRAYER_HANDS} Hare Krishna Dear ${firstName},`,
+    `Your BrajMart order #${orderId} has been successfully dispatched and shipped.`,
     '',
-    'ORDER DETAILS',
-    `Tracking Number: ${cleanLine(order.trackingId) || '-'}`,
-    `Shipping Partner: ${cleanLine(order.shippingService) || '-'}`,
-    'Track your shipment:',
-    `👉 ${trackingLink}`,
+    `Your Order Tracking Number is: ${cleanLine(order.trackingId) || '-'}`,
+    `Shipping Provider: ${cleanLine(order.shippingService) || '-'}`,
     '',
-    'Your order will be delivered to you shortly.',
+    'You can track your order here:',
+    trackingLink,
+    '',
+    'It will be delivered to you shortly.',
     extraNote ? `Note: ${extraNote}` : '',
     '',
-    'ITEMS IN YOUR ORDER',
-    ...formatItemLines(order.items),
+    'Thank you for choosing BrajMart and for bringing the devotion and flavours of Vrindavan Dham to your home.',
     '',
-    `Order Total: ${formatCurrency(order.total)}`,
+    'Want to explore more from the sacred land of Vrindavan Dham?',
+    `Visit ${BRAJMART_SITE_URL} and discover our collection of devotional products, prasadam and Vrindavan specialties.`,
     '',
-    'SHIPPING ADDRESS',
-    ...formatAddressLines(address, customerName),
+    'We would love to stay connected with you.',
     '',
-    'Thank you for choosing BrajMart and for bringing a little piece of Vrindavan Dham into your home.',
-    'May Sri Radha Krishna bless you and your family with peace, devotion and happiness.',
-    '━━━━━━━━━━━━━━━━━━',
-    'STAY CONNECTED WITH BRAJMART',
-    '━━━━━━━━━━━━━━━━━━',
     'Exclusive offers & latest updates:',
     BRAJMART_WHATSAPP_CHANNEL_URL,
     '',
     'Follow us on Instagram:',
     BRAJMART_INSTAGRAM_URL,
     '',
-    "We'd love to hear about your experience.",
-    'Leave us a Google Review:',
+    'Enjoyed your BrajMart experience?',
+    'We would be grateful for your review:',
     BRAJMART_GOOGLE_REVIEW_URL,
     '',
-    'For any assistance, contact us:',
+    'For any assistance, please contact us:',
     BRAJMART_CONTACT_PHONE_DISPLAY,
     '',
-    'Hare Krishna 🙏',
+    'Thank you once again for shopping with BrajMart.',
+    `Hare Krishna ${PRAYER_HANDS}`,
+    '',
+    'Yours faithfully,',
     'BrajMart Team',
-    'From the Sacred Land of Vrindavan Dham',
+    'From Vrindavan Dham',
+    'All glories to Sri Sri Radha Shyam Sunder!',
   ].filter((line) => line !== '').join('\n');
 };
 
@@ -164,7 +169,7 @@ export const buildPendingPaymentWhatsAppMessage = (order: OrderLike) => {
   const paymentLink = paymentToken ? getPublicUrl(`/payment-status/${encodeURIComponent(paymentToken)}`) : '';
 
   return [
-    `🙏 Hare Krishna Dear ${customerName},`,
+    `${PRAYER_HANDS} Hare Krishna Dear ${customerName},`,
     `Your BrajMart order #${orderId} is waiting for payment completion.`,
     '',
     'PAYMENT PENDING DETAILS',
@@ -173,7 +178,7 @@ export const buildPendingPaymentWhatsAppMessage = (order: OrderLike) => {
     `Payment Status: ${cleanLine(order.paymentStatus) || 'pending'}`,
     `Order Date: ${formatDate(order.createdAt)}`,
     paymentLink ? 'Complete / check your payment here:' : '',
-    paymentLink ? `👉 ${paymentLink}` : '',
+    paymentLink ? `${POINT_RIGHT} ${paymentLink}` : '',
     '',
     'ITEMS PENDING IN YOUR ORDER',
     ...formatItemLines(order.items),
@@ -185,9 +190,9 @@ export const buildPendingPaymentWhatsAppMessage = (order: OrderLike) => {
     '',
     'Kindly complete your payment so we can confirm and prepare your order for dispatch.',
     'If you have already paid, please reply here with your payment screenshot or transaction ID.',
-    '━━━━━━━━━━━━━━━━━━',
+    SEPARATOR,
     'STAY CONNECTED WITH BRAJMART',
-    '━━━━━━━━━━━━━━━━━━',
+    SEPARATOR,
     'Exclusive offers & latest updates:',
     BRAJMART_WHATSAPP_CHANNEL_URL,
     '',
@@ -197,7 +202,7 @@ export const buildPendingPaymentWhatsAppMessage = (order: OrderLike) => {
     'For any assistance, contact us:',
     BRAJMART_CONTACT_PHONE_DISPLAY,
     '',
-    'Hare Krishna 🙏',
+    `Hare Krishna ${PRAYER_HANDS}`,
     'BrajMart Team',
     'From the Sacred Land of Vrindavan Dham',
   ].filter((line) => line !== '').join('\n');
