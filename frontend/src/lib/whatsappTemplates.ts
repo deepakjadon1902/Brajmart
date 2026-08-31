@@ -6,6 +6,7 @@ export const BRAJMART_GOOGLE_REVIEW_URL = 'https://g.page/r/CcB_tRBxPC-NEBM/revi
 
 const PRAYER_HANDS = '\u{1F64F}';
 const POINT_RIGHT = '\u{1F449}';
+const SEARCH_ICON = '\u{1F50E}';
 const SEPARATOR = '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501';
 
 type AddressLike = {
@@ -86,6 +87,26 @@ const getFirstName = (name: string) => cleanLine(name).split(/\s+/)[0] || 'Custo
 export const getOrderWhatsAppPhone = (order: OrderLike) =>
   normalizeWhatsAppPhone(getAddress(order).mobile || order.customerPhone || order.phone);
 
+export const getCourierTrackingUrl = (shippingService?: string, trackingId?: string) => {
+  const service = cleanLine(shippingService).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const awb = cleanLine(trackingId);
+
+  if (service === 'dtdc') {
+    return awb
+      ? `https://www.dtdc.com/track-your-shipment/?awb=${encodeURIComponent(awb)}`
+      : 'https://www.dtdc.com/track-your-shipment/';
+  }
+
+  if (service === 'shreemaruti') return 'https://shreemaruti.com/track-shipment/';
+  if (service === 'delhivery') return 'https://www.delhivery.com/tracking';
+  if (service === 'indiapost') return 'https://www.indiapost.gov.in/';
+  if (service === 'ekart') return 'https://www.ekartlogistics.in/track-order';
+
+  return awb
+    ? `https://www.dtdc.com/track-your-shipment/?awb=${encodeURIComponent(awb)}`
+    : 'https://www.brajmart.com/track-orders';
+};
+
 const formatAddressLines = (address: AddressLike, fallbackName: string) => [
   cleanLine(address.fullName || fallbackName),
   cleanLine([address.street, address.city].filter(Boolean).join(', ')),
@@ -114,8 +135,8 @@ export const buildDispatchedOrderWhatsAppMessage = (order: OrderLike, note?: str
   const customerName = getCustomerName(order);
   const firstName = getFirstName(customerName);
   const orderId = getOrderId(order);
-  const trackingLookup = cleanLine(order.trackingId || orderId);
-  const trackingLink = getPublicUrl(`/track-orders?orderId=${encodeURIComponent(trackingLookup)}`);
+  const trackingId = cleanLine(order.trackingId);
+  const trackingLink = getCourierTrackingUrl(order.shippingService, trackingId);
   const extraNote = cleanLine(note);
 
   return [
@@ -123,10 +144,11 @@ export const buildDispatchedOrderWhatsAppMessage = (order: OrderLike, note?: str
     '',
     `Your BrajMart order #${orderId} has been successfully dispatched and shipped.`,
     '',
-    `Your Order Tracking Number is: ${cleanLine(order.trackingId) || '-'}`,
+    `Your Order Tracking Number is: ${trackingId || '-'}`,
     `Shipping Provider: ${cleanLine(order.shippingService) || '-'}`,
     '',
-    'You can track your order here:',
+    `${SEARCH_ICON} Track Your Order:`,
+    `${POINT_RIGHT} Track Shipment`,
     trackingLink,
     '',
     'It will be delivered to you shortly.',
