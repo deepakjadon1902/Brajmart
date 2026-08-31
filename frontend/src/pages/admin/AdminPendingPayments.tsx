@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, CreditCard, Mail, MapPin, Phone, RefreshCw, Search, UserRound } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, CreditCard, Mail, MapPin, MessageCircle, Phone, RefreshCw, Search, UserRound } from 'lucide-react';
 import { confirmPendingPayment, fetchPendingPaymentOrders } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
+import {
+  buildPendingPaymentWhatsAppMessage,
+  buildWhatsAppWebUrl,
+  getOrderWhatsAppPhone,
+} from '@/lib/whatsappTemplates';
 
 type PendingPaymentItem = {
   productId?: string;
@@ -130,6 +135,16 @@ const AdminPendingPayments = () => {
     }
   };
 
+  const handleOpenWhatsApp = (order: PendingPaymentOrder) => {
+    const phone = getOrderWhatsAppPhone(order);
+    if (!phone) {
+      toast.error('Customer phone number is missing');
+      return;
+    }
+    const message = buildPendingPaymentWhatsAppMessage(order);
+    window.open(buildWhatsAppWebUrl(phone, message), '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -182,6 +197,7 @@ const AdminPendingPayments = () => {
                 <th className="px-5 py-3 text-left font-medium">Address</th>
                 <th className="px-5 py-3 text-left font-medium">Products</th>
                 <th className="px-5 py-3 text-left font-medium">Payment</th>
+                <th className="px-5 py-3 text-left font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -229,10 +245,19 @@ const AdminPendingPayments = () => {
                     </span>
                     <p className="mt-2 flex items-center gap-2 text-xs text-slate-400"><CreditCard size={13} />{order.paymentMethod || 'Online'}</p>
                     <p className="mt-2 text-xs text-slate-500">Updated {formatDate(order.paymentUpdatedAt)}</p>
+                  </td>
+                  <td className="px-5 py-4">
+                    <button
+                      onClick={() => handleOpenWhatsApp(order)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/30"
+                    >
+                      <MessageCircle size={14} />
+                      WhatsApp
+                    </button>
                     <button
                       onClick={() => handleConfirmPayment(order)}
                       disabled={confirmingOrderId === (order.orderId || order._id)}
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <CheckCircle2 size={14} />
                       {confirmingOrderId === (order.orderId || order._id) ? 'Confirming...' : 'Confirm Payment'}
@@ -242,14 +267,14 @@ const AdminPendingPayments = () => {
               ))}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-500">
                     No pending online payment checkouts found.
                   </td>
                 </tr>
               )}
               {loading && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-500">
                     Loading pending payment users...
                   </td>
                 </tr>

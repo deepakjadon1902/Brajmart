@@ -5,10 +5,15 @@ import { Search, Eye, X, RefreshCw, MapPin, MessageCircle } from 'lucide-react';
 import { adminCheckDtdcPincode, adminTrackDtdcOrder, fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
+import {
+  BRAJMART_CONTACT_PHONE_DISPLAY,
+  buildDispatchedOrderWhatsAppMessage,
+  buildWhatsAppWebUrl,
+  getOrderWhatsAppPhone,
+} from '@/lib/whatsappTemplates';
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
 const shippingServices = ['DTDC', 'Shree Maruti', 'Delhivery', 'India Post', 'Ekart'];
-const COMPANY_WHATSAPP_DISPLAY = '+91 96343 59003';
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -178,62 +183,15 @@ const AdminOrders = () => {
     }
   };
 
-  const normalizeWhatsAppPhone = (value: unknown) => {
-    const digits = String(value || '').replace(/\D/g, '');
-    if (!digits) return '';
-    if (digits.length === 10) return `91${digits}`;
-    if (digits.length === 11 && digits.startsWith('0')) return `91${digits.slice(1)}`;
-    return digits;
-  };
-
-  const formatOrderStatus = (value: unknown) =>
-    String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
-
-  const buildWhatsAppMessage = (order: any) => {
-    const address = order.shippingAddress || {};
-    const items = Array.isArray(order.items) ? order.items : [];
-    const itemLines = items.map((item: any, index: number) => {
-      const name = item?.product?.name || item?.name || 'Item';
-      const qty = Number(item?.quantity || 1);
-      const price = Number(item?.price || 0);
-      return `${index + 1}. ${name} - Qty ${qty} - INR ${(price * qty).toLocaleString('en-IN')}`;
-    });
-
-    return [
-      `Hello ${address.fullName || order.customerName || 'Customer'},`,
-      '',
-      whatsappNote.trim() ? whatsappNote.trim() : 'Sharing the latest update for your BrajMart order.',
-      '',
-      `Order ID: ${order.id || order._id || '-'}`,
-      `Status: ${formatOrderStatus(order.status)}`,
-      `Payment: ${order.paymentMethod || '-'}`,
-      `Amount: INR ${Number(order.total || 0).toLocaleString('en-IN')}`,
-      order.shippingService ? `Shipping Service: ${order.shippingService}` : '',
-      order.trackingId ? `Tracking ID: ${order.trackingId}` : '',
-      '',
-      'Items:',
-      ...(itemLines.length ? itemLines : ['-']),
-      '',
-      'Shipping Address:',
-      address.fullName || order.customerName || '-',
-      [address.street, address.city].filter(Boolean).join(', ') || '-',
-      [address.state, address.pincode].filter(Boolean).join(' - ') || '-',
-      `Phone: ${address.mobile || '-'}`,
-      '',
-      `For help, reply here or contact BrajMart on ${COMPANY_WHATSAPP_DISPLAY}.`,
-      'Thank you for shopping with BrajMart.',
-    ].filter((line) => line !== '').join('\n');
-  };
-
   const handleOpenWhatsApp = () => {
     if (!detail) return;
-    const phone = normalizeWhatsAppPhone(detail.shippingAddress?.mobile || detail.customerPhone || detail.phone);
+    const phone = getOrderWhatsAppPhone(detail);
     if (!phone) {
       toast.error('Customer phone number is missing');
       return;
     }
-    const message = buildWhatsAppMessage(detail);
-    window.open(`https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    const message = buildDispatchedOrderWhatsAppMessage(detail, whatsappNote);
+    window.open(buildWhatsAppWebUrl(phone, message), '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -331,11 +289,11 @@ const AdminOrders = () => {
               <div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-slate-400 mb-2">Custom WhatsApp Message</label>
+                    <label className="block text-sm font-medium text-slate-400 mb-2">Additional WhatsApp Note</label>
                     <textarea
                       value={whatsappNote}
                       onChange={(e) => setWhatsappNote(e.target.value.slice(0, 500))}
-                      placeholder="Type a custom note for this customer..."
+                      placeholder="Optional note to add inside the dispatch template..."
                       className="min-h-24 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                     />
                   </div>
@@ -348,7 +306,7 @@ const AdminOrders = () => {
                     WhatsApp
                   </button>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">Opens WhatsApp Web to the customer's number with this order's items, amount, status, tracking, address, and your custom note filled in. Keep WhatsApp Web logged in as {COMPANY_WHATSAPP_DISPLAY} so the message is sent from the company number.</p>
+                <p className="mt-2 text-xs text-slate-500">Opens WhatsApp Web with the full dispatch template, order items, tracking link, address, and optional note filled in. Keep WhatsApp Web logged in as {BRAJMART_CONTACT_PHONE_DISPLAY} so the message is sent from the company number.</p>
               </div>
 
               {/* Coupon */}
