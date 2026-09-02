@@ -7,7 +7,7 @@ export default defineConfig(({ isSsrBuild }) => ({
   server: {
     host: "::",
     port: 8081,
-    strictPort: true,
+    strictPort: false,
     proxy: {
       "/api": {
         target: "http://localhost:5001",

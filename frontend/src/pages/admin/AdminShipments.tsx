@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { StatusBadge } from './AdminDashboard';
 import { CheckCircle2, MapPin, RefreshCw, Truck } from 'lucide-react';
-import { adminCheckDtdcPincode, adminTrackDtdcOrder, fetchOrders } from '@/lib/api';
+import { adminCheckDeliveryServicePincode, adminTrackDeliveryServiceOrder, fetchOrders } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 
 const AdminShipments = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [busyOrder, setBusyOrder] = useState('');
-  const [dtdcPreview, setDtdcPreview] = useState<any | null>(null);
+  const [deliveryPreview, setDeliveryPreview] = useState<any | null>(null);
   const [page, setPage] = useState(1);
   useEffect(() => {
     const load = async () => {
@@ -27,7 +27,7 @@ const AdminShipments = () => {
     load();
   }, []);
   const shipments = orders.filter((o) => o.status !== 'cancelled');
-  const dtdcShipments = shipments.filter((o) => String(o.shippingService || '').toLowerCase().includes('dtdc'));
+  const delhiveryShipments = shipments.filter((o) => String(o.shippingService || '').toLowerCase().includes('delhivery'));
   const paginatedShipments = shipments.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
 
   useEffect(() => {
@@ -35,19 +35,19 @@ const AdminShipments = () => {
     if (page > totalPages) setPage(totalPages);
   }, [shipments.length, page]);
 
-  const fetchDtdcStatus = async (order: any) => {
+  const fetchDeliveryStatus = async (order: any) => {
     const lookup = String(order.trackingId || '').trim();
     if (!lookup) {
-      toast.error('Add the DTDC AWB/tracking ID first');
+      toast.error('Add the Delhivery AWB/tracking ID first');
       return;
     }
     setBusyOrder(order.id);
     try {
-      const data: any = await adminTrackDtdcOrder(lookup);
-      setDtdcPreview({ order, tracking: data?.tracking || null, pincode: null });
-      toast.success('DTDC status refreshed');
+      const data: any = await adminTrackDeliveryServiceOrder(lookup);
+      setDeliveryPreview({ order, tracking: data?.tracking || null, pincode: null });
+      toast.success('Delhivery status refreshed');
     } catch (err: any) {
-      toast.error(err?.message || 'Unable to fetch DTDC status');
+      toast.error(err?.message || 'Unable to fetch Delhivery status');
     } finally {
       setBusyOrder('');
     }
@@ -61,11 +61,11 @@ const AdminShipments = () => {
     }
     setBusyOrder(order.id);
     try {
-      const data: any = await adminCheckDtdcPincode({ desPincode: pincode });
-      setDtdcPreview({ order, tracking: null, pincode: data });
-      toast.success('DTDC pincode checked');
+      const data: any = await adminCheckDeliveryServicePincode({ desPincode: pincode });
+      setDeliveryPreview({ order, tracking: null, pincode: data });
+      toast.success('Delivery pincode checked');
     } catch (err: any) {
-      toast.error(err?.message || 'Unable to check DTDC pincode');
+      toast.error(err?.message || 'Unable to check delivery pincode');
     } finally {
       setBusyOrder('');
     }
@@ -80,7 +80,7 @@ const AdminShipments = () => {
           { label: 'To Ship', count: orders.filter(o => o.status === 'confirmed' || o.status === 'processing').length, color: 'text-amber-400' },
           { label: 'In Transit', count: orders.filter(o => o.status === 'shipped').length, color: 'text-blue-400' },
           { label: 'Out for Delivery', count: orders.filter(o => o.status === 'out_for_delivery').length, color: 'text-purple-400' },
-          { label: 'DTDC Active', count: dtdcShipments.length, color: 'text-emerald-400' },
+          { label: 'Delhivery Active', count: delhiveryShipments.length, color: 'text-emerald-400' },
         ].map((s) => (
           <div key={s.label} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
             <p className={`text-2xl font-bold ${s.color}`}>{s.count}</p>
@@ -89,49 +89,49 @@ const AdminShipments = () => {
         ))}
       </div>
 
-      {dtdcPreview && (
+      {deliveryPreview && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">DTDC Service Desk</p>
-              <h2 className="text-white font-semibold mt-1">Order {dtdcPreview.order.id}</h2>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Delivery Service Desk</p>
+              <h2 className="text-white font-semibold mt-1">Order {deliveryPreview.order.id}</h2>
             </div>
-            <button onClick={() => setDtdcPreview(null)} className="text-xs text-slate-400 hover:text-white">Close</button>
+            <button onClick={() => setDeliveryPreview(null)} className="text-xs text-slate-400 hover:text-white">Close</button>
           </div>
-          {dtdcPreview.tracking && (
+          {deliveryPreview.tracking && (
             <div className="mt-4 rounded-xl bg-slate-800/50 border border-slate-700 p-4">
               <div className="flex items-center gap-2 text-sm font-semibold text-white">
                 <Truck size={16} className="text-amber-400" />
-                {dtdcPreview.tracking.currentStatus}
+                {deliveryPreview.tracking.currentStatus}
               </div>
-              {dtdcPreview.tracking.lastLocation && <p className="mt-1 text-xs text-slate-400">Last location: {dtdcPreview.tracking.lastLocation}</p>}
-              {dtdcPreview.tracking.trackingPortalUrl && (
+              {deliveryPreview.tracking.lastLocation && <p className="mt-1 text-xs text-slate-400">Last location: {deliveryPreview.tracking.lastLocation}</p>}
+              {deliveryPreview.tracking.trackingPortalUrl && (
                 <a
-                  href={dtdcPreview.tracking.trackingPortalUrl}
+                  href={deliveryPreview.tracking.trackingPortalUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-2 inline-flex text-xs font-medium text-amber-300 hover:text-amber-200"
                 >
-                  Open DTDC tracking page
+                  Open Delhivery tracking page
                 </a>
               )}
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {(dtdcPreview.tracking.events || []).slice(0, 4).map((event: any, index: number) => (
+                {(deliveryPreview.tracking.events || []).slice(0, 4).map((event: any, index: number) => (
                   <div key={`${event.status}-${index}`} className="rounded-lg border border-slate-700 bg-slate-900/60 p-3">
                     <p className="text-xs font-medium text-white">{event.status}</p>
-                    <p className="mt-1 text-xs text-slate-500">{[event.date, event.time, event.location].filter(Boolean).join(' - ') || 'DTDC update'}</p>
+                    <p className="mt-1 text-xs text-slate-500">{[event.date, event.time, event.location].filter(Boolean).join(' - ') || 'Delhivery update'}</p>
                   </div>
                 ))}
               </div>
             </div>
           )}
-          {dtdcPreview.pincode && (
+          {deliveryPreview.pincode && (
             <div className="mt-4 rounded-xl bg-slate-800/50 border border-slate-700 p-4">
-              <div className={`flex items-center gap-2 text-sm font-semibold ${dtdcPreview.pincode.serviceable ? 'text-emerald-400' : 'text-red-400'}`}>
+              <div className={`flex items-center gap-2 text-sm font-semibold ${deliveryPreview.pincode.serviceable ? 'text-emerald-400' : 'text-red-400'}`}>
                 <CheckCircle2 size={16} />
-                {dtdcPreview.pincode.orgPincode} to {dtdcPreview.pincode.desPincode}: {dtdcPreview.pincode.serviceable ? 'Serviceable' : 'Needs review'}
+                {deliveryPreview.pincode.desPincode || deliveryPreview.pincode.pincode}: {deliveryPreview.pincode.serviceable ? 'Serviceable' : 'Needs review'}
               </div>
-              {dtdcPreview.pincode.message && <p className="mt-1 text-xs text-slate-400">{dtdcPreview.pincode.message}</p>}
+              {deliveryPreview.pincode.message && <p className="mt-1 text-xs text-slate-400">{deliveryPreview.pincode.message}</p>}
             </div>
           )}
         </div>
@@ -147,7 +147,7 @@ const AdminShipments = () => {
               <th className="text-left px-5 py-3 font-medium">Courier</th>
               <th className="text-left px-5 py-3 font-medium">Destination</th>
               <th className="text-left px-5 py-3 font-medium">Status</th>
-              <th className="text-left px-5 py-3 font-medium">DTDC Tools</th>
+              <th className="text-left px-5 py-3 font-medium">Delivery Tools</th>
             </tr></thead>
             <tbody>
               {paginatedShipments.map((o) => (
@@ -169,7 +169,7 @@ const AdminShipments = () => {
                         Pin
                       </button>
                       <button
-                        onClick={() => fetchDtdcStatus(o)}
+                        onClick={() => fetchDeliveryStatus(o)}
                         disabled={busyOrder === o.id || !o.trackingId}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300 hover:bg-amber-500/20 disabled:opacity-60"
                       >

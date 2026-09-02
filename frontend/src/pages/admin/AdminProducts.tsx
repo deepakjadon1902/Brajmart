@@ -2,7 +2,7 @@ import * as React from "react";
 import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Product, Category, Subcategory } from '@/types/product';
-import { AlertTriangle, Search, Plus, Edit2, Trash2, X, Upload, ImageIcon } from 'lucide-react';
+import { AlertTriangle, Search, Plus, Edit2, Trash2, X, Upload, ImageIcon, Truck } from 'lucide-react';
 import {
   createProduct,
   deleteProduct as deleteProductApi,
@@ -223,6 +223,7 @@ const AdminProducts = () => {
         attributes: normalizedAttributes,
         variantPricing: normalizedVariantPricing,
         colorVariants: normalizedColorVariants,
+        codEnabled: product.codEnabled === undefined ? null : product.codEnabled,
         sizes: Array.isArray(product.sizes) ? product.sizes : [],
         sizePricing: Array.isArray(product.sizePricing) ? product.sizePricing : [],
         piecePricing: Array.isArray(product.piecePricing) ? product.piecePricing : [],
@@ -291,6 +292,7 @@ const AdminProducts = () => {
               rating: 0,
               reviewCount: 0,
               inStock: true,
+              codEnabled: null,
               tags: [],
               sizes: [],
               sizePricing: [],
@@ -385,6 +387,7 @@ const AdminProducts = () => {
               <th className="text-left px-5 py-3 font-medium hidden md:table-cell">MRP</th>
               <th className="text-left px-5 py-3 font-medium hidden md:table-cell">Rating</th>
               <th className="text-left px-5 py-3 font-medium">Stock</th>
+              <th className="text-left px-5 py-3 font-medium">COD</th>
               <th className="text-left px-5 py-3 font-medium">Actions</th>
             </tr></thead>
             <tbody>
@@ -401,6 +404,11 @@ const AdminProducts = () => {
                   <td className="px-5 py-3 text-slate-400 line-through hidden md:table-cell">INR {p.originalPrice || p.price}</td>
                   <td className="px-5 py-3 text-amber-400 hidden md:table-cell">* {p.rating}</td>
                   <td className="px-5 py-3"><span className={`text-xs font-medium ${p.inStock ? 'text-emerald-400' : 'text-red-400'}`}>{p.inStock ? 'In Stock' : 'Out'}</span></td>
+                  <td className="px-5 py-3">
+                    <span className={`text-xs font-medium ${p.codEnabled === true || (p.codEnabled === null && p.categoryCodEnabled) ? 'text-emerald-400' : 'text-slate-400'}`}>
+                      {p.codEnabled === null || p.codEnabled === undefined ? (p.categoryCodEnabled ? 'Category' : 'No') : p.codEnabled ? 'Yes' : 'No'}
+                    </span>
+                  </td>
                   <td className="px-5 py-3 flex gap-2">
                     <button onClick={() => { setIsCreating(false); setEditProduct({ ...p, images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []), colorVariants: Array.isArray((p as any).colorVariants) ? (p as any).colorVariants : [], tags: Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []) }); }} className="text-blue-400 hover:text-blue-300"><Edit2 size={15} /></button>
                     <button onClick={() => handleDelete(p.id)} className="text-red-400 hover:text-red-300"><Trash2 size={15} /></button>
@@ -1319,6 +1327,36 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
             <button onClick={() => update('inStock', !form.inStock)} className={`w-10 h-5 rounded-full transition ${form.inStock ? 'bg-emerald-500' : 'bg-slate-600'}`}>
               <div className={`w-4 h-4 rounded-full bg-white transition-transform ${form.inStock ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-amber-300">
+                <Truck size={16} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-white">Cash on Delivery</p>
+                <p className="mt-1 text-xs text-slate-500">Product setting overrides category COD. Inherit uses the selected category rule.</p>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {[
+                    { label: 'Inherit', value: null },
+                    { label: 'Enable', value: true },
+                    { label: 'Disable', value: false },
+                  ].map((option) => {
+                    const selected = form.codEnabled === option.value || (option.value === null && (form.codEnabled === null || form.codEnabled === undefined));
+                    return (
+                      <button
+                        key={option.label}
+                        type="button"
+                        onClick={() => update('codEnabled', option.value)}
+                        className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${selected ? 'border-amber-500/50 bg-amber-500/15 text-amber-200' : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
           <div>
             <label className="block text-sm text-slate-300 mb-2">Placement Tags</label>

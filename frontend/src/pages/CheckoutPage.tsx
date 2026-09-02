@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDtdcPincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
+import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
 import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
@@ -21,7 +21,7 @@ const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
 const DEFAULT_SHIPPING_FEE = 49;
 const CHECKOUT_IDEMPOTENCY_STORAGE_KEY = 'brajmart-checkout-idempotency';
 type ServiceabilityState = { pincode: string; serviceable: boolean; codAvailable: boolean; manualReview?: boolean; message?: string };
-type DtdcCheckResponse = Partial<Omit<ServiceabilityState, 'pincode'>>;
+type DeliveryCheckResponse = Partial<Omit<ServiceabilityState, 'pincode'>>;
 type CreatedOrderResponse = { orderId?: string | number; _id?: string | number; id?: string | number };
 type AddressValidationResult = { valid: true } | { valid: false; message: string };
 type BundleSnapshot = {
@@ -145,6 +145,12 @@ const RazorpayLogo = () => (
   </div>
 );
 
+const CodLogo = () => (
+  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-tulsi/25 bg-tulsi/10 text-tulsi">
+    <Truck size={23} />
+  </div>
+);
+
 const CheckoutPage = () => {
   const { items, totalPrice, totalSavings, updateQuantity, removeItem, clearCart, reconcileValidatedItems } = useCartStore();
   const { user, isAuthenticated } = useAuthStore();
@@ -200,12 +206,30 @@ const CheckoutPage = () => {
   const effectiveShipping = shippingAddress;
   const effectiveEmail = String(billingAddress.email || shippingAddress.email || customerEmail || user?.email || '').trim();
   const effectivePincode = String(effectiveShipping.pincode || '').trim();
-  const hasPrasadamItems = items.some((i) => {
-    const text = `${i.product.category || ''} ${i.product.name || ''} ${i.product.slug || ''}`.toLowerCase();
+  const codDecisionItems = checkoutValidation?.items?.length
+    ? checkoutValidation.items
+    : items.map((i) => i.product);
+  const hasPrasadamItems = codDecisionItems.some((item: any) => {
+    const text = `${item.category || ''} ${item.name || ''} ${item.slug || ''}`.toLowerCase();
     return /\bprasadam\b|\bprasad\b/.test(text);
   });
-  const codAvailable = Boolean(serviceability?.pincode === effectivePincode && serviceability.serviceable && serviceability.codAvailable);
-  const canUseCodService = Boolean(settings.codEnabled && codAvailable && !hasPrasadamItems);
+  const codEligibleItems = codDecisionItems.every((product: any) => {
+    if (product.codEnabled !== null && product.codEnabled !== undefined) return Boolean(product.codEnabled);
+    if (product.categoryCodEnabled !== undefined) return Boolean(product.categoryCodEnabled);
+    return true;
+  });
+  const deliveryServiceable = Boolean(serviceability?.pincode === effectivePincode && serviceability.serviceable);
+  const partnerCodAvailable = Boolean(deliveryServiceable && serviceability?.codAvailable);
+  const canUseCodService = Boolean(partnerCodAvailable && !hasPrasadamItems && codEligibleItems);
+  const codUnavailableReason = hasPrasadamItems
+    ? 'COD is not available for Prasadam products.'
+    : !codEligibleItems
+      ? 'COD is enabled only for selected products and categories in this order.'
+      : !deliveryServiceable
+        ? 'Enter a serviceable delivery pincode to enable COD.'
+        : !partnerCodAvailable
+          ? 'COD is not available for this delivery pincode.'
+          : 'COD is currently unavailable.';
   const validatedSubtotal = checkoutValidation?.subtotal ?? localSubtotal;
   const validatedShipping = checkoutValidation?.shipping ?? shipping;
   const validatedPackaging = checkoutValidation?.packaging ?? packagingCost;
@@ -274,19 +298,24 @@ const CheckoutPage = () => {
   }, [updateSettings]);
 
   useEffect(() => {
-    if (paymentMethod !== 'razorpay') setPaymentMethod('razorpay');
-  }, [paymentMethod]);
-
-  useEffect(() => {
     if (serviceability && serviceability.pincode !== effectivePincode) {
       setServiceability(null);
       setWantsCodService(false);
+      if (paymentMethod === 'cod') setPaymentMethod('razorpay');
     }
-  }, [effectivePincode, serviceability]);
+  }, [effectivePincode, paymentMethod, serviceability]);
 
   useEffect(() => {
-    if (wantsCodService && !canUseCodService) setWantsCodService(false);
-  }, [canUseCodService, wantsCodService]);
+    if (paymentMethod === 'cod') {
+      if (canUseCodService) setWantsCodService(true);
+      else {
+        setPaymentMethod('razorpay');
+        setWantsCodService(false);
+      }
+      return;
+    }
+    if (wantsCodService) setWantsCodService(false);
+  }, [canUseCodService, paymentMethod, wantsCodService]);
 
   const couponItemSignature = items
     .map((i) => `${i.product.id}:${i.quantity}:${i.product.selectedSize || ''}:${i.product.selectedPieces || ''}`)
@@ -337,6 +366,23 @@ const CheckoutPage = () => {
     }
   };
 
+  useEffect(() => {
+    if (!items.length) return;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await validateCart(checkoutItemsPayload());
+        if (active) setCheckoutValidation(result);
+      } catch {
+        // Submit still performs a blocking validation.
+      }
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [couponItemSignature]);
+
   const applyCheckoutUpdates = () => {
     if (!checkoutValidation) return;
     reconcileValidatedItems(checkoutValidation.items.map((item) => ({
@@ -349,6 +395,8 @@ const CheckoutPage = () => {
       image: item.image,
       category: item.category,
       inStock: item.inStock,
+      codEnabled: item.codEnabled,
+      categoryCodEnabled: item.categoryCodEnabled,
       availableQuantity: item.availableQuantity,
     })));
     setCheckoutValidation(null);
@@ -389,7 +437,7 @@ const CheckoutPage = () => {
     const timer = window.setTimeout(async () => {
       setCheckingPincode(true);
       try {
-        const result = await checkDtdcPincode({ desPincode: effectivePincode }) as DtdcCheckResponse;
+        const result = await checkDeliveryServicePincode({ desPincode: effectivePincode }) as DeliveryCheckResponse;
         if (!active) return;
         setServiceability({
           pincode: effectivePincode,
@@ -514,7 +562,7 @@ const CheckoutPage = () => {
 
     setCheckingPincode(true);
     try {
-      const result = await checkDtdcPincode({ desPincode: pincode }) as DtdcCheckResponse;
+      const result = await checkDeliveryServicePincode({ desPincode: pincode }) as DeliveryCheckResponse;
       const next = {
         pincode,
         serviceable: Boolean(result?.serviceable),
@@ -524,18 +572,18 @@ const CheckoutPage = () => {
       };
       setServiceability(next);
       if (next.manualReview) {
-        toast.info(next.message || 'Courier auto-check is unavailable. You can continue and our team will confirm dispatch.');
+        toast.info(next.message || 'Delivery partner auto-check is unavailable. You can continue and our team will confirm dispatch.');
         return true;
       }
       if (!next.serviceable) {
-        toast.error(next.message || 'DTDC delivery is not available for this pincode right now');
+        toast.error(next.message || 'Delivery partner is not available for this pincode right now');
         return false;
       }
       toast.success('Delivery pincode verified');
       return true;
     } catch {
       setServiceability(null);
-      toast.info('Could not verify courier serviceability right now. You can continue and our team will confirm dispatch.');
+      toast.info('Could not verify delivery partner serviceability right now. You can continue and our team will confirm dispatch.');
       return true;
     } finally {
       setCheckingPincode(false);
@@ -559,7 +607,6 @@ const CheckoutPage = () => {
         upiEnabled: data.upiEnabled,
         cardEnabled: data.cardEnabled,
       });
-      if (!data.codEnabled) setWantsCodService(false);
     } catch {
       // Keep current settings if the refresh fails; backend validation still protects the order.
     }
@@ -723,25 +770,6 @@ const CheckoutPage = () => {
       return;
     }
 
-    if (wantsCodService) {
-      try {
-        const data = await fetchPublicSettings({ fresh: true });
-        updateSettings({
-          codEnabled: data.codEnabled,
-          codFee: data.codFee ?? 40,
-          upiEnabled: data.upiEnabled,
-          cardEnabled: data.cardEnabled,
-        });
-        if (!data.codEnabled) {
-          setWantsCodService(false);
-          toast.error('COD is currently disabled. Please use online payment.');
-          return;
-        }
-      } catch {
-        // Backend order creation still checks the setting before accepting COD.
-      }
-    }
-
     trackMetaPixelEvent('AddPaymentInfo', {
       content_ids: items.map((i) => String(i.product.id || i.product.slug || i.product.name)),
       content_type: 'product',
@@ -825,7 +853,20 @@ const CheckoutPage = () => {
       pills: ['Primary', 'UPI', 'Cards', 'NetBanking', 'Wallets'],
       badge: 'Primary',
       brandColor: 'text-[#0b72e7]',
+      disabled: false,
     },
+    ...(!hasPrasadamItems && codEligibleItems ? [{
+      value: 'cod',
+      title: 'Cash on Delivery',
+      subtitle: canUseCodService
+        ? `Pay the full order total at delivery. COD Handle Fee ${formatPrice(validatedCodFee)} applies.`
+        : codUnavailableReason,
+      logo: CodLogo,
+      pills: ['Pay at delivery', 'Cash collection', 'COD fee'],
+      badge: canUseCodService ? 'Available' : 'Unavailable',
+      brandColor: canUseCodService ? 'text-tulsi' : 'text-muted-foreground',
+      disabled: !canUseCodService,
+    }] : []),
   ];
 
   const renderAddressForm = (
@@ -972,19 +1013,19 @@ const CheckoutPage = () => {
                     <div className="rounded-xl border border-border bg-muted/30 p-3">
                       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                         <Truck size={16} className="text-gold" />
-                        DTDC delivery check
+                        Delivery partner check
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {serviceability?.pincode === String(effectiveShipping.pincode || '').trim()
                           ? serviceability.manualReview
-                            ? serviceability.message || 'Courier auto-check is unavailable. Our team will confirm dispatch.'
+                            ? serviceability.message || 'Delivery partner auto-check is unavailable. Our team will confirm dispatch.'
                             : serviceability.serviceable
                             ? serviceability.codAvailable
                               ? `Delivery and COD available for ${serviceability.pincode}. COD Handle Fee ${formatPrice(codFee)} applies only when COD is selected.`
                               : `Delivery available for ${serviceability.pincode}. COD is not available for this pincode.`
                             : serviceability.message || `Delivery needs review for ${serviceability.pincode}.`
                           : checkingPincode
-                            ? 'Checking this pincode with DTDC...'
+                            ? 'Checking this pincode with delivery partner...'
                             : 'Your delivery pincode is verified automatically when you enter 6 digits.'}
                       </p>
                     </div>
@@ -1014,7 +1055,7 @@ const CheckoutPage = () => {
                       {[
                         { icon: ShieldCheck, title: 'Secure gateway', text: 'Encrypted checkout' },
                         { icon: CheckCircle2, title: 'Verified order', text: 'Email confirmation' },
-                        { icon: Truck, title: serviceability?.manualReview ? 'Courier review' : 'DTDC checked', text: serviceability?.manualReview ? 'Dispatch confirmed by team' : codAvailable ? 'COD serviceable' : 'Delivery verified' },
+                        { icon: Truck, title: serviceability?.manualReview ? 'Partner review' : 'Partner checked', text: serviceability?.manualReview ? 'Dispatch confirmed by team' : partnerCodAvailable ? 'Partner COD serviceable' : 'Delivery verified' },
                       ].map((item) => (
                         <div key={item.title} className="flex items-center gap-3 rounded-xl border border-border bg-pearl/60 px-3 py-2.5">
                           <item.icon size={16} className="shrink-0 text-tulsi" />
@@ -1040,22 +1081,34 @@ const CheckoutPage = () => {
                               key={m.value}
                               role="radio"
                               aria-checked={selected}
-                              tabIndex={0}
-                              onClick={() => setPaymentMethod(m.value)}
+                              aria-disabled={m.disabled}
+                              tabIndex={m.disabled ? -1 : 0}
+                              onClick={() => {
+                                if (m.disabled) return;
+                                setPaymentMethod(m.value);
+                                setWantsCodService(m.value === 'cod');
+                              }}
                               onKeyDown={(event) => {
                                 if (event.key === 'Enter' || event.key === ' ') {
                                   event.preventDefault();
+                                  if (m.disabled) return;
                                   setPaymentMethod(m.value);
+                                  setWantsCodService(m.value === 'cod');
                                 }
                               }}
-                              className={`group flex min-w-0 items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all sm:gap-4 sm:p-4 ${selected ? 'border-gold bg-gold/5 shadow-[0_0_0_1px_rgba(218,165,32,0.2)]' : 'border-border bg-background hover:border-gold/50 hover:bg-pearl/50'}`}
+                              className={`group flex min-w-0 items-center gap-3 rounded-xl border p-3 transition-all sm:gap-4 sm:p-4 ${m.disabled ? 'cursor-not-allowed border-border bg-muted/30 opacity-70' : selected ? 'cursor-pointer border-gold bg-gold/5 shadow-[0_0_0_1px_rgba(218,165,32,0.2)]' : 'cursor-pointer border-border bg-background hover:border-gold/50 hover:bg-pearl/50'}`}
                             >
                               <input
                                 type="radio"
                                 name="payment"
                                 value={m.value}
                                 checked={selected}
-                                onChange={() => setPaymentMethod(m.value)}
+                                disabled={m.disabled}
+                                onChange={() => {
+                                  if (m.disabled) return;
+                                  setPaymentMethod(m.value);
+                                  setWantsCodService(m.value === 'cod');
+                                }}
                                 className="sr-only"
                               />
                               <Logo />
@@ -1090,7 +1143,7 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {settings.codEnabled && (
+                    {!hasPrasadamItems && codEligibleItems && (
                       <div className={`mt-5 rounded-xl border p-4 transition-colors ${canUseCodService ? 'border-tulsi/30 bg-tulsi/5' : 'border-border bg-muted/30'}`}>
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-start gap-3">
@@ -1099,7 +1152,7 @@ const CheckoutPage = () => {
                             </div>
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-sm font-semibold text-foreground">DTDC COD service</p>
+                                <p className="text-sm font-semibold text-foreground">Delivery partner COD</p>
                                 <span className={`text-[11px] px-2 py-0.5 rounded-full border ${canUseCodService ? 'border-tulsi/30 text-tulsi' : 'border-border text-muted-foreground'}`}>
                                 {canUseCodService ? 'Available' : checkingPincode ? 'Checking' : 'Not available'}
                                 </span>
@@ -1107,20 +1160,17 @@ const CheckoutPage = () => {
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {hasPrasadamItems
                                   ? 'COD is not available for Prasadam products. Please continue with online payment.'
+                                  : !codEligibleItems
+                                    ? 'COD is enabled only for selected products and categories in this order.'
                                   : canUseCodService
                                     ? `Select COD to confirm this order without online payment. COD Handle Fee ${formatPrice(codFee)} will be collected with the order total.`
-                                    : 'Enter a DTDC COD serviceable pincode in delivery details to enable this service.'}
+                                    : 'Enter a delivery partner COD serviceable pincode in delivery details to enable this service.'}
                               </p>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => canUseCodService && setWantsCodService((value) => !value)}
-                            disabled={!canUseCodService}
-                            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${wantsCodService ? 'bg-tulsi text-white' : 'border border-border bg-background text-foreground hover:border-tulsi/50'}`}
-                          >
-                            {wantsCodService ? 'COD Selected' : 'Want COD'}
-                          </button>
+                          <span className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold ${wantsCodService ? 'bg-tulsi text-white' : 'border border-border bg-background text-muted-foreground'}`}>
+                            {wantsCodService ? 'COD selected' : 'Select COD above'}
+                          </span>
                         </div>
                       </div>
                     )}

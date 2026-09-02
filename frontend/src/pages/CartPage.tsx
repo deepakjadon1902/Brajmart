@@ -301,7 +301,7 @@ const CartPage = () => {
               </div>
               <div className="rounded-lg border border-border bg-card p-4">
                 <Truck size={18} className="mb-2 text-saffron" />
-                <p className="text-sm font-bold text-foreground">DTDC Delivery</p>
+                <p className="text-sm font-bold text-foreground">Delhivery Delivery</p>
                 <p className="mt-1 text-xs text-muted-foreground">Pincode check continues at checkout.</p>
               </div>
               <div className="rounded-lg border border-border bg-card p-4">

@@ -1,6 +1,7 @@
 import { dbExecute, dbQuery, isDbConnected } from './db';
 import bcrypt from 'bcryptjs';
 import { ensureCommerceIntelligenceSchema } from './commerceIntelligence';
+import { ensureDeliveryServiceSchema } from './deliveryService';
 
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
@@ -108,6 +109,7 @@ const ensurePhaseZeroCommerceSchema = async () => {
     ['reserved_quantity', 'INT NOT NULL DEFAULT 0 AFTER stock_quantity'],
     ['low_stock_threshold', 'INT NOT NULL DEFAULT 3 AFTER reserved_quantity'],
     ['sku', 'VARCHAR(120) NULL AFTER slug'],
+    ['cod_enabled', 'TINYINT(1) NULL AFTER in_stock'],
   ] as const;
   for (const [column, definition] of productColumns) {
     if (!(await columnExists('products', column))) {
@@ -160,6 +162,21 @@ const ensurePhaseZeroCommerceSchema = async () => {
       CONSTRAINT fk_checkout_sessions_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
+const ensureDeliveryCodColumns = async () => {
+  const MIGRATION_KEY = '2026-09-02_delivery_partner_cod_rules';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  if (!(await columnExists('products', 'cod_enabled'))) {
+    await dbExecute('ALTER TABLE products ADD COLUMN cod_enabled TINYINT(1) NULL AFTER in_stock');
+  }
+  if (!(await columnExists('categories', 'cod_enabled'))) {
+    await dbExecute('ALTER TABLE categories ADD COLUMN cod_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER product_count');
+  }
+  await ensureDeliveryServiceSchema();
 
   await setMigrationDone(MIGRATION_KEY);
 };
@@ -515,6 +532,7 @@ export const runDataMigrations = async () => {
   await ensureOrderCodSchema();
   await ensureCouponSchema();
   await ensurePhaseZeroCommerceSchema();
+  await ensureDeliveryCodColumns();
   await ensurePurposeCollectionsSchema();
   await ensureFreeShippingThresholdDefault();
   await ensurePhase5bAdminSafetySchema();

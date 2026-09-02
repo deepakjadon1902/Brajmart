@@ -456,6 +456,75 @@ router.post('/admin/confirm-pending/:orderId', auth, adminOnly, async (req, res)
   }
 });
 
+router.post('/admin/cod-paid/:orderId', auth, adminOnly, async (req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const orderId = Number(req.params.orderId);
+    if (!Number.isFinite(orderId) || orderId <= 0) return res.status(400).json({ message: 'Invalid order ID' });
+
+    const orderData = await getPaymentOrderDetails(orderId);
+    if (!orderData?.orderRow) return res.status(404).json({ message: 'Order not found' });
+    const orderRow = orderData.orderRow;
+    if (!/^cod$|cash\s*on\s*delivery/i.test(String(orderRow.payment_method || ''))) {
+      return res.status(400).json({ message: 'Only COD orders can be marked as collected here' });
+    }
+
+    const paidRows = await dbQuery<any>(
+      "SELECT * FROM payments WHERE order_id = ? AND status = 'paid' AND LOWER(method) IN ('cod', 'cash on delivery') ORDER BY updated_at DESC LIMIT 1",
+      [orderId]
+    );
+    if (paidRows[0]) {
+      return res.json({ ok: true, orderId, status: 'paid', alreadyPaid: true, payment: mapPaymentRow(paidRows[0]) });
+    }
+
+    const amount = Number(orderRow.total || 0);
+    const transactionId = String(req.body?.transactionId || '').trim() || `cod_${orderId}_${Date.now()}`;
+    const method = 'COD';
+    const note = String(req.body?.note || '').trim() || 'COD amount collected by delivery partner';
+    const history = parseJson<Array<{ status: string; date: string; note?: string }>>(orderRow.status_history, []);
+    if (!history.some((entry) => String(entry.note || '') === note)) {
+      history.push({ status: String(orderRow.status || 'confirmed'), date: new Date().toISOString(), note });
+    }
+
+    await dbExecute('UPDATE orders SET status_history = ?, updated_at = NOW() WHERE id = ?', [JSON.stringify(history), orderId]);
+
+    const paymentRows = await dbQuery<any>('SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1', [orderId]);
+    const paymentRow = paymentRows[0];
+    let paymentId = paymentRow?.id;
+    if (paymentRow) {
+      await dbExecute(
+        'UPDATE payments SET status = ?, method = ?, amount = ?, transaction_id = ?, updated_at = NOW() WHERE id = ?',
+        ['paid', method, amount, transactionId, paymentRow.id]
+      );
+    } else {
+      const inserted = await dbExecute(
+        'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [orderId, orderRow.customer_name || '', orderRow.customer_email || '', method, amount, 'paid', transactionId]
+      );
+      paymentId = (inserted as any).insertId;
+    }
+
+    await dbExecute(
+      'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
+      [transactionId, 'paid', orderId, amount, method, transactionId]
+    );
+
+    const refreshedRows = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [paymentId]);
+    sendAdminPaymentNotice({
+      status: 'paid',
+      orderId: String(orderId),
+      amount,
+      paymentId: transactionId,
+      method,
+      customerEmail: orderRow.customer_email,
+    }).catch(() => {});
+
+    return res.json({ ok: true, orderId, status: 'paid', paymentId: transactionId, payment: refreshedRows[0] ? mapPaymentRow(refreshedRows[0]) : undefined });
+  } catch (err: any) {
+    return res.status(500).json({ message: err?.message || 'Failed to mark COD payment as paid' });
+  }
+});
+
 router.get('/status/:token', async (req, res) => {
   try {
     const token = req.params.token;

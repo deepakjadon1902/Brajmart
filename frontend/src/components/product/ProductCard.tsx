@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, ShoppingCart, Star, Eye } from 'lucide-react';
+import { Heart, ShoppingCart, Star, Eye, Truck } from 'lucide-react';
 import { Product } from '@/types/product';
 import { formatPrice } from '@/utils/formatPrice';
 import { toSquareImageUrl } from '@/utils/image';
@@ -107,6 +107,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
   const mediaFitClass = isCompact ? 'object-contain p-2.5' : 'object-cover';
   const ratingValue = Number(product.rating || 0);
   const reviewCount = Number(product.reviewCount || 0);
+  const codEligible = product.codEnabled === true || (product.codEnabled === null && Boolean(product.categoryCodEnabled));
 
   useEffect(() => {
     if (!isHovered) {
@@ -197,10 +198,24 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
               <Star size={12} className="fill-[#d69a00] text-[#d69a00]" aria-hidden="true" />
               {ratingValue.toFixed(1).replace(/\.0$/, '')} ({reviewCount})
             </span>
+          ) : codEligible ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-tulsi">
+              <Truck size={12} aria-hidden="true" />
+              COD available
+            </span>
           ) : (
             <span className="text-[11px] text-muted-foreground">No reviews yet</span>
           )}
         </div>
+
+        {hasReviewRating(product) && codEligible && (
+          <div className="min-h-[18px]">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-tulsi">
+              <Truck size={12} aria-hidden="true" />
+              COD available
+            </span>
+          </div>
+        )}
 
         <div className="mt-auto flex items-baseline gap-1.5 leading-tight">
           <div className="price-current font-sans text-[15px] font-bold text-[#212121] sm:text-[16px]">{formatPrice(product.price)}</div>

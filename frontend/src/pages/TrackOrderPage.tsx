@@ -7,7 +7,7 @@ import { OrderPaymentBreakdown } from '@/components/orders/OrderPaymentBreakdown
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { Search, Package, CheckCircle2, Truck, MapPin, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { trackDtdcOrder, trackOrder, trackOrderById } from '@/lib/api';
+import { trackDeliveryServiceOrder, trackOrder, trackOrderById } from '@/lib/api';
 
 const steps = [
   { key: 'confirmed', label: 'Order Placed', icon: Package },
@@ -32,9 +32,9 @@ const TrackOrderPage = () => {
   const [orderId, setOrderId] = useState('');
   const [order, setOrder] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
-  const [dtdcTracking, setDtdcTracking] = useState<any | null>(null);
-  const [dtdcLoading, setDtdcLoading] = useState(false);
-  const [dtdcError, setDtdcError] = useState('');
+  const [deliveryTracking, setDeliveryTracking] = useState<any | null>(null);
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
+  const [deliveryError, setDeliveryError] = useState('');
   const [liveOnlyLookup, setLiveOnlyLookup] = useState('');
 
   useEffect(() => {
@@ -52,8 +52,8 @@ const TrackOrderPage = () => {
       return;
     }
     setLoading(true);
-    setDtdcTracking(null);
-    setDtdcError('');
+    setDeliveryTracking(null);
+    setDeliveryError('');
     setLiveOnlyLookup('');
     try {
       let found;
@@ -70,43 +70,43 @@ const TrackOrderPage = () => {
         }
       }
       setOrder(found);
-      loadDtdcTracking(found).catch(() => {});
+      loadDeliveryTracking(found).catch(() => {});
       toast({ title: 'Order Found!' });
     } catch (err: any) {
       try {
-        setDtdcLoading(true);
-        const data: any = await trackDtdcOrder(input);
+        setDeliveryLoading(true);
+        const data: any = await trackDeliveryServiceOrder(input);
         setOrder(data?.order || null);
-        setDtdcTracking(data?.tracking || null);
+        setDeliveryTracking(data?.tracking || null);
         setLiveOnlyLookup(input);
-        toast({ title: data?.order ? 'Order Found!' : 'DTDC tracking found' });
+        toast({ title: data?.order ? 'Order Found!' : 'Delhivery tracking found' });
       } catch (liveErr: any) {
         setOrder(null);
-        setDtdcTracking(null);
+        setDeliveryTracking(null);
         toast({ title: liveErr?.message || err?.message || 'Order not found', variant: 'destructive' });
       } finally {
-        setDtdcLoading(false);
+        setDeliveryLoading(false);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const loadDtdcTracking = async (foundOrder: any) => {
+  const loadDeliveryTracking = async (foundOrder: any) => {
     const service = String(foundOrder?.shippingService || '').toLowerCase();
     const shipped = ['shipped', 'out_for_delivery', 'delivered'].includes(String(foundOrder?.status || ''));
     const lookup = foundOrder?.trackingId || foundOrder?.orderId || foundOrder?._id;
-    if (!service.includes('dtdc') || !shipped || !lookup) return;
+    if (!service.includes('delhivery') || !shipped || !lookup) return;
 
-    setDtdcLoading(true);
-    setDtdcError('');
+    setDeliveryLoading(true);
+    setDeliveryError('');
     try {
-      const data: any = await trackDtdcOrder(lookup);
-      setDtdcTracking(data?.tracking || null);
+      const data: any = await trackDeliveryServiceOrder(lookup);
+      setDeliveryTracking(data?.tracking || null);
     } catch (err: any) {
-      setDtdcError(err?.message || 'Live DTDC tracking is not available right now');
+      setDeliveryError(err?.message || 'Live Delhivery tracking is not available right now');
     } finally {
-      setDtdcLoading(false);
+      setDeliveryLoading(false);
     }
   };
 
@@ -153,38 +153,38 @@ const TrackOrderPage = () => {
                     </div>
                   )}
                 </div>
-                {String(order.shippingService || '').toLowerCase().includes('dtdc') && (
+                {String(order.shippingService || '').toLowerCase().includes('delhivery') && (
                   <div className="mb-6 rounded-xl border border-border bg-muted/30 p-4">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div>
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">DTDC Live Tracking</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Delhivery Live Tracking</p>
                         <p className="text-sm font-semibold text-foreground">
                           {order.trackingId ? `AWB ${order.trackingId}` : 'Tracking ID pending'}
                         </p>
                       </div>
-                      {dtdcLoading ? (
+                      {deliveryLoading ? (
                         <span className="text-xs text-saffron">Fetching courier status...</span>
-                      ) : dtdcTracking ? (
-                        <span className="text-xs text-tulsi">Updated from DTDC</span>
+                      ) : deliveryTracking ? (
+                        <span className="text-xs text-tulsi">Updated from Delhivery</span>
                       ) : ['shipped', 'out_for_delivery', 'delivered'].includes(String(order.status)) ? (
                         <button
                           type="button"
-                          onClick={() => loadDtdcTracking(order)}
+                          onClick={() => loadDeliveryTracking(order)}
                           className="px-3 py-2 rounded-lg border border-saffron/40 text-saffron text-xs font-medium hover:bg-saffron/10"
                         >
-                          Refresh DTDC
+                          Refresh Delhivery
                         </button>
                       ) : (
                         <span className="text-xs text-muted-foreground">Available after dispatch</span>
                       )}
                     </div>
-                    {dtdcTracking && (
+                    {deliveryTracking && (
                       <div className="mt-3 text-sm">
-                        <p className="font-medium text-foreground">{dtdcTracking.currentStatus}</p>
-                        {dtdcTracking.lastLocation && <p className="text-xs text-muted-foreground">Last location: {dtdcTracking.lastLocation}</p>}
+                        <p className="font-medium text-foreground">{deliveryTracking.currentStatus}</p>
+                        {deliveryTracking.lastLocation && <p className="text-xs text-muted-foreground">Last location: {deliveryTracking.lastLocation}</p>}
                       </div>
                     )}
-                    {dtdcError && <p className="mt-3 text-xs text-destructive">{dtdcError}</p>}
+                    {deliveryError && <p className="mt-3 text-xs text-destructive">{deliveryError}</p>}
                   </div>
                 )}
                 {etaText && (
@@ -214,11 +214,11 @@ const TrackOrderPage = () => {
                 </div>
               </div>
 
-              {dtdcTracking?.events?.length > 0 && (
+              {deliveryTracking?.events?.length > 0 && (
                 <div className="bg-card rounded-2xl border border-border p-6 mb-8">
-                  <h3 className="font-semibold text-foreground mb-4">DTDC Shipment Timeline</h3>
+                  <h3 className="font-semibold text-foreground mb-4">Delhivery Shipment Timeline</h3>
                   <div className="space-y-4">
-                    {dtdcTracking.events.map((event: any, idx: number) => (
+                    {deliveryTracking.events.map((event: any, idx: number) => (
                       <div key={`${event.status}-${idx}`} className="flex gap-3">
                         <div className="mt-1 h-2.5 w-2.5 rounded-full bg-saffron shrink-0" />
                         <div>
@@ -261,38 +261,38 @@ const TrackOrderPage = () => {
         </section>
       )}
 
-      {!order && (dtdcTracking || dtdcLoading || liveOnlyLookup) && (
+      {!order && (deliveryTracking || deliveryLoading || liveOnlyLookup) && (
         <section className="py-12 bg-background">
           <div className="container mx-auto px-4 max-w-3xl">
             <ScrollReveal>
               <div className="bg-card rounded-2xl border border-border p-6 md:p-8">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">DTDC Live Tracking</p>
-                    <h2 className="font-cinzel text-xl font-bold text-foreground">AWB {dtdcTracking?.trackingId || liveOnlyLookup}</h2>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Delhivery Live Tracking</p>
+                    <h2 className="font-cinzel text-xl font-bold text-foreground">AWB {deliveryTracking?.trackingId || liveOnlyLookup}</h2>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
-                      const fakeOrder = { shippingService: 'DTDC', status: 'shipped', trackingId: dtdcTracking?.trackingId || liveOnlyLookup };
-                      loadDtdcTracking(fakeOrder);
+                      const fakeOrder = { shippingService: 'Delhivery', status: 'shipped', trackingId: deliveryTracking?.trackingId || liveOnlyLookup };
+                      loadDeliveryTracking(fakeOrder);
                     }}
-                    disabled={dtdcLoading}
+                    disabled={deliveryLoading}
                     className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-saffron/40 text-saffron text-xs font-semibold hover:bg-saffron/10 disabled:opacity-60"
                   >
-                    {dtdcLoading ? 'Refreshing...' : 'Refresh'}
+                    {deliveryLoading ? 'Refreshing...' : 'Refresh'}
                   </button>
                 </div>
 
-                {dtdcTracking ? (
+                {deliveryTracking ? (
                   <>
                     <div className="rounded-xl border border-border bg-muted/30 p-4 mb-6">
-                      <p className="text-sm font-semibold text-foreground">{dtdcTracking.currentStatus}</p>
-                      {dtdcTracking.lastLocation && <p className="text-xs text-muted-foreground mt-1">Last location: {dtdcTracking.lastLocation}</p>}
+                      <p className="text-sm font-semibold text-foreground">{deliveryTracking.currentStatus}</p>
+                      {deliveryTracking.lastLocation && <p className="text-xs text-muted-foreground mt-1">Last location: {deliveryTracking.lastLocation}</p>}
                     </div>
-                    {(dtdcTracking.events || []).length > 0 && (
+                    {(deliveryTracking.events || []).length > 0 && (
                       <div className="space-y-4">
-                        {dtdcTracking.events.map((event: any, idx: number) => (
+                        {deliveryTracking.events.map((event: any, idx: number) => (
                           <div key={`${event.status}-${idx}`} className="flex gap-3">
                             <div className="mt-1 h-2.5 w-2.5 rounded-full bg-saffron shrink-0" />
                             <div>
@@ -311,7 +311,7 @@ const TrackOrderPage = () => {
                   </>
                 ) : (
                   <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                    Fetching courier status from DTDC...
+                    Fetching courier status from Delhivery...
                   </div>
                 )}
               </div>

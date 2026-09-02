@@ -19,6 +19,8 @@ export interface Product {
   badge?: 'new' | 'bestseller' | 'combo' | 'exclusive';
   tags?: string[];
   inStock: boolean;
+  codEnabled?: boolean | null;
+  categoryCodEnabled?: boolean;
   stockQuantity?: number | null;
   reservedQuantity?: number;
   lowStockThreshold?: number;
@@ -49,6 +51,7 @@ export interface Category {
   icon: string;
   color: string;
   productCount: number;
+  codEnabled?: boolean;
   displayOrder?: number;
   subcategories?: Subcategory[];
 }

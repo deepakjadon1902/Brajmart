@@ -93,7 +93,7 @@ router.post('/validate', async (req, res) => {
             .filter((item) => item.productId);
         const ids = Array.from(new Set(requested.map((item) => item.productId)));
         const rows = ids.length
-            ? await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, s.name AS subcategory_name
+            ? await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name
            FROM products p
            LEFT JOIN categories c ON p.category_id = c.id
            LEFT JOIN subcategories s ON p.subcategory_id = s.id
@@ -175,6 +175,8 @@ router.post('/validate', async (req, res) => {
                 quantity: availableQuantity,
                 availableQuantity: available,
                 inStock,
+                codEnabled: product.cod_enabled === null || product.cod_enabled === undefined ? null : Boolean(Number(product.cod_enabled)),
+                categoryCodEnabled: Boolean(Number(product.category_cod_enabled || 0)),
                 selectedSize: snapshot.selectedSize || item.raw.selectedSize,
                 selectedPieces: snapshot.selectedPieces || item.raw.selectedPieces,
                 selectedAttributes: snapshot.selectedAttributes || item.raw.selectedAttributes,

@@ -397,7 +397,7 @@ router.post('/create-order', razorpayCreateLimiter, auth_1.optionalAuth, async (
         }
         const settings = await (0, orderPricing_1.getCheckoutSettings)();
         const baseTotals = (0, orderPricing_1.computeTotals)(priced.itemsSubtotal, settings);
-        const cod = await (0, cod_1.resolveCodHandleFee)(order, settings);
+        const cod = await (0, cod_1.resolveCodHandleFee)({ ...order, items: priced.items }, settings);
         const totalsBeforeCoupon = { ...baseTotals, cod: cod.amount, total: baseTotals.total + cod.amount };
         let totals = totalsBeforeCoupon;
         let couponDetails = null;

@@ -427,7 +427,7 @@ const AdminSettings = () => {
               <p className="text-sm font-medium text-white">Cash on Delivery</p>
               <p className="text-xs text-slate-400">
                 {codEnabled
-                  ? 'COD is enabled on the storefront after DTDC pincode verification. Prasadam products remain blocked.'
+                  ? 'COD is enabled on the storefront after delivery partner pincode verification. Prasadam products remain blocked.'
                   : 'COD is disabled everywhere on the storefront. Customers will see only online payment methods.'}
               </p>
             </div>

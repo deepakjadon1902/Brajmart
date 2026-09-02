@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Truck } from 'lucide-react';
 import { useProductStore, categorySlugMap, categoryToSlug } from '@/store/productStore';
 import ProductCard from '@/components/product/ProductCard';
 import ProductGridSkeleton from '@/components/product/ProductGridSkeleton';
@@ -108,6 +109,12 @@ const CategoryPage = () => {
                 <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-saffron">
                   {products.length} products available
                 </p>
+                {catMeta?.codEnabled && (
+                  <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-tulsi/20 bg-tulsi/10 px-3 py-1 text-xs font-semibold text-tulsi">
+                    <Truck size={13} aria-hidden="true" />
+                    COD available on this category
+                  </p>
+                )}
               </div>
             </div>
             {!subSlug && catMeta?.subcategories?.length ? (

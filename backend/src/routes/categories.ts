@@ -29,12 +29,24 @@ const ensureSubcategoriesTable = async () => {
   `);
 };
 
+const ensureCategoryCodColumn = async () => {
+  const rows = await dbQuery<any>(
+    `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'categories' AND COLUMN_NAME = 'cod_enabled'
+     LIMIT 1`
+  );
+  if (!rows.length) {
+    await dbExecute('ALTER TABLE categories ADD COLUMN cod_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER product_count');
+  }
+};
+
 const mapCategoryRow = (row: any) => ({
   _id: String(row.id),
   name: row.name,
   icon: row.icon,
   color: row.color,
   productCount: Number(row.product_count ?? 0),
+  codEnabled: Boolean(Number(row.cod_enabled || 0)),
   displayOrder: Number(row.display_order ?? 0),
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
@@ -68,6 +80,7 @@ const buildUpdate = (data: any) => {
   if (data.icon !== undefined) set('icon', data.icon);
   if (data.color !== undefined) set('color', data.color);
   if (data.productCount !== undefined) set('product_count', data.productCount);
+  if (data.codEnabled !== undefined) set('cod_enabled', data.codEnabled ? 1 : 0);
   if (data.displayOrder !== undefined) set('display_order', data.displayOrder);
 
   if (!fields.length) return null;
@@ -85,6 +98,7 @@ router.get('/', async (req, res) => {
     }
 
     await ensureSubcategoriesTable();
+    await ensureCategoryCodColumn();
 
     const rows = await dbQuery<any>('SELECT * FROM categories WHERE archived_at IS NULL ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
     const subRows = await dbQuery<any>('SELECT * FROM subcategories WHERE archived_at IS NULL ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC');
@@ -127,10 +141,11 @@ router.post('/', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await ensureSubcategoriesTable();
+    await ensureCategoryCodColumn();
     const data = req.body || {};
     const result: any = await dbExecute(
-      'INSERT INTO categories (name, icon, color, product_count, display_order) VALUES (?, ?, ?, ?, ?)',
-      [data.name, data.icon, data.color ?? '#f59e0b', data.productCount ?? 0, data.displayOrder ?? 0]
+      'INSERT INTO categories (name, icon, color, product_count, cod_enabled, display_order) VALUES (?, ?, ?, ?, ?, ?)',
+      [data.name, data.icon, data.color ?? '#f59e0b', data.productCount ?? 0, data.codEnabled ? 1 : 0, data.displayOrder ?? 0]
     );
     const rows = await dbQuery<any>('SELECT * FROM categories WHERE id = ? LIMIT 1', [result.insertId]);
     clearListCache();
@@ -152,6 +167,7 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await ensureSubcategoriesTable();
+    await ensureCategoryCodColumn();
 
     const before = await dbQuery<any>('SELECT * FROM categories WHERE id = ? LIMIT 1', [req.params.id]);
     const prev = before?.[0];
@@ -207,6 +223,7 @@ router.delete('/:id', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await ensureSubcategoriesTable();
+    await ensureCategoryCodColumn();
     const reason = String(req.body?.reason || req.query.reason || 'Category archived by admin').trim().slice(0, 255);
     const actor = actorFromRequest(req);
     let archived: any = null;
@@ -279,6 +296,7 @@ router.get('/:id/subcategories', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await ensureSubcategoriesTable();
+    await ensureCategoryCodColumn();
     const rows = await dbQuery<any>('SELECT * FROM subcategories WHERE category_id = ? AND archived_at IS NULL ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC', [req.params.id]);
     res.json(rows.map(mapSubcategoryRow));
   } catch (err: any) {
@@ -290,6 +308,7 @@ router.post('/:id/subcategories', auth, adminOnly, async (req: AuthRequest, res)
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await ensureSubcategoriesTable();
+    await ensureCategoryCodColumn();
     const data = req.body || {};
     const name = String(data.name || '').trim();
     if (!name) return res.status(400).json({ message: 'Subcategory name is required' });
@@ -319,6 +338,7 @@ router.put('/subcategories/:subId', auth, adminOnly, async (req: AuthRequest, re
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await ensureSubcategoriesTable();
+    await ensureCategoryCodColumn();
     const data = req.body || {};
     const fields: string[] = [];
     const values: any[] = [];
@@ -363,6 +383,7 @@ router.delete('/subcategories/:subId', auth, adminOnly, async (req: AuthRequest,
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await ensureSubcategoriesTable();
+    await ensureCategoryCodColumn();
     const beforeRows = await dbQuery<any>('SELECT * FROM subcategories WHERE id = ? LIMIT 1', [req.params.subId]);
     const before = beforeRows[0];
     if (!before) return res.status(404).json({ message: 'Subcategory not found' });

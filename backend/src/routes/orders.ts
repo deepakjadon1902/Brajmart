@@ -6,7 +6,7 @@ import { auth, adminOnly, optionalAuth, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
 import { applyCouponToTotals, computeTotals, getCheckoutSettings, hasPrasadamItems, markCouponUsed, priceAndValidateOrderItems } from '../lib/orderPricing';
 import { upsertUserDefaultAddress } from '../lib/userAddress';
-import { checkDtdcPincode, trackDtdcShipment } from '../lib/dtdc';
+import { checkDeliveryServicePincode, getAdminCodConfig, getCodEligibilityForItems, ensureDeliveryServiceSchema, trackDeliveryServiceShipment } from '../lib/deliveryService';
 import { merchantOrderWhereSql } from '../lib/orderVisibility';
 import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
@@ -20,7 +20,7 @@ const codOrderLimiter = rateLimit('cod-order-create', {
   key: rateLimitKeyByIpAndOrderEmail,
   message: 'Too many order attempts. Please wait before trying again.',
 });
-const pincodeCheckLimiter = rateLimit('dtdc-pincode-check', {
+const pincodeCheckLimiter = rateLimit('delivery-pincode-check', {
   windowMs: 15 * 60 * 1000,
   max: 60,
   message: 'Too many pincode checks. Please wait before trying again.',
@@ -229,8 +229,8 @@ const findOrderByLookup = async (lookup: string) => {
   return rows[0] || null;
 };
 
-const buildDtdcOrderStatusTracking = (order: ReturnType<typeof mapOrderRow>, message: string) => ({
-  carrier: 'DTDC',
+const buildDeliveryPartnerOrderStatusTracking = (order: ReturnType<typeof mapOrderRow>, message: string) => ({
+  carrier: order.shippingService || process.env.DELIVERY_PARTNER_NAME || 'Delivery Service Partner',
   trackingId: order.trackingId,
   currentStatus: order.status.replace(/_/g, ' '),
   lastLocation: '',
@@ -243,95 +243,158 @@ const buildDtdcOrderStatusTracking = (order: ReturnType<typeof mapOrderRow>, mes
   }],
 });
 
-router.get('/dtdc/track/:lookup', async (req, res) => {
+const handleDeliveryPartnerTrack = async (req: any, res: any, isAdmin = false) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const row = await findOrderByLookup(req.params.lookup);
     if (!row) {
       const trackingId = String(req.params.lookup || '').trim();
-      if (!trackingId) return res.status(404).json({ message: 'Order not found' });
-      const tracking = await trackDtdcShipment({ trackingId });
-      return res.json({ order: null, tracking });
-    }
-
-    const order = mapOrderRow(row);
-    const service = String(order.shippingService || '').toLowerCase();
-    if (service && !service.includes('dtdc')) {
-      return res.status(400).json({ message: 'This order is not assigned to DTDC' });
-    }
-    if (!order.trackingId) return res.status(400).json({ message: 'DTDC tracking ID is not available yet' });
-    if (!['shipped', 'out_for_delivery', 'delivered'].includes(String(order.status))) {
-      return res.json({
-        order: mapPublicTrackingOrder(row),
-        tracking: buildDtdcOrderStatusTracking(order, 'DTDC live tracking will be available after dispatch.'),
-      });
-    }
-
-    const tracking = await trackDtdcShipment({ trackingId: order.trackingId });
-    return res.json({ order: mapPublicTrackingOrder(row), tracking });
-  } catch (err: any) {
-    res.status(500).json({ message: err?.message || 'Unable to fetch DTDC tracking' });
-  }
-});
-
-router.get('/admin/dtdc/track/:lookup', auth, adminOnly, async (req, res) => {
-  try {
-    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    const row = await findOrderByLookup(req.params.lookup);
-    if (!row) {
-      const trackingId = String(req.params.lookup || '').trim();
-      if (!trackingId) return res.status(400).json({ message: 'Tracking ID is required' });
-      const tracking = await trackDtdcShipment({ trackingId });
+      if (!trackingId) return res.status(isAdmin ? 400 : 404).json({ message: isAdmin ? 'Tracking ID is required' : 'Order not found' });
+      const tracking = await trackDeliveryServiceShipment({ trackingId });
       return res.json({ order: null, tracking });
     }
 
     const order = mapOrderRow(row);
     const trackingId = order.trackingId || String(req.params.lookup || '').trim();
     if (!trackingId) return res.status(400).json({ message: 'Tracking ID is required' });
-
-    const tracking = await trackDtdcShipment({ trackingId });
-    return res.json({ order, tracking });
-  } catch (err: any) {
-    res.status(500).json({ message: err?.message || 'Unable to fetch DTDC tracking' });
-  }
-});
-
-router.post('/dtdc/pincode', pincodeCheckLimiter, async (req, res) => {
-  try {
-    const desPincode = String(req.body?.desPincode || '').trim();
-    const orgPincode = req.body?.orgPincode ? String(req.body.orgPincode).trim() : undefined;
-    if (!/^\d{6}$/.test(desPincode)) {
-      return res.status(400).json({ message: 'Destination pincode must be 6 digits' });
+    if (!isAdmin && !['shipped', 'out_for_delivery', 'delivered'].includes(String(order.status))) {
+      return res.json({
+        order: mapPublicTrackingOrder(row),
+        tracking: buildDeliveryPartnerOrderStatusTracking(order, 'Live tracking will be available after dispatch.'),
+      });
     }
-    const result = await checkDtdcPincode({
-      orgPincode,
-      desPincode,
-    });
+
+    const tracking = await trackDeliveryServiceShipment({ trackingId });
+    return res.json({ order: isAdmin ? order : mapPublicTrackingOrder(row), tracking });
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Unable to fetch delivery partner tracking' });
+  }
+};
+
+router.get('/delivery-service/track/:lookup', async (req, res) => {
+  return handleDeliveryPartnerTrack(req, res, false);
+});
+
+router.get('/admin/delivery-service/track/:lookup', auth, adminOnly, async (req, res) => {
+  return handleDeliveryPartnerTrack(req, res, true);
+});
+
+router.post('/delivery-service/pincode', pincodeCheckLimiter, async (req, res) => {
+  try {
+    const result = await checkDeliveryServicePincode({ desPincode: req.body?.desPincode });
     res.json(result);
   } catch (err: any) {
-    console.error('Public DTDC pincode check failed:', err?.message || err);
-    res.json({
-      carrier: 'DTDC',
-      orgPincode: String(req.body?.orgPincode || process.env.DTDC_ORIGIN_PINCODE || ''),
-      desPincode: String(req.body?.desPincode || ''),
-      serviceable: true,
-      codAvailable: false,
-      manualReview: true,
-      message: 'Courier auto-check is temporarily unavailable. Online orders can continue and our team will confirm dispatch.',
-      details: [],
-    });
+    res.status(400).json({ message: err?.message || 'Unable to check delivery pincode' });
   }
 });
 
-router.post('/admin/dtdc/pincode', auth, adminOnly, async (req, res) => {
+router.post('/admin/delivery-service/pincode', auth, adminOnly, async (req, res) => {
   try {
-    const result = await checkDtdcPincode({
-      orgPincode: req.body?.orgPincode,
-      desPincode: req.body?.desPincode,
-    });
+    const result = await checkDeliveryServicePincode({ desPincode: req.body?.desPincode });
     res.json(result);
   } catch (err: any) {
-    res.status(500).json({ message: err?.message || 'Unable to check DTDC pincode' });
+    res.status(500).json({ message: err?.message || 'Unable to check delivery pincode' });
+  }
+});
+
+router.get('/admin/cod-config', auth, adminOnly, async (_req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(await getAdminCodConfig());
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Unable to load COD settings' });
+  }
+});
+
+router.put('/admin/cod-config', auth, adminOnly, async (req: AuthRequest, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    await ensureDeliveryServiceSchema();
+    const categoryIds = Array.isArray(req.body?.categoryIds) ? req.body.categoryIds.map((id: any) => Number(id)).filter(Number.isFinite) : [];
+    const productIds = Array.isArray(req.body?.productIds) ? req.body.productIds.map((id: any) => Number(id)).filter(Number.isFinite) : [];
+    const enabled = req.body?.enabled !== false;
+    const inherit = Boolean(req.body?.inherit);
+
+    if (categoryIds.length) {
+      await dbExecute(
+        `UPDATE categories SET cod_enabled = ?, updated_at = NOW() WHERE id IN (${categoryIds.map(() => '?').join(',')})`,
+        [enabled ? 1 : 0, ...categoryIds]
+      );
+    }
+    if (productIds.length) {
+      await dbExecute(
+        `UPDATE products SET cod_enabled = ?, updated_at = NOW() WHERE id IN (${productIds.map(() => '?').join(',')})`,
+        [inherit ? null : enabled ? 1 : 0, ...productIds]
+      );
+    }
+
+    await insertAdminAuditLog(null, {
+      req,
+      action: 'COD_RULE_UPDATE',
+      entityType: 'delivery_cod',
+      entityId: 'bulk',
+      after: { categoryIds, productIds, enabled, inherit },
+      reason: 'COD eligibility updated',
+    }).catch(() => {});
+    res.json(await getAdminCodConfig());
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Unable to save COD settings' });
+  }
+});
+
+router.post('/admin/cod-config/pincodes', auth, adminOnly, async (req: AuthRequest, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    await ensureDeliveryServiceSchema();
+    const pincodes = String(req.body?.pincodes || req.body?.pincode || '')
+      .split(/[\s,]+/)
+      .map((p) => p.replace(/\D/g, ''))
+      .filter((p) => /^\d{6}$/.test(p));
+    if (!pincodes.length) return res.status(400).json({ message: 'Enter at least one valid 6 digit pincode' });
+    const deliveryEnabled = req.body?.deliveryEnabled !== false ? 1 : 0;
+    const codEnabled = req.body?.codEnabled !== false ? 1 : 0;
+    const partnerName = String(req.body?.partnerName || 'Delivery Service Partner').trim().slice(0, 120);
+    const note = String(req.body?.note || '').trim().slice(0, 255) || null;
+
+    for (const pincode of Array.from(new Set(pincodes))) {
+      await dbExecute(
+        `INSERT INTO delivery_pincode_rules (pincode, delivery_enabled, cod_enabled, partner_name, note)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE delivery_enabled = VALUES(delivery_enabled), cod_enabled = VALUES(cod_enabled), partner_name = VALUES(partner_name), note = VALUES(note), updated_at = NOW()`,
+        [pincode, deliveryEnabled, codEnabled, partnerName, note]
+      );
+    }
+
+    await insertAdminAuditLog(null, {
+      req,
+      action: 'COD_PINCODE_UPDATE',
+      entityType: 'delivery_pincode_rule',
+      entityId: 'bulk',
+      after: { pincodes, deliveryEnabled: Boolean(deliveryEnabled), codEnabled: Boolean(codEnabled), partnerName, note },
+      reason: 'COD pincode rules updated',
+    }).catch(() => {});
+    res.json(await getAdminCodConfig());
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Unable to save pincode rules' });
+  }
+});
+
+router.delete('/admin/cod-config/pincodes/:id', auth, adminOnly, async (req: AuthRequest, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    await ensureDeliveryServiceSchema();
+    await dbExecute('DELETE FROM delivery_pincode_rules WHERE id = ?', [req.params.id]);
+    await insertAdminAuditLog(null, {
+      req,
+      action: 'COD_PINCODE_DELETE',
+      entityType: 'delivery_pincode_rule',
+      entityId: req.params.id,
+      reason: 'COD pincode rule removed',
+    }).catch(() => {});
+    res.json(await getAdminCodConfig());
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Unable to remove pincode rule' });
   }
 });
 
@@ -407,17 +470,18 @@ router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) =>
       if (hasPrasadamItems(priced.items)) {
         return res.status(400).json({ message: 'COD is not available for Prasadam products. Please use online payment for Prasadam orders.' });
       }
-      if (!settings.codEnabled) {
-        return res.status(400).json({ message: 'COD is currently disabled' });
+      const eligibility = await getCodEligibilityForItems(priced.items);
+      if (!eligibility.eligible) {
+        return res.status(400).json({ message: eligibility.message });
       }
       const deliveryPincode = String(contact.shippingAddress.pincode || contact.billingAddress.pincode || '').trim();
       if (!/^\d{6}$/.test(deliveryPincode)) {
         return res.status(400).json({ message: 'A valid 6 digit delivery pincode is required for COD' });
       }
-      const dtdc = await checkDtdcPincode({ desPincode: deliveryPincode });
-      codAvailable = Boolean(dtdc.serviceable && dtdc.codAvailable);
+      const delivery = await checkDeliveryServicePincode({ desPincode: deliveryPincode });
+      codAvailable = Boolean(delivery.serviceable && delivery.codAvailable);
       codPincode = deliveryPincode;
-      codMessage = dtdc.message || (codAvailable ? 'COD available for this pincode' : 'COD not available for this pincode');
+      codMessage = delivery.message || (codAvailable ? 'COD available for this pincode' : 'COD not available for this pincode');
       if (!codAvailable) {
         return res.status(400).json({ message: codMessage || 'COD is not available for this pincode' });
       }

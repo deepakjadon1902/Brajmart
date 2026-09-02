@@ -91,19 +91,17 @@ export const getCourierTrackingUrl = (shippingService?: string, trackingId?: str
   const service = cleanLine(shippingService).toLowerCase().replace(/[^a-z0-9]/g, '');
   const awb = cleanLine(trackingId);
 
-  if (service === 'dtdc') {
-    return awb
-      ? `https://www.dtdc.com/track-your-shipment/?awb=${encodeURIComponent(awb)}`
-      : 'https://www.dtdc.com/track-your-shipment/';
-  }
-
   if (service === 'shreemaruti') return 'https://shreemaruti.com/track-shipment/';
-  if (service === 'delhivery') return 'https://www.delhivery.com/tracking';
+  if (service === 'delhivery') {
+    return awb
+      ? `https://www.delhivery.com/track/package/${encodeURIComponent(awb)}`
+      : 'https://www.delhivery.com/tracking';
+  }
   if (service === 'indiapost') return 'https://www.indiapost.gov.in/';
   if (service === 'ekart') return 'https://www.ekartlogistics.in/track-order';
 
   return awb
-    ? `https://www.dtdc.com/track-your-shipment/?awb=${encodeURIComponent(awb)}`
+    ? `https://www.delhivery.com/track/package/${encodeURIComponent(awb)}`
     : 'https://www.brajmart.com/track-orders';
 };
 

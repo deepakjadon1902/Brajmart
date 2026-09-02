@@ -331,7 +331,7 @@ const renderOrderDetails = (payload: {
       </table>
     </div>` : '';
   const methodHtml = payload.paymentMethod ? `<p><strong>Payment Method:</strong> ${escapeHtml(payload.paymentMethod)}</p>` : '';
-  const codHtml = payload.codMessage ? `<p><strong>DTDC COD:</strong> ${escapeHtml(payload.codMessage)}</p>` : '';
+  const codHtml = payload.codMessage ? `<p><strong>COD:</strong> ${escapeHtml(payload.codMessage)}</p>` : '';
   const txnHtml = payload.transactionId ? `<p><strong>Transaction ID:</strong> ${escapeHtml(payload.transactionId)}</p>` : '';
   const couponDiscount = Number(payload.couponDiscount || payload.couponDetails?.discountAmount || 0);
   const couponHtml = payload.couponCode || couponDiscount > 0 ? `

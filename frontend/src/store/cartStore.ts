@@ -27,6 +27,8 @@ interface CartStore {
     image?: string;
     category?: string;
     inStock?: boolean;
+    codEnabled?: boolean | null;
+    categoryCodEnabled?: boolean;
     availableQuantity?: number | null;
   }>) => void;
   clearCart: () => void;
@@ -163,6 +165,8 @@ export const useCartStore = create<CartStore>()(
                 price: Number(validated.price || item.product.price),
                 originalPrice: validated.originalPrice === null ? undefined : (validated.originalPrice ?? item.product.originalPrice),
                 inStock: validated.inStock ?? item.product.inStock,
+                codEnabled: validated.codEnabled === undefined ? item.product.codEnabled : validated.codEnabled,
+                categoryCodEnabled: validated.categoryCodEnabled ?? item.product.categoryCodEnabled,
                 stockQuantity: validated.availableQuantity ?? item.product.stockQuantity,
                 reservedQuantity: 0,
               },

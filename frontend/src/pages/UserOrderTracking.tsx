@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useOrderStore, OrderStatus } from '@/store/orderStore';
 import { useAuthStore } from '@/store/authStore';
-import { trackDtdcOrder, trackOrder, trackOrderById } from '@/lib/api';
+import { trackDeliveryServiceOrder, trackOrder, trackOrderById } from '@/lib/api';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -60,11 +60,11 @@ const statusPillClass = (status: string) => {
   return 'border-amber-200 bg-amber-50 text-amber-700';
 };
 
-const canLoadDtdc = (order: any) => {
+const canLoadDelivery = (order: any) => {
   const service = String(order?.shippingService || '').toLowerCase();
   const awb = String(order?.trackingId || '').trim();
   const shipped = ['shipped', 'out_for_delivery', 'delivered'].includes(String(order?.status || ''));
-  return service.includes('dtdc') && Boolean(awb) && shipped;
+  return service.includes('delhivery') && Boolean(awb) && shipped;
 };
 
 const TrackingTrustStrip = () => (
@@ -76,8 +76,8 @@ const TrackingTrustStrip = () => (
     </div>
     <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
       <Truck size={18} className="mb-2 text-saffron" />
-      <p className="text-sm font-bold text-foreground">DTDC Updates</p>
-      <p className="mt-1 text-xs text-muted-foreground">Courier scans appear when DTDC API returns them.</p>
+      <p className="text-sm font-bold text-foreground">Delhivery Updates</p>
+      <p className="mt-1 text-xs text-muted-foreground">Courier scans appear when Delhivery API returns them.</p>
     </div>
     <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
       <ReceiptText size={18} className="mb-2 text-brand-gold" />
@@ -95,8 +95,8 @@ const UserOrderTracking = () => {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [trackedOrder, setTrackedOrder] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
-  const [dtdcTracking, setDtdcTracking] = useState<any | null>(null);
-  const [dtdcLoading, setDtdcLoading] = useState(false);
+  const [deliveryTracking, setDeliveryTracking] = useState<any | null>(null);
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -132,23 +132,23 @@ const UserOrderTracking = () => {
     statusHistory: o.statusHistory || [],
   });
 
-  const loadDtdcTracking = async (orderToTrack: any) => {
+  const loadDeliveryTracking = async (orderToTrack: any) => {
     const awb = String(orderToTrack?.trackingId || '').trim();
-    if (!canLoadDtdc(orderToTrack)) return;
+    if (!canLoadDelivery(orderToTrack)) return;
 
-    setDtdcLoading(true);
+    setDeliveryLoading(true);
     try {
-      const data: any = await trackDtdcOrder(awb);
-      setDtdcTracking(data?.tracking || null);
+      const data: any = await trackDeliveryServiceOrder(awb);
+      setDeliveryTracking(data?.tracking || null);
     } catch (err: any) {
-      setDtdcTracking({
-        carrier: 'DTDC',
+      setDeliveryTracking({
+        carrier: 'Delhivery',
         trackingId: awb,
         currentStatus: 'Tracking is available from your BrajMart order status',
-        events: [{ status: orderToTrack.status, remarks: err?.message || 'Live DTDC tracking is not available right now' }],
+        events: [{ status: orderToTrack.status, remarks: err?.message || 'Live Delhivery tracking is not available right now' }],
       });
     } finally {
-      setDtdcLoading(false);
+      setDeliveryLoading(false);
     }
   };
 
@@ -157,12 +157,12 @@ const UserOrderTracking = () => {
     const id = searchId.trim();
     if (!id) return;
     setLoading(true);
-    setDtdcTracking(null);
+    setDeliveryTracking(null);
     setTrackedOrder(null);
     const found = getOrderById(id);
     if (found) {
       setSelectedOrderId(id);
-      loadDtdcTracking(found).catch(() => {});
+      loadDeliveryTracking(found).catch(() => {});
       setLoading(false);
       return;
     }
@@ -181,18 +181,18 @@ const UserOrderTracking = () => {
       const normalized = normalizeApiOrder(apiOrder);
       setSelectedOrderId(null);
       setTrackedOrder(normalized);
-      loadDtdcTracking(normalized).catch(() => {});
+      loadDeliveryTracking(normalized).catch(() => {});
       toast.success('Order found');
     } catch (err: any) {
       try {
-        const data: any = await trackDtdcOrder(id);
+        const data: any = await trackDeliveryServiceOrder(id);
         if (data?.order) {
           const normalized = normalizeApiOrder(data.order);
           setTrackedOrder(normalized);
           setSelectedOrderId(null);
         }
-        setDtdcTracking(data?.tracking || null);
-        toast.success(data?.order ? 'Order found' : 'DTDC tracking loaded');
+        setDeliveryTracking(data?.tracking || null);
+        toast.success(data?.order ? 'Order found' : 'Delhivery tracking loaded');
       } catch (liveErr: any) {
         toast.error(liveErr?.message || err?.message || 'Order not found. Please check the tracking ID.');
       }
@@ -204,14 +204,14 @@ const UserOrderTracking = () => {
   const selectOrder = (order: any) => {
     setTrackedOrder(order);
     setSelectedOrderId(order.trackingId || order.id);
-    setDtdcTracking(null);
-    loadDtdcTracking(order).catch(() => {});
+    setDeliveryTracking(null);
+    loadDeliveryTracking(order).catch(() => {});
   };
 
   const clearSelectedOrder = () => {
     setSelectedOrderId(null);
     setTrackedOrder(null);
-    setDtdcTracking(null);
+    setDeliveryTracking(null);
   };
 
   const currentStepIndex = selectedOrder ? statusSteps.findIndex((s) => s.status === selectedOrder.status) : -1;
@@ -228,7 +228,7 @@ const UserOrderTracking = () => {
             <p className="mb-3 font-cinzel text-xs font-bold uppercase tracking-[0.28em] text-gold">Order Tracking</p>
             <h1 className="font-cinzel text-3xl font-bold text-white md:text-5xl">Track Your Order</h1>
             <p className="mx-auto mt-4 max-w-xl text-sm text-white/75">
-              Enter your BrajMart order ID or DTDC AWB number. The tracking ID is sent on your order confirmation email.
+              Enter your BrajMart order ID or Delhivery AWB number. The tracking ID is sent on your order confirmation email.
             </p>
             <form onSubmit={handleSearch} className="mx-auto mt-7 flex max-w-xl overflow-hidden rounded-lg border border-white/15 bg-white/10 p-1 shadow-sm">
               <input
@@ -248,7 +248,7 @@ const UserOrderTracking = () => {
             </form>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-xs text-white/75">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5"><ShieldCheck size={13} /> Private lookup</span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5"><Truck size={13} /> DTDC supported</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5"><Truck size={13} /> Delhivery supported</span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1.5"><PackageCheck size={13} /> BrajMart status</span>
             </div>
           </div>
@@ -289,7 +289,7 @@ const UserOrderTracking = () => {
               </div>
 
               <div className="p-5">
-                {String(selectedOrder.shippingService || '').toLowerCase().includes('dtdc') && (
+                {String(selectedOrder.shippingService || '').toLowerCase().includes('delhivery') && (
                   <div className="mb-5 rounded-lg border border-[#E7D8C7] bg-background p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-start gap-3">
@@ -297,34 +297,34 @@ const UserOrderTracking = () => {
                           <Truck size={18} />
                         </span>
                         <div>
-                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">DTDC Courier Tracking</p>
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Delhivery Courier Tracking</p>
                           <p className="mt-1 text-sm font-bold text-foreground">{selectedOrder.trackingId ? `AWB ${selectedOrder.trackingId}` : 'AWB pending'}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">Live scan history appears after dispatch when DTDC returns data.</p>
+                          <p className="mt-1 text-xs text-muted-foreground">Live scan history appears after dispatch when Delhivery returns data.</p>
                         </div>
                       </div>
-                      {dtdcLoading ? (
+                      {deliveryLoading ? (
                         <span className="inline-flex items-center gap-2 text-xs font-semibold text-saffron">
                           <RefreshCw size={13} className="animate-spin" /> Fetching status
                         </span>
-                      ) : canLoadDtdc(selectedOrder) ? (
+                      ) : canLoadDelivery(selectedOrder) ? (
                         <button
                           type="button"
-                          onClick={() => loadDtdcTracking(selectedOrder)}
+                          onClick={() => loadDeliveryTracking(selectedOrder)}
                           className="inline-flex items-center justify-center gap-2 rounded-md border border-saffron/40 px-3 py-2 text-xs font-bold text-saffron transition-colors hover:bg-saffron/10"
                         >
-                          <RefreshCw size={13} /> Refresh DTDC
+                          <RefreshCw size={13} /> Refresh Delhivery
                         </button>
                       ) : (
                         <span className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground">Available after dispatch</span>
                       )}
                     </div>
-                    {dtdcTracking && (
+                    {deliveryTracking && (
                       <div className="mt-4 rounded-lg border border-border bg-card p-4">
-                        <p className="text-sm font-bold text-foreground">{dtdcTracking.currentStatus}</p>
-                        {dtdcTracking.lastLocation && <p className="mt-1 text-xs text-muted-foreground">Last location: {dtdcTracking.lastLocation}</p>}
-                        {dtdcTracking.trackingPortalUrl && (
-                          <a href={dtdcTracking.trackingPortalUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-saffron hover:underline">
-                            Open DTDC tracking page <ExternalLink size={12} />
+                        <p className="text-sm font-bold text-foreground">{deliveryTracking.currentStatus}</p>
+                        {deliveryTracking.lastLocation && <p className="mt-1 text-xs text-muted-foreground">Last location: {deliveryTracking.lastLocation}</p>}
+                        {deliveryTracking.trackingPortalUrl && (
+                          <a href={deliveryTracking.trackingPortalUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-saffron hover:underline">
+                            Open Delhivery tracking page <ExternalLink size={12} />
                           </a>
                         )}
                       </div>
@@ -448,14 +448,14 @@ const UserOrderTracking = () => {
 
             <TrackingTrustStrip />
           </div>
-        ) : dtdcTracking ? (
+        ) : deliveryTracking ? (
           <div className="mx-auto max-w-4xl space-y-5">
             <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
               <div className="border-b border-border bg-brand-raised px-5 py-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-saffron">DTDC Tracking</p>
-                    <h2 className="mt-1 font-cinzel text-2xl font-bold text-foreground">AWB {dtdcTracking.trackingId || searchId}</h2>
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-saffron">Delhivery Tracking</p>
+                    <h2 className="mt-1 font-cinzel text-2xl font-bold text-foreground">AWB {deliveryTracking.trackingId || searchId}</h2>
                   </div>
                   <button
                     type="button"
@@ -474,23 +474,23 @@ const UserOrderTracking = () => {
                       <Truck size={18} />
                     </span>
                     <div>
-                      <p className="text-sm font-bold text-foreground">{dtdcTracking.currentStatus}</p>
-                      {dtdcTracking.lastLocation && <p className="mt-1 text-xs text-muted-foreground">Last location: {dtdcTracking.lastLocation}</p>}
-                      <p className="mt-2 text-xs text-muted-foreground">If live scan history is pending, use the official DTDC page with this AWB number.</p>
-                      {dtdcTracking.trackingPortalUrl && (
-                        <a href={dtdcTracking.trackingPortalUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-saffron hover:underline">
-                          Open DTDC tracking page <ExternalLink size={12} />
+                      <p className="text-sm font-bold text-foreground">{deliveryTracking.currentStatus}</p>
+                      {deliveryTracking.lastLocation && <p className="mt-1 text-xs text-muted-foreground">Last location: {deliveryTracking.lastLocation}</p>}
+                      <p className="mt-2 text-xs text-muted-foreground">If live scan history is pending, use the official Delhivery page with this AWB number.</p>
+                      {deliveryTracking.trackingPortalUrl && (
+                        <a href={deliveryTracking.trackingPortalUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-saffron hover:underline">
+                          Open Delhivery tracking page <ExternalLink size={12} />
                         </a>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {(dtdcTracking.events || []).length > 0 && (
+                {(deliveryTracking.events || []).length > 0 && (
                   <div className="mt-5 rounded-lg border border-border bg-card p-4">
                     <h3 className="mb-4 text-sm font-bold text-foreground">Tracking Activity</h3>
                     <div className="space-y-4">
-                      {dtdcTracking.events.map((event: any, idx: number) => (
+                      {deliveryTracking.events.map((event: any, idx: number) => (
                         <div key={`${event.status}-${idx}`} className="flex gap-3">
                           <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-saffron" />
                           <div>
@@ -515,7 +515,7 @@ const UserOrderTracking = () => {
               </div>
               <h2 className="font-cinzel text-xl font-bold text-foreground">Track any BrajMart shipment</h2>
               <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                Use the search box above with your order ID or DTDC AWB number. For new orders, tracking updates appear after dispatch.
+                Use the search box above with your order ID or Delhivery AWB number. For new orders, tracking updates appear after dispatch.
               </p>
               <Link to="/" className="mt-5 inline-flex rounded-lg bg-gold-gradient px-5 py-3 text-sm font-bold text-maroon-dark shadow-sm shimmer">
                 Continue Shopping

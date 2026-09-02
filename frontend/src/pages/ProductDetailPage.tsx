@@ -371,6 +371,7 @@ const ProductDetailPage = () => {
   const deliveryMin = Math.max(1, positiveNumber(settings.deliveryEtaMinDays, 3));
   const deliveryMax = Math.max(deliveryMin, positiveNumber(settings.deliveryEtaMaxDays, 7));
   const productHighlights = product ? makeHighlights(product) : [];
+  const codEligible = product ? product.codEnabled === true || (product.codEnabled === null && Boolean(product.categoryCodEnabled)) : false;
   const lowStockThreshold = Math.max(1, Number(product?.lowStockThreshold || 3));
   const availabilityText = !purchasable
     ? 'Out of stock'
@@ -945,7 +946,7 @@ const ProductDetailPage = () => {
               )}
             </div>
 
-            <div className="grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm sm:grid-cols-3">
+            <div className={`grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm ${codEligible ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
               <div className="flex items-start gap-3">
                 <PackageCheck size={18} className="mt-0.5 text-tulsi" aria-hidden="true" />
                 <div>
@@ -969,6 +970,15 @@ const ProductDetailPage = () => {
                   <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Payment options are confirmed at checkout</p>
                 </div>
               </div>
+              {codEligible && (
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 size={18} className="mt-0.5 text-tulsi" aria-hidden="true" />
+                  <div>
+                    <p className="text-sm font-bold text-foreground">COD available</p>
+                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Pay the total amount at delivery</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm">
@@ -1027,9 +1037,10 @@ const ProductDetailPage = () => {
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 border-t border-border pt-3">
+              <div className={`grid gap-2 border-t border-border pt-3 ${codEligible ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
                 {[
                   { icon: Truck, label: 'Delivery', sub: `${deliveryMin}-${deliveryMax} working days after dispatch`, href: '/shipping-delivery' },
+                  ...(codEligible ? [{ icon: CheckCircle2, label: 'COD', sub: 'Cash accepted on delivery', href: '' }] : []),
                   { icon: PackageCheck, label: 'Order check', sub: 'Items are checked before dispatch', href: '' },
                   { icon: RotateCcw, label: 'Returns', sub: 'Review return policy', href: '/return-policy' },
                 ].map((badge) => (

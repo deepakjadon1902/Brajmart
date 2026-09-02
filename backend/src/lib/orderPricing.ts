@@ -18,6 +18,7 @@ export type PricedOrderItem = {
   name: string;
   image: string;
   category: string;
+  categoryId?: number | null;
   quantity: number;
   price: number;
   selectedSize?: string;
@@ -224,7 +225,7 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
   const uniqueIds = Array.from(new Set(ids));
   const placeholders = uniqueIds.map(() => '?').join(',');
   const rows = await dbQuery<any>(
-    `SELECT id, name, slug, price, image, category, in_stock, stock_quantity, reserved_quantity
+    `SELECT id, name, slug, price, image, category, category_id, in_stock, stock_quantity, reserved_quantity
      FROM products
      WHERE id IN (${placeholders}) AND archived_at IS NULL`,
     uniqueIds
@@ -267,6 +268,7 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
       name: String(product.name || ''),
       image: String(product.image || ''),
       category: String(product.category || ''),
+      categoryId: product.category_id == null ? null : Number(product.category_id),
       quantity,
       price,
       selectedSize: raw.selectedSize,

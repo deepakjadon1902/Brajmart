@@ -470,19 +470,35 @@ export const trackOrder = (orderId: string | number) =>
   getJson(`/orders/track/${orderId}`);
 export const trackOrderById = (trackingId: string) =>
   getJson(`/orders/track-by-id/${trackingId}`);
-export const trackDtdcOrder = (lookup: string | number) =>
-  getJson(`/orders/dtdc/track/${encodeURIComponent(String(lookup))}`);
-export const adminTrackDtdcOrder = (lookup: string | number) =>
-  getJson(`/orders/admin/dtdc/track/${encodeURIComponent(String(lookup))}`);
-export const checkDtdcPincode = (payload: { orgPincode?: string; desPincode: string }) =>
-  getJson('/orders/dtdc/pincode', { method: 'POST', body: payload });
-export const adminCheckDtdcPincode = (payload: { orgPincode?: string; desPincode: string }) =>
-  getJson('/orders/admin/dtdc/pincode', { method: 'POST', body: payload });
+export const trackDeliveryServiceOrder = (lookup: string | number) =>
+  getJson(`/orders/delivery-service/track/${encodeURIComponent(String(lookup))}`);
+export const adminTrackDeliveryServiceOrder = (lookup: string | number) =>
+  getJson(`/orders/admin/delivery-service/track/${encodeURIComponent(String(lookup))}`);
+export const checkDeliveryServicePincode = (payload: { desPincode: string }) =>
+  getJson('/orders/delivery-service/pincode', { method: 'POST', body: payload });
+export const adminCheckDeliveryServicePincode = (payload: { desPincode: string }) =>
+  getJson('/orders/admin/delivery-service/pincode', { method: 'POST', body: payload });
+
+export type AdminCodConfig = {
+  products: Array<{ id: string; name: string; slug: string; image: string; category: string; categoryId?: number; codEnabled: boolean | null }>;
+  categories: Array<{ id: string; name: string; icon: string; color: string; codEnabled: boolean }>;
+  pincodes: Array<{ id: string; pincode: string; deliveryEnabled: boolean; codEnabled: boolean; partnerName: string; note: string }>;
+};
+export const fetchAdminCodConfig = () =>
+  getJson<AdminCodConfig>('/orders/admin/cod-config', { cache: 'no-store' });
+export const updateAdminCodConfig = (payload: { productIds?: string[]; categoryIds?: string[]; enabled?: boolean; inherit?: boolean }) =>
+  getJson<AdminCodConfig>('/orders/admin/cod-config', { method: 'PUT', body: payload });
+export const saveAdminCodPincodes = (payload: { pincodes: string; deliveryEnabled: boolean; codEnabled: boolean; partnerName?: string; note?: string }) =>
+  getJson<AdminCodConfig>('/orders/admin/cod-config/pincodes', { method: 'POST', body: payload });
+export const deleteAdminCodPincode = (id: string) =>
+  getJson<AdminCodConfig>(`/orders/admin/cod-config/pincodes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
 // Payments
 export const fetchPayments = () => getJson('/payments');
 export const confirmPendingPayment = (orderId: string | number, payload?: { transactionId?: string; note?: string }) =>
   getJson(`/payments/admin/confirm-pending/${encodeURIComponent(String(orderId))}`, { method: 'POST', body: payload || {} });
+export const markCodOrderPaid = (orderId: string | number, payload?: { transactionId?: string; note?: string }) =>
+  getJson(`/payments/admin/cod-paid/${encodeURIComponent(String(orderId))}`, { method: 'POST', body: payload || {} });
 export const updatePaymentStatus = (id: string, status: string) =>
   getJson(`/payments/${id}`, { method: 'PUT', body: { status } });
 export const createPayment = (payload: Record<string, unknown>) =>
@@ -593,6 +609,8 @@ export type CartValidationResponse = {
     availableQuantity?: number | null;
     originalPrice?: number | null;
     inStock?: boolean;
+    codEnabled?: boolean | null;
+    categoryCodEnabled?: boolean;
   }>;
   subtotal: number;
   discount: number;

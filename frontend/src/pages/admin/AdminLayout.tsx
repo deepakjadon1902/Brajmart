@@ -14,6 +14,7 @@ const navItems = [
   { label: 'Pending Payments', icon: CreditCard, path: '/admin/pending-payments' },
   { label: 'Orders', icon: ShoppingBag, path: '/admin/orders' },
   { label: 'Products', icon: Package, path: '/admin/products' },
+  { label: 'COD Rules', icon: Truck, path: '/admin/cod' },
   { label: 'Inventory', icon: Boxes, path: '/admin/inventory' },
   { label: 'Bundles', icon: PackagePlus, path: '/admin/bundles' },
   { label: 'Reviews', icon: MessageSquare, path: '/admin/reviews' },
