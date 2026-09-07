@@ -8,6 +8,7 @@ import {
   fetchAdminBundles,
   updateAdminBundle,
   updateAdminBundleStatus,
+  uploadImage,
 } from '@/lib/api';
 import { useProductStore } from '@/store/productStore';
 import { Product } from '@/types/product';
@@ -21,7 +22,6 @@ const emptyForm = {
   id: '',
   name: '',
   slug: '',
-  sku: '',
   description: '',
   imageUrl: '',
   displayLocation: 'home',
@@ -40,6 +40,7 @@ const AdminBundles = () => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const validProducts = useMemo(
     () => products.filter((product) => isProductPurchasable(product) && Number(product.price) > 0),
@@ -88,7 +89,6 @@ const AdminBundles = () => {
       id: bundle.id,
       name: bundle.name,
       slug: bundle.slug,
-      sku: bundle.sku || '',
       description: bundle.description || '',
       imageUrl: bundle.imageUrl || '',
       displayLocation: bundle.displayLocation || 'home',
@@ -114,7 +114,6 @@ const AdminBundles = () => {
       const payload = {
         name: form.name,
         slug: form.slug,
-        sku: form.sku,
         description: form.description,
         imageUrl: form.imageUrl,
         displayLocation: form.displayLocation,
@@ -158,6 +157,26 @@ const AdminBundles = () => {
     }
   };
 
+  const uploadBundleImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Choose a valid image file');
+      return;
+    }
+    setUploadingImage(true);
+    try {
+      const { url } = await uploadImage(file);
+      setForm((current) => ({ ...current, imageUrl: url }));
+      toast.success('Bundle image uploaded');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Bundle image upload failed'));
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -177,8 +196,22 @@ const AdminBundles = () => {
           <div className="mt-4 space-y-3">
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Bundle name" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
             <input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="Slug, optional" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
-            <input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="Bundle SKU / unit code" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
-            <input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="Bundle image URL, optional" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+            <div className="rounded-lg border border-slate-700 bg-slate-950 p-3">
+              <div className="flex items-center gap-3">
+                {form.imageUrl ? (
+                  <img src={form.imageUrl} alt="" className="h-14 w-14 rounded-lg bg-white object-contain p-1" />
+                ) : (
+                  <span className="flex h-14 w-14 items-center justify-center rounded-lg border border-dashed border-slate-700 text-xs text-slate-500">Image</span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg bg-slate-800 px-3 text-sm font-bold text-white hover:bg-slate-700">
+                    {uploadingImage ? 'Uploading...' : 'Upload Bundle Image'}
+                    <input type="file" accept="image/*" onChange={uploadBundleImage} disabled={uploadingImage} className="hidden" />
+                  </label>
+                  {form.imageUrl && <p className="mt-1 truncate text-xs text-slate-500">{form.imageUrl}</p>}
+                </div>
+              </div>
+            </div>
             <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short admin-curated description" rows={3} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
             <div className="grid grid-cols-2 gap-3">
               <select value={form.displayLocation} onChange={(e) => setForm({ ...form, displayLocation: e.target.value })} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
@@ -265,7 +298,6 @@ const AdminBundles = () => {
                     <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400"><Boxes size={18} /></span>
                     <span className="min-w-0">
                       <span className="block truncate font-semibold text-white">{bundle.name}</span>
-                      <span className="block truncate text-xs text-slate-400">{bundle.sku || 'No SKU'}</span>
                       <span className="text-xs text-slate-500">{bundle.productCount} products · {bundle.displayLocation} · {formatPrice(bundle.bundlePrice)}</span>
                     </span>
                   </button>
