@@ -23,6 +23,9 @@ export type ProductAuditItem = {
   reservedQuantity: number | null;
   lowStockThreshold: number | null;
   sku: string;
+  description: string;
+  metaTitle: string;
+  metaDescription: string;
   issueCount: number;
   issues: ProductAuditIssue[];
 };
@@ -162,6 +165,9 @@ export const auditProductRecord = (row: any): ProductAuditItem => {
     reservedQuantity,
     lowStockThreshold,
     sku,
+    description,
+    metaTitle,
+    metaDescription,
     issueCount: issues.length,
     issues,
   };
@@ -174,20 +180,11 @@ export const buildProductAuditReport = (rows: any[]): ProductAuditReport => {
     if (slug) acc[slug] = (acc[slug] || 0) + 1;
     return acc;
   }, {});
-  const skuCounts = sourceRows.reduce<Record<string, number>>((acc, row) => {
-    const sku = toText(row.sku).toLowerCase();
-    if (sku) acc[sku] = (acc[sku] || 0) + 1;
-    return acc;
-  }, {});
   const items = sourceRows.map((row) => {
     const item = auditProductRecord(row);
     const slugKey = item.slug.toLowerCase();
-    const skuKey = item.sku.toLowerCase();
     if (slugKey && slugCounts[slugKey] > 1) {
       addIssue(item.issues, 'DUPLICATE_SLUG', 'slug', 'error', 'Slug is used by more than one product.', item.slug, 'Set a unique slug.');
-    }
-    if (skuKey && skuCounts[skuKey] > 1) {
-      addIssue(item.issues, 'DUPLICATE_SKU', 'sku', 'error', 'SKU is used by more than one product.', item.sku, 'Set a unique SKU.');
     }
     item.issueCount = item.issues.length;
     return item;

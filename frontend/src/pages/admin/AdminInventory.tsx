@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
   Boxes,
@@ -18,12 +17,17 @@ import {
   fetchInventoryDashboard,
   fetchInventoryHistory,
   fetchInventoryProducts,
+  InventoryAuditIssue,
   InventoryAuditItem,
   InventoryProduct,
   InventoryTransaction,
   saveInventoryProductCorrection,
 } from '@/lib/api';
+import { useProductStore } from '@/store/productStore';
 import { toast } from 'sonner';
+
+const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
+const PRODUCT_SYNC_EVENT = 'brajmart-products-updated';
 
 const statusLabel: Record<InventoryProduct['status'], string> = {
   HEALTHY: 'Healthy',
@@ -76,6 +80,13 @@ const AdminInventory = () => {
   const [history, setHistory] = useState<InventoryTransaction[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [correctionItem, setCorrectionItem] = useState<InventoryAuditItem | null>(null);
+  const refreshProducts = useProductStore((state) => state.loadFromApi);
+
+  const auditByProductId = useMemo(() => {
+    const map = new Map<string, InventoryAuditItem>();
+    for (const item of audit?.items || []) map.set(String(item.id), item);
+    return map;
+  }, [audit]);
 
   const load = async (nextPage = page) => {
     setRefreshing(true);
@@ -142,7 +153,13 @@ const AdminInventory = () => {
 
   const onCorrectionSaved = async () => {
     setCorrectionItem(null);
-    await load(page);
+    await Promise.all([load(page), refreshProducts({ force: true })]);
+    try {
+      localStorage.setItem(PRODUCT_SYNC_KEY, String(Date.now()));
+      window.dispatchEvent(new Event(PRODUCT_SYNC_EVENT));
+    } catch {
+      // ignore storage/event issues in restricted browser modes
+    }
   };
 
   return (
@@ -244,7 +261,27 @@ const AdminInventory = () => {
                     </td>
                   </tr>
                 ) : (
-                  products.map((product) => (
+                  products.map((product) => {
+                    const auditItem = auditByProductId.get(String(product.id));
+                    const correctionTarget = auditItem || ({
+                      id: product.id,
+                      name: product.name,
+                      slug: product.slug,
+                      category: product.category,
+                      price: null,
+                      originalPrice: null,
+                      rating: null,
+                      reviewCount: null,
+                      inStock: product.inStock,
+                      stockQuantity: product.stockQuantity,
+                      reservedQuantity: product.reservedQuantity,
+                      lowStockThreshold: product.lowStockThreshold,
+                      sku: product.sku,
+                      issueCount: 0,
+                      issues: [],
+                    } satisfies InventoryAuditItem);
+
+                    return (
                     <tr key={product.id} className="align-middle">
                       <td className="px-4 py-3">
                         <div className="flex min-w-0 items-center gap-3">
@@ -283,16 +320,18 @@ const AdminInventory = () => {
                           >
                             History
                           </button>
-                          <Link
-                            to="/admin/products"
+                          <button
+                            type="button"
+                            onClick={() => setCorrectionItem(correctionTarget)}
                             className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
                           >
                             Edit
-                          </Link>
+                          </button>
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -534,19 +573,67 @@ const HistoryModal = ({ product, transactions, loading, onClose }: { product: In
   </div>
 );
 
+const correctionFieldLabels: Record<string, string> = {
+  name: 'Product Name',
+  slug: 'URL Slug',
+  sku: 'SKU',
+  price: 'Sale Price',
+  originalPrice: 'MRP',
+  image: 'Primary Image URL',
+  category: 'Category',
+  rating: 'Rating',
+  reviewCount: 'Review Count',
+  lowStockThreshold: 'Low Stock Threshold',
+  stockQuantity: 'Stock Quantity',
+  reservedQuantity: 'Reserved Quantity',
+  inStock: 'In Stock',
+  description: 'Description',
+  metaTitle: 'SEO Title',
+  metaDescription: 'SEO Description',
+};
+
+const numericCorrectionFields = new Set(['price', 'originalPrice', 'rating', 'reviewCount', 'lowStockThreshold', 'stockQuantity', 'reservedQuantity']);
+const editableCorrectionFields = new Set(Object.keys(correctionFieldLabels));
+
+const fieldValue = (item: InventoryAuditItem, field: string) => {
+  const value = item[field as keyof InventoryAuditItem];
+  if (value === null || value === undefined) return '';
+  return typeof value === 'boolean' ? value : String(value);
+};
+
 const CorrectionModal = ({ item, onClose, onSaved }: { item: InventoryAuditItem; onClose: () => void; onSaved: () => void }) => {
-  const [field, setField] = useState(item.issues[0]?.field || 'name');
-  const [value, setValue] = useState('');
+  const issueFields = Array.from(new Set(item.issues.map((issue) => issue.field).filter((field) => editableCorrectionFields.has(field))));
+  const fallbackFields = ['name', 'slug', 'sku', 'category', 'price', 'originalPrice', 'rating', 'reviewCount', 'lowStockThreshold', 'inStock'];
+  const fields = issueFields.length ? issueFields : fallbackFields;
+  const [form, setForm] = useState<Record<string, string | boolean>>(() =>
+    Object.fromEntries(fields.map((field) => [field, fieldValue(item, field)]))
+  );
   const [saving, setSaving] = useState(false);
-  const currentIssue = item.issues.find((issue) => issue.field === field) || item.issues[0];
+  const blockedIssues = item.issues.filter((issue) => !editableCorrectionFields.has(issue.field));
+  const issuesByField = useMemo(() => {
+    return item.issues.reduce<Record<string, InventoryAuditIssue[]>>((acc, issue) => {
+      acc[issue.field] = [...(acc[issue.field] || []), issue];
+      return acc;
+    }, {});
+  }, [item.issues]);
+
+  const updateField = (field: string, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const submit = async () => {
     try {
       setSaving(true);
-      const normalizedValue = ['price', 'originalPrice', 'rating', 'reviewCount', 'lowStockThreshold'].includes(field)
-        ? Number(value)
-        : value;
-      await saveInventoryProductCorrection(item.id, { [field]: normalizedValue });
+      const payload = fields.reduce<Record<string, unknown>>((acc, field) => {
+        const value = form[field];
+        if (numericCorrectionFields.has(field)) {
+          acc[field] = value === '' ? null : Number(value);
+        } else {
+          acc[field] = value;
+        }
+        return acc;
+      }, {});
+      await saveInventoryProductCorrection(item.id, payload);
       toast.success('Product correction saved');
       onSaved();
     } catch (err) {
@@ -558,38 +645,77 @@ const CorrectionModal = ({ item, onClose, onSaved }: { item: InventoryAuditItem;
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900" onClick={(event) => event.stopPropagation()}>
+      <div className="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900" onClick={(event) => event.stopPropagation()}>
         <div className="border-b border-slate-800 p-5">
-          <h3 className="text-lg font-semibold text-white">Review Product Issue</h3>
+          <h3 className="text-lg font-semibold text-white">Edit Product Data</h3>
           <p className="mt-1 text-sm text-slate-400">{item.name || `Product #${item.id}`}</p>
         </div>
-        <div className="space-y-4 p-5">
-          <div className="space-y-2">
-            {item.issues.map((issue) => (
-              <button
-                key={`${issue.code}-${issue.field}`}
-                type="button"
-                onClick={() => setField(issue.field)}
-                className={`w-full rounded-xl border p-3 text-left text-sm ${field === issue.field ? 'border-amber-400 bg-amber-500/10 text-amber-100' : 'border-slate-800 bg-slate-950/40 text-slate-300'}`}
-              >
-                <span className="font-semibold">{issue.code}</span>
-                <span className="block text-xs opacity-80">{issue.message}</span>
-              </button>
-            ))}
+        <div className="max-h-[68vh] space-y-4 overflow-y-auto p-5">
+          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+            <p className="text-sm font-semibold text-white">{item.issueCount || item.issues.length || 'No'} issues found</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {item.issues.length ? item.issues.map((issue) => (
+                <span
+                  key={`${issue.code}-${issue.field}`}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${issue.severity === 'error' ? 'border-red-500/30 bg-red-500/10 text-red-200' : 'border-amber-500/30 bg-amber-500/10 text-amber-200'}`}
+                >
+                  {issue.code}
+                </span>
+              )) : (
+                <span className="text-xs text-slate-400">You can edit the core inventory product fields here.</span>
+              )}
+            </div>
           </div>
-          {currentIssue && (
-            <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-sm text-slate-300">
-              <p>Current value: {JSON.stringify(currentIssue.currentValue ?? item[field as keyof InventoryAuditItem] ?? '')}</p>
-              <p className="mt-1 text-xs text-slate-500">{currentIssue.recommendedCorrection}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {fields.map((field) => {
+              const fieldIssues = issuesByField[field] || [];
+              const value = form[field];
+              if (field === 'inStock') {
+                return (
+                  <label key={field} className="rounded-xl border border-slate-800 bg-slate-950/30 p-3">
+                    <span className="mb-2 block text-sm font-semibold text-slate-200">{correctionFieldLabels[field]}</span>
+                    <select
+                      value={value ? 'true' : 'false'}
+                      onChange={(event) => updateField(field, event.target.value === 'true')}
+                      className="h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-white outline-none focus:border-amber-400"
+                    >
+                      <option value="true">In stock</option>
+                      <option value="false">Out of stock</option>
+                    </select>
+                    {fieldIssues.map((issue) => (
+                      <p key={issue.code} className="mt-2 text-xs text-slate-400">{issue.message} {issue.recommendedCorrection || ''}</p>
+                    ))}
+                  </label>
+                );
+              }
+              return (
+                <div key={field} className="rounded-xl border border-slate-800 bg-slate-950/30 p-3">
+                  <Field
+                    label={correctionFieldLabels[field] || field}
+                    value={String(value ?? '')}
+                    onChange={(next) => updateField(field, next)}
+                    type={field === 'description' || field === 'metaDescription' ? 'textarea' : numericCorrectionFields.has(field) ? 'number' : 'text'}
+                  />
+                  {fieldIssues.map((issue) => (
+                    <p key={issue.code} className="mt-2 text-xs text-slate-400">{issue.message} {issue.recommendedCorrection || ''}</p>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+          {blockedIssues.length > 0 && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+              {blockedIssues.map((issue) => (
+                <p key={`${issue.code}-${issue.field}`}>{issue.message} {issue.recommendedCorrection || ''}</p>
+              ))}
             </div>
           )}
-          <Field label="Corrected value" value={value} onChange={setValue} type={['price', 'originalPrice', 'rating', 'reviewCount', 'lowStockThreshold'].includes(field) ? 'number' : 'text'} />
         </div>
         <div className="flex justify-end gap-3 border-t border-slate-800 p-5">
           <button type="button" onClick={onClose} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200">Cancel</button>
-          <button type="button" disabled={saving || !value} onClick={submit} className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50">
+          <button type="button" disabled={saving} onClick={submit} className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50">
             <Pencil size={15} />
-            Save Correction
+            Save Product Data
           </button>
         </div>
       </div>
@@ -600,12 +726,21 @@ const CorrectionModal = ({ item, onClose, onSaved }: { item: InventoryAuditItem;
 const Field = ({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) => (
   <label>
     <span className="mb-1 block text-sm text-slate-300">{label}</span>
-    <input
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      type={type}
-      className="h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-white outline-none focus:border-amber-400"
-    />
+    {type === 'textarea' ? (
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={3}
+        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-amber-400"
+      />
+    ) : (
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        type={type}
+        className="h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-white outline-none focus:border-amber-400"
+      />
+    )}
   </label>
 );
 

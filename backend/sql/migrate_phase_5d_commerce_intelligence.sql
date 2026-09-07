@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS bundles (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   name VARCHAR(255) NOT NULL,
   slug VARCHAR(180) NOT NULL,
+  sku VARCHAR(120) NULL,
   description TEXT NULL,
   image_url VARCHAR(1024) NULL,
   display_location VARCHAR(80) NOT NULL DEFAULT 'product_detail',

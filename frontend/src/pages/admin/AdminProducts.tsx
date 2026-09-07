@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 
 const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
+const PRODUCT_SYNC_EVENT = 'brajmart-products-updated';
 
 // No image size limit
 const slugify = (value: string) =>
@@ -136,6 +137,24 @@ const AdminProducts = () => {
     }
   };
 
+  const prepareProductForEdit = (product: Product): Product => ({
+    ...product,
+    images: Array.isArray(product.images) ? product.images : (product.image ? [product.image] : []),
+    colorVariants: Array.isArray(product.colorVariants) ? product.colorVariants : [],
+    tags: Array.isArray(product.tags) ? product.tags : (product.badge ? [product.badge] : []),
+  });
+
+  const openEditProduct = async (product: Product) => {
+    setIsCreating(false);
+    try {
+      await loadFromApi({ force: true });
+      const latest = useProductStore.getState().getProductById(product.id) || product;
+      setEditProduct(prepareProductForEdit(latest));
+    } catch {
+      setEditProduct(prepareProductForEdit(product));
+    }
+  };
+
   const handleSave = async (product: Product) => {
     try {
       if (!product.description || !product.description.trim()) {
@@ -211,6 +230,7 @@ const AdminProducts = () => {
 
       const normalized = {
         ...product,
+        sku: product.sku?.trim() || '',
         metaTitle: product.metaTitle?.trim() || deriveProductMetaTitle(product.name, product.category),
         metaDescription: product.metaDescription?.trim() || deriveProductMetaDescription(product.description || '', product.name),
         price,
@@ -218,6 +238,10 @@ const AdminProducts = () => {
         rating,
         reviewCount: Math.floor(reviewCount),
         soldCount: Math.floor(soldCount),
+        stockQuantity: product.stockQuantity === null || product.stockQuantity === undefined
+          ? null
+          : Math.max(0, Math.floor(Number(product.stockQuantity) || 0)),
+        lowStockThreshold: Math.max(0, Math.floor(Number(product.lowStockThreshold ?? 3) || 0)),
         tags: Array.isArray(product.tags) ? product.tags : (product.badge ? [product.badge] : []),
         // Always send these keys so backend always persists them (never reverts to NULL).
         attributes: normalizedAttributes,
@@ -228,10 +252,7 @@ const AdminProducts = () => {
         sizePricing: Array.isArray(product.sizePricing) ? product.sizePricing : [],
         piecePricing: Array.isArray(product.piecePricing) ? product.piecePricing : [],
       };
-      delete (normalized as Partial<Product>).stockQuantity;
       delete (normalized as Partial<Product>).reservedQuantity;
-      delete (normalized as Partial<Product>).lowStockThreshold;
-      delete (normalized as Partial<Product>).sku;
       if (isCreating) {
         const created: any = await createProduct(normalized as any);
         addProduct({ ...created, id: created.id || created._id, tags: normalized.tags });
@@ -247,6 +268,7 @@ const AdminProducts = () => {
       // Important: write this AFTER the DB refresh so `syncAt > lastFetchedAt` is guaranteed.
       try {
         localStorage.setItem(PRODUCT_SYNC_KEY, String(Date.now()));
+        window.dispatchEvent(new Event(PRODUCT_SYNC_EVENT));
       } catch {
         // ignore storage permission errors
       }
@@ -277,6 +299,7 @@ const AdminProducts = () => {
               id: '',
               name: '',
               slug: '',
+              sku: '',
               price: 0,
               originalPrice: undefined,
               image: '',
@@ -292,6 +315,9 @@ const AdminProducts = () => {
               rating: 0,
               reviewCount: 0,
               inStock: true,
+              stockQuantity: null,
+              reservedQuantity: 0,
+              lowStockThreshold: 3,
               codEnabled: null,
               tags: [],
               sizes: [],
@@ -410,7 +436,7 @@ const AdminProducts = () => {
                     </span>
                   </td>
                   <td className="px-5 py-3 flex gap-2">
-                    <button onClick={() => { setIsCreating(false); setEditProduct({ ...p, images: Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []), colorVariants: Array.isArray((p as any).colorVariants) ? (p as any).colorVariants : [], tags: Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []) }); }} className="text-blue-400 hover:text-blue-300"><Edit2 size={15} /></button>
+                    <button onClick={() => openEditProduct(p)} className="text-blue-400 hover:text-blue-300"><Edit2 size={15} /></button>
                     <button onClick={() => handleDelete(p.id)} className="text-red-400 hover:text-red-300"><Trash2 size={15} /></button>
                   </td>
                 </tr>
@@ -688,6 +714,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
         <div className="p-5 space-y-4">
           <Field label="Name" value={form.name} onChange={updateName} />
           <Field label="Slug" value={form.slug} onChange={(v) => update('slug', v)} />
+          <Field label="SKU" value={form.sku || ''} onChange={(v) => update('sku', v)} />
           <Field label="Description" value={form.description || ''} onChange={updateDescription} type="textarea" />
           <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
             <Field label="Meta Title" value={form.metaTitle || ''} onChange={(v) => update('metaTitle', cleanMetaText(v, 60))} />
@@ -697,6 +724,23 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Price (INR)" value={String(form.price)} onChange={(v) => update('price', Number(v))} type="number" />
             <Field label="MRP (INR)" value={String(form.originalPrice || '')} onChange={(v) => update('originalPrice', Number(v))} type="number" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
+            <Field
+              label="Stock Quantity"
+              value={form.stockQuantity === null || form.stockQuantity === undefined ? '' : String(form.stockQuantity)}
+              onChange={(v) => update('stockQuantity', v === '' ? null : Number(v))}
+              type="number"
+            />
+            <Field
+              label="Low Stock Threshold"
+              value={String(form.lowStockThreshold ?? 3)}
+              onChange={(v) => update('lowStockThreshold', Number(v))}
+              type="number"
+            />
+            <div className="sm:col-span-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs text-slate-400">
+              Reserved stock: {form.reservedQuantity ?? 0}
+            </div>
           </div>
           <div>
             <label className="block text-sm text-slate-300 mb-1">Category</label>

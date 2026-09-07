@@ -218,8 +218,13 @@ export type ProductAuditReport = {
     inStock: boolean;
     stockQuantity: number | null;
     reservedQuantity: number | null;
+    lowStockThreshold: number | null;
+    sku: string;
+    description?: string;
+    metaTitle?: string;
+    metaDescription?: string;
     issueCount: number;
-    issues: Array<{ code: string; field: string; severity: 'error' | 'warning'; message: string }>;
+    issues: Array<{ code: string; field: string; severity: 'error' | 'warning'; message: string; currentValue?: unknown; recommendedCorrection?: string }>;
   }>;
 };
 export const fetchProductAudit = () =>
@@ -316,6 +321,9 @@ export type InventoryAuditItem = {
   reservedQuantity: number | null;
   lowStockThreshold: number | null;
   sku: string;
+  description?: string;
+  metaTitle?: string;
+  metaDescription?: string;
   issueCount: number;
   issues: InventoryAuditIssue[];
 };
@@ -667,6 +675,7 @@ export type CommerceBundle = {
   id: string;
   name: string;
   slug: string;
+  sku?: string;
   description: string;
   imageUrl?: string;
   displayLocation: string;
@@ -676,6 +685,9 @@ export type CommerceBundle = {
   productCount: number;
   bundlePrice: number;
   savings: number;
+  startsAt?: string;
+  endsAt?: string;
+  archivedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -699,6 +711,8 @@ export const updateAdminBundle = (id: string, payload: Record<string, unknown>) 
   getJson<{ bundle: CommerceBundle | null }>(`/bundles/admin/${id}`, { method: 'PUT', body: payload });
 export const updateAdminBundleStatus = (id: string, isActive: boolean) =>
   getJson<{ bundle: CommerceBundle | null }>(`/bundles/admin/${id}/status`, { method: 'PATCH', body: { isActive } });
+export const deleteAdminBundle = (id: string) =>
+  getJson<{ ok: boolean }>(`/bundles/admin/${id}`, { method: 'DELETE' });
 
 export const uploadImage = async (file: File) => {
   const token = getAuthToken();

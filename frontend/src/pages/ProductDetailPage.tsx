@@ -70,6 +70,8 @@ const makeHighlights = (product: NonNullable<ReturnType<typeof useProductStore.g
   const highlights = new Set<string>();
   if (product.category) highlights.add(`Category: ${product.category}`);
   if (product.subcategory) highlights.add(`Collection: ${product.subcategory}`);
+  const availableQuantity = getAvailableQuantity(product);
+  if (availableQuantity !== null) highlights.add(`Available stock: ${availableQuantity}`);
   if (Array.isArray(product.sizes) && product.sizes.length) highlights.add(`Available sizes: ${product.sizes.slice(0, 4).join(', ')}`);
   if (Array.isArray(product.attributes)) {
     product.attributes.slice(0, 3).forEach((attr) => {
@@ -516,7 +518,7 @@ const ProductDetailPage = () => {
       name: product.name,
       description: schemaDescription,
       image: images,
-      sku: String(product.id),
+      sku: String(product.sku || product.id),
       category: product.category,
       brand: {
         '@type': 'Brand',
@@ -913,7 +915,7 @@ const ProductDetailPage = () => {
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{product.category}</span>
               <h1 className="font-playfair text-2xl md:text-3xl font-bold text-foreground mt-1 leading-tight">{product.name}</h1>
-              <p className="mt-1 text-xs text-muted-foreground">SKU: {product.id}</p>
+              <p className="mt-1 text-xs text-muted-foreground">SKU: {product.sku || product.id}</p>
             </div>
 
             {/* Rating */}

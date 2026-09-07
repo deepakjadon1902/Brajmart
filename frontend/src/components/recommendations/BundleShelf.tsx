@@ -64,6 +64,7 @@ const BundleShelf = ({ bundles, title = 'Complete the Collection', subtitle = 'A
         <div className="grid gap-3 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
           <aside className="rounded-lg border border-border bg-card p-4 shadow-sm">
             <h3 className="font-playfair text-xl font-bold leading-tight text-foreground">{bundle.name}</h3>
+            {bundle.sku && <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">SKU: {bundle.sku}</p>}
             {bundle.description && <p className="mt-2 text-sm leading-5 text-muted-foreground">{bundle.description}</p>}
             <div className="mt-3 space-y-1.5">
               {products.map((product) => (

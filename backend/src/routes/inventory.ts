@@ -289,7 +289,24 @@ router.get('/audit', auth, adminOnly, async (_req, res) => {
 router.put('/products/:id/correction', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    const allowed = ['name', 'slug', 'sku', 'price', 'originalPrice', 'image', 'category', 'rating', 'reviewCount', 'lowStockThreshold', 'inStock'];
+    const allowed = [
+      'name',
+      'slug',
+      'sku',
+      'price',
+      'originalPrice',
+      'image',
+      'category',
+      'rating',
+      'reviewCount',
+      'lowStockThreshold',
+      'stockQuantity',
+      'reservedQuantity',
+      'inStock',
+      'description',
+      'metaTitle',
+      'metaDescription',
+    ];
     const body = req.body || {};
     const fields: string[] = [];
     const values: any[] = [];
@@ -313,8 +330,6 @@ router.put('/products/:id/correction', auth, adminOnly, async (req: AuthRequest,
     if (body.sku !== undefined) {
       const value = normalizeText(body.sku, 120);
       if (!value) return res.status(400).json({ message: 'SKU is required for inventory-managed products.' });
-      const duplicates = await dbQuery<any>('SELECT id FROM products WHERE sku = ? AND id <> ? LIMIT 1', [value, req.params.id]);
-      if (duplicates.length) return res.status(400).json({ message: 'SKU already exists on another product.' });
       set('sku', value);
     }
     if (body.price !== undefined) {
@@ -332,6 +347,13 @@ router.put('/products/:id/correction', auth, adminOnly, async (req: AuthRequest,
       if (!value) return res.status(400).json({ message: 'Primary image is required.' });
       set('image', value);
     }
+    if (body.description !== undefined) {
+      const value = normalizeText(body.description, 5000);
+      if (!value) return res.status(400).json({ message: 'Description is required.' });
+      set('description', value);
+    }
+    if (body.metaTitle !== undefined) set('meta_title', normalizeText(body.metaTitle, 255));
+    if (body.metaDescription !== undefined) set('meta_description', normalizeText(body.metaDescription, 500));
     if (body.category !== undefined) {
       const value = normalizeText(body.category, 255);
       if (!value) return res.status(400).json({ message: 'Category is required.' });
@@ -355,13 +377,23 @@ router.put('/products/:id/correction', auth, adminOnly, async (req: AuthRequest,
       if (value === null || value < 0) return res.status(400).json({ message: 'Low stock threshold cannot be negative.' });
       set('low_stock_threshold', value);
     }
+    if (body.stockQuantity !== undefined) {
+      const value = body.stockQuantity === null || body.stockQuantity === '' ? null : toNonNegativeInt(body.stockQuantity);
+      if (value !== null && value < 0) return res.status(400).json({ message: 'Stock quantity cannot be negative.' });
+      set('stock_quantity', value);
+    }
+    if (body.reservedQuantity !== undefined) {
+      const value = toNonNegativeInt(body.reservedQuantity);
+      if (value === null || value < 0) return res.status(400).json({ message: 'Reserved quantity cannot be negative.' });
+      set('reserved_quantity', value);
+    }
     if (body.inStock !== undefined) set('in_stock', body.inStock ? 1 : 0);
 
     const disallowed = Object.keys(body).filter((key) => !allowed.includes(key));
     if (disallowed.length) return res.status(400).json({ message: `Unsupported correction fields: ${disallowed.join(', ')}` });
     if (!fields.length) return res.status(400).json({ message: 'No correction fields provided.' });
 
-    const existingRows = await dbQuery<any>('SELECT price, original_price FROM products WHERE id = ? LIMIT 1', [req.params.id]);
+    const existingRows = await dbQuery<any>('SELECT * FROM products WHERE id = ? LIMIT 1', [req.params.id]);
     const existing = existingRows[0];
     if (!existing) return res.status(404).json({ message: 'Product not found' });
     const nextPrice = body.price !== undefined ? Number(body.price) : Number(existing.price);
@@ -369,10 +401,26 @@ router.put('/products/:id/correction', auth, adminOnly, async (req: AuthRequest,
       ? (body.originalPrice === null || body.originalPrice === '' ? null : Number(body.originalPrice))
       : (existing.original_price === null ? null : Number(existing.original_price));
     if (nextMrp !== null && nextPrice > nextMrp) return res.status(400).json({ message: 'Sale price cannot be higher than MRP.' });
+    const nextStock = body.stockQuantity !== undefined
+      ? (body.stockQuantity === null || body.stockQuantity === '' ? null : toNonNegativeInt(body.stockQuantity))
+      : toIntOrNull(existing.stock_quantity);
+    const nextReserved = body.reservedQuantity !== undefined ? toNonNegativeInt(body.reservedQuantity) : (toIntOrNull(existing.reserved_quantity) ?? 0);
+    if (nextStock !== null && nextReserved !== null && nextReserved > nextStock) {
+      return res.status(400).json({ message: 'Reserved quantity cannot exceed stock quantity.' });
+    }
 
     fields.push('updated_at = NOW()');
     await dbExecute(`UPDATE products SET ${fields.join(', ')} WHERE id = ?`, [...values, req.params.id]);
     const rows = await dbQuery<any>(`${productSelect} WHERE p.id = ? LIMIT 1`, [req.params.id]);
+    await insertAdminAuditLog(null, {
+      req,
+      action: 'INVENTORY_PRODUCT_CORRECTION',
+      entityType: 'product',
+      entityId: req.params.id,
+      before: existing,
+      after: rows[0],
+      reason: 'Inventory product data corrected',
+    }).catch(() => {});
     res.json({ ok: true, product: mapInventoryProduct(rows[0]) });
   } catch {
     res.status(500).json({ message: 'Failed to save product correction' });

@@ -4,6 +4,7 @@ import { fetchProducts, fetchCategories } from '@/lib/api';
 
 const STALE_AFTER_MS = 5 * 60 * 1000; // 5 minutes
 const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
+const PRODUCT_SYNC_EVENT = 'brajmart-products-updated';
 let productListRequest: Promise<void> | null = null;
 
 interface ProductStore {
@@ -214,6 +215,10 @@ if (typeof window !== 'undefined') {
   try {
     window.addEventListener('storage', (e) => {
       if (e.key !== PRODUCT_SYNC_KEY) return;
+      const state = useProductStore.getState();
+      state.loadFromApi({ force: true }).catch(() => undefined);
+    });
+    window.addEventListener(PRODUCT_SYNC_EVENT, () => {
       const state = useProductStore.getState();
       state.loadFromApi({ force: true }).catch(() => undefined);
     });

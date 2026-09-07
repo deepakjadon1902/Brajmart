@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { isDbConnected } from '../lib/db';
 import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import {
+  archiveBundle,
   createBundle,
   ensureCommerceIntelligenceSchema,
   getAdminBundles,
@@ -76,6 +77,19 @@ router.patch('/admin/:id/status', auth, adminOnly, async (req, res) => {
     res.json({ bundle: bundles.find((bundle: any) => Number(bundle.id) === bundleId) || null });
   } catch (err: any) {
     const message = err?.message === 'BUNDLE_NOT_FOUND' ? 'Bundle not found' : 'Failed to update bundle status';
+    res.status(err?.message === 'BUNDLE_NOT_FOUND' ? 404 : 500).json({ message });
+  }
+});
+
+router.delete('/admin/:id', auth, adminOnly, async (req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const bundleId = Number(req.params.id);
+    if (!Number.isFinite(bundleId) || bundleId <= 0) return res.status(400).json({ message: 'Valid bundle id is required' });
+    await archiveBundle(req as AuthRequest, bundleId, req.body?.reason || req.query.reason || 'Bundle deleted by admin');
+    res.json({ ok: true });
+  } catch (err: any) {
+    const message = err?.message === 'BUNDLE_NOT_FOUND' ? 'Bundle not found' : 'Failed to delete bundle';
     res.status(err?.message === 'BUNDLE_NOT_FOUND' ? 404 : 500).json({ message });
   }
 });

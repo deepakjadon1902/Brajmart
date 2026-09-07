@@ -54,6 +54,7 @@ const mapBundleRow = (row: any, products: any[] = []) => {
     id: String(row.id),
     name: row.name,
     slug: row.slug,
+    sku: row.sku || '',
     description: row.description || '',
     imageUrl: row.image_url || '',
     displayLocation: row.display_location || 'product_detail',
@@ -77,6 +78,7 @@ export const ensureCommerceIntelligenceSchema = async () => {
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       name VARCHAR(255) NOT NULL,
       slug VARCHAR(180) NOT NULL,
+      sku VARCHAR(120) NULL,
       description TEXT NULL,
       image_url VARCHAR(1024) NULL,
       display_location VARCHAR(80) NOT NULL DEFAULT 'product_detail',
@@ -97,6 +99,9 @@ export const ensureCommerceIntelligenceSchema = async () => {
       KEY idx_bundles_archived (archived_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+  await dbExecute('ALTER TABLE bundles ADD COLUMN sku VARCHAR(120) NULL AFTER slug').catch((err: any) => {
+    if (!String(err?.message || '').includes('Duplicate column name')) throw err;
+  });
   await dbExecute(`
     CREATE TABLE IF NOT EXISTS bundle_products (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -391,7 +396,7 @@ export const getPublicBundles = async (opts: { location?: string; limit?: number
 
 export const getAdminBundles = async () => {
   await ensureCommerceIntelligenceSchema();
-  const rows = await dbQuery<any>('SELECT * FROM bundles ORDER BY sort_order ASC, created_at DESC');
+  const rows = await dbQuery<any>('SELECT * FROM bundles WHERE archived_at IS NULL ORDER BY sort_order ASC, created_at DESC');
   if (!rows.length) return [];
   const products = await dbQuery<any>(
     `SELECT bp.bundle_id, bp.product_id, bp.sort_order, p.name, p.slug, p.price, p.image, p.archived_at, p.in_stock, p.stock_quantity, p.reserved_quantity
@@ -435,6 +440,7 @@ const validateBundlePayload = async (body: any, partial = false) => {
     data: {
       name,
       slug,
+      sku: String(body?.sku || '').trim().slice(0, 120),
       description: String(body?.description || '').trim(),
       imageUrl: String(body?.imageUrl || body?.image_url || '').trim(),
       displayLocation: slugify(body?.displayLocation || body?.display_location || 'product_detail') || 'product_detail',
@@ -452,11 +458,12 @@ export const createBundle = async (req: AuthRequest) => {
   const actor = req.user?.email || req.user?.id || null;
   const result = await withDbTransaction(async (connection) => {
     const [inserted]: any = await connection.execute(
-      `INSERT INTO bundles (name, slug, description, image_url, display_location, sort_order, is_active, starts_at, ends_at, created_by, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO bundles (name, slug, sku, description, image_url, display_location, sort_order, is_active, starts_at, ends_at, created_by, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         data.name,
         data.slug,
+        data.sku || null,
         data.description,
         data.imageUrl || null,
         data.displayLocation,
@@ -503,6 +510,7 @@ export const updateBundle = async (req: AuthRequest, bundleId: number) => {
     };
     if (req.body?.name !== undefined) set('name', data.name);
     if (req.body?.slug !== undefined || req.body?.name !== undefined) set('slug', data.slug);
+    if (req.body?.sku !== undefined) set('sku', data.sku || null);
     if (req.body?.description !== undefined) set('description', data.description);
     if (req.body?.imageUrl !== undefined || req.body?.image_url !== undefined) set('image_url', data.imageUrl || null);
     if (req.body?.displayLocation !== undefined || req.body?.display_location !== undefined) set('display_location', data.displayLocation);
@@ -548,6 +556,30 @@ export const setBundleActive = async (req: AuthRequest, bundleId: number, isActi
       before: beforeRows[0],
       after: afterRows[0],
       reason: isActive ? 'Bundle activated' : 'Bundle deactivated',
+    });
+  });
+  clearCommerceIntelligenceCache();
+  return { ok: true as const };
+};
+
+export const archiveBundle = async (req: AuthRequest, bundleId: number, reason = 'Bundle deleted by admin') => {
+  await withDbTransaction(async (connection) => {
+    const actor = req.user?.email || req.user?.id || null;
+    const [beforeRows]: any = await connection.execute('SELECT * FROM bundles WHERE id = ? LIMIT 1', [bundleId]);
+    if (!beforeRows[0]) throw new Error('BUNDLE_NOT_FOUND');
+    await connection.execute(
+      'UPDATE bundles SET is_active = 0, archived_at = NOW(), archived_by = ?, archive_reason = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
+      [actor, String(reason || 'Bundle deleted by admin').trim().slice(0, 255), actor, bundleId]
+    );
+    const [afterRows]: any = await connection.execute('SELECT * FROM bundles WHERE id = ? LIMIT 1', [bundleId]);
+    await insertAdminAuditLog(connection, {
+      req,
+      action: 'BUNDLE_DELETE',
+      entityType: 'bundle',
+      entityId: bundleId,
+      before: beforeRows[0],
+      after: afterRows[0],
+      reason: 'Bundle deleted',
     });
   });
   clearCommerceIntelligenceCache();

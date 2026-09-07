@@ -82,6 +82,7 @@ const validateProductCommerceFields = (data, opts = {}) => {
     }
     return { ok: true };
 };
+const normalizeSku = (value) => String(value ?? '').trim().slice(0, 120);
 const isColorSelectionKey = (key) => String(key || '').toLowerCase().includes('color');
 const sanitizeColorVariants = (input) => {
     const list = Array.isArray(input) ? input : [];
@@ -474,9 +475,26 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         await ensureProductSeoColumns();
         await ensureCodSchema();
         const data = req.body || {};
+        if (data.sku !== undefined) {
+            data.sku = normalizeSku(data.sku);
+        }
         const commerceValidation = validateProductCommerceFields(data);
         if (!commerceValidation.ok)
             return res.status(400).json({ message: commerceValidation.message });
+        if (data.stockQuantity !== undefined) {
+            const stockQuantity = data.stockQuantity === null || data.stockQuantity === '' ? null : Math.floor(Number(data.stockQuantity));
+            if (stockQuantity !== null && (!Number.isFinite(stockQuantity) || stockQuantity < 0)) {
+                return res.status(400).json({ message: 'Stock quantity cannot be negative.' });
+            }
+            data.stockQuantity = stockQuantity;
+        }
+        if (data.lowStockThreshold !== undefined) {
+            const lowStockThreshold = Math.floor(Number(data.lowStockThreshold));
+            if (!Number.isFinite(lowStockThreshold) || lowStockThreshold < 0) {
+                return res.status(400).json({ message: 'Low stock threshold cannot be negative.' });
+            }
+            data.lowStockThreshold = lowStockThreshold;
+        }
         if (process.env.NODE_ENV !== 'production') {
             console.log('POST /products payload keys:', Object.keys(data));
             console.log('POST /products attributes count:', Array.isArray(data.attributes) ? data.attributes.length : 'n/a');
@@ -530,9 +548,10 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             if (found)
                 categoryIdToSave = Number(found);
         }
-        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `sku`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `stock_quantity`, `low_stock_threshold`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
+            data.sku || null,
             data.price,
             data.originalPrice ?? null,
             data.image,
@@ -545,6 +564,8 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.badge ?? null,
             JSON.stringify(data.tags || []),
             data.inStock === undefined ? 1 : data.inStock ? 1 : 0,
+            data.stockQuantity === undefined ? null : data.stockQuantity,
+            data.lowStockThreshold === undefined ? 3 : data.lowStockThreshold,
             data.codEnabled === undefined || data.codEnabled === null || data.codEnabled === '' ? null : data.codEnabled ? 1 : 0,
             data.soldCount ?? 0,
             data.description ?? '',
@@ -557,9 +578,10 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             JSON.stringify(sanitizeVariantPricing(data.variantPricing || [])),
             JSON.stringify(sanitizeColorVariants(data.colorVariants || [])),
         ]);
-        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `sku`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `stock_quantity`, `low_stock_threshold`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
+            data.sku || null,
             data.price,
             data.originalPrice ?? null,
             data.image,
@@ -572,6 +594,8 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.badge ?? null,
             JSON.stringify(data.tags || []),
             data.inStock === undefined ? 1 : data.inStock ? 1 : 0,
+            data.stockQuantity === undefined ? null : data.stockQuantity,
+            data.lowStockThreshold === undefined ? 3 : data.lowStockThreshold,
             data.codEnabled === undefined || data.codEnabled === null || data.codEnabled === '' ? null : data.codEnabled ? 1 : 0,
             data.soldCount ?? 0,
             data.description ?? '',
@@ -630,8 +654,8 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         await ensureProductSeoColumns();
         await ensureCodSchema();
         const body = req.body || {};
-        if (body.stockQuantity !== undefined || body.reservedQuantity !== undefined) {
-            return res.status(400).json({ message: 'Use inventory adjustment controls to change stock quantities.' });
+        if (body.sku !== undefined) {
+            body.sku = normalizeSku(body.sku);
         }
         const normalizedCategoryId = (() => {
             const raw = (body.categoryId ?? body.category_id);
@@ -656,6 +680,35 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             const found = rows?.[0]?.id;
             if (found)
                 body.categoryId = Number(found);
+        }
+        if (body.stockQuantity !== undefined || body.reservedQuantity !== undefined || body.lowStockThreshold !== undefined) {
+            const rows = await (0, db_1.dbQuery)('SELECT stock_quantity, reserved_quantity, low_stock_threshold FROM products WHERE id = ? LIMIT 1', [req.params.id]);
+            const existing = rows?.[0];
+            if (!existing)
+                return res.status(404).json({ message: 'Product not found' });
+            const stockQuantity = body.stockQuantity === undefined
+                ? (existing.stock_quantity === null || existing.stock_quantity === undefined ? null : Number(existing.stock_quantity))
+                : (body.stockQuantity === null || body.stockQuantity === '' ? null : Math.floor(Number(body.stockQuantity)));
+            const reservedQuantity = body.reservedQuantity === undefined ? Math.max(0, Math.floor(Number(existing.reserved_quantity || 0))) : Math.floor(Number(body.reservedQuantity));
+            const lowStockThreshold = body.lowStockThreshold === undefined ? Math.max(0, Math.floor(Number(existing.low_stock_threshold || 0))) : Math.floor(Number(body.lowStockThreshold));
+            if (stockQuantity !== null && (!Number.isFinite(stockQuantity) || stockQuantity < 0)) {
+                return res.status(400).json({ message: 'Stock quantity cannot be negative.' });
+            }
+            if (!Number.isFinite(reservedQuantity) || reservedQuantity < 0) {
+                return res.status(400).json({ message: 'Reserved quantity cannot be negative.' });
+            }
+            if (!Number.isFinite(lowStockThreshold) || lowStockThreshold < 0) {
+                return res.status(400).json({ message: 'Low stock threshold cannot be negative.' });
+            }
+            if (stockQuantity !== null && reservedQuantity > stockQuantity) {
+                return res.status(400).json({ message: 'Stock quantity cannot be lower than reserved stock.' });
+            }
+            if (body.stockQuantity !== undefined)
+                body.stockQuantity = stockQuantity;
+            if (body.reservedQuantity !== undefined)
+                body.reservedQuantity = reservedQuantity;
+            if (body.lowStockThreshold !== undefined)
+                body.lowStockThreshold = lowStockThreshold;
         }
         let existingCommerceRow = null;
         if (body.price !== undefined || body.originalPrice !== undefined) {

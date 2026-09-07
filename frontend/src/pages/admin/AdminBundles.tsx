@@ -1,25 +1,34 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Boxes, CheckCircle2, Plus, Save, Search, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Boxes, CheckCircle2, Pencil, Plus, Save, Search, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   CommerceBundle,
   createAdminBundle,
+  deleteAdminBundle,
   fetchAdminBundles,
   updateAdminBundle,
   updateAdminBundleStatus,
 } from '@/lib/api';
 import { useProductStore } from '@/store/productStore';
+import { Product } from '@/types/product';
 import { formatPrice } from '@/utils/formatPrice';
 import { isProductPurchasable } from '@/utils/productPresentation';
+
+const errorMessage = (err: unknown, fallback: string) =>
+  err instanceof Error ? err.message : fallback;
 
 const emptyForm = {
   id: '',
   name: '',
   slug: '',
+  sku: '',
   description: '',
+  imageUrl: '',
   displayLocation: 'home',
   sortOrder: 0,
   isActive: false,
+  startsAt: '',
+  endsAt: '',
   productIds: [] as string[],
 };
 
@@ -43,7 +52,10 @@ const AdminBundles = () => {
       .filter((product) => [product.name, product.sku, product.category].filter(Boolean).join(' ').toLowerCase().includes(q))
       .slice(0, 80);
   }, [query, validProducts]);
-  const selectedProducts = useMemo(() => form.productIds.map((id) => validProducts.find((product) => product.id === id)).filter(Boolean), [form.productIds, validProducts]);
+  const selectedProducts = useMemo(
+    () => form.productIds.map((id) => validProducts.find((product) => product.id === id)).filter((product): product is Product => Boolean(product)),
+    [form.productIds, validProducts]
+  );
   const bundleTotal = selectedProducts.reduce((sum, product) => sum + Number(product?.price || 0), 0);
 
   const loadBundles = async () => {
@@ -51,8 +63,8 @@ const AdminBundles = () => {
     try {
       const data = await fetchAdminBundles();
       setBundles(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to load bundles');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to load bundles'));
     } finally {
       setLoading(false);
     }
@@ -76,11 +88,15 @@ const AdminBundles = () => {
       id: bundle.id,
       name: bundle.name,
       slug: bundle.slug,
+      sku: bundle.sku || '',
       description: bundle.description || '',
+      imageUrl: bundle.imageUrl || '',
       displayLocation: bundle.displayLocation || 'home',
       sortOrder: bundle.sortOrder || 0,
       isActive: Boolean(bundle.isActive),
-      productIds: (bundle.products || []).map((product: any) => String(product.id)),
+      startsAt: bundle.startsAt ? bundle.startsAt.slice(0, 16) : '',
+      endsAt: bundle.endsAt ? bundle.endsAt.slice(0, 16) : '',
+      productIds: (bundle.products || []).map((product) => String(product.id)),
     });
   };
 
@@ -98,10 +114,14 @@ const AdminBundles = () => {
       const payload = {
         name: form.name,
         slug: form.slug,
+        sku: form.sku,
         description: form.description,
+        imageUrl: form.imageUrl,
         displayLocation: form.displayLocation,
         sortOrder: form.sortOrder,
         isActive: form.isActive,
+        startsAt: form.startsAt || null,
+        endsAt: form.endsAt || null,
         productIds: form.productIds,
       };
       if (form.id) await updateAdminBundle(form.id, payload);
@@ -109,8 +129,8 @@ const AdminBundles = () => {
       toast.success(form.id ? 'Bundle updated' : 'Bundle created');
       setForm(emptyForm);
       await loadBundles();
-    } catch (err: any) {
-      toast.error(err?.message || 'Bundle save failed');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Bundle save failed'));
     } finally {
       setSaving(false);
     }
@@ -121,8 +141,20 @@ const AdminBundles = () => {
       await updateAdminBundleStatus(bundle.id, isActive);
       toast.success(isActive ? 'Bundle activated' : 'Bundle deactivated');
       await loadBundles();
-    } catch (err: any) {
-      toast.error(err?.message || 'Status update failed');
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Status update failed'));
+    }
+  };
+
+  const deleteBundle = async (bundle: CommerceBundle) => {
+    if (!confirm(`Delete bundle "${bundle.name}"? It will be removed from the admin active list and the main application.`)) return;
+    try {
+      await deleteAdminBundle(bundle.id);
+      if (form.id === bundle.id) setForm(emptyForm);
+      toast.success('Bundle deleted');
+      await loadBundles();
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Bundle delete failed'));
     }
   };
 
@@ -145,6 +177,8 @@ const AdminBundles = () => {
           <div className="mt-4 space-y-3">
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Bundle name" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
             <input value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="Slug, optional" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+            <input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="Bundle SKU / unit code" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+            <input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="Bundle image URL, optional" className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
             <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short admin-curated description" rows={3} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
             <div className="grid grid-cols-2 gap-3">
               <select value={form.displayLocation} onChange={(e) => setForm({ ...form, displayLocation: e.target.value })} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
@@ -153,6 +187,16 @@ const AdminBundles = () => {
                 <option value="cart">Cart</option>
               </select>
               <input type="number" min={0} value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) || 0 })} className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-xs text-slate-400">
+                Starts
+                <input type="datetime-local" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+              </label>
+              <label className="text-xs text-slate-400">
+                Ends
+                <input type="datetime-local" value={form.endsAt} onChange={(e) => setForm({ ...form, endsAt: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+              </label>
             </div>
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
@@ -166,7 +210,7 @@ const AdminBundles = () => {
               <p className="text-sm font-bold text-amber-400">{formatPrice(bundleTotal)}</p>
             </div>
             <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
-              {selectedProducts.map((product: any) => (
+              {selectedProducts.map((product) => (
                 <div key={product.id} className="grid grid-cols-[40px_1fr_auto] items-center gap-2 rounded-lg border border-slate-800 bg-slate-950 p-2">
                   <img src={product.image} alt="" className="h-10 w-10 rounded bg-white object-contain p-1" />
                   <div className="min-w-0">
@@ -221,13 +265,24 @@ const AdminBundles = () => {
                     <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400"><Boxes size={18} /></span>
                     <span className="min-w-0">
                       <span className="block truncate font-semibold text-white">{bundle.name}</span>
+                      <span className="block truncate text-xs text-slate-400">{bundle.sku || 'No SKU'}</span>
                       <span className="text-xs text-slate-500">{bundle.productCount} products · {bundle.displayLocation} · {formatPrice(bundle.bundlePrice)}</span>
                     </span>
                   </button>
-                  <button type="button" onClick={() => setStatus(bundle, !bundle.isActive)} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold ${bundle.isActive ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-800 text-slate-300'}`}>
-                    {bundle.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-                    {bundle.isActive ? 'Active' : 'Inactive'}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => editBundle(bundle)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-700 px-3 text-sm font-bold text-slate-200 hover:bg-slate-800">
+                      <Pencil size={16} />
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => setStatus(bundle, !bundle.isActive)} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold ${bundle.isActive ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-800 text-slate-300'}`}>
+                      {bundle.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                      {bundle.isActive ? 'Active' : 'Inactive'}
+                    </button>
+                    <button type="button" onClick={() => deleteBundle(bundle)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-500/10 px-3 text-sm font-bold text-red-300 hover:bg-red-500/20">
+                      <Trash2 size={16} />
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))}
               {!loading && !bundles.length && <p className="p-4 text-sm text-slate-400">No bundles created yet.</p>}
