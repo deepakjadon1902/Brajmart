@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { fetchPaymentStatus, trackOrder } from '@/lib/api';
 import { toPositiveMetaValue, trackMetaPixelEvent } from '@/lib/metaPixel';
+import { clearCheckoutDraft } from '@/lib/checkoutDraft';
 import { useCartStore } from '@/store/cartStore';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -103,6 +104,7 @@ const PaymentStatusPage = () => {
   useEffect(() => {
     if (status === 'paid') {
       clearCart();
+      clearCheckoutDraft();
       try {
         sessionStorage.removeItem('brajmart-checkout-idempotency');
       } catch {

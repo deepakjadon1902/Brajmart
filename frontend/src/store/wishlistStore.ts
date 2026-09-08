@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import { Product } from '@/types/product';
 import { createUserScopedStorage } from '@/lib/userStorage';
 import { clearWishlistApi, fetchWishlist, getAuthToken, PersistedProductInterestItem, updateWishlist } from '@/lib/api';
@@ -34,6 +34,10 @@ const numberField = (value: unknown) => {
   const number = Number(value || 0);
   return Number.isFinite(number) ? number : 0;
 };
+const badgeField = (value: unknown): Product['badge'] => {
+  if (value === 'new' || value === 'bestseller' || value === 'combo' || value === 'exclusive') return value;
+  return undefined;
+};
 
 const fromApiItem = (item: PersistedProductInterestItem): Product => ({
   id: String(item.productId || item.id || item._id || ''),
@@ -45,10 +49,10 @@ const fromApiItem = (item: PersistedProductInterestItem): Product => ({
   category: stringField(item.category || item.product?.category),
   rating: numberField(item.product?.rating),
   reviewCount: numberField(item.product?.reviewCount),
-  badge: stringField(item.product?.badge) || undefined,
+  badge: badgeField(item.product?.badge),
   inStock: item.product?.inStock === undefined ? true : Boolean(item.product.inStock),
   selectedSize: item.selectedSize || stringField(item.product?.selectedSize) || undefined,
-  selectedPieces: item.selectedPieces || stringField(item.product?.selectedPieces) || undefined,
+  selectedPieces: numberField(item.selectedPieces || item.product?.selectedPieces) || undefined,
 });
 
 export const useWishlistStore = create<WishlistStore>()(
@@ -103,6 +107,6 @@ export const useWishlistStore = create<WishlistStore>()(
         set({ items: [] });
       },
     }),
-    { name: 'brajmart-wishlist', storage: createUserScopedStorage('brajmart-wishlist') }
+    { name: 'brajmart-wishlist', storage: createJSONStorage(() => createUserScopedStorage('brajmart-wishlist')) }
   )
 );

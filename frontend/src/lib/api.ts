@@ -602,7 +602,7 @@ export type PersistedProductInterestItem = {
   category?: string;
   quantity?: number;
   selectedSize?: string;
-  selectedPieces?: string;
+  selectedPieces?: string | number;
   selectedAttributes?: Record<string, string>;
   product?: Record<string, unknown>;
 };

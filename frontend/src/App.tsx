@@ -160,7 +160,6 @@ const App = () => {
   const settings = useSettingsStore((s) => s.settings);
   const loadProducts = useProductStore((s) => s.loadFromApi);
   const loadCart = useCartStore((s) => s.loadFromApi);
-  const clearWishlist = useWishlistStore((s) => s.clear);
   const loadWishlist = useWishlistStore((s) => s.loadFromApi);
   const authToken = useAuthStore((s) => s.token);
   const brandImage = settings.storeLogo || DEFAULT_IMAGE;
@@ -258,13 +257,10 @@ const App = () => {
   }, [authToken, loadCart]);
 
   useEffect(() => {
-    if (!authToken) {
-      clearWishlist();
-      return;
-    }
+    if (!authToken) return;
     useWishlistStore.persist.rehydrate();
     loadWishlist();
-  }, [authToken, clearWishlist, loadWishlist]);
+  }, [authToken, loadWishlist]);
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -15,6 +15,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
 import { trackMetaPixelEvent } from '@/lib/metaPixel';
+import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft';
 
 const steps = ['Delivery Details', 'Payment', 'Confirmation'];
 const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
@@ -151,23 +152,36 @@ const CodLogo = () => (
   </div>
 );
 
+const getDefaultAddress = (user: ReturnType<typeof useAuthStore.getState>['user']): Address => ({
+  fullName: user?.fullName || '',
+  mobile: user?.mobile || '',
+  street: user?.address || '',
+  addressLine2: '',
+  city: user?.city || '',
+  state: user?.state || '',
+  pincode: user?.pincode || '',
+  email: user?.email || '',
+});
+
 const CheckoutPage = () => {
   const { items, totalPrice, totalSavings, updateQuantity, removeItem, clearCart, reconcileValidatedItems } = useCartStore();
   const { user, isAuthenticated } = useAuthStore();
   const { settings, updateSettings } = useSettingsStore();
   const navigate = useNavigate();
+  const [initialCheckoutDraft] = useState(() => readCheckoutDraft(user?.id));
+  const defaultAddress = getDefaultAddress(user);
 
-  const [step, setStep] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState('razorpay');
+  const [step, setStep] = useState(() => initialCheckoutDraft?.step && initialCheckoutDraft.step > 0 ? initialCheckoutDraft.step : 0);
+  const [paymentMethod, setPaymentMethod] = useState(initialCheckoutDraft?.paymentMethod || 'razorpay');
   const [placedOrderId, setPlacedOrderId] = useState('');
-  const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
+  const [billingSameAsShipping, setBillingSameAsShipping] = useState(initialCheckoutDraft?.billingSameAsShipping ?? true);
   const [processing, setProcessing] = useState(false);
-  const [customerEmail, setCustomerEmail] = useState(user?.email || '');
+  const [customerEmail, setCustomerEmail] = useState(initialCheckoutDraft?.customerEmail || user?.email || '');
   const [serviceability, setServiceability] = useState<ServiceabilityState | null>(null);
   const [checkingPincode, setCheckingPincode] = useState(false);
-  const [wantsCodService, setWantsCodService] = useState(false);
-  const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  const [wantsCodService, setWantsCodService] = useState(initialCheckoutDraft?.wantsCodService ?? false);
+  const [couponCode, setCouponCode] = useState(initialCheckoutDraft?.couponCode || '');
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(initialCheckoutDraft?.appliedCoupon || null);
   const [couponLoading, setCouponLoading] = useState(false);
   const [bundleSnapshot, setBundleSnapshot] = useState<BundleSnapshot | null>(null);
   const [checkoutValidation, setCheckoutValidation] = useState<CartValidationResponse | null>(null);
@@ -181,27 +195,9 @@ const CheckoutPage = () => {
   const packagingRate = Math.max(0, Number(settings.packagingRate) || 0);
   const packagingCost = Math.round(localSubtotal * packagingRate / 100);
   const codFee = Math.max(0, Number(settings.codFee ?? 40) || 0);
-  const [billingAddress, setBillingAddress] = useState<Address>({
-    fullName: user?.fullName || '',
-    mobile: user?.mobile || '',
-    street: user?.address || '',
-    addressLine2: '',
-    city: user?.city || '',
-    state: user?.state || '',
-    pincode: user?.pincode || '',
-    email: user?.email || '',
-  });
+  const [billingAddress, setBillingAddress] = useState<Address>(initialCheckoutDraft?.billingAddress || defaultAddress);
 
-  const [shippingAddress, setShippingAddress] = useState<Address>({
-    fullName: user?.fullName || '',
-    mobile: user?.mobile || '',
-    street: user?.address || '',
-    addressLine2: '',
-    city: user?.city || '',
-    state: user?.state || '',
-    pincode: user?.pincode || '',
-    email: user?.email || '',
-  });
+  const [shippingAddress, setShippingAddress] = useState<Address>(initialCheckoutDraft?.shippingAddress || defaultAddress);
 
   const effectiveShipping = shippingAddress;
   const effectiveEmail = String(billingAddress.email || shippingAddress.email || customerEmail || user?.email || '').trim();
@@ -470,6 +466,21 @@ const CheckoutPage = () => {
     if (billingSameAsShipping) setBillingAddress({ ...shippingAddress });
   }, [billingSameAsShipping, shippingAddress]);
 
+  useEffect(() => {
+    if (!items.length || step >= 2) return;
+    saveCheckoutDraft({
+      step,
+      paymentMethod,
+      billingSameAsShipping,
+      customerEmail,
+      shippingAddress,
+      billingAddress,
+      couponCode,
+      appliedCoupon,
+      wantsCodService,
+    }, user?.id);
+  }, [appliedCoupon, billingAddress, billingSameAsShipping, couponCode, customerEmail, items.length, paymentMethod, shippingAddress, step, user?.id, wantsCodService]);
+
   const shouldRedirectToCart = items.length === 0 && step < 2;
   useEffect(() => {
     if (shouldRedirectToCart) navigate('/cart');
@@ -509,13 +520,13 @@ const CheckoutPage = () => {
 
   const validateContactAndAddress = () => {
     const shippingResult = validateAddress(shippingAddress, 'Shipping');
-    if (!shippingResult.valid) {
+    if (shippingResult.valid === false) {
       toast.error(shippingResult.message);
       setStep(0);
       return false;
     }
     const billingResult = validateAddress(billingAddress, 'Billing');
-    if (!billingResult.valid) {
+    if (billingResult.valid === false) {
       toast.error(billingResult.message);
       setStep(0);
       return false;
@@ -816,6 +827,7 @@ const CheckoutPage = () => {
         }) as CreatedOrderResponse;
         setPlacedOrderId(String(order?.orderId || order?._id || order?.id || ''));
         sessionStorage.removeItem('brajmart-last-bundle');
+        clearCheckoutDraft(user?.id);
         clearCart();
         setStep(2);
         toast.success('COD order confirmed successfully');
