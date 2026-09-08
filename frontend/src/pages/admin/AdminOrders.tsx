@@ -13,7 +13,7 @@ import {
 } from '@/lib/whatsappTemplates';
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
-const shippingServices = ['Delhivery', 'Shree Maruti', 'India Post', 'Ekart'];
+const shippingServices = ['DTDC', 'Delhivery', 'Shree Maruti', 'India Post', 'Ekart'];
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -126,7 +126,7 @@ const AdminOrders = () => {
       const updated: any = await updateOrderStatusApi(orderId, {
         status: detail.status,
         trackingId: cleaned,
-        shippingService: detail.shippingService || 'Delhivery',
+        shippingService: detail.shippingService || 'DTDC',
         note: `Tracking ID updated to ${cleaned}`,
       });
       const normalized = normalizeOrder(updated);
