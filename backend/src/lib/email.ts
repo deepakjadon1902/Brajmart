@@ -379,10 +379,10 @@ export const sendOrderConfirmation = async (to: string, payload: { orderId: stri
   await sendEmail(to, 'Your BrajMart Order Confirmation', html);
 };
 
-export const sendPaymentReceipt = async (to: string, payload: { orderId: string; amount: number; paymentId: string; invoiceNumber?: number | string; orderDate?: string; paidAt?: string; eta?: string; details?: ({ items?: OrderItem[]; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } & OrderPriceBreakdown) }) => {
+export const buildPaymentReceiptHtml = async (payload: { orderId: string; amount: number; paymentId: string; invoiceNumber?: number | string; orderDate?: string; paidAt?: string; eta?: string; details?: ({ items?: OrderItem[]; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } & OrderPriceBreakdown) }) => {
   const invoiceNumber = payload.invoiceNumber ? String(payload.invoiceNumber) : payload.orderId;
   const paidAt = payload.paidAt || new Date().toISOString();
-  const html = await brandWrapper(
+  return brandWrapper(
     'Tax Invoice',
     `<div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:18px;">
        <div>
@@ -404,6 +404,11 @@ export const sendPaymentReceipt = async (to: string, payload: { orderId: string;
        ${payload.eta ? `<p style="margin:5px 0 0;"><strong>Estimated delivery:</strong> ${escapeHtml(payload.eta)}</p>` : ''}
      </div>`
   );
+};
+
+export const sendPaymentReceipt = async (to: string, payload: { orderId: string; amount: number; paymentId: string; invoiceNumber?: number | string; orderDate?: string; paidAt?: string; eta?: string; details?: ({ items?: OrderItem[]; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } & OrderPriceBreakdown) }) => {
+  const invoiceNumber = payload.invoiceNumber ? String(payload.invoiceNumber) : payload.orderId;
+  const html = await buildPaymentReceiptHtml(payload);
   await sendEmail(to, `BrajMart Invoice #${invoiceNumber}`, html);
 };
 

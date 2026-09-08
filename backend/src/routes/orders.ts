@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute, withDbTransaction } from '../lib/db';
-import { sendOrderConfirmation, sendShippingUpdate } from '../lib/email';
+import { buildPaymentReceiptHtml, sendOrderConfirmation, sendShippingUpdate } from '../lib/email';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { auth, adminOnly, optionalAuth, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
@@ -242,6 +242,49 @@ const buildDeliveryPartnerOrderStatusTracking = (order: ReturnType<typeof mapOrd
     remarks: message,
   }],
 });
+
+const buildOrderInvoiceDetails = (row: any) => ({
+  items: parseJson(row.items, []),
+  total: Number(row.total),
+  itemsSubtotal: row.items_subtotal == null ? undefined : Number(row.items_subtotal),
+  shippingAmount: row.shipping_amount == null ? undefined : Number(row.shipping_amount),
+  packagingAmount: row.packaging_amount == null ? undefined : Number(row.packaging_amount),
+  packagingRate: row.packaging_rate == null ? undefined : Number(row.packaging_rate),
+  codAmount: row.cod_amount == null ? undefined : Number(row.cod_amount),
+  codAvailable: row.cod_available == null ? undefined : Boolean(Number(row.cod_available)),
+  codPincode: row.cod_pincode ?? undefined,
+  codMessage: row.cod_message ?? undefined,
+  couponCode: row.coupon_code ?? undefined,
+  couponDiscount: row.coupon_discount == null ? undefined : Number(row.coupon_discount),
+  couponDetails: parseJson(row.coupon_details, null),
+  paymentMethod: row.payment_method,
+  shippingAddress: parseJson(row.shipping_address, {}),
+  billingAddress: parseJson(row.billing_address, {}),
+});
+
+const wrapInvoiceHtml = (invoiceHtml: string, autoPrint: boolean) => `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BrajMart Invoice</title>
+    <style>
+      @page { size: A4; margin: 12mm; }
+      @media print {
+        body { background: #fff !important; }
+        .no-print { display: none !important; }
+      }
+      body { margin: 0; background: #f7f4ef; }
+      .invoice-toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; font-family: Arial, sans-serif; }
+      .invoice-toolbar button { border: 1px solid #c58f1f; background: #c58f1f; color: #3b1c12; border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="invoice-toolbar no-print"><button onclick="window.print()">Download PDF</button></div>
+    ${invoiceHtml}
+    ${autoPrint ? '<script>window.addEventListener("load", () => setTimeout(() => window.print(), 300));</script>' : ''}
+  </body>
+</html>`;
 
 const handleDeliveryPartnerTrack = async (req: any, res: any, isAdmin = false) => {
   try {
@@ -596,6 +639,51 @@ router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) =>
     res.status(201).json(order);
   } catch (err: any) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/:id/invoice', auth, adminOnly, async (req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    const rows = await dbQuery<any>(
+      `SELECT * FROM orders
+       WHERE id = ?
+         AND ${merchantOrderWhereSql('orders')}
+       LIMIT 1`,
+      [req.params.id]
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ message: 'Order not found' });
+
+    const paymentRows = await dbQuery<any>(
+      `SELECT transaction_id, amount, status, created_at
+       FROM payments
+       WHERE order_id = ?
+       ORDER BY FIELD(status, 'paid') DESC, created_at DESC, id DESC
+       LIMIT 1`,
+      [req.params.id]
+    ).catch(() => []);
+    const paymentRow = paymentRows[0];
+    const paymentId = String(paymentRow?.transaction_id || row.tracking_id || row.id);
+    const amount = Number(paymentRow?.amount || row.total || 0);
+    const paidAt = toIsoString(paymentRow?.created_at) || toIsoString(row.created_at) || undefined;
+    const invoiceHtml = await buildPaymentReceiptHtml({
+      orderId: String(row.id),
+      invoiceNumber: row.id,
+      amount,
+      paymentId,
+      orderDate: toIsoString(row.created_at) || undefined,
+      paidAt,
+      details: {
+        ...buildOrderInvoiceDetails(row),
+        transactionId: paymentId,
+      },
+    });
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="BrajMart-Invoice-${row.id}.html"`);
+    return res.send(wrapInvoiceHtml(invoiceHtml, req.query.print === '1'));
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Failed to generate invoice' });
   }
 });
 

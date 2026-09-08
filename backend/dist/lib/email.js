@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendPasswordResetOtp = exports.sendVerifyOtp = exports.sendVerifyEmail = exports.sendShippingUpdate = exports.sendAdminPaymentNotice = exports.sendPaymentFailed = exports.sendPaymentReceipt = exports.sendOrderConfirmation = exports.sendEmail = void 0;
+exports.sendPasswordResetOtp = exports.sendVerifyOtp = exports.sendVerifyEmail = exports.sendShippingUpdate = exports.sendAdminPaymentNotice = exports.sendPaymentFailed = exports.sendPaymentReceipt = exports.buildPaymentReceiptHtml = exports.sendOrderConfirmation = exports.sendEmail = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const db_1 = require("./db");
 let cachedTransporter = null;
@@ -341,10 +341,10 @@ const sendOrderConfirmation = async (to, payload) => {
     await (0, exports.sendEmail)(to, 'Your BrajMart Order Confirmation', html);
 };
 exports.sendOrderConfirmation = sendOrderConfirmation;
-const sendPaymentReceipt = async (to, payload) => {
+const buildPaymentReceiptHtml = async (payload) => {
     const invoiceNumber = payload.invoiceNumber ? String(payload.invoiceNumber) : payload.orderId;
     const paidAt = payload.paidAt || new Date().toISOString();
-    const html = await brandWrapper('Tax Invoice', `<div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:18px;">
+    return brandWrapper('Tax Invoice', `<div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:18px;">
        <div>
          <p style="margin:0;color:#8a6d4e;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;">Invoice</p>
          <p style="margin:4px 0 0;font-size:24px;font-weight:800;color:#3b1c12;">#${escapeHtml(invoiceNumber)}</p>
@@ -363,6 +363,11 @@ const sendPaymentReceipt = async (to, payload) => {
        <p style="margin:5px 0 0;"><strong>Payment ID:</strong> ${escapeHtml(payload.paymentId)}</p>
        ${payload.eta ? `<p style="margin:5px 0 0;"><strong>Estimated delivery:</strong> ${escapeHtml(payload.eta)}</p>` : ''}
      </div>`);
+};
+exports.buildPaymentReceiptHtml = buildPaymentReceiptHtml;
+const sendPaymentReceipt = async (to, payload) => {
+    const invoiceNumber = payload.invoiceNumber ? String(payload.invoiceNumber) : payload.orderId;
+    const html = await (0, exports.buildPaymentReceiptHtml)(payload);
     await (0, exports.sendEmail)(to, `BrajMart Invoice #${invoiceNumber}`, html);
 };
 exports.sendPaymentReceipt = sendPaymentReceipt;

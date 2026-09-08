@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { OrderStatus } from '@/store/orderStore';
 import { StatusBadge } from './AdminDashboard';
-import { Search, Eye, X, RefreshCw, MapPin, MessageCircle } from 'lucide-react';
-import { adminCheckDeliveryServicePincode, adminTrackDeliveryServiceOrder, fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
+import { Search, Eye, X, RefreshCw, MapPin, MessageCircle, FileText, Download } from 'lucide-react';
+import { adminCheckDeliveryServicePincode, adminTrackDeliveryServiceOrder, fetchOrderInvoice, fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 import {
@@ -197,6 +197,19 @@ const AdminOrders = () => {
     window.open(buildWhatsAppWebUrl(phone, message), '_blank', 'noopener,noreferrer');
   };
 
+  const handleInvoice = async (orderId: string, action: 'view' | 'download') => {
+    try {
+      const blob = await fetchOrderInvoice(orderId, { print: action === 'download' });
+      const url = URL.createObjectURL(blob);
+      const opened = window.open(url, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      if (!opened) toast.info('Allow popups to open the invoice PDF view');
+      else if (action === 'download') toast.info('Choose Save as PDF in the print dialog');
+    } catch (err: any) {
+      toast.error(err?.message || 'Unable to download invoice');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Orders Management</h1>
@@ -214,7 +227,7 @@ const AdminOrders = () => {
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-xs sm:text-sm min-w-[980px]">
+          <table className="w-full text-xs sm:text-sm min-w-[1060px]">
             <thead><tr className="text-slate-400 border-b border-slate-800">
               <th className="text-left px-5 py-3 font-medium">Order ID</th>
               <th className="text-left px-5 py-3 font-medium">Customer</th>
@@ -224,6 +237,7 @@ const AdminOrders = () => {
               <th className="text-left px-5 py-3 font-medium">Status</th>
               <th className="text-left px-5 py-3 font-medium hidden md:table-cell">Date</th>
               <th className="text-left px-5 py-3 font-medium">Actions</th>
+              <th className="text-left px-5 py-3 font-medium">Invoice</th>
             </tr></thead>
             <tbody>
               {paginatedOrders.map((o) => (
@@ -244,6 +258,28 @@ const AdminOrders = () => {
                   <td className="px-5 py-3 text-slate-400 text-xs hidden md:table-cell">{new Date(o.createdAt).toLocaleDateString('en-IN')}</td>
                   <td className="px-5 py-3">
                     <button onClick={() => setSelectedOrder(o.id)} className="text-amber-400 hover:text-amber-300"><Eye size={16} /></button>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleInvoice(o._id || o.id, 'view')}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-300"
+                        title="View PDF invoice"
+                        aria-label={`View PDF invoice for order ${o.id}`}
+                      >
+                        <FileText size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleInvoice(o._id || o.id, 'download')}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-emerald-500/50 hover:text-emerald-300"
+                        title="Download PDF invoice"
+                        aria-label={`Download PDF invoice for order ${o.id}`}
+                      >
+                        <Download size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

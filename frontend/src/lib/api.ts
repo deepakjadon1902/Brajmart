@@ -470,6 +470,20 @@ const queryString = (params?: Record<string, string | number | boolean | undefin
 export const fetchOrders = (opts?: { search?: string }) => getJson<any[]>(`/orders${queryString({ search: opts?.search })}`);
 export const fetchPendingPaymentOrders = (opts?: { search?: string }) => getJson<Record<string, unknown>[]>(`/orders/admin/pending-payments${queryString({ search: opts?.search })}`);
 export const fetchMyOrders = () => getJson<any[]>('/orders/my');
+export const fetchOrderInvoice = async (id: string | number, opts?: { print?: boolean }) => {
+  const token = getAuthToken();
+  const res = await fetch(`${API_BASE}/orders/${encodeURIComponent(String(id))}/invoice${queryString({ print: opts?.print ? 1 : undefined })}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    const message = typeof data?.message === 'string' ? data.message : `Invoice download failed (${res.status})`;
+    throw new Error(message);
+  }
+  return res.blob();
+};
 export const updateOrderStatus = (id: string, payload: { status: string; note?: string; shippingService?: string; trackingId?: string | null }) =>
   getJson<Record<string, any>>(`/orders/${id}/status`, { method: 'PUT', body: payload });
 export const createOrder = (payload: Record<string, unknown>) =>
