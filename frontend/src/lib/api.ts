@@ -156,6 +156,18 @@ export const createRazorpayOrder = (payload: {
     prefill: { name: string; email: string; contact?: string };
   }>('/razorpay/create-order', { method: 'POST', body: payload });
 
+export const retryRazorpayOrder = (token: string) =>
+  getJson<{
+    keyId: string;
+    orderId: string;
+    statusToken: string;
+    amount: number;
+    currency: string;
+    name: string;
+    description: string;
+    prefill: { name: string; email: string; contact?: string };
+  }>('/razorpay/retry-order', { method: 'POST', body: { token } });
+
 export const verifyRazorpayPayment = (payload: {
   razorpay_order_id: string;
   razorpay_payment_id: string;
@@ -169,7 +181,7 @@ export const verifyRazorpayPayment = (payload: {
 export const reportRazorpayPaymentFailed = (payload: {
   razorpay_order_id: string;
   razorpay_payment_id?: string;
-  customer_email: string;
+  customer_email?: string;
   reason?: string;
 }) =>
   getJson<{ ok: boolean; orderId: number; paymentId: string; status: string }>('/razorpay/failed', {

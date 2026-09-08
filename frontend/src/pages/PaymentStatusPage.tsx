@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import { fetchPaymentStatus, trackOrder } from '@/lib/api';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { CheckCircle2, CreditCard, XCircle, Loader2 } from 'lucide-react';
+import { fetchPaymentStatus, reportRazorpayPaymentFailed, retryRazorpayOrder, trackOrder, verifyRazorpayPayment } from '@/lib/api';
 import { toPositiveMetaValue, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { clearCheckoutDraft } from '@/lib/checkoutDraft';
 import { useCartStore } from '@/store/cartStore';
+import { formatPrice } from '@/utils/formatPrice';
+import { toast } from 'sonner';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
@@ -34,12 +36,47 @@ type TrackedOrder = {
 declare global {
   interface Window {
     dataLayer?: Array<Record<string, unknown>>;
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open: () => void;
+      close?: () => void;
+      on: (event: string, handler: (response: unknown) => void) => void;
+    };
   }
 }
 
+let razorpayCheckoutLoadPromise: Promise<boolean> | null = null;
+
+const loadRazorpayCheckout = () =>
+  razorpayCheckoutLoadPromise ||= new Promise<boolean>((resolve) => {
+    if (typeof window === 'undefined') return resolve(false);
+    if (window.Razorpay) return resolve(true);
+    const existingScript = document.querySelector<HTMLScriptElement>('script[data-brajmart-razorpay-checkout="true"]');
+    if (existingScript && window.Razorpay) return resolve(true);
+
+    let settled = false;
+    const finish = (loaded: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      if (!loaded) razorpayCheckoutLoadPromise = null;
+      resolve(loaded);
+    };
+
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.dataset.brajmartRazorpayCheckout = 'true';
+    script.onload = () => finish(Boolean(window.Razorpay));
+    script.onerror = () => finish(false);
+    const timeoutId = window.setTimeout(() => finish(false), 12000);
+    document.body.appendChild(script);
+  });
+
 const PaymentStatusPage = () => {
   const { token } = useParams();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [retrying, setRetrying] = useState(false);
   const [status, setStatus] = useState<'paid' | 'pending' | 'failed' | null>(null);
   const [orderId, setOrderId] = useState<number | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
@@ -164,6 +201,93 @@ const PaymentStatusPage = () => {
     }
   }, [token, status, amount, method, orderId, orderItems]);
 
+  const handleRetryPayment = async () => {
+    if (!token || retrying || status === 'paid') return;
+    setRetrying(true);
+    try {
+      const loaded = await loadRazorpayCheckout();
+      if (!loaded || !window.Razorpay) {
+        throw new Error('Unable to load Razorpay checkout. Please disable browser shields/ad blockers and try again.');
+      }
+
+      const result = await retryRazorpayOrder(token);
+      const checkout = new window.Razorpay({
+        key: result.keyId,
+        amount: result.amount,
+        currency: result.currency,
+        name: result.name,
+        description: result.description,
+        image: '/logo.png',
+        order_id: result.orderId,
+        prefill: result.prefill,
+        notes: {
+          source: 'brajmart_payment_retry',
+          previous_status_token: token,
+        },
+        theme: {
+          color: '#E8680A',
+        },
+        modal: {
+          ondismiss: () => setRetrying(false),
+        },
+        handler: async (response: unknown) => {
+          const payment = response as {
+            razorpay_order_id?: string;
+            razorpay_payment_id?: string;
+            razorpay_signature?: string;
+          };
+          try {
+            await verifyRazorpayPayment({
+              razorpay_order_id: payment.razorpay_order_id || result.orderId,
+              razorpay_payment_id: payment.razorpay_payment_id || '',
+              razorpay_signature: payment.razorpay_signature || '',
+            });
+            navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`, { replace: true });
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : '';
+            toast.error(message || 'Payment completed, but verification is still pending.');
+            navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`, { replace: true });
+          } finally {
+            setRetrying(false);
+          }
+        },
+      });
+
+      checkout.on('payment.failed', async (response: unknown) => {
+        const failure = response as {
+          error?: {
+            description?: string;
+            reason?: string;
+            metadata?: {
+              order_id?: string;
+              payment_id?: string;
+            };
+          };
+        };
+        const reason = failure?.error?.description || failure?.error?.reason || 'Payment failed';
+        try {
+          await reportRazorpayPaymentFailed({
+            razorpay_order_id: failure?.error?.metadata?.order_id || result.orderId,
+            razorpay_payment_id: failure?.error?.metadata?.payment_id,
+            reason,
+          });
+        } catch {
+          // Webhooks or the status page can still reconcile this attempt.
+        }
+        checkout.close?.();
+        toast.error('Payment failed. You can try again with the same order.');
+        setRetrying(false);
+        navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`, { replace: true });
+      });
+
+      checkout.open();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '';
+      toast.error(message || 'Unable to retry payment. Please try again.');
+      setRetrying(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -205,7 +329,7 @@ const PaymentStatusPage = () => {
               {amount !== null && (
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-muted-foreground">Amount:</span>
-                  <span className="font-semibold">₹{amount.toLocaleString('en-IN')}</span>
+                  <span className="font-semibold">{formatPrice(amount)}</span>
                 </div>
               )}
               {method && (
@@ -220,9 +344,21 @@ const PaymentStatusPage = () => {
               <Link to="/track-orders" className="px-5 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors">
                 Track Order
               </Link>
-              <Link to="/checkout" className="px-5 py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer">
-                Back to Checkout
-              </Link>
+              {status === 'failed' && method === 'Razorpay' ? (
+                <button
+                  type="button"
+                  onClick={handleRetryPayment}
+                  disabled={retrying}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {retrying ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                  {retrying ? 'Opening Payment...' : 'Pay Again'}
+                </button>
+              ) : (
+                <Link to="/checkout" className="px-5 py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer">
+                  Back to Checkout
+                </Link>
+              )}
             </div>
           </div>
         </div>
