@@ -40,4 +40,11 @@ for (const name of ['sitemap.xml', 'sitemap-index.xml', 'sitemap-products.xml', 
   assert(!xml.includes('?tag=') && !xml.includes('/cart') && !xml.includes('/checkout'), `${name} contains excluded URLs`);
 }
 
-console.log('SEO verification passed: rendered HTML, product content, schemas, canonicals, and sitemap exclusions are present.');
+const llms = await fs.readFile(path.join(dist, 'llms.txt'), 'utf8');
+assert(llms.startsWith('# Brajmart'), 'llms.txt is missing the Brajmart heading');
+assert(llms.includes('https://www.brajmart.com/products'), 'llms.txt is missing absolute public product URL');
+assert(llms.includes('Sitemap index'), 'llms.txt is missing sitemap guidance');
+assert(!/https:\/\/www\.brajmart\.com\/(admin|checkout|cart|profile|payment-status|login|register)\b/i.test(llms), 'llms.txt contains private route URLs');
+assert(!/Bearer\s+[A-Za-z0-9._-]+|JWT_SECRET|MYSQL_|DATABASE_URL|RAZORPAY_.*SECRET|API_KEY/i.test(llms), 'llms.txt appears to expose private or sensitive content');
+
+console.log('SEO verification passed: rendered HTML, product content, schemas, canonicals, llms.txt, and sitemap exclusions are present.');

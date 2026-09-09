@@ -33,6 +33,7 @@ const SEO = ({
       <meta name="description" content={metaDescription} />
       <meta name="robots" content={robots} />
       <link rel="canonical" href={canonical} />
+      <link rel="alternate" type="text/plain" title="AI/LLM site information" href="/llms.txt" />
       <meta property="og:type" content={type} />
       <meta property="og:site_name" content={SITE_NAME} />
       <meta property="og:url" content={canonical} />

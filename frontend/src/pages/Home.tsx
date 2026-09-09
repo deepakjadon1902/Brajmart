@@ -78,11 +78,6 @@ const Home = () => {
       '@type': 'WebSite',
       name: 'Brajmart',
       url: SITE_URL,
-      potentialAction: {
-        '@type': 'SearchAction',
-        target: `${SITE_URL}/search?q={search_term_string}`,
-        'query-input': 'required name=search_term_string',
-      },
     },
     breadcrumbSchema([{ name: 'Home', path: '/' }]),
   ];

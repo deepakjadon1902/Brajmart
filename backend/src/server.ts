@@ -222,14 +222,7 @@ type SitemapEntry = {
 
 const staticSitemapEntries: SitemapEntry[] = [
   { path: '/', priority: '1.0', changefreq: 'daily' },
-  { path: '/shop', priority: '0.9', changefreq: 'daily' },
   { path: '/products', priority: '0.9', changefreq: 'daily' },
-  { path: '/products?tag=bestseller', priority: '0.8', changefreq: 'daily' },
-  { path: '/products?tag=latest', priority: '0.8', changefreq: 'daily' },
-  { path: '/products?tag=new', priority: '0.8', changefreq: 'daily' },
-  { path: '/products?tag=prasadam', priority: '0.8', changefreq: 'weekly' },
-  { path: '/products?tag=accessories', priority: '0.8', changefreq: 'weekly' },
-  { path: '/products?tag=exclusive', priority: '0.8', changefreq: 'weekly' },
   { path: '/categories', priority: '0.8', changefreq: 'weekly' },
   { path: '/category/spiritual-books', priority: '0.8', changefreq: 'weekly' },
   { path: '/category/prasadam', priority: '0.8', changefreq: 'weekly' },
@@ -260,24 +253,143 @@ const staticSitemapEntries: SitemapEntry[] = [
 
 app.get('/robots.txt', (_req, res) => {
   res.type('text/plain').send([
-    'User-agent: Googlebot',
-    'Allow: /',
-    '',
-    'User-agent: Bingbot',
-    'Allow: /',
-    '',
-    'User-agent: Twitterbot',
-    'Allow: /',
-    '',
-    'User-agent: facebookexternalhit',
-    'Allow: /',
-    '',
     'User-agent: *',
     'Allow: /',
+    '# Block filter, sort, search, and pagination URLs',
+    'Disallow: /*?sort=',
+    'Disallow: /*?filter=',
+    'Disallow: /*?page=',
+    'Disallow: /*?category=',
+    'Disallow: /*?color=',
+    'Disallow: /*?price=',
+    'Disallow: /*?brand=',
+    'Disallow: /search',
+    'Disallow: /search?',
+    'Disallow: /search/',
+    '# Block private, transactional, account, and API routes',
+    'Disallow: /api/',
+    'Disallow: /cart',
+    'Disallow: /checkout',
+    'Disallow: /compare',
+    'Disallow: /account',
+    'Disallow: /my-orders',
+    'Disallow: /profile',
+    'Disallow: /wishlist',
+    'Disallow: /login',
+    'Disallow: /register',
+    'Disallow: /admin',
+    'Disallow: /orders',
+    'Disallow: /oauth-callback',
+    'Disallow: /verify-email',
+    'Disallow: /verify-otp',
+    'Disallow: /forgot-password',
+    'Disallow: /track-order',
+    'Disallow: /track-orders',
+    'Disallow: /payment-status/',
     '',
     `Sitemap: ${SITE_URL}/sitemap.xml`,
     `Sitemap: ${SITE_URL}/sitemap_index.xml`,
   ].join('\n'));
+});
+
+app.get('/llms.txt', async (_req, res) => {
+  const generatedAt = new Date().toISOString();
+  const categories: string[] = [];
+  const products: string[] = [];
+  const blogs: string[] = [];
+
+  if (isDbConnected()) {
+    try {
+      const [categoryRows, productRows, blogRows] = await Promise.all([
+        dbQuery<any>('SELECT name, product_count FROM categories WHERE archived_at IS NULL AND name IS NOT NULL AND name <> "" ORDER BY (display_order IS NULL OR display_order = 0) ASC, display_order ASC, created_at DESC LIMIT 40'),
+        dbQuery<any>('SELECT name, slug, price, in_stock, category, updated_at FROM products WHERE archived_at IS NULL AND slug IS NOT NULL AND slug <> "" ORDER BY updated_at DESC LIMIT 40'),
+        dbQuery<any>("SELECT title, slug, excerpt FROM blogs WHERE archived_at IS NULL AND slug IS NOT NULL AND slug <> '' AND status = 'published' ORDER BY COALESCE(published_at, created_at) DESC LIMIT 20").catch(() => []),
+      ]);
+
+      for (const row of categoryRows || []) {
+        const slug = slugify(row.name);
+        if (slug) categories.push(`- ${String(row.name).trim()}${Number(row.product_count || 0) > 0 ? ` (${Number(row.product_count)} products)` : ''}: ${SITE_URL}/category/${slug}`);
+      }
+      for (const row of productRows || []) {
+        const slug = slugify(row.slug);
+        if (!slug) continue;
+        const details = [
+          row.category ? `category: ${String(row.category).trim()}` : '',
+          Number(row.price || 0) > 0 ? `price: INR ${Number(row.price)}` : '',
+          Number(row.in_stock || 0) ? 'availability: check product page' : 'availability: may be unavailable',
+        ].filter(Boolean).join('; ');
+        products.push(`- ${String(row.name || '').trim()}: ${SITE_URL}/product/${slug}${details ? ` (${details})` : ''}`);
+      }
+      for (const row of blogRows || []) {
+        const slug = slugify(row.slug);
+        if (slug) blogs.push(`- ${String(row.title || '').trim()}: ${SITE_URL}/blog/${slug}`);
+      }
+    } catch (err) {
+      console.error('Failed to build llms.txt:', err);
+    }
+  }
+
+  const content = [
+    '# Brajmart',
+    '',
+    'Brajmart is an online devotional commerce website for authentic Vrindavan and Braj-inspired products, including prasadam, tulsi malas, puja items, spiritual books, deity shringar, accessories, groceries, and Braj Yatra-related items.',
+    '',
+    `Canonical site: ${SITE_URL}`,
+    '',
+    '## Main Public Sections',
+    '',
+    `- Homepage: ${SITE_URL}/`,
+    `- Products: ${SITE_URL}/products`,
+    `- Categories: ${SITE_URL}/categories`,
+    `- Blog: ${SITE_URL}/blog`,
+    `- About Brajmart: ${SITE_URL}/about`,
+    `- Contact: ${SITE_URL}/contact`,
+    `- Help Center: ${SITE_URL}/help-center`,
+    `- Customer Service: ${SITE_URL}/customer-service`,
+    '',
+    '## Shopping And Product Information',
+    '',
+    'Public product pages contain product names, descriptions, images, categories, prices in INR, visible stock or availability signals, SKU information when available, shipping/return links, and related products. Private, transactional, administrative, authentication, account, order, checkout, payment callback, and API areas are not intended for indexing.',
+    '',
+    '## Categories',
+    '',
+    categories.length ? categories.join('\n') : `- Browse categories: ${SITE_URL}/categories`,
+    '',
+    '## Representative Public Products',
+    '',
+    'The full indexable catalog is listed in the XML sitemap. This file includes a compact public sample rather than duplicating every product.',
+    '',
+    products.length ? products.join('\n') : `- Product catalog: ${SITE_URL}/products`,
+    '',
+    '## Blog And Guides',
+    '',
+    blogs.length ? blogs.join('\n') : `- Blog: ${SITE_URL}/blog`,
+    '',
+    '## Public Policies',
+    '',
+    `- Shipping and Delivery: ${SITE_URL}/shipping-delivery`,
+    `- Return Policy: ${SITE_URL}/return-policy`,
+    `- Privacy Policy: ${SITE_URL}/privacy-policy`,
+    `- Payment Methods: ${SITE_URL}/payment-method`,
+    `- Terms and Conditions: ${SITE_URL}/terms`,
+    '',
+    '## Machine-Readable Resources',
+    '',
+    `- Robots policy: ${SITE_URL}/robots.txt`,
+    `- Sitemap index: ${SITE_URL}/sitemap_index.xml`,
+    `- Sitemap: ${SITE_URL}/sitemap.xml`,
+    '',
+    '## Notes For Crawlers And AI Systems',
+    '',
+    'Use canonical URLs from the sitemap and page metadata. This file improves machine readability and discoverability, but it does not guarantee crawling, indexing, ranking, or recommendations by any external AI or search platform.',
+    '',
+    `Generated from public routes on ${generatedAt}.`,
+  ].join('\n');
+
+  res
+    .type('text/plain')
+    .setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400')
+    .send(content);
 });
 
 app.get('/sitemap_index.xml', (_req, res) => {

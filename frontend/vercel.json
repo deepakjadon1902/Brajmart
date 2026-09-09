@@ -10,7 +10,7 @@
       ]
     },
     {
-      "source": "/(favicon.ico|logo.png|robots.txt|sitemap.xml|sitemap-index.xml|sitemap_index.xml|sitemap-products.xml|sitemap-categories.xml|sitemap-pages.xml|sitemap-blog.xml)",
+      "source": "/(favicon.ico|logo.png|robots.txt|llms.txt|sitemap.xml|sitemap-index.xml|sitemap_index.xml|sitemap-products.xml|sitemap-categories.xml|sitemap-pages.xml|sitemap-blog.xml)",
       "headers": [
         {
           "key": "Cache-Control",

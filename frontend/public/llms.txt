@@ -1,0 +1,109 @@
+# Brajmart
+
+Brajmart is an online devotional commerce website for authentic Vrindavan and Braj-inspired products, including prasadam, tulsi malas, puja items, spiritual books, deity shringar, accessories, groceries, and Braj Yatra-related items.
+
+Canonical site: https://www.brajmart.com
+
+## Main Public Sections
+
+- Homepage: https://www.brajmart.com/
+- Products: https://www.brajmart.com/products
+- Categories: https://www.brajmart.com/categories
+- Blog: https://www.brajmart.com/blog
+- About Brajmart: https://www.brajmart.com/about
+- Contact: https://www.brajmart.com/contact
+- Help Center: https://www.brajmart.com/help-center
+- Customer Service: https://www.brajmart.com/customer-service
+
+## Shopping And Product Information
+
+Public product pages contain product names, descriptions, images, categories, prices in INR, visible stock or availability signals, SKU information when available, shipping/return links, and related products. Cart, checkout, account, admin, payment status, authentication, and order-tracking areas are private or transactional and are not intended for indexing.
+
+## Categories
+
+- Brajmart Special: https://www.brajmart.com/category/brajmart-special
+- Books: https://www.brajmart.com/category/books
+- Prasadam: https://www.brajmart.com/category/prasadam
+- Accessories: https://www.brajmart.com/category/accessories
+- Clothing: https://www.brajmart.com/category/clothing
+- Groceries: https://www.brajmart.com/category/groceries
+- Idols Shringar: https://www.brajmart.com/category/idols-shringar
+- Incense Pooja Items: https://www.brajmart.com/category/incense-pooja-items
+
+
+## Representative Public Products
+
+The full indexable catalog is listed in the XML sitemap. This file includes a compact, public sample to help machine consumers understand the catalog shape without duplicating every product.
+
+- Sri Sri Radha Shyam Sunder Temple Prasadam Big Box: https://www.brajmart.com/product/sri-sri-radha-shyam-sunder-temple-prasadam-big-box (availability: check product page)
+- Sri Sri Radha Shyam Sunder Temple Prasadam Small: https://www.brajmart.com/product/sri-sri-radha-shyam-sunder-temple-prasadam-small (availability: check product page)
+- Iskcon Vrindavan Navratan Sada Mixture Namkeen: https://www.brajmart.com/product/iskcon-vrindavan-navratan-sada-mixture-namkeen (availability: check product page)
+- Iskcon Prasadam Soan Papdi 1kg: https://www.brajmart.com/product/iskcon-prasadam-soan-papdi-1kg (availability: check product page)
+- Iskcon Prasadam Soan Papdi 500grams: https://www.brajmart.com/product/iskcon-prasadam-soan-papdi-500grams (availability: check product page)
+- Iskcon Prasadam Vrindavan Peda 1kg: https://www.brajmart.com/product/iskcon-prasadam-vrindavan-peda-1kg (availability: check product page)
+- Iskcon Prasadam Vrindavan Peda 500gram: https://www.brajmart.com/product/iskcon-prasadam-vrindavan-peda-500gram (availability: check product page)
+- Srimad Bhagavatam Complete English Set 18 Volumes: https://www.brajmart.com/product/srimad-bhagavatam-complete-english-set-18-volumes (availability: check product page)
+- Srimad Bhagavatam Complete Hindi Set 18 Volumes: https://www.brajmart.com/product/srimad-bhagavatam-complete-hindi-set-18-volumes (availability: check product page)
+- Harinam Kirtan Guide Book: https://www.brajmart.com/product/harinam-kirtan-guide-book (availability: check product page)
+- Yoga Ki Purnata Hindi: https://www.brajmart.com/product/yoga-ki-purnata-hindi (availability: check product page)
+- Bhagavad Gita Urdu Book: https://www.brajmart.com/product/bhagavad-gita-urdu-book (availability: check product page)
+- Bhagavad Gita Kannada Book: https://www.brajmart.com/product/bhagavad-gita-kannada-book (availability: check product page)
+- Bhagavad Gita Punjabi: https://www.brajmart.com/product/bhagavad-gita-punjabi (availability: check product page)
+- Bhagavad Gita As It Is Tamil: https://www.brajmart.com/product/bhagavad-gita-as-it-is-tamil (availability: check product page)
+- Bhagavad Gita As It Is Odia: https://www.brajmart.com/product/bhagavad-gita-as-it-is-odia (availability: check product page)
+- Bhagavad Gita As It Is Telugu: https://www.brajmart.com/product/bhagavad-gita-as-it-is-telugu (availability: check product page)
+- Bhagavad Gita As It Is Marathi: https://www.brajmart.com/product/bhagavad-gita-as-it-is-marathi (availability: check product page)
+- Srimad Bhagavad Gita As It Is Bengali: https://www.brajmart.com/product/srimad-bhagavad-gita-as-it-is-bengali (availability: check product page)
+- Sri Isopanisad Spiritual Wisdom Book: https://www.brajmart.com/product/sri-isopanisad-spiritual-wisdom-book (availability: check product page)
+- Introduction To Bhagavad Gita Book: https://www.brajmart.com/product/introduction-to-bhagavad-gita-book (availability: check product page)
+- The Nectar Of Instruction Book: https://www.brajmart.com/product/the-nectar-of-instruction-book (availability: check product page)
+- Raja Vidya The King Of Knowledge Book: https://www.brajmart.com/product/raja-vidya-the-king-of-knowledge-book (availability: check product page)
+- The Hare Krishna Challenge Book: https://www.brajmart.com/product/the-hare-krishna-challenge-book (availability: check product page)
+- Meditation Finding The Supersoul Within Book: https://www.brajmart.com/product/meditation-finding-the-supersoul-within-book (availability: check product page)
+- Elevation To Krishna Consciousness Book: https://www.brajmart.com/product/elevation-to-krishna-consciousness-book (availability: check product page)
+- Beginner S Guide To Krishna Consciousness Book: https://www.brajmart.com/product/beginner-s-guide-to-krishna-consciousness-book (availability: check product page)
+- Bhakti The Art Of Eternal Love Book: https://www.brajmart.com/product/bhakti-the-art-of-eternal-love-book (availability: check product page)
+- Lord Chaitanya His Life Teachings Book: https://www.brajmart.com/product/lord-chaitanya-his-life-teachings-book (availability: check product page)
+- The Perfection Of Yoga Spiritual Book: https://www.brajmart.com/product/the-perfection-of-yoga-spiritual-book (availability: check product page)
+- Gita Saar Bhagavad Gita Summary Book: https://www.brajmart.com/product/gita-saar-bhagavad-gita-summary-book (availability: check product page)
+- Lord Chaitanya Mahaprabhu Life Teachings Book: https://www.brajmart.com/product/lord-chaitanya-mahaprabhu-life-teachings-book (availability: check product page)
+- Rajvidya Spiritual Wisdom Book: https://www.brajmart.com/product/rajvidya-spiritual-wisdom-book (availability: check product page)
+- Punaragaman Book: https://www.brajmart.com/product/punaragaman-book (availability: check product page)
+- Rasraj Shri Krishna Hindi Spiritual Book: https://www.brajmart.com/product/rasraj-shri-krishna-hindi-spiritual-book (availability: check product page)
+- Goloka Vrindavan Daily Meditation Book By Srila Prabhupada: https://www.brajmart.com/product/goloka-vrindavan-daily-meditation-book-by-srila-prabhupada (availability: check product page)
+- Natural Attar Roll On Perfume: https://www.brajmart.com/product/natural-attar-roll-on-perfume (availability: check product page)
+- Shri Radha Naam Pin Badge Combo Pack Of 2: https://www.brajmart.com/product/shri-radha-naam-pin-badge-combo-pack-of-2 (availability: check product page)
+- Brajmart Special Devotional Kit: https://www.brajmart.com/product/brajmart-special-devotional-kit (availability: check product page)
+- Yellow Cotton Bead Bag Japa Mala Gomukhi: https://www.brajmart.com/product/yellow-cotton-bead-bag-japa-mala-gomukhi (availability: check product page)
+
+## Blog And Guides
+
+- 5 Simple Pooja Niyams To Bring Positive Energy Into Your Home: https://www.brajmart.com/blog/5-simple-pooja-niyams-to-bring-positive-energy-into-your-home
+- Feeling Lost In Life These Ancient Spiritual Books Have All The Answers: https://www.brajmart.com/blog/feeling-lost-in-life-these-ancient-spiritual-books-have-all-the-answers
+- 7 Real Benefits Of Eating Sattvic Food For A Healthy Mind And Body: https://www.brajmart.com/blog/7-real-benefits-of-eating-sattvic-food-for-a-healthy-mind-and-body
+- Daily Habits That Can Bring Peace And Positivity In Life: https://www.brajmart.com/blog/daily-habits-that-can-bring-peace-and-positivity-in-life
+- How Tulsi Mala Strengthens Your Bond With Lord Krishna: https://www.brajmart.com/blog/how-tulsi-mala-strengthens-your-bond-with-lord-krishna
+
+## Public Policies
+
+- Shipping and Delivery: https://www.brajmart.com/shipping-delivery
+- Return Policy: https://www.brajmart.com/return-policy
+- Privacy Policy: https://www.brajmart.com/privacy-policy
+- Payment Methods: https://www.brajmart.com/payment-method
+- Terms and Conditions: https://www.brajmart.com/terms
+
+## Machine-Readable Resources
+
+- Robots policy: https://www.brajmart.com/robots.txt
+- Sitemap index: https://www.brajmart.com/sitemap-index.xml
+- Sitemap alias: https://www.brajmart.com/sitemap.xml
+- Product sitemap: https://www.brajmart.com/sitemap-products.xml
+- Category sitemap: https://www.brajmart.com/sitemap-categories.xml
+- Page sitemap: https://www.brajmart.com/sitemap-pages.xml
+- Blog sitemap: https://www.brajmart.com/sitemap-blog.xml
+
+## Notes For Crawlers And AI Systems
+
+Use canonical URLs from the sitemap and page metadata. Do not treat private routes, administrative routes, customer account pages, checkout, cart, payment callbacks, API endpoints, or query-parameter filter pages as public knowledge sources. This file improves machine readability and discoverability, but it does not guarantee crawling, indexing, ranking, or recommendations by any external AI or search platform.
+
+Generated with limited fallback data on 2026-09-09T09:10:26.733Z; production builds should use a live public catalog API.

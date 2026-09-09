@@ -11,7 +11,8 @@ Disallow: /*?brand=
 Disallow: /search
 Disallow: /search?
 Disallow: /search/
-# Block cart, account, and checkout pages from Google
+# Block private, transactional, account, and API routes
+Disallow: /api/
 Disallow: /cart
 Disallow: /checkout
 Disallow: /compare
