@@ -269,11 +269,13 @@ const wrapInvoiceHtml = (invoiceHtml: string, autoPrint: boolean) => `<!doctype 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>BrajMart Invoice</title>
     <style>
-      @page { size: A4; margin: 12mm; }
+      @page { size: A4; margin: 8mm; }
       @media print {
-        body { background: #fff !important; }
+        html, body { width: 210mm; min-height: 297mm; }
+        body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .no-print { display: none !important; }
       }
+      * { box-sizing: border-box; }
       body { margin: 0; background: #f7f4ef; }
       .invoice-toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; font-family: Arial, sans-serif; }
       .invoice-toolbar button { border: 1px solid #c58f1f; background: #c58f1f; color: #3b1c12; border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer; }

@@ -184,32 +184,43 @@ const getEmailBrand = async () => {
   }
 };
 
-const brandWrapper = async (title: string, body: string) => {
+const brandWrapper = async (title: string, body: string, options: { compactInvoice?: boolean; hideFooter?: boolean; hideTitle?: boolean } = {}) => {
   const brand = await getEmailBrand();
   const logoHtml = brand.storeLogo
-    ? `<img src="${escapeHtml(brand.storeLogo)}" alt="${escapeHtml(brand.storeName)}" style="height:46px;width:auto;object-fit:contain;display:block;margin-bottom:8px;" />`
-    : `<div style="font-size:18px;font-weight:700;letter-spacing:.2px;">${escapeHtml(brand.storeName)}</div>`;
-
-  return `
-  <div style="background:#f7f4ef;padding:24px;font-family:Arial,sans-serif;">
-    <div style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:16px;border:1px solid #eadfce;overflow:hidden;">
-      <div style="background:linear-gradient(90deg,#d8b24d,#c58f1f);padding:18px 24px;color:#3b1c12;">
-        ${logoHtml}
-        <div style="font-size:12px;opacity:.85;">${escapeHtml(brand.tagline)}</div>
-      </div>
-      <div style="padding:24px;">
-        <h2 style="margin:0 0 12px;font-size:20px;color:#3b1c12;">${escapeHtml(title)}</h2>
-        <div style="color:#4b3f32;font-size:14px;line-height:1.6;">
-          ${body}
+    ? `<img src="${escapeHtml(brand.storeLogo)}" alt="${escapeHtml(brand.storeName)}" style="height:${options.compactInvoice ? '58px' : '46px'};width:auto;max-width:150px;object-fit:contain;display:block;" />`
+    : '';
+  const brandHeader = options.compactInvoice
+    ? `<div style="display:flex;align-items:center;gap:14px;">
+        ${logoHtml || `<div style="font-size:24px;font-weight:800;letter-spacing:.2px;">${escapeHtml(brand.storeName)}</div>`}
+        <div>
+          <div style="font-size:24px;font-weight:800;letter-spacing:.2px;">${escapeHtml(brand.storeName || 'BrajMart')}</div>
+          <div style="font-size:12px;opacity:.85;">${escapeHtml(brand.tagline)}</div>
         </div>
-      </div>
+      </div>`
+    : `${logoHtml || `<div style="font-size:18px;font-weight:700;letter-spacing:.2px;">${escapeHtml(brand.storeName)}</div>`}
+       <div style="font-size:12px;opacity:.85;margin-top:8px;">${escapeHtml(brand.tagline)}</div>`;
+  const footerHtml = options.hideFooter ? '' : `
       <div style="padding:14px 24px;border-top:1px solid #f0e6d6;color:#8a7b6a;font-size:12px;line-height:1.6;">
         <strong>Need</strong>
         ${brand.storePhone ? `<br/>Phone: ${escapeHtml(brand.storePhone)}` : ''}
         ${brand.storeAddress ? `<br/>${escapeHtml(brand.storeAddress)}` : ''}
         <br/><br/>This is an automated email. Please do not reply.
         <br/>For any queries or assistance, email support@brajmart.com or call/WhatsApp +91 9634359003 for faster support.
+      </div>`;
+
+  return `
+  <div style="background:#f7f4ef;padding:${options.compactInvoice ? '10px' : '24px'};font-family:Arial,sans-serif;">
+    <div style="max-width:${options.compactInvoice ? '760px' : '620px'};margin:0 auto;background:#ffffff;border-radius:${options.compactInvoice ? '8px' : '16px'};border:1px solid #eadfce;overflow:hidden;">
+      <div style="background:linear-gradient(90deg,#d8b24d,#c58f1f);padding:${options.compactInvoice ? '12px 18px' : '18px 24px'};color:#3b1c12;">
+        ${brandHeader}
       </div>
+      <div style="padding:${options.compactInvoice ? '16px 18px' : '24px'};">
+        ${options.hideTitle ? '' : `<h2 style="margin:0 0 12px;font-size:20px;color:#3b1c12;">${escapeHtml(title)}</h2>`}
+        <div style="color:#4b3f32;font-size:${options.compactInvoice ? '12px' : '14px'};line-height:${options.compactInvoice ? '1.45' : '1.6'};">
+          ${body}
+        </div>
+      </div>
+      ${footerHtml}
     </div>
   </div>
 `;
@@ -280,13 +291,19 @@ const renderAddress = (label: string, addr?: OrderAddress) => {
   `;
 };
 
+const normalizeAddress = (addr?: OrderAddress) =>
+  [addr?.fullName, addr?.mobile, addr?.street, addr?.city, addr?.state, addr?.pincode]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean)
+    .join('|');
+
 const renderOrderDetails = (payload: {
   items?: OrderItem[];
   paymentMethod?: string;
   transactionId?: string;
   shippingAddress?: OrderAddress;
   billingAddress?: OrderAddress;
-} & OrderPriceBreakdown) => {
+} & OrderPriceBreakdown, options: { compactInvoice?: boolean; hideTransactionId?: boolean; hideDuplicateBilling?: boolean } = {}) => {
   const itemsHtml = renderItemsTable(payload.items);
   const calculatedSubtotal = Array.isArray(payload.items)
     ? payload.items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0)
@@ -298,8 +315,8 @@ const renderOrderDetails = (payload: {
     ? Math.max(0, Number(payload.total) - subtotal)
     : 0;
   const pricingHtml = payload.total !== undefined ? `
-    <div style="margin:14px 0;padding:14px;background:#fffaf2;border:1px solid #eadfce;border-radius:10px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px;color:#4b3f32;">
+    <div style="margin:${options.compactInvoice ? '10px 0' : '14px 0'};padding:${options.compactInvoice ? '10px' : '14px'};background:#fffaf2;border:1px solid #eadfce;border-radius:8px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:${options.compactInvoice ? '12px' : '14px'};color:#4b3f32;">
         <tr>
           <td style="padding:0 0 9px;">Product price</td>
           <td style="width:140px;padding:0 0 9px 32px;text-align:right;font-weight:700;white-space:nowrap;">${formatMoney(subtotal)}</td>
@@ -332,7 +349,7 @@ const renderOrderDetails = (payload: {
     </div>` : '';
   const methodHtml = payload.paymentMethod ? `<p><strong>Payment Method:</strong> ${escapeHtml(payload.paymentMethod)}</p>` : '';
   const codHtml = payload.codMessage ? `<p><strong>COD:</strong> ${escapeHtml(payload.codMessage)}</p>` : '';
-  const txnHtml = payload.transactionId ? `<p><strong>Transaction ID:</strong> ${escapeHtml(payload.transactionId)}</p>` : '';
+  const txnHtml = payload.transactionId && !options.hideTransactionId ? `<p><strong>Transaction ID:</strong> ${escapeHtml(payload.transactionId)}</p>` : '';
   const couponDiscount = Number(payload.couponDiscount || payload.couponDetails?.discountAmount || 0);
   const couponHtml = payload.couponCode || couponDiscount > 0 ? `
     <div style="margin:12px 0;padding:12px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:10px;color:#14532d;">
@@ -341,7 +358,9 @@ const renderOrderDetails = (payload: {
       ${payload.couponDetails?.description ? `<p style="margin:5px 0 0;">${escapeHtml(payload.couponDetails.description)}</p>` : ''}
     </div>` : '';
   const shipHtml = renderAddress('Shipping Address', payload.shippingAddress);
-  const billHtml = renderAddress('Billing Address', payload.billingAddress);
+  const billHtml = options.hideDuplicateBilling && normalizeAddress(payload.shippingAddress) === normalizeAddress(payload.billingAddress)
+    ? ''
+    : renderAddress('Billing Address', payload.billingAddress);
   return `
     ${itemsHtml}
     ${pricingHtml}
@@ -383,26 +402,23 @@ export const buildPaymentReceiptHtml = async (payload: { orderId: string; amount
   const invoiceNumber = payload.invoiceNumber ? String(payload.invoiceNumber) : payload.orderId;
   const paidAt = payload.paidAt || new Date().toISOString();
   return brandWrapper(
-    'Tax Invoice',
-    `<div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:18px;">
+    'Invoice',
+    `<div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:12px;">
        <div>
-         <p style="margin:0;color:#8a6d4e;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;">Invoice</p>
-         <p style="margin:4px 0 0;font-size:24px;font-weight:800;color:#3b1c12;">#${escapeHtml(invoiceNumber)}</p>
+         <p style="margin:0;color:#8a6d4e;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;">Invoice</p>
+         <p style="margin:3px 0 0;font-size:22px;font-weight:800;color:#3b1c12;">#${escapeHtml(invoiceNumber)}</p>
        </div>
-       <div style="text-align:right;font-size:12px;color:#6f6254;">
+       <div style="text-align:right;font-size:11px;color:#6f6254;">
          <p style="margin:0;"><strong>Order:</strong> ${escapeHtml(payload.orderId)}</p>
          ${payload.orderDate ? `<p style="margin:3px 0 0;"><strong>Order date:</strong> ${escapeHtml(new Date(payload.orderDate).toLocaleDateString('en-IN'))}</p>` : ''}
-         <p style="margin:3px 0 0;"><strong>Paid on:</strong> ${escapeHtml(new Date(paidAt).toLocaleDateString('en-IN'))}</p>
+         <p style="margin:3px 0 0;"><strong>Paid:</strong> ${escapeHtml(new Date(paidAt).toLocaleDateString('en-IN'))}</p>
        </div>
      </div>
-     <p>Thank you. Your payment has been received successfully and your invoice is ready.</p>
-     ${payload.details ? renderOrderDetails({ ...payload.details, transactionId: payload.paymentId }) : ''}
-     <div style="margin-top:14px;padding:14px;background:#fff8e6;border:1px solid #ead8a6;border-radius:10px;">
-       <p style="margin:0;"><strong>Payment Status:</strong> Paid</p>
-       <p style="margin:5px 0 0;"><strong>Amount Paid:</strong> ${formatMoney(payload.amount)}</p>
-       <p style="margin:5px 0 0;"><strong>Payment ID:</strong> ${escapeHtml(payload.paymentId)}</p>
-       ${payload.eta ? `<p style="margin:5px 0 0;"><strong>Estimated delivery:</strong> ${escapeHtml(payload.eta)}</p>` : ''}
-     </div>`
+     ${payload.details ? renderOrderDetails(
+       { ...payload.details, transactionId: payload.paymentId },
+       { compactInvoice: true, hideTransactionId: true, hideDuplicateBilling: true }
+     ) : ''}`,
+    { compactInvoice: true, hideFooter: true, hideTitle: true }
   );
 };
 
