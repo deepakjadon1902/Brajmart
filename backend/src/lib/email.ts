@@ -187,7 +187,7 @@ const getEmailBrand = async () => {
 const brandWrapper = async (title: string, body: string, options: { compactInvoice?: boolean; hideFooter?: boolean; hideTitle?: boolean } = {}) => {
   const brand = await getEmailBrand();
   const logoHtml = brand.storeLogo
-    ? `<img src="${escapeHtml(brand.storeLogo)}" alt="${escapeHtml(brand.storeName)}" style="height:${options.compactInvoice ? '58px' : '46px'};width:auto;max-width:150px;object-fit:contain;display:block;" />`
+    ? `<img src="${escapeHtml(brand.storeLogo)}" alt="${escapeHtml(brand.storeName)}" style="height:${options.compactInvoice ? '70px' : '46px'};width:auto;max-width:180px;object-fit:contain;display:block;" />`
     : '';
   const brandHeader = options.compactInvoice
     ? `<div style="display:flex;align-items:center;gap:14px;">
@@ -418,7 +418,7 @@ export const buildPaymentReceiptHtml = async (payload: { orderId: string; amount
        { ...payload.details, transactionId: payload.paymentId },
        { compactInvoice: true, hideTransactionId: true, hideDuplicateBilling: true }
      ) : ''}`,
-    { compactInvoice: true, hideFooter: true, hideTitle: true }
+    { compactInvoice: true, hideFooter: false, hideTitle: true }
   );
 };
 
