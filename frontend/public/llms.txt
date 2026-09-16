@@ -106,4 +106,4 @@ The full indexable catalog is listed in the XML sitemap. This file includes a co
 
 Use canonical URLs from the sitemap and page metadata. Do not treat private routes, administrative routes, customer account pages, checkout, cart, payment callbacks, API endpoints, or query-parameter filter pages as public knowledge sources. This file improves machine readability and discoverability, but it does not guarantee crawling, indexing, ranking, or recommendations by any external AI or search platform.
 
-Generated with limited fallback data on 2026-09-09T09:10:26.733Z; production builds should use a live public catalog API.
+Generated with limited fallback data on 2026-09-16T11:54:42.259Z; production builds should use a live public catalog API.

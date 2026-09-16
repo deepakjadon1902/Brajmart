@@ -204,7 +204,7 @@ export const buildPendingPaymentWhatsAppMessage = (order: OrderLike) => {
     `Payment Method: ${cleanLine(order.paymentMethod) || 'Online Payment'}`,
     `Payment Status: ${cleanLine(order.paymentStatus) || 'pending'}`,
     `Order Date: ${formatDate(order.createdAt)}`,
-    paymentLink ? 'Complete / check your payment here:' : '',
+    paymentLink ? 'Complete payment / Pay Again for this same order here:' : '',
     paymentLink ? `${POINT_RIGHT} ${paymentLink}` : '',
     '',
     'ITEMS PENDING IN YOUR ORDER',

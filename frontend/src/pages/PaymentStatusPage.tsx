@@ -344,7 +344,7 @@ const PaymentStatusPage = () => {
               <Link to="/track-orders" className="px-5 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors">
                 Track Order
               </Link>
-              {status === 'failed' && method === 'Razorpay' ? (
+              {(status === 'pending' || status === 'failed') && method === 'Razorpay' ? (
                 <button
                   type="button"
                   onClick={handleRetryPayment}
