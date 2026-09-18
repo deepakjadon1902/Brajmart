@@ -3,6 +3,8 @@ import { Search, Ban, CheckCircle, Mail, Phone, MapPin, CalendarDays, ShoppingBa
 import { fetchUsers, updateUserStatus } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
+import AdminExportActions from '@/components/admin/AdminExportActions';
+import type { ExportColumn } from '@/lib/adminExport';
 
 type UserAddress = {
   fullName?: string;
@@ -95,6 +97,22 @@ const AdminUsers = () => {
       || address.includes(query);
   });
   const paginatedUsers = filtered.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
+  const userExportColumns: ExportColumn<MockUser>[] = [
+    { header: 'User ID', value: (u) => u.id },
+    { header: 'Name', value: (u) => u.name },
+    { header: 'Customer Type', value: (u) => u.customerType || 'registered' },
+    { header: 'Email', value: (u) => u.email || '-' },
+    { header: 'Phone', value: (u) => u.phone || getPrimaryAddress(u).mobile || '-' },
+    { header: 'Primary Address Name', value: (u) => getPrimaryAddress(u).fullName || '-' },
+    { header: 'Address', value: (u) => formatAddress(getPrimaryAddress(u)) || '-' },
+    { header: 'City', value: (u) => getPrimaryAddress(u).city || '-' },
+    { header: 'State', value: (u) => getPrimaryAddress(u).state || '-' },
+    { header: 'Pincode', value: (u) => getPrimaryAddress(u).pincode || '-' },
+    { header: 'Joined', value: (u) => new Date(u.joined).toLocaleString('en-IN') },
+    { header: 'Orders', value: (u) => u.orders },
+    { header: 'Spent', value: (u) => u.spent },
+    { header: 'Status', value: (u) => u.status },
+  ];
 
   useEffect(() => {
     setPage(1);
@@ -144,6 +162,13 @@ const AdminUsers = () => {
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, phone, or address..." className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
       </div>
+
+      <AdminExportActions
+        title="BrajMart Users"
+        fileName="brajmart-users"
+        rows={filtered}
+        columns={userExportColumns}
+      />
 
       <div className="grid gap-4 lg:hidden">
         {paginatedUsers.map((u) => {

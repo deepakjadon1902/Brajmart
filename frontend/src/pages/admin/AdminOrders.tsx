@@ -5,6 +5,8 @@ import { Search, Eye, X, RefreshCw, MapPin, MessageCircle, FileText, Download } 
 import { adminCheckDeliveryServicePincode, adminTrackDeliveryServiceOrder, fetchOrderInvoice, fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
+import AdminExportActions from '@/components/admin/AdminExportActions';
+import type { ExportColumn } from '@/lib/adminExport';
 import {
   BRAJMART_CONTACT_PHONE_DISPLAY,
   buildDispatchedOrderWhatsAppMessage,
@@ -14,6 +16,61 @@ import {
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
 const shippingServices = ['DTDC', 'Delhivery', 'Shree Maruti', 'India Post', 'Ekart'];
+
+type OrderExportItem = {
+  product?: { name?: string };
+  name?: string;
+  quantity?: number | string;
+  price?: number | string;
+};
+
+type OrderExportRow = {
+  id?: string;
+  _id?: string;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  shippingAddress?: {
+    fullName?: string;
+    mobile?: string;
+    street?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+  };
+  items?: OrderExportItem[];
+  subtotal?: number | string;
+  discount?: number | string;
+  couponDiscount?: number | string;
+  couponCode?: string;
+  shipping?: number | string;
+  packaging?: number | string;
+  codFee?: number | string;
+  total?: number | string;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  status?: string;
+  shippingService?: string;
+  trackingId?: string;
+  createdAt?: string;
+  statusHistory?: Array<{ status?: string; note?: string; date?: string }>;
+};
+
+const orderItemsText = (order: OrderExportRow) => (order.items || [])
+  .map((item) => {
+    const name = item?.product?.name || item?.name || 'Item';
+    const quantity = Number(item?.quantity || 1);
+    const price = Number(item?.price || 0);
+    return `${name} (Qty ${quantity} x INR ${price.toLocaleString('en-IN')})`;
+  })
+  .join('; ');
+
+const orderAddressText = (order: OrderExportRow) => {
+  const address = order.shippingAddress || {};
+  return [address.fullName || order.customerName, address.street, address.city, address.state, address.pincode]
+    .filter(Boolean)
+    .join(', ');
+};
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -103,6 +160,30 @@ const AdminOrders = () => {
     return matchSearch && matchStatus;
   });
   const paginatedOrders = filtered.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
+  const orderExportColumns: ExportColumn<OrderExportRow>[] = [
+    { header: 'Order ID', value: (o) => o.id },
+    { header: 'Database ID', value: (o) => o._id || '-' },
+    { header: 'Customer Name', value: (o) => o.shippingAddress?.fullName || o.customerName || '-' },
+    { header: 'Customer Email', value: (o) => o.customerEmail || '-' },
+    { header: 'Customer Phone', value: (o) => o.shippingAddress?.mobile || o.customerPhone || '-' },
+    { header: 'Shipping Address', value: orderAddressText },
+    { header: 'Items Count', value: (o) => (o.items || []).length },
+    { header: 'Items', value: orderItemsText },
+    { header: 'Subtotal', value: (o) => o.subtotal ?? '-' },
+    { header: 'Discount', value: (o) => o.discount ?? o.couponDiscount ?? 0 },
+    { header: 'Coupon Code', value: (o) => o.couponCode || '-' },
+    { header: 'Shipping', value: (o) => o.shipping ?? '-' },
+    { header: 'Packaging', value: (o) => o.packaging ?? '-' },
+    { header: 'COD Fee', value: (o) => o.codFee ?? '-' },
+    { header: 'Total', value: (o) => o.total ?? 0 },
+    { header: 'Payment Method', value: (o) => o.paymentMethod || '-' },
+    { header: 'Payment Status', value: (o) => o.paymentStatus || '-' },
+    { header: 'Order Status', value: (o) => o.status || '-' },
+    { header: 'Shipping Service', value: (o) => o.shippingService || '-' },
+    { header: 'Tracking ID', value: (o) => o.trackingId || '-' },
+    { header: 'Created At', value: (o) => o.createdAt ? new Date(o.createdAt).toLocaleString('en-IN') : '-' },
+    { header: 'Status History', value: (o) => (o.statusHistory || []).map((h) => `${h.status} - ${h.note || ''} - ${h.date ? new Date(h.date).toLocaleString('en-IN') : ''}`).join('; ') },
+  ];
 
   useEffect(() => {
     setPage(1);
@@ -223,6 +304,12 @@ const AdminOrders = () => {
           <option value="all">All Status</option>
           {statusOptions.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
         </select>
+        <AdminExportActions
+          title="BrajMart Orders"
+          fileName="brajmart-orders"
+          rows={filtered as OrderExportRow[]}
+          columns={orderExportColumns}
+        />
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">

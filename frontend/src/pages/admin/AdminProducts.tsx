@@ -15,6 +15,8 @@ import {
 } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
+import AdminExportActions from '@/components/admin/AdminExportActions';
+import type { ExportColumn } from '@/lib/adminExport';
 
 const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
 const PRODUCT_SYNC_EVENT = 'brajmart-products-updated';
@@ -99,6 +101,29 @@ const AdminProducts = () => {
     return matchSearch && matchCat;
   });
   const paginatedProducts = filtered.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
+  const productExportColumns: ExportColumn<Product>[] = [
+    { header: 'Product ID', value: (p) => p.id },
+    { header: 'Name', value: (p) => p.name },
+    { header: 'Slug', value: (p) => p.slug },
+    { header: 'SKU', value: (p) => p.sku || '-' },
+    { header: 'Category', value: (p) => p.category || '-' },
+    { header: 'Subcategory', value: (p) => p.subcategory || '-' },
+    { header: 'Sale Price', value: (p) => p.price },
+    { header: 'MRP', value: (p) => p.originalPrice || p.price },
+    { header: 'Rating', value: (p) => p.rating ?? 0 },
+    { header: 'Reviews', value: (p) => p.reviewCount ?? 0 },
+    { header: 'Stock Status', value: (p) => p.inStock ? 'In stock' : 'Out of stock' },
+    { header: 'Stock Quantity', value: (p) => p.stockQuantity ?? 'Unmanaged' },
+    { header: 'Reserved Quantity', value: (p) => p.reservedQuantity ?? 0 },
+    { header: 'Low Stock Threshold', value: (p) => p.lowStockThreshold ?? '-' },
+    { header: 'COD', value: (p) => p.codEnabled === null || p.codEnabled === undefined ? (p.categoryCodEnabled ? 'Category enabled' : 'No') : p.codEnabled ? 'Yes' : 'No' },
+    { header: 'Tags', value: (p) => (p.tags || []).join(', ') },
+    { header: 'Sizes', value: (p) => (p.sizes || []).join(', ') },
+    { header: 'Meta Title', value: (p) => p.metaTitle || '-' },
+    { header: 'Meta Description', value: (p) => p.metaDescription || '-' },
+    { header: 'Description', value: (p) => p.description || '-' },
+    { header: 'Main Image', value: (p) => p.image || '-' },
+  ];
 
   useEffect(() => {
     setPage(1);
@@ -401,6 +426,12 @@ const AdminProducts = () => {
           <option value="all">All Categories</option>
           {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
+        <AdminExportActions
+          title="BrajMart Products"
+          fileName="brajmart-products"
+          rows={filtered}
+          columns={productExportColumns}
+        />
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">

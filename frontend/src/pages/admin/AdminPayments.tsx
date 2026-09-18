@@ -3,6 +3,8 @@ import { CreditCard, Wallet, DollarSign, AlertCircle, Truck, CheckCircle2, type 
 import { fetchOrders, fetchPayments, reconcilePayments, markCodOrderPaid } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
+import AdminExportActions from '@/components/admin/AdminExportActions';
+import type { ExportColumn } from '@/lib/adminExport';
 
 type AdminPayment = {
   id: string;
@@ -70,6 +72,7 @@ const AdminPayments = () => {
   }, []);
 
   const paidPayments = payments.filter((p) => p.status === 'paid');
+  const failedPayments = payments.filter((p) => p.status === 'failed');
   const codOrders = orders.filter(isCodOrder);
   const paidCodOrderIds = new Set(
     paidPayments
@@ -84,6 +87,25 @@ const AdminPayments = () => {
   const pendingCodRevenue = codPendingOrders.reduce((s, o) => s + Number(o.total || 0), 0);
   const pendingRevenue = payments.filter((p) => p.status === 'pending').reduce((s, p) => s + p.amount, 0) + pendingCodRevenue;
   const paginatedPayments = payments.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
+  const paymentExportColumns: ExportColumn<AdminPayment>[] = [
+    { header: 'Payment ID', value: (p) => p.id },
+    { header: 'Transaction ID', value: (p) => p.transactionId || '-' },
+    { header: 'Order ID', value: (p) => p.orderId || '-' },
+    { header: 'Customer Name', value: (p) => p.customerName || '-' },
+    { header: 'Method', value: (p) => p.method || '-' },
+    { header: 'Amount', value: (p) => p.amount },
+    { header: 'Status', value: (p) => p.status || '-' },
+    { header: 'Created At', value: (p) => p.createdAt ? new Date(p.createdAt).toLocaleString('en-IN') : '-' },
+  ];
+  const codExportColumns: ExportColumn<AdminOrder>[] = [
+    { header: 'Order ID', value: (o) => orderKey(o) },
+    { header: 'Customer', value: (o) => o.customerName || o.customerEmail || 'Customer' },
+    { header: 'Payment Method', value: (o) => o.paymentMethod || 'COD' },
+    { header: 'Amount', value: (o) => Number(o.total || 0) },
+    { header: 'Order Status', value: (o) => o.status || '-' },
+    { header: 'Collection Status', value: (o) => paidCodOrderIds.has(orderKey(o)) ? 'Paid' : 'Collect pending' },
+    { header: 'Created At', value: (o) => o.createdAt ? new Date(o.createdAt).toLocaleString('en-IN') : '-' },
+  ];
 
   useEffect(() => {
     const totalPages = Math.max(1, Math.ceil(payments.length / ADMIN_PAGE_SIZE));
@@ -173,9 +195,17 @@ const AdminPayments = () => {
             <h2 className="text-lg font-semibold text-white">COD Collection</h2>
             <p className="text-xs text-slate-400">Mark COD orders paid only after the delivery amount is collected.</p>
           </div>
-          <span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-xs font-semibold text-yellow-300">
-            INR {pendingCodRevenue.toLocaleString('en-IN')} pending
-          </span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-xs font-semibold text-yellow-300">
+              INR {pendingCodRevenue.toLocaleString('en-IN')} pending
+            </span>
+            <AdminExportActions
+              title="BrajMart COD Collection"
+              fileName="brajmart-cod-collection"
+              rows={codOrders}
+              columns={codExportColumns}
+            />
+          </div>
         </div>
         {codOrders.length === 0 ? (
           <div className="p-8 text-center text-slate-400">
@@ -237,25 +267,42 @@ const AdminPayments = () => {
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-white">Transaction History</h2>
-          <button
-            onClick={async () => {
-              try {
-                await reconcilePayments();
-                const data: unknown = await fetchPayments();
-                setPayments(normalizePayments(data));
-                const orderData: unknown = await fetchOrders();
-                setOrders(Array.isArray(orderData) ? orderData : []);
-                toast.success('Payment status refreshed');
-              } catch (err: unknown) {
-                toast.error(errorMessage(err, 'Failed to refresh payments'));
-              }
-            }}
-            className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white hover:bg-slate-700 transition"
-          >
-            Refresh
-          </button>
+        <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Transaction History</h2>
+            <p className="text-xs text-slate-400">Download all transactions or only failed payment attempts.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <AdminExportActions
+              title="BrajMart Payment Transactions"
+              fileName="brajmart-payment-transactions"
+              rows={payments}
+              columns={paymentExportColumns}
+            />
+            <AdminExportActions
+              title="BrajMart Failed Payments"
+              fileName="brajmart-failed-payments"
+              rows={failedPayments}
+              columns={paymentExportColumns}
+            />
+            <button
+              onClick={async () => {
+                try {
+                  await reconcilePayments();
+                  const data: unknown = await fetchPayments();
+                  setPayments(normalizePayments(data));
+                  const orderData: unknown = await fetchOrders();
+                  setOrders(Array.isArray(orderData) ? orderData : []);
+                  toast.success('Payment status refreshed');
+                } catch (err: unknown) {
+                  toast.error(errorMessage(err, 'Failed to refresh payments'));
+                }
+              }}
+              className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white hover:bg-slate-700 transition"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
         {payments.length === 0 ? (
           <div className="p-12 text-center text-slate-400">

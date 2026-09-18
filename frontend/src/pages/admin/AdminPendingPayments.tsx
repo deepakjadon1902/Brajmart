@@ -3,6 +3,8 @@ import { AlertCircle, CheckCircle2, Clock3, CreditCard, Mail, MapPin, MessageCir
 import { confirmPendingPayment, fetchPendingPaymentOrders } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
+import AdminExportActions from '@/components/admin/AdminExportActions';
+import type { ExportColumn } from '@/lib/adminExport';
 import {
   buildPendingPaymentWhatsAppMessage,
   buildWhatsAppWebUrl,
@@ -51,6 +53,10 @@ const formatDate = (value?: string) => {
 
 const addressText = (address?: PendingPaymentOrder['customerAddress']) =>
   [address?.street, address?.city, address?.state, address?.pincode].filter(Boolean).join(', ');
+
+const pendingItemsText = (order: PendingPaymentOrder) => (order.items || [])
+  .map((item) => `${item.name || 'Product'} (Qty ${Number(item.quantity || 1)} x INR ${Number(item.price || 0).toLocaleString('en-IN')}${item.selectedSize ? `, Size ${item.selectedSize}` : ''}${item.selectedPieces ? `, ${item.selectedPieces}` : ''})`)
+  .join('; ');
 
 const AdminPendingPayments = () => {
   const [orders, setOrders] = useState<PendingPaymentOrder[]>([]);
@@ -101,6 +107,22 @@ const AdminPendingPayments = () => {
       || (order.items || []).some((item) => String(item.name || '').toLowerCase().includes(query));
   });
   const paginatedOrders = filtered.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
+  const pendingPaymentExportColumns: ExportColumn<PendingPaymentOrder>[] = [
+    { header: 'Checkout / Order ID', value: (o) => o.orderId || o._id || '-' },
+    { header: 'Customer Name', value: (o) => o.customerName || o.customerAddress?.fullName || 'Customer' },
+    { header: 'Customer Email', value: (o) => o.customerEmail || '-' },
+    { header: 'Customer Phone', value: (o) => o.customerPhone || o.customerAddress?.mobile || '-' },
+    { header: 'Address', value: (o) => addressText(o.customerAddress) || '-' },
+    { header: 'Products Count', value: (o) => (o.items || []).length },
+    { header: 'Products', value: pendingItemsText },
+    { header: 'Total', value: (o) => Number(o.total || 0) },
+    { header: 'Payment Method', value: (o) => o.paymentMethod || 'Online' },
+    { header: 'Payment Status', value: (o) => o.paymentStatus || 'pending' },
+    { header: 'Payment Token', value: (o) => o.paymentToken || '-' },
+    { header: 'Checkout Created', value: (o) => formatDate(o.createdAt) },
+    { header: 'Payment Created', value: (o) => formatDate(o.paymentCreatedAt) },
+    { header: 'Payment Updated', value: (o) => formatDate(o.paymentUpdatedAt) },
+  ];
 
   useEffect(() => {
     setPage(1);
@@ -186,6 +208,13 @@ const AdminPendingPayments = () => {
           className="w-full rounded-xl border border-slate-700 bg-slate-900 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
         />
       </div>
+
+      <AdminExportActions
+        title="BrajMart Pending Payment Users"
+        fileName="brajmart-pending-payments"
+        rows={filtered}
+        columns={pendingPaymentExportColumns}
+      />
 
       <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
         <div className="overflow-x-auto">
