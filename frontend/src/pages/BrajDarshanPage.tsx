@@ -8,6 +8,33 @@ import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { brajDestinations } from '@/data/brajDestinations';
 import { breadcrumbSchema } from '@/lib/seo';
 
+const devotionalLinks = [
+  {
+    label: 'Explore Vrindavan prasadam',
+    to: '/category/prasadam',
+    text: 'Prasadam and devotional foods for festivals, gifting and home offerings.',
+  },
+  {
+    label: 'Browse puja items',
+    to: '/category/incense-pooja-items',
+    text: 'Incense, dhoop, lamps and puja samagri for daily worship.',
+  },
+  {
+    label: 'Shop spiritual books',
+    to: '/category/books',
+    text: 'Bhagavad Gita, bhajan books and devotional reading for learning at home.',
+  },
+  {
+    label: 'Find devotional accessories',
+    to: '/category/accessories',
+    text: 'Tulsi Mala, Japa Mala and useful accessories for temple visits and japa.',
+  },
+];
+
+const destinationSlugByName = new Map(
+  brajDestinations.map((item) => [item.name.toLowerCase(), item.slug])
+);
+
 const BrajDarshanPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const destination = brajDestinations.find((d) => d.slug === slug);
@@ -36,7 +63,6 @@ const BrajDarshanPage = () => {
         schema={[
           breadcrumbSchema([
             { name: 'Home', path: '/' },
-            { name: 'Braj Darshan', path: '/' },
             { name: destination.name, path },
           ]),
           {
@@ -118,9 +144,40 @@ const BrajDarshanPage = () => {
                 <h2 className="mb-4 font-cinzel text-xl font-bold text-foreground md:text-2xl">Nearby Braj Places</h2>
                 <div className="flex flex-wrap gap-2">
                   {destination.nearbyPlaces.map((place) => (
-                    <span key={place} className="rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground">
-                      {place}
-                    </span>
+                    destinationSlugByName.has(place.toLowerCase()) ? (
+                      <Link
+                        key={place}
+                        to={`/braj-darshan/${destinationSlugByName.get(place.toLowerCase())}`}
+                        className="rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground transition hover:border-saffron/50 hover:text-saffron"
+                      >
+                        {place}
+                      </Link>
+                    ) : (
+                      <span key={place} className="rounded-full border border-border bg-card px-4 py-2 text-sm text-muted-foreground">
+                        {place}
+                      </span>
+                    )
+                  ))}
+                </div>
+              </section>
+            </ScrollReveal>
+
+            <ScrollReveal>
+              <section>
+                <div className="mb-4">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-gold">Devotional Shopping</p>
+                  <h2 className="font-cinzel text-xl font-bold text-foreground md:text-2xl">Products Connected With Braj Devotional Life</h2>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {devotionalLinks.map((item) => (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className="rounded-lg border border-border bg-card p-4 transition hover:border-saffron/40 hover:shadow-sm"
+                    >
+                      <h3 className="font-cinzel text-base font-semibold text-foreground">{item.label}</h3>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
+                    </Link>
                   ))}
                 </div>
               </section>
