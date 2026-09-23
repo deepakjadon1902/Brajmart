@@ -183,7 +183,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
         )}
 
         {hasReviewRating(product) && (
-          <span className="absolute bottom-3 left-3 inline-flex h-[22px] items-center gap-0.5 rounded-sm bg-[#388e3c] px-1.5 text-[11px] font-semibold leading-none text-white shadow-sm">
+          <span className="absolute bottom-3 left-3 inline-flex h-[22px] items-center gap-0.5 rounded-sm bg-[#2e7d32] px-1.5 text-[11px] font-semibold leading-none text-white shadow-sm">
             <span>{ratingValue.toFixed(1).replace(/\.0$/, '')}</span>
             <Star size={10} strokeWidth={2.4} className="fill-white text-white" aria-hidden="true" />
           </span>
@@ -225,10 +225,10 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
         <div className="mt-auto flex items-baseline gap-1.5 leading-tight">
           <div className="price-current font-sans text-[15px] font-bold text-[#212121] sm:text-[16px]">{formatPrice(product.price)}</div>
           {mrp && (
-            <div className="price-original font-sans text-[11px] text-[#878787] line-through sm:text-[12px]">{formatPrice(mrp)}</div>
+            <div className="price-original font-sans text-[11px] text-[#666666] line-through sm:text-[12px]">{formatPrice(mrp)}</div>
           )}
           {discount > 0 && (
-            <div className="font-sans text-[11px] font-semibold text-[#388e3c] sm:text-[12px]">{discount}% off</div>
+            <div className="font-sans text-[11px] font-semibold text-[#2e7d32] sm:text-[12px]">{discount}% off</div>
           )}
         </div>
 

@@ -139,7 +139,7 @@ const HeroCarousel = () => {
               <button
                 type="button"
                 onClick={goToPreviousSlide}
-                className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/86 text-brand-primary shadow-md backdrop-blur-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent sm:left-4 sm:h-10 sm:w-10"
+                className="absolute left-4 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/86 text-brand-primary shadow-md backdrop-blur-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent sm:flex"
                 aria-label="Previous hero slide"
               >
                 <ChevronLeft className="h-5 w-5" aria-hidden="true" />
@@ -147,12 +147,12 @@ const HeroCarousel = () => {
               <button
                 type="button"
                 onClick={goToNextSlide}
-                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/86 text-brand-primary shadow-md backdrop-blur-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent sm:right-4 sm:h-10 sm:w-10"
+                className="absolute right-4 top-1/2 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/86 text-brand-primary shadow-md backdrop-blur-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent sm:flex"
                 aria-label="Next hero slide"
               >
                 <ChevronRight className="h-5 w-5" aria-hidden="true" />
               </button>
-              <div className="absolute bottom-3 left-1/2 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center justify-center gap-1.5 sm:bottom-5 sm:gap-2 md:bottom-6 md:gap-2.5">
+              <div className="absolute bottom-5 left-1/2 hidden max-w-[calc(100%-2rem)] -translate-x-1/2 items-center justify-center gap-2 sm:flex md:bottom-6 md:gap-2.5">
               {displaySlides.map((slide, i) => (
                 <button
                   key={slide.id}
