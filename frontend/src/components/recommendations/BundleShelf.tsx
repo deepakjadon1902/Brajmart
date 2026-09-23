@@ -5,6 +5,7 @@ import SectionHeader from '@/components/ui/SectionHeader';
 import { CommerceBundle } from '@/lib/api';
 import { trackMetaPixelEvent, productToMetaPixelParams } from '@/lib/metaPixel';
 import { useCartStore } from '@/store/cartStore';
+import { preloadCartDrawer } from '@/components/cart/lazyCartDrawer';
 import { Product } from '@/types/product';
 import { formatPrice } from '@/utils/formatPrice';
 
@@ -84,7 +85,7 @@ const BundleShelf = ({ bundles, title = 'Complete the Collection', subtitle = 'A
               </div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button type="button" onClick={addBundle} className="min-h-10 rounded-lg border border-maroon bg-white px-3 text-xs font-bold text-maroon premium-focus">
+              <button type="button" onClick={addBundle} onPointerEnter={preloadCartDrawer} onPointerDown={preloadCartDrawer} onFocus={preloadCartDrawer} className="min-h-10 rounded-lg border border-maroon bg-white px-3 text-xs font-bold text-maroon premium-focus">
                 Add Set
               </button>
               <button type="button" onClick={buyBundle} className="min-h-10 rounded-lg bg-saffron px-3 text-xs font-bold text-white premium-focus">

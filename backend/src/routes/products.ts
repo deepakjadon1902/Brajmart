@@ -124,7 +124,7 @@ const sanitizeVariantPricing = (input: any) => {
 
 const LIST_CACHE_TTL_MS = 60_000;
 const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
-let listCache: { at: number; data: any[] } | null = null;
+let listCache: { at: number; view: 'list' | 'detail'; data: any[] } | null = null;
 const clearListCache = () => {
   listCache = null;
 };
@@ -307,6 +307,37 @@ export const mapProductRow = (row: any) => ({
   archiveReason: row.archive_reason || '',
 });
 
+export const mapProductListRow = (row: any) => ({
+  id: String(row.id),
+  name: row.name,
+  slug: row.slug,
+  price: Number(row.price),
+  originalPrice: row.original_price !== null ? Number(row.original_price) : undefined,
+  image: row.image,
+  images: (() => {
+    const parsed = parseJson(row.images, []);
+    if (Array.isArray(parsed) && parsed.length) return parsed.slice(0, 2);
+    return row.image ? [row.image] : [];
+  })(),
+  categoryId: row.category_id !== undefined && row.category_id !== null ? Number(row.category_id) : undefined,
+  subcategoryId: row.subcategory_id !== undefined && row.subcategory_id !== null ? Number(row.subcategory_id) : undefined,
+  category: String(row.category_name ?? row.category ?? ''),
+  subcategory: row.subcategory_name !== undefined && row.subcategory_name !== null ? String(row.subcategory_name) : (row.subcategory ?? null),
+  rating: Number(row.real_review_count || 0) > 0 ? Number(row.real_rating ?? 0) : Number(row.rating ?? 0),
+  reviewCount: Number(row.real_review_count || 0) > 0 ? Number(row.real_review_count ?? 0) : Number(row.review_count ?? 0),
+  badge: row.badge ?? null,
+  tags: parseJson(row.tags, []),
+  inStock: boolFromDb(row.in_stock),
+  codEnabled: row.cod_enabled === undefined || row.cod_enabled === null ? null : boolFromDb(row.cod_enabled),
+  categoryCodEnabled: row.category_cod_enabled === undefined || row.category_cod_enabled === null ? undefined : boolFromDb(row.category_cod_enabled),
+  stockQuantity: row.stock_quantity === undefined || row.stock_quantity === null ? null : Number(row.stock_quantity),
+  sku: row.sku ?? '',
+  soldCount: Number(row.sold_count ?? 0),
+  description: row.description ?? '',
+  createdAt: toIsoString(row.created_at),
+  updatedAt: toIsoString(row.updated_at),
+});
+
 const buildUpdate = (data: any) => {
   const fields: string[] = [];
   const values: any[] = [];
@@ -380,15 +411,22 @@ router.get('/', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const fresh = req.query.fresh === '1';
+    const view = ['detail', 'full', 'admin'].includes(String(req.query.view || '')) ? 'detail' : 'list';
     res.setHeader('Cache-Control', fresh ? 'no-store, max-age=0' : LIST_CACHE_CONTROL);
-    if (!fresh && listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
+    if (!fresh && listCache && listCache.view === view && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
       return res.json(listCache.data);
     }
     await ensureProductCategorySchema();
     await ensureProductSeoColumns();
     await ensureCodSchema();
+    const productProjection = view === 'detail'
+      ? 'p.*'
+      : `p.id, p.name, p.slug, p.price, p.original_price, p.image, p.images,
+         p.category_id, p.subcategory_id, p.rating, p.review_count, p.badge, p.tags,
+         p.in_stock, p.cod_enabled, p.stock_quantity, p.sku, p.sold_count,
+         p.description, p.created_at, p.updated_at`;
     const rows = await dbQuery<any>(
-      `SELECT p.*, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name, ra.real_rating, ra.real_review_count
+      `SELECT ${productProjection}, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name, ra.real_rating, ra.real_review_count
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN subcategories s ON p.subcategory_id = s.id
@@ -396,8 +434,8 @@ router.get('/', async (req, res) => {
        WHERE p.archived_at IS NULL
        ORDER BY p.created_at DESC`
     );
-    const data = rows.map(mapProductRow);
-    listCache = { at: Date.now(), data };
+    const data = rows.map(view === 'detail' ? mapProductRow : mapProductListRow);
+    listCache = { at: Date.now(), view, data };
     res.json(data);
   } catch (err: any) {
     res.status(500).json({ message: err.message });

@@ -1,35 +1,58 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <!-- Google Tag Manager -->
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-PBFHQWC4');</script>
-    <!-- End Google Tag Manager -->
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17517087439"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'AW-17517087439');
+      window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
+      (function () {
+        var loaded = false;
+        var loadScript = function (src) {
+          var script = document.createElement('script');
+          script.async = true;
+          script.src = src;
+          document.head.appendChild(script);
+        };
+        var loadMarketing = function () {
+          if (loaded) return;
+          loaded = true;
+
+          window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+          loadScript('https://www.googletagmanager.com/gtm.js?id=GTM-PBFHQWC4');
+
+          loadScript('https://www.googletagmanager.com/gtag/js?id=AW-17517087439');
+          window.gtag('js', new Date());
+          window.gtag('config', 'AW-17517087439');
+
+          !function(f,b,e,v,n,t,s)
+          {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+          n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+          if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+          n.queue=[];t=b.createElement(e);t.async=!0;
+          t.src=v;s=b.getElementsByTagName(e)[0];
+          s.parentNode.insertBefore(t,s)}(window, document,'script',
+          'https://connect.facebook.net/en_US/fbevents.js');
+          window.fbq('init', '1824114108557446');
+          window.fbq('track', 'PageView');
+        };
+        var schedule = function () {
+          var afterCriticalStartup = function () {
+            window.setTimeout(function () {
+              if ('requestIdleCallback' in window) {
+                window.requestIdleCallback(loadMarketing, { timeout: 4000 });
+              } else {
+                loadMarketing();
+              }
+            }, 8000);
+          };
+          if (document.readyState === 'complete') afterCriticalStartup();
+          else window.addEventListener('load', afterCriticalStartup, { once: true });
+        };
+        ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach(function (eventName) {
+          window.addEventListener(eventName, loadMarketing, { once: true, passive: true });
+        });
+        schedule();
+      })();
     </script>
-    <!-- Meta Pixel Code -->
-    <script>
-      !function(f,b,e,v,n,t,s)
-      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)}(window, document,'script',
-      'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '1824114108557446');
-      fbq('track', 'PageView');
-    </script>
-    <!-- End Meta Pixel Code -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/favicon.ico" />

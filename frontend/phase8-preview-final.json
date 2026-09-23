@@ -1,0 +1,3700 @@
+{
+  "createdAt": "2026-09-23T10:50:40.071Z",
+  "baseUrl": "http://127.0.0.1:4178",
+  "profiles": {
+    "desktop": {
+      "runs": [
+        {
+          "profile": "desktop",
+          "run": 1,
+          "errors": [],
+          "metrics": {
+            "nav": {
+              "ttfb": 83.5,
+              "fcp": 7952,
+              "domContentLoaded": 8177.10000000149,
+              "load": 9497,
+              "transfer": 53709,
+              "encoded": 53409,
+              "decoded": 696619
+            },
+            "lcp": {
+              "startTime": 7952,
+              "element": "H1",
+              "text": "Seva Vigrahas",
+              "url": ""
+            },
+            "cls": 0,
+            "shifts": [],
+            "longTasks": [
+              {
+                "startTime": 7394.300000000745,
+                "duration": 352,
+                "name": "unknown"
+              },
+              {
+                "startTime": 7785.699999999255,
+                "duration": 119,
+                "name": "unknown"
+              },
+              {
+                "startTime": 7947.699999999255,
+                "duration": 256,
+                "name": "self"
+              },
+              {
+                "startTime": 8204.5,
+                "duration": 155,
+                "name": "self"
+              },
+              {
+                "startTime": 8362.199999999255,
+                "duration": 521,
+                "name": "self"
+              },
+              {
+                "startTime": 8903.5,
+                "duration": 88,
+                "name": "self"
+              },
+              {
+                "startTime": 9025.300000000745,
+                "duration": 104,
+                "name": "self"
+              }
+            ],
+            "domNodes": 3917,
+            "sections": [
+              {
+                "index": 0,
+                "tag": "SECTION",
+                "className": "relative bg-background",
+                "heading": "Seva Vigrahas",
+                "nodes": 37,
+                "cards": 0,
+                "hidden": false,
+                "top": 118
+              },
+              {
+                "index": 1,
+                "tag": "SECTION",
+                "className": "hidden bg-brand-soft border-y border-border md:block",
+                "heading": "",
+                "nodes": 70,
+                "cards": 0,
+                "hidden": false,
+                "top": 517
+              },
+              {
+                "index": 2,
+                "tag": "SECTION",
+                "className": "bg-background py-8 sm:py-10 md:py-12",
+                "heading": "What brings you here today?",
+                "nodes": 64,
+                "cards": 0,
+                "hidden": false,
+                "top": 589
+              },
+              {
+                "index": 3,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Special",
+                "nodes": 273,
+                "cards": 6,
+                "hidden": false,
+                "top": 938
+              },
+              {
+                "index": 4,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Most Selling Products",
+                "nodes": 481,
+                "cards": 12,
+                "hidden": false,
+                "top": 1442
+              },
+              {
+                "index": 5,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Prasadam",
+                "nodes": 490,
+                "cards": 12,
+                "hidden": false,
+                "top": 1945
+              },
+              {
+                "index": 6,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Books",
+                "nodes": 462,
+                "cards": 12,
+                "hidden": false,
+                "top": 2449
+              },
+              {
+                "index": 7,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Accessories",
+                "nodes": 492,
+                "cards": 12,
+                "hidden": false,
+                "top": 2952
+              },
+              {
+                "index": 8,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Clothing",
+                "nodes": 465,
+                "cards": 12,
+                "hidden": false,
+                "top": 3456
+              },
+              {
+                "index": 9,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Groceries",
+                "nodes": 467,
+                "cards": 12,
+                "hidden": false,
+                "top": 3960
+              },
+              {
+                "index": 10,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Spiritual Books from Vrindavan",
+                "nodes": 22,
+                "cards": 0,
+                "hidden": false,
+                "top": 4463
+              },
+              {
+                "index": 11,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Top Devotional Accessories",
+                "nodes": 169,
+                "cards": 4,
+                "hidden": false,
+                "top": 4851
+              },
+              {
+                "index": 12,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Devotional shopping, made reassuring",
+                "nodes": 31,
+                "cards": 0,
+                "hidden": false,
+                "top": 5355
+              },
+              {
+                "index": 13,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Exclusive Shop",
+                "nodes": 11,
+                "cards": 0,
+                "hidden": false,
+                "top": 5765
+              },
+              {
+                "index": 14,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 6153
+              },
+              {
+                "index": 15,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Braj Darshan",
+                "nodes": 86,
+                "cards": 0,
+                "hidden": false,
+                "top": 6373
+              },
+              {
+                "index": 16,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 7310
+              },
+              {
+                "index": 17,
+                "tag": "DIV",
+                "className": "",
+                "heading": "From the land of Krishna to your doorstep.",
+                "nodes": 25,
+                "cards": 0,
+                "hidden": false,
+                "top": 7310
+              },
+              {
+                "index": 18,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Bring a little Braj home, again and again.",
+                "nodes": 10,
+                "cards": 0,
+                "hidden": false,
+                "top": 7646
+              }
+            ],
+            "productCards": 82,
+            "cardNodes": [
+              38,
+              47,
+              46,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              36,
+              39,
+              36,
+              36,
+              36,
+              36,
+              36,
+              39,
+              39
+            ],
+            "buckets": {
+              "third-party:fonts.googleapis.com": {
+                "count": 1,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 7198.699999999255
+              },
+              "script": {
+                "count": 1,
+                "transfer": 86479,
+                "encoded": 86179,
+                "decoded": 275225,
+                "duration": 199.09999999776483
+              },
+              "other": {
+                "count": 4,
+                "transfer": 81394,
+                "encoded": 80194,
+                "decoded": 259948,
+                "duration": 630.8999999985099
+              },
+              "link": {
+                "count": 1,
+                "transfer": 25933,
+                "encoded": 25633,
+                "decoded": 147337,
+                "duration": 168.20000000298023
+              },
+              "third-party:ik.imagekit.io": {
+                "count": 13,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 49512.09999999404
+              },
+              "third-party:images.unsplash.com": {
+                "count": 2,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 2573.099999997765
+              },
+              "fetch": {
+                "count": 4,
+                "transfer": 1336,
+                "encoded": 136,
+                "decoded": 136,
+                "duration": 1961.4999999962747
+              }
+            }
+          },
+          "interactions": {
+            "searchTyping": 812,
+            "wishlistToggle": 2469
+          },
+          "events": [
+            {
+              "name": "beforeinput",
+              "startTime": 11832.89999999851,
+              "duration": 224,
+              "processingStart": 11832.89999999851,
+              "processingEnd": 11843,
+              "interactionId": 0
+            },
+            {
+              "name": "input",
+              "startTime": 11927.199999999255,
+              "duration": 136,
+              "processingStart": 11963.10000000149,
+              "processingEnd": 11992,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerover",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14710.39999999851,
+              "processingEnd": 14712.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.39999999851,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14712.5,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseover",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14712.5,
+              "processingEnd": 14713,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseenter",
+              "startTime": 14692.60000000149,
+              "duration": 224,
+              "processingStart": 14713,
+              "processingEnd": 14713.10000000149,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerdown",
+              "startTime": 14696.39999999851,
+              "duration": 224,
+              "processingStart": 14724.300000000745,
+              "processingEnd": 14727.699999999255,
+              "interactionId": 5254
+            },
+            {
+              "name": "mousedown",
+              "startTime": 14696.39999999851,
+              "duration": 224,
+              "processingStart": 14727.800000000745,
+              "processingEnd": 14728.300000000745,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerup",
+              "startTime": 14698.89999999851,
+              "duration": 224,
+              "processingStart": 14736.39999999851,
+              "processingEnd": 14738.89999999851,
+              "interactionId": 5254
+            },
+            {
+              "name": "mouseup",
+              "startTime": 14698.89999999851,
+              "duration": 224,
+              "processingStart": 14738.89999999851,
+              "processingEnd": 14741.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "click",
+              "startTime": 14698.89999999851,
+              "duration": 224,
+              "processingStart": 14742.10000000149,
+              "processingEnd": 14748.199999999255,
+              "interactionId": 5254
+            },
+            {
+              "name": "pointerout",
+              "startTime": 14753.10000000149,
+              "duration": 168,
+              "processingStart": 14753.60000000149,
+              "processingEnd": 14754,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerover",
+              "startTime": 14753.10000000149,
+              "duration": 168,
+              "processingStart": 14754,
+              "processingEnd": 14754.10000000149,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 14753.10000000149,
+              "duration": 168,
+              "processingStart": 14754.199999999255,
+              "processingEnd": 14754.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseout",
+              "startTime": 14753.10000000149,
+              "duration": 168,
+              "processingStart": 14754.199999999255,
+              "processingEnd": 14754.300000000745,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseover",
+              "startTime": 14753.10000000149,
+              "duration": 168,
+              "processingStart": 14754.300000000745,
+              "processingEnd": 14754.39999999851,
+              "interactionId": 0
+            }
+          ]
+        },
+        {
+          "profile": "desktop",
+          "run": 2,
+          "errors": [],
+          "metrics": {
+            "nav": {
+              "ttfb": 333.19999999925494,
+              "fcp": 1144,
+              "domContentLoaded": 1296.5999999977648,
+              "load": 2830.800000000745,
+              "transfer": 53709,
+              "encoded": 53409,
+              "decoded": 696619
+            },
+            "lcp": {
+              "startTime": 1144,
+              "element": "H1",
+              "text": "Seva Vigrahas",
+              "url": ""
+            },
+            "cls": 0.09192411854852539,
+            "shifts": [
+              {
+                "startTime": 2363.800000000745,
+                "value": 0.054760802469135804,
+                "sources": [
+                  {
+                    "node": "DIV.absolute.inset-x-0.bottom-0",
+                    "previousRect": {
+                      "x": 0,
+                      "y": 215,
+                      "width": 1440,
+                      "height": 302,
+                      "top": 215,
+                      "right": 1440,
+                      "bottom": 517,
+                      "left": 0
+                    },
+                    "currentRect": {
+                      "x": 0,
+                      "y": 243,
+                      "width": 1440,
+                      "height": 274,
+                      "top": 243,
+                      "right": 1440,
+                      "bottom": 517,
+                      "left": 0
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 2861.800000000745,
+                "value": 0.0003391053669410151,
+                "sources": [
+                  {
+                    "node": "A.rounded-lg.border.border-white/40",
+                    "previousRect": {
+                      "x": 314.53125,
+                      "y": 431,
+                      "width": 154.171875,
+                      "height": 46,
+                      "top": 431,
+                      "right": 468.703125,
+                      "bottom": 477,
+                      "left": 314.53125
+                    },
+                    "currentRect": {
+                      "x": 270.53125,
+                      "y": 431,
+                      "width": 154.171875,
+                      "height": 46,
+                      "top": 431,
+                      "right": 424.703125,
+                      "bottom": 477,
+                      "left": 270.53125
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 640,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 664,
+                      "bottom": 494,
+                      "left": 640
+                    },
+                    "currentRect": {
+                      "x": 623,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 647,
+                      "bottom": 494,
+                      "left": 623
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 674,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 698,
+                      "bottom": 494,
+                      "left": 674
+                    },
+                    "currentRect": {
+                      "x": 657,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 681,
+                      "bottom": 494,
+                      "left": 657
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 708,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 732,
+                      "bottom": 494,
+                      "left": 708
+                    },
+                    "currentRect": {
+                      "x": 691,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 715,
+                      "bottom": 494,
+                      "left": 691
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 742,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 766,
+                      "bottom": 494,
+                      "left": 742
+                    },
+                    "currentRect": {
+                      "x": 725,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 749,
+                      "bottom": 494,
+                      "left": 725
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 2990.800000000745,
+                "value": 0.00017700295781893002,
+                "sources": [
+                  {
+                    "node": "A.rounded-lg.border.border-white/40",
+                    "previousRect": {
+                      "x": 271.140625,
+                      "y": 431,
+                      "width": 154.171875,
+                      "height": 46,
+                      "top": 431,
+                      "right": 425.3125,
+                      "bottom": 477,
+                      "left": 271.140625
+                    },
+                    "currentRect": {
+                      "x": 297.140625,
+                      "y": 431,
+                      "width": 154.171875,
+                      "height": 46,
+                      "top": 431,
+                      "right": 451.3125,
+                      "bottom": 477,
+                      "left": 297.140625
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 657,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 681,
+                      "bottom": 494,
+                      "left": 657
+                    },
+                    "currentRect": {
+                      "x": 640,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 664,
+                      "bottom": 494,
+                      "left": 640
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 691,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 715,
+                      "bottom": 494,
+                      "left": 691
+                    },
+                    "currentRect": {
+                      "x": 674,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 698,
+                      "bottom": 494,
+                      "left": 674
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 725,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 749,
+                      "bottom": 494,
+                      "left": 725
+                    },
+                    "currentRect": {
+                      "x": 708,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 732,
+                      "bottom": 494,
+                      "left": 708
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 759,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 783,
+                      "bottom": 494,
+                      "left": 759
+                    },
+                    "currentRect": {
+                      "x": 742,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 766,
+                      "bottom": 494,
+                      "left": 742
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 3044.5,
+                "value": 0.005919753086419753,
+                "sources": [
+                  {
+                    "node": "DIV.absolute.inset-x-0.bottom-0",
+                    "previousRect": {
+                      "x": 0,
+                      "y": 243,
+                      "width": 1440,
+                      "height": 274,
+                      "top": 243,
+                      "right": 1440,
+                      "bottom": 517,
+                      "left": 0
+                    },
+                    "currentRect": {
+                      "x": 0,
+                      "y": 271,
+                      "width": 1440,
+                      "height": 246,
+                      "top": 271,
+                      "right": 1440,
+                      "bottom": 517,
+                      "left": 0
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 3092.39999999851,
+                "value": 0.005919753086419753,
+                "sources": [
+                  {
+                    "node": "DIV.absolute.inset-x-0.bottom-0",
+                    "previousRect": {
+                      "x": 0,
+                      "y": 271,
+                      "width": 1440,
+                      "height": 246,
+                      "top": 271,
+                      "right": 1440,
+                      "bottom": 517,
+                      "left": 0
+                    },
+                    "currentRect": {
+                      "x": 0,
+                      "y": 243,
+                      "width": 1440,
+                      "height": 274,
+                      "top": 243,
+                      "right": 1440,
+                      "bottom": 517,
+                      "left": 0
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 3144.5,
+                "value": 0.000238257137345679,
+                "sources": [
+                  {
+                    "node": "A.rounded-lg.border.border-white/40",
+                    "previousRect": {
+                      "x": 296.546875,
+                      "y": 431,
+                      "width": 154.171875,
+                      "height": 46,
+                      "top": 431,
+                      "right": 450.71875,
+                      "bottom": 477,
+                      "left": 296.546875
+                    },
+                    "currentRect": {
+                      "x": 337.546875,
+                      "y": 431,
+                      "width": 154.171875,
+                      "height": 46,
+                      "top": 431,
+                      "right": 491.71875,
+                      "bottom": 477,
+                      "left": 337.546875
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 708,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 732,
+                      "bottom": 494,
+                      "left": 708
+                    },
+                    "currentRect": {
+                      "x": 691,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 715,
+                      "bottom": 494,
+                      "left": 691
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 742,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 766,
+                      "bottom": 494,
+                      "left": 742
+                    },
+                    "currentRect": {
+                      "x": 725,
+                      "y": 469,
+                      "width": 24,
+                      "height": 25,
+                      "top": 469,
+                      "right": 749,
+                      "bottom": 494,
+                      "left": 725
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 3183.599999997765,
+                "value": 0.008668209876543211,
+                "sources": [
+                  {
+                    "node": "DIV.absolute.inset-x-0.bottom-0",
+                    "previousRect": {
+                      "x": 0,
+                      "y": 243,
+                      "width": 1440,
+                      "height": 274,
+                      "top": 243,
+                      "right": 1440,
+                      "bottom": 517,
+                      "left": 0
+                    },
+                    "currentRect": {
+                      "x": 0,
+                      "y": 259,
+                      "width": 1440,
+                      "height": 258,
+                      "top": 259,
+                      "right": 1440,
+                      "bottom": 517,
+                      "left": 0
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 3209.300000000745,
+                "value": 0.015901234567901233,
+                "sources": [
+                  {
+                    "node": "DIV.absolute.inset-x-0.bottom-0",
+                    "previousRect": {
+                      "x": 0,
+                      "y": 259,
+                      "width": 1440,
+                      "height": 258,
+                      "top": 259,
+                      "right": 1440,
+                      "bottom": 517,
+                      "left": 0
+                    },
+                    "currentRect": {
+                      "x": 0,
+                      "y": 195,
+                      "width": 1440,
+                      "height": 322,
+                      "top": 195,
+                      "right": 1440,
+                      "bottom": 517,
+                      "left": 0
+                    }
+                  }
+                ]
+              }
+            ],
+            "longTasks": [
+              {
+                "startTime": 778.8999999985099,
+                "duration": 254,
+                "name": "unknown"
+              },
+              {
+                "startTime": 1184.3999999985099,
+                "duration": 147,
+                "name": "self"
+              },
+              {
+                "startTime": 1332.3999999985099,
+                "duration": 169,
+                "name": "unknown"
+              },
+              {
+                "startTime": 1503.0999999977648,
+                "duration": 613,
+                "name": "self"
+              },
+              {
+                "startTime": 2161.5,
+                "duration": 156,
+                "name": "self"
+              },
+              {
+                "startTime": 2379.39999999851,
+                "duration": 151,
+                "name": "self"
+              }
+            ],
+            "domNodes": 3894,
+            "sections": [
+              {
+                "index": 0,
+                "tag": "SECTION",
+                "className": "relative bg-background",
+                "heading": "Bring the Blessings of Vrindavan Home",
+                "nodes": 14,
+                "cards": 0,
+                "hidden": false,
+                "top": 118
+              },
+              {
+                "index": 1,
+                "tag": "SECTION",
+                "className": "hidden bg-brand-soft border-y border-border md:block",
+                "heading": "",
+                "nodes": 70,
+                "cards": 0,
+                "hidden": false,
+                "top": 517
+              },
+              {
+                "index": 2,
+                "tag": "SECTION",
+                "className": "bg-background py-8 sm:py-10 md:py-12",
+                "heading": "What brings you here today?",
+                "nodes": 64,
+                "cards": 0,
+                "hidden": false,
+                "top": 589
+              },
+              {
+                "index": 3,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Special",
+                "nodes": 273,
+                "cards": 6,
+                "hidden": false,
+                "top": 938
+              },
+              {
+                "index": 4,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Most Selling Products",
+                "nodes": 481,
+                "cards": 12,
+                "hidden": false,
+                "top": 1442
+              },
+              {
+                "index": 5,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Prasadam",
+                "nodes": 490,
+                "cards": 12,
+                "hidden": false,
+                "top": 1945
+              },
+              {
+                "index": 6,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Books",
+                "nodes": 462,
+                "cards": 12,
+                "hidden": false,
+                "top": 2449
+              },
+              {
+                "index": 7,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Accessories",
+                "nodes": 492,
+                "cards": 12,
+                "hidden": false,
+                "top": 2952
+              },
+              {
+                "index": 8,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Clothing",
+                "nodes": 465,
+                "cards": 12,
+                "hidden": false,
+                "top": 3456
+              },
+              {
+                "index": 9,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Groceries",
+                "nodes": 467,
+                "cards": 12,
+                "hidden": false,
+                "top": 3960
+              },
+              {
+                "index": 10,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Spiritual Books from Vrindavan",
+                "nodes": 22,
+                "cards": 0,
+                "hidden": false,
+                "top": 4463
+              },
+              {
+                "index": 11,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Top Devotional Accessories",
+                "nodes": 169,
+                "cards": 4,
+                "hidden": false,
+                "top": 4851
+              },
+              {
+                "index": 12,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Devotional shopping, made reassuring",
+                "nodes": 31,
+                "cards": 0,
+                "hidden": false,
+                "top": 5355
+              },
+              {
+                "index": 13,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Exclusive Shop",
+                "nodes": 11,
+                "cards": 0,
+                "hidden": false,
+                "top": 5765
+              },
+              {
+                "index": 14,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 6153
+              },
+              {
+                "index": 15,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Braj Darshan",
+                "nodes": 86,
+                "cards": 0,
+                "hidden": false,
+                "top": 6373
+              },
+              {
+                "index": 16,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 7310
+              },
+              {
+                "index": 17,
+                "tag": "DIV",
+                "className": "",
+                "heading": "From the land of Krishna to your doorstep.",
+                "nodes": 25,
+                "cards": 0,
+                "hidden": false,
+                "top": 7310
+              },
+              {
+                "index": 18,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Bring a little Braj home, again and again.",
+                "nodes": 10,
+                "cards": 0,
+                "hidden": false,
+                "top": 7646
+              }
+            ],
+            "productCards": 82,
+            "cardNodes": [
+              38,
+              47,
+              46,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              36,
+              39,
+              36,
+              36,
+              36,
+              36,
+              36,
+              39,
+              39
+            ],
+            "buckets": {
+              "third-party:fonts.googleapis.com": {
+                "count": 1,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 411.8999999985099
+              },
+              "script": {
+                "count": 1,
+                "transfer": 86479,
+                "encoded": 86179,
+                "decoded": 275225,
+                "duration": 81.89999999850988
+              },
+              "other": {
+                "count": 4,
+                "transfer": 81394,
+                "encoded": 80194,
+                "decoded": 259948,
+                "duration": 1162.800000000745
+              },
+              "link": {
+                "count": 1,
+                "transfer": 25933,
+                "encoded": 25633,
+                "decoded": 147337,
+                "duration": 243.39999999850988
+              },
+              "third-party:ik.imagekit.io": {
+                "count": 20,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 17483.399999994785
+              },
+              "third-party:images.unsplash.com": {
+                "count": 2,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 960.4000000022352
+              },
+              "fetch": {
+                "count": 4,
+                "transfer": 1336,
+                "encoded": 136,
+                "decoded": 136,
+                "duration": 247.70000000670552
+              }
+            }
+          },
+          "interactions": {},
+          "events": []
+        },
+        {
+          "profile": "desktop",
+          "run": 3,
+          "errors": [],
+          "metrics": {
+            "nav": {
+              "ttfb": 45.899999998509884,
+              "fcp": 784,
+              "domContentLoaded": 1187.5,
+              "load": 1698.199999999255,
+              "transfer": 53709,
+              "encoded": 53409,
+              "decoded": 696619
+            },
+            "lcp": {
+              "startTime": 784,
+              "element": "H1",
+              "text": "Seva Vigrahas",
+              "url": ""
+            },
+            "cls": 0,
+            "shifts": [],
+            "longTasks": [
+              {
+                "startTime": 326.3999999985099,
+                "duration": 283,
+                "name": "unknown"
+              },
+              {
+                "startTime": 849.7999999970198,
+                "duration": 52,
+                "name": "unknown"
+              },
+              {
+                "startTime": 910.6999999992549,
+                "duration": 153,
+                "name": "unknown"
+              },
+              {
+                "startTime": 1069.5999999977648,
+                "duration": 121,
+                "name": "self"
+              },
+              {
+                "startTime": 1196.7999999970198,
+                "duration": 485,
+                "name": "self"
+              },
+              {
+                "startTime": 1736.0999999977648,
+                "duration": 94,
+                "name": "self"
+              },
+              {
+                "startTime": 1855.199999999255,
+                "duration": 108,
+                "name": "self"
+              }
+            ],
+            "domNodes": 3917,
+            "sections": [
+              {
+                "index": 0,
+                "tag": "SECTION",
+                "className": "relative bg-background",
+                "heading": "Seva Vigrahas",
+                "nodes": 37,
+                "cards": 0,
+                "hidden": false,
+                "top": 118
+              },
+              {
+                "index": 1,
+                "tag": "SECTION",
+                "className": "hidden bg-brand-soft border-y border-border md:block",
+                "heading": "",
+                "nodes": 70,
+                "cards": 0,
+                "hidden": false,
+                "top": 517
+              },
+              {
+                "index": 2,
+                "tag": "SECTION",
+                "className": "bg-background py-8 sm:py-10 md:py-12",
+                "heading": "What brings you here today?",
+                "nodes": 64,
+                "cards": 0,
+                "hidden": false,
+                "top": 589
+              },
+              {
+                "index": 3,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Special",
+                "nodes": 273,
+                "cards": 6,
+                "hidden": false,
+                "top": 938
+              },
+              {
+                "index": 4,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Most Selling Products",
+                "nodes": 481,
+                "cards": 12,
+                "hidden": false,
+                "top": 1442
+              },
+              {
+                "index": 5,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Prasadam",
+                "nodes": 490,
+                "cards": 12,
+                "hidden": false,
+                "top": 1945
+              },
+              {
+                "index": 6,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Books",
+                "nodes": 462,
+                "cards": 12,
+                "hidden": false,
+                "top": 2449
+              },
+              {
+                "index": 7,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Accessories",
+                "nodes": 492,
+                "cards": 12,
+                "hidden": false,
+                "top": 2952
+              },
+              {
+                "index": 8,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Clothing",
+                "nodes": 465,
+                "cards": 12,
+                "hidden": false,
+                "top": 3456
+              },
+              {
+                "index": 9,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Groceries",
+                "nodes": 467,
+                "cards": 12,
+                "hidden": false,
+                "top": 3960
+              },
+              {
+                "index": 10,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Spiritual Books from Vrindavan",
+                "nodes": 22,
+                "cards": 0,
+                "hidden": false,
+                "top": 4463
+              },
+              {
+                "index": 11,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Top Devotional Accessories",
+                "nodes": 169,
+                "cards": 4,
+                "hidden": false,
+                "top": 4851
+              },
+              {
+                "index": 12,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Devotional shopping, made reassuring",
+                "nodes": 31,
+                "cards": 0,
+                "hidden": false,
+                "top": 5355
+              },
+              {
+                "index": 13,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Exclusive Shop",
+                "nodes": 11,
+                "cards": 0,
+                "hidden": false,
+                "top": 5765
+              },
+              {
+                "index": 14,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 6153
+              },
+              {
+                "index": 15,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Braj Darshan",
+                "nodes": 86,
+                "cards": 0,
+                "hidden": false,
+                "top": 6373
+              },
+              {
+                "index": 16,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 7310
+              },
+              {
+                "index": 17,
+                "tag": "DIV",
+                "className": "",
+                "heading": "From the land of Krishna to your doorstep.",
+                "nodes": 25,
+                "cards": 0,
+                "hidden": false,
+                "top": 7310
+              },
+              {
+                "index": 18,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Bring a little Braj home, again and again.",
+                "nodes": 10,
+                "cards": 0,
+                "hidden": false,
+                "top": 7646
+              }
+            ],
+            "productCards": 82,
+            "cardNodes": [
+              38,
+              47,
+              46,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              36,
+              39,
+              36,
+              36,
+              36,
+              36,
+              36,
+              39,
+              39
+            ],
+            "buckets": {
+              "third-party:fonts.googleapis.com": {
+                "count": 1,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 100
+              },
+              "script": {
+                "count": 1,
+                "transfer": 86479,
+                "encoded": 86179,
+                "decoded": 275225,
+                "duration": 120.40000000223517
+              },
+              "other": {
+                "count": 4,
+                "transfer": 81394,
+                "encoded": 80194,
+                "decoded": 259948,
+                "duration": 363.1000000014901
+              },
+              "link": {
+                "count": 1,
+                "transfer": 25933,
+                "encoded": 25633,
+                "decoded": 147337,
+                "duration": 100.79999999701977
+              },
+              "third-party:ik.imagekit.io": {
+                "count": 13,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 9907.00000000745
+              },
+              "third-party:images.unsplash.com": {
+                "count": 2,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 1109.5999999977648
+              },
+              "fetch": {
+                "count": 4,
+                "transfer": 1336,
+                "encoded": 136,
+                "decoded": 136,
+                "duration": 127
+              }
+            }
+          },
+          "interactions": {},
+          "events": []
+        }
+      ],
+      "median": {
+        "ttfb": 83.5,
+        "fcp": 1144,
+        "lcp": 1144,
+        "cls": 0,
+        "domNodes": 3917,
+        "longTaskCount": 7,
+        "longTaskDuration": 1490
+      }
+    },
+    "mobile": {
+      "runs": [
+        {
+          "profile": "mobile",
+          "run": 1,
+          "errors": [],
+          "metrics": {
+            "nav": {
+              "ttfb": 35.5,
+              "fcp": 844,
+              "domContentLoaded": 1207.0999999977648,
+              "load": 1817.2999999970198,
+              "transfer": 53709,
+              "encoded": 53409,
+              "decoded": 696619
+            },
+            "lcp": {
+              "startTime": 844,
+              "element": "A",
+              "text": "Radha-Krishna, Balram, Gopal and Laddu Gopal, Gaur Nitai!",
+              "url": ""
+            },
+            "cls": 0.02449854382136865,
+            "shifts": [
+              {
+                "startTime": 1844.199999999255,
+                "value": 0.004280780202255462,
+                "sources": [
+                  {
+                    "node": "DIV.absolute.inset-x-0.bottom-0",
+                    "previousRect": {
+                      "x": 32,
+                      "y": 168,
+                      "width": 326,
+                      "height": 114.09375,
+                      "top": 168,
+                      "right": 358,
+                      "bottom": 282.09375,
+                      "left": 32
+                    },
+                    "currentRect": {
+                      "x": 32,
+                      "y": 168,
+                      "width": 326,
+                      "height": 114.09375,
+                      "top": 168,
+                      "right": 358,
+                      "bottom": 282.09375,
+                      "left": 32
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 2031.0999999977648,
+                "value": 0.00044901023371857364,
+                "sources": [
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 123,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 147,
+                      "bottom": 270.09375,
+                      "left": 123
+                    },
+                    "currentRect": {
+                      "x": 108,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 132,
+                      "bottom": 270.09375,
+                      "left": 108
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 153,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 177,
+                      "bottom": 270.09375,
+                      "left": 153
+                    },
+                    "currentRect": {
+                      "x": 138,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 162,
+                      "bottom": 270.09375,
+                      "left": 138
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 183,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 207,
+                      "bottom": 270.09375,
+                      "left": 183
+                    },
+                    "currentRect": {
+                      "x": 168,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 192,
+                      "bottom": 270.09375,
+                      "left": 168
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 213,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 237,
+                      "bottom": 270.09375,
+                      "left": 213
+                    },
+                    "currentRect": {
+                      "x": 198,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 222,
+                      "bottom": 270.09375,
+                      "left": 198
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 243,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 267,
+                      "bottom": 270.09375,
+                      "left": 243
+                    },
+                    "currentRect": {
+                      "x": 228,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 252,
+                      "bottom": 270.09375,
+                      "left": 228
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 2077.099999997765,
+                "value": 0.00037773876804895876,
+                "sources": [
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 138,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 162,
+                      "bottom": 270.09375,
+                      "left": 138
+                    },
+                    "currentRect": {
+                      "x": 123,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 147,
+                      "bottom": 270.09375,
+                      "left": 123
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 168,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 192,
+                      "bottom": 270.09375,
+                      "left": 168
+                    },
+                    "currentRect": {
+                      "x": 153,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 177,
+                      "bottom": 270.09375,
+                      "left": 153
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 198,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 222,
+                      "bottom": 270.09375,
+                      "left": 198
+                    },
+                    "currentRect": {
+                      "x": 183,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 207,
+                      "bottom": 270.09375,
+                      "left": 183
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 228,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 252,
+                      "bottom": 270.09375,
+                      "left": 228
+                    },
+                    "currentRect": {
+                      "x": 213,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 237,
+                      "bottom": 270.09375,
+                      "left": 213
+                    }
+                  },
+                  {
+                    "node": "BUTTON.group.flex.h-6",
+                    "previousRect": {
+                      "x": 258,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 282,
+                      "bottom": 270.09375,
+                      "left": 258
+                    },
+                    "currentRect": {
+                      "x": 243,
+                      "y": 226.09375,
+                      "width": 24,
+                      "height": 44,
+                      "top": 226.09375,
+                      "right": 267,
+                      "bottom": 270.09375,
+                      "left": 243
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 2096.099999997765,
+                "value": 0.0032105851516915957,
+                "sources": [
+                  {
+                    "node": "DIV.absolute.inset-x-0.bottom-0",
+                    "previousRect": {
+                      "x": 32,
+                      "y": 168,
+                      "width": 326,
+                      "height": 114.09375,
+                      "top": 168,
+                      "right": 358,
+                      "bottom": 282.09375,
+                      "left": 32
+                    },
+                    "currentRect": {
+                      "x": 32,
+                      "y": 168,
+                      "width": 326,
+                      "height": 114.09375,
+                      "top": 168,
+                      "right": 358,
+                      "bottom": 282.09375,
+                      "left": 32
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 2142.699999999255,
+                "value": 0.0032105851516915957,
+                "sources": [
+                  {
+                    "node": "DIV.absolute.inset-x-0.bottom-0",
+                    "previousRect": {
+                      "x": 32,
+                      "y": 168,
+                      "width": 326,
+                      "height": 114.09375,
+                      "top": 168,
+                      "right": 358,
+                      "bottom": 282.09375,
+                      "left": 32
+                    },
+                    "currentRect": {
+                      "x": 32,
+                      "y": 168,
+                      "width": 326,
+                      "height": 114.09375,
+                      "top": 168,
+                      "right": 358,
+                      "bottom": 282.09375,
+                      "left": 32
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 2196.39999999851,
+                "value": 0.0032105851516915957,
+                "sources": [
+                  {
+                    "node": "DIV.absolute.inset-x-0.bottom-0",
+                    "previousRect": {
+                      "x": 32,
+                      "y": 168,
+                      "width": 326,
+                      "height": 114.09375,
+                      "top": 168,
+                      "right": 358,
+                      "bottom": 282.09375,
+                      "left": 32
+                    },
+                    "currentRect": {
+                      "x": 32,
+                      "y": 168,
+                      "width": 326,
+                      "height": 114.09375,
+                      "top": 168,
+                      "right": 358,
+                      "bottom": 282.09375,
+                      "left": 32
+                    }
+                  }
+                ]
+              },
+              {
+                "startTime": 2240.699999999255,
+                "value": 0.009759259162270873,
+                "sources": [
+                  {
+                    "node": "DIV.absolute.inset-x-0.bottom-0",
+                    "previousRect": {
+                      "x": 32,
+                      "y": 168,
+                      "width": 326,
+                      "height": 114.09375,
+                      "top": 168,
+                      "right": 358,
+                      "bottom": 282.09375,
+                      "left": 32
+                    },
+                    "currentRect": {
+                      "x": 32,
+                      "y": 168,
+                      "width": 326,
+                      "height": 114.09375,
+                      "top": 168,
+                      "right": 358,
+                      "bottom": 282.09375,
+                      "left": 32
+                    }
+                  }
+                ]
+              }
+            ],
+            "longTasks": [
+              {
+                "startTime": 459.0999999977648,
+                "duration": 328,
+                "name": "unknown"
+              },
+              {
+                "startTime": 943.7999999970198,
+                "duration": 167,
+                "name": "unknown"
+              },
+              {
+                "startTime": 1113,
+                "duration": 103,
+                "name": "self"
+              },
+              {
+                "startTime": 1219.5999999977648,
+                "duration": 448,
+                "name": "self"
+              },
+              {
+                "startTime": 1701.3999999985099,
+                "duration": 100,
+                "name": "self"
+              },
+              {
+                "startTime": 1853.0999999977648,
+                "duration": 93,
+                "name": "self"
+              }
+            ],
+            "domNodes": 3894,
+            "sections": [
+              {
+                "index": 0,
+                "tag": "SECTION",
+                "className": "relative bg-background",
+                "heading": "Bring the Blessings of Vrindavan Home",
+                "nodes": 14,
+                "cards": 0,
+                "hidden": false,
+                "top": 168
+              },
+              {
+                "index": 1,
+                "tag": "SECTION",
+                "className": "hidden bg-brand-soft border-y border-border md:block",
+                "heading": "",
+                "nodes": 70,
+                "cards": 0,
+                "hidden": true,
+                "top": 0
+              },
+              {
+                "index": 2,
+                "tag": "SECTION",
+                "className": "bg-background py-8 sm:py-10 md:py-12",
+                "heading": "What brings you here today?",
+                "nodes": 64,
+                "cards": 0,
+                "hidden": false,
+                "top": 282
+              },
+              {
+                "index": 3,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Special",
+                "nodes": 273,
+                "cards": 6,
+                "hidden": false,
+                "top": 1450
+              },
+              {
+                "index": 4,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Most Selling Products",
+                "nodes": 481,
+                "cards": 12,
+                "hidden": false,
+                "top": 1903
+              },
+              {
+                "index": 5,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Prasadam",
+                "nodes": 490,
+                "cards": 12,
+                "hidden": false,
+                "top": 2355
+              },
+              {
+                "index": 6,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Books",
+                "nodes": 462,
+                "cards": 12,
+                "hidden": false,
+                "top": 2828
+              },
+              {
+                "index": 7,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Accessories",
+                "nodes": 492,
+                "cards": 12,
+                "hidden": false,
+                "top": 3280
+              },
+              {
+                "index": 8,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Clothing",
+                "nodes": 465,
+                "cards": 12,
+                "hidden": false,
+                "top": 3733
+              },
+              {
+                "index": 9,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Groceries",
+                "nodes": 467,
+                "cards": 12,
+                "hidden": false,
+                "top": 4185
+              },
+              {
+                "index": 10,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Spiritual Books from Vrindavan",
+                "nodes": 22,
+                "cards": 0,
+                "hidden": false,
+                "top": 4638
+              },
+              {
+                "index": 11,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Top Devotional Accessories",
+                "nodes": 169,
+                "cards": 4,
+                "hidden": false,
+                "top": 5058
+              },
+              {
+                "index": 12,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Devotional shopping, made reassuring",
+                "nodes": 31,
+                "cards": 0,
+                "hidden": false,
+                "top": 5510
+              },
+              {
+                "index": 13,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Exclusive Shop",
+                "nodes": 11,
+                "cards": 0,
+                "hidden": false,
+                "top": 6316
+              },
+              {
+                "index": 14,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 6736
+              },
+              {
+                "index": 15,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Braj Darshan",
+                "nodes": 86,
+                "cards": 0,
+                "hidden": false,
+                "top": 6956
+              },
+              {
+                "index": 16,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 7955
+              },
+              {
+                "index": 17,
+                "tag": "DIV",
+                "className": "",
+                "heading": "From the land of Krishna to your doorstep.",
+                "nodes": 25,
+                "cards": 0,
+                "hidden": false,
+                "top": 7955
+              },
+              {
+                "index": 18,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Bring a little Braj home, again and again.",
+                "nodes": 10,
+                "cards": 0,
+                "hidden": false,
+                "top": 8911
+              }
+            ],
+            "productCards": 82,
+            "cardNodes": [
+              38,
+              47,
+              46,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              36,
+              39,
+              36,
+              36,
+              36,
+              36,
+              36,
+              39,
+              39
+            ],
+            "buckets": {
+              "third-party:fonts.googleapis.com": {
+                "count": 1,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 294.1000000014901
+              },
+              "script": {
+                "count": 1,
+                "transfer": 86479,
+                "encoded": 86179,
+                "decoded": 275225,
+                "duration": 245
+              },
+              "other": {
+                "count": 4,
+                "transfer": 81394,
+                "encoded": 80194,
+                "decoded": 259948,
+                "duration": 1098.1999999955297
+              },
+              "link": {
+                "count": 1,
+                "transfer": 25933,
+                "encoded": 25633,
+                "decoded": 147337,
+                "duration": 199.10000000149012
+              },
+              "third-party:ik.imagekit.io": {
+                "count": 20,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 14006.400000002235
+              },
+              "third-party:images.unsplash.com": {
+                "count": 2,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 607.9000000059605
+              },
+              "fetch": {
+                "count": 4,
+                "transfer": 1336,
+                "encoded": 136,
+                "decoded": 136,
+                "duration": 149.19999999552965
+              }
+            }
+          },
+          "interactions": {
+            "searchTyping": 248,
+            "wishlistToggle": 862,
+            "menuOpen": 319
+          },
+          "events": [
+            {
+              "name": "beforeinput",
+              "startTime": 4081.199999999255,
+              "duration": 24,
+              "processingStart": 4081.199999999255,
+              "processingEnd": 4081.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "input",
+              "startTime": 4082.89999999851,
+              "duration": 24,
+              "processingStart": 4083.7999999970198,
+              "processingEnd": 4092.2999999970198,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerover",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5075.29999999702,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.199999999255,
+              "processingEnd": 5076.29999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.29999999702,
+              "processingEnd": 5076.29999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseover",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.29999999702,
+              "processingEnd": 5076.79999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseenter",
+              "startTime": 5068.29999999702,
+              "duration": 88,
+              "processingStart": 5076.79999999702,
+              "processingEnd": 5076.89999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerdown",
+              "startTime": 5068.39999999851,
+              "duration": 88,
+              "processingStart": 5080.599999997765,
+              "processingEnd": 5082.599999997765,
+              "interactionId": 5848
+            },
+            {
+              "name": "mousedown",
+              "startTime": 5068.39999999851,
+              "duration": 88,
+              "processingStart": 5082.599999997765,
+              "processingEnd": 5083.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerup",
+              "startTime": 5068.39999999851,
+              "duration": 88,
+              "processingStart": 5085.89999999851,
+              "processingEnd": 5086,
+              "interactionId": 5848
+            },
+            {
+              "name": "mouseup",
+              "startTime": 5068.39999999851,
+              "duration": 88,
+              "processingStart": 5086.099999997765,
+              "processingEnd": 5087.5,
+              "interactionId": 0
+            },
+            {
+              "name": "click",
+              "startTime": 5068.39999999851,
+              "duration": 88,
+              "processingStart": 5087.5,
+              "processingEnd": 5093.79999999702,
+              "interactionId": 5848
+            },
+            {
+              "name": "pointerout",
+              "startTime": 5098.89999999851,
+              "duration": 56,
+              "processingStart": 5099.699999999255,
+              "processingEnd": 5100.199999999255,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerover",
+              "startTime": 5098.89999999851,
+              "duration": 56,
+              "processingStart": 5100.199999999255,
+              "processingEnd": 5100.29999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5098.89999999851,
+              "duration": 56,
+              "processingStart": 5100.29999999702,
+              "processingEnd": 5100.29999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseout",
+              "startTime": 5098.89999999851,
+              "duration": 56,
+              "processingStart": 5100.39999999851,
+              "processingEnd": 5100.5,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseover",
+              "startTime": 5098.89999999851,
+              "duration": 56,
+              "processingStart": 5100.5,
+              "processingEnd": 5100.5,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerout",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619,
+              "processingEnd": 5619.29999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerleave",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.39999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerover",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.39999999851,
+              "processingEnd": 5619.599999997765,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.599999997765,
+              "processingEnd": 5619.599999997765,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.599999997765,
+              "processingEnd": 5619.599999997765,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.599999997765,
+              "processingEnd": 5619.599999997765,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.599999997765,
+              "processingEnd": 5619.599999997765,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.599999997765,
+              "processingEnd": 5619.599999997765,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseout",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.599999997765,
+              "processingEnd": 5619.89999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseover",
+              "startTime": 5616.89999999851,
+              "duration": 88,
+              "processingStart": 5619.89999999851,
+              "processingEnd": 5620,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerdown",
+              "startTime": 5617.099999997765,
+              "duration": 88,
+              "processingStart": 5620.699999999255,
+              "processingEnd": 5623.199999999255,
+              "interactionId": 5855
+            },
+            {
+              "name": "mousedown",
+              "startTime": 5617.099999997765,
+              "duration": 88,
+              "processingStart": 5623.199999999255,
+              "processingEnd": 5623.29999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerup",
+              "startTime": 5617.199999999255,
+              "duration": 88,
+              "processingStart": 5624.29999999702,
+              "processingEnd": 5624.39999999851,
+              "interactionId": 5855
+            },
+            {
+              "name": "mouseup",
+              "startTime": 5617.199999999255,
+              "duration": 88,
+              "processingStart": 5624.39999999851,
+              "processingEnd": 5624.5,
+              "interactionId": 0
+            },
+            {
+              "name": "click",
+              "startTime": 5617.199999999255,
+              "duration": 88,
+              "processingStart": 5624.599999997765,
+              "processingEnd": 5627.39999999851,
+              "interactionId": 5855
+            },
+            {
+              "name": "pointerover",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.5,
+              "processingEnd": 5642.79999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.79999999702,
+              "processingEnd": 5642.79999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.79999999702,
+              "processingEnd": 5642.79999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.79999999702,
+              "processingEnd": 5642.79999999702,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.89999999851,
+              "processingEnd": 5642.89999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.89999999851,
+              "processingEnd": 5642.89999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.89999999851,
+              "processingEnd": 5642.89999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.89999999851,
+              "processingEnd": 5642.89999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.89999999851,
+              "processingEnd": 5642.89999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.89999999851,
+              "processingEnd": 5642.89999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "pointerenter",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.89999999851,
+              "processingEnd": 5642.89999999851,
+              "interactionId": 0
+            },
+            {
+              "name": "mouseover",
+              "startTime": 5642,
+              "duration": 64,
+              "processingStart": 5642.89999999851,
+              "processingEnd": 5643,
+              "interactionId": 0
+            }
+          ]
+        },
+        {
+          "profile": "mobile",
+          "run": 2,
+          "errors": [],
+          "metrics": {
+            "nav": {
+              "ttfb": 46.19999999925494,
+              "fcp": 480,
+              "domContentLoaded": 836.6000000014901,
+              "load": 868.5,
+              "transfer": 53709,
+              "encoded": 53409,
+              "decoded": 696619
+            },
+            "lcp": {
+              "startTime": 480,
+              "element": "A",
+              "text": "Radha-Krishna, Balram, Gopal and Laddu Gopal, Gaur Nitai!",
+              "url": ""
+            },
+            "cls": 0,
+            "shifts": [],
+            "longTasks": [
+              {
+                "startTime": 225.10000000149012,
+                "duration": 206,
+                "name": "unknown"
+              },
+              {
+                "startTime": 580.8999999985099,
+                "duration": 146,
+                "name": "unknown"
+              },
+              {
+                "startTime": 730.6000000014901,
+                "duration": 109,
+                "name": "self"
+              },
+              {
+                "startTime": 870.1999999992549,
+                "duration": 445,
+                "name": "self"
+              },
+              {
+                "startTime": 1337,
+                "duration": 100,
+                "name": "self"
+              },
+              {
+                "startTime": 1445.3999999985099,
+                "duration": 108,
+                "name": "self"
+              }
+            ],
+            "domNodes": 3917,
+            "sections": [
+              {
+                "index": 0,
+                "tag": "SECTION",
+                "className": "relative bg-background",
+                "heading": "Seva Vigrahas",
+                "nodes": 37,
+                "cards": 0,
+                "hidden": false,
+                "top": 168
+              },
+              {
+                "index": 1,
+                "tag": "SECTION",
+                "className": "hidden bg-brand-soft border-y border-border md:block",
+                "heading": "",
+                "nodes": 70,
+                "cards": 0,
+                "hidden": true,
+                "top": 0
+              },
+              {
+                "index": 2,
+                "tag": "SECTION",
+                "className": "bg-background py-8 sm:py-10 md:py-12",
+                "heading": "What brings you here today?",
+                "nodes": 64,
+                "cards": 0,
+                "hidden": false,
+                "top": 282
+              },
+              {
+                "index": 3,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Special",
+                "nodes": 273,
+                "cards": 6,
+                "hidden": false,
+                "top": 1450
+              },
+              {
+                "index": 4,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Most Selling Products",
+                "nodes": 481,
+                "cards": 12,
+                "hidden": false,
+                "top": 1903
+              },
+              {
+                "index": 5,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Prasadam",
+                "nodes": 490,
+                "cards": 12,
+                "hidden": false,
+                "top": 2355
+              },
+              {
+                "index": 6,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Books",
+                "nodes": 462,
+                "cards": 12,
+                "hidden": false,
+                "top": 2828
+              },
+              {
+                "index": 7,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Accessories",
+                "nodes": 492,
+                "cards": 12,
+                "hidden": false,
+                "top": 3280
+              },
+              {
+                "index": 8,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Clothing",
+                "nodes": 465,
+                "cards": 12,
+                "hidden": false,
+                "top": 3733
+              },
+              {
+                "index": 9,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Groceries",
+                "nodes": 467,
+                "cards": 12,
+                "hidden": false,
+                "top": 4185
+              },
+              {
+                "index": 10,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Spiritual Books from Vrindavan",
+                "nodes": 22,
+                "cards": 0,
+                "hidden": false,
+                "top": 4638
+              },
+              {
+                "index": 11,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Top Devotional Accessories",
+                "nodes": 169,
+                "cards": 4,
+                "hidden": false,
+                "top": 5058
+              },
+              {
+                "index": 12,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Devotional shopping, made reassuring",
+                "nodes": 31,
+                "cards": 0,
+                "hidden": false,
+                "top": 5510
+              },
+              {
+                "index": 13,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Exclusive Shop",
+                "nodes": 11,
+                "cards": 0,
+                "hidden": false,
+                "top": 6316
+              },
+              {
+                "index": 14,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 6736
+              },
+              {
+                "index": 15,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Braj Darshan",
+                "nodes": 86,
+                "cards": 0,
+                "hidden": false,
+                "top": 6956
+              },
+              {
+                "index": 16,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 7955
+              },
+              {
+                "index": 17,
+                "tag": "DIV",
+                "className": "",
+                "heading": "From the land of Krishna to your doorstep.",
+                "nodes": 25,
+                "cards": 0,
+                "hidden": false,
+                "top": 7955
+              },
+              {
+                "index": 18,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Bring a little Braj home, again and again.",
+                "nodes": 10,
+                "cards": 0,
+                "hidden": false,
+                "top": 8911
+              }
+            ],
+            "productCards": 82,
+            "cardNodes": [
+              38,
+              47,
+              46,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              36,
+              39,
+              36,
+              36,
+              36,
+              36,
+              36,
+              39,
+              39
+            ],
+            "buckets": {
+              "third-party:fonts.googleapis.com": {
+                "count": 1,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 146.5
+              },
+              "script": {
+                "count": 1,
+                "transfer": 86479,
+                "encoded": 86179,
+                "decoded": 275225,
+                "duration": 79.69999999925494
+              },
+              "other": {
+                "count": 4,
+                "transfer": 81394,
+                "encoded": 80194,
+                "decoded": 259948,
+                "duration": 251.59999999776483
+              },
+              "link": {
+                "count": 1,
+                "transfer": 25933,
+                "encoded": 25633,
+                "decoded": 147337,
+                "duration": 71.5
+              },
+              "third-party:ik.imagekit.io": {
+                "count": 13,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 2799.6999999918044
+              },
+              "third-party:images.unsplash.com": {
+                "count": 2,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 95.5
+              },
+              "fetch": {
+                "count": 4,
+                "transfer": 1336,
+                "encoded": 136,
+                "decoded": 136,
+                "duration": 269.80000000447035
+              }
+            }
+          },
+          "interactions": {},
+          "events": []
+        },
+        {
+          "profile": "mobile",
+          "run": 3,
+          "errors": [],
+          "metrics": {
+            "nav": {
+              "ttfb": 51.80000000074506,
+              "fcp": 608,
+              "domContentLoaded": 946.6999999992549,
+              "load": 1393.5,
+              "transfer": 53709,
+              "encoded": 53409,
+              "decoded": 696619
+            },
+            "lcp": {
+              "startTime": 608,
+              "element": "A",
+              "text": "Radha-Krishna, Balram, Gopal and Laddu Gopal, Gaur Nitai!",
+              "url": ""
+            },
+            "cls": 0,
+            "shifts": [],
+            "longTasks": [
+              {
+                "startTime": 365.3999999985099,
+                "duration": 191,
+                "name": "unknown"
+              },
+              {
+                "startTime": 689.5,
+                "duration": 156,
+                "name": "unknown"
+              },
+              {
+                "startTime": 851.8999999985099,
+                "duration": 99,
+                "name": "self"
+              },
+              {
+                "startTime": 962,
+                "duration": 419,
+                "name": "self"
+              },
+              {
+                "startTime": 1424.300000000745,
+                "duration": 79,
+                "name": "self"
+              },
+              {
+                "startTime": 1518.699999999255,
+                "duration": 71,
+                "name": "self"
+              }
+            ],
+            "domNodes": 3917,
+            "sections": [
+              {
+                "index": 0,
+                "tag": "SECTION",
+                "className": "relative bg-background",
+                "heading": "Seva Vigrahas",
+                "nodes": 37,
+                "cards": 0,
+                "hidden": false,
+                "top": 168
+              },
+              {
+                "index": 1,
+                "tag": "SECTION",
+                "className": "hidden bg-brand-soft border-y border-border md:block",
+                "heading": "",
+                "nodes": 70,
+                "cards": 0,
+                "hidden": true,
+                "top": 0
+              },
+              {
+                "index": 2,
+                "tag": "SECTION",
+                "className": "bg-background py-8 sm:py-10 md:py-12",
+                "heading": "What brings you here today?",
+                "nodes": 64,
+                "cards": 0,
+                "hidden": false,
+                "top": 282
+              },
+              {
+                "index": 3,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Special",
+                "nodes": 273,
+                "cards": 6,
+                "hidden": false,
+                "top": 1450
+              },
+              {
+                "index": 4,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Most Selling Products",
+                "nodes": 481,
+                "cards": 12,
+                "hidden": false,
+                "top": 1903
+              },
+              {
+                "index": 5,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Prasadam",
+                "nodes": 490,
+                "cards": 12,
+                "hidden": false,
+                "top": 2355
+              },
+              {
+                "index": 6,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Books",
+                "nodes": 462,
+                "cards": 12,
+                "hidden": false,
+                "top": 2828
+              },
+              {
+                "index": 7,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Accessories",
+                "nodes": 492,
+                "cards": 12,
+                "hidden": false,
+                "top": 3280
+              },
+              {
+                "index": 8,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Clothing",
+                "nodes": 465,
+                "cards": 12,
+                "hidden": false,
+                "top": 3733
+              },
+              {
+                "index": 9,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Groceries",
+                "nodes": 467,
+                "cards": 12,
+                "hidden": false,
+                "top": 4185
+              },
+              {
+                "index": 10,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Spiritual Books from Vrindavan",
+                "nodes": 22,
+                "cards": 0,
+                "hidden": false,
+                "top": 4638
+              },
+              {
+                "index": 11,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Top Devotional Accessories",
+                "nodes": 169,
+                "cards": 4,
+                "hidden": false,
+                "top": 5058
+              },
+              {
+                "index": 12,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Devotional shopping, made reassuring",
+                "nodes": 31,
+                "cards": 0,
+                "hidden": false,
+                "top": 5510
+              },
+              {
+                "index": 13,
+                "tag": "DIV",
+                "className": "",
+                "heading": "BrajMart Exclusive Shop",
+                "nodes": 11,
+                "cards": 0,
+                "hidden": false,
+                "top": 6316
+              },
+              {
+                "index": 14,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 6736
+              },
+              {
+                "index": 15,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Braj Darshan",
+                "nodes": 86,
+                "cards": 0,
+                "hidden": false,
+                "top": 6956
+              },
+              {
+                "index": 16,
+                "tag": "DIV",
+                "className": "",
+                "heading": "",
+                "nodes": 1,
+                "cards": 0,
+                "hidden": false,
+                "top": 7955
+              },
+              {
+                "index": 17,
+                "tag": "DIV",
+                "className": "",
+                "heading": "From the land of Krishna to your doorstep.",
+                "nodes": 25,
+                "cards": 0,
+                "hidden": false,
+                "top": 7955
+              },
+              {
+                "index": 18,
+                "tag": "DIV",
+                "className": "",
+                "heading": "Bring a little Braj home, again and again.",
+                "nodes": 10,
+                "cards": 0,
+                "hidden": false,
+                "top": 8911
+              }
+            ],
+            "productCards": 82,
+            "cardNodes": [
+              38,
+              47,
+              46,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              39,
+              36,
+              39,
+              36,
+              36,
+              36,
+              36,
+              36,
+              39,
+              39
+            ],
+            "buckets": {
+              "third-party:fonts.googleapis.com": {
+                "count": 1,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 275.70000000298023
+              },
+              "script": {
+                "count": 1,
+                "transfer": 86479,
+                "encoded": 86179,
+                "decoded": 275225,
+                "duration": 114.5
+              },
+              "other": {
+                "count": 4,
+                "transfer": 81394,
+                "encoded": 80194,
+                "decoded": 259948,
+                "duration": 259.70000000298023
+              },
+              "link": {
+                "count": 1,
+                "transfer": 25933,
+                "encoded": 25633,
+                "decoded": 147337,
+                "duration": 112.60000000149012
+              },
+              "third-party:ik.imagekit.io": {
+                "count": 13,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 8472.29999999702
+              },
+              "third-party:images.unsplash.com": {
+                "count": 2,
+                "transfer": 0,
+                "encoded": 0,
+                "decoded": 0,
+                "duration": 721.3000000007451
+              },
+              "fetch": {
+                "count": 4,
+                "transfer": 1336,
+                "encoded": 136,
+                "decoded": 136,
+                "duration": 50.19999999925494
+              }
+            }
+          },
+          "interactions": {},
+          "events": []
+        }
+      ],
+      "median": {
+        "ttfb": 46.19999999925494,
+        "fcp": 608,
+        "lcp": 608,
+        "cls": 0,
+        "domNodes": 3917,
+        "longTaskCount": 6,
+        "longTaskDuration": 1114
+      }
+    }
+  }
+}

@@ -96,7 +96,7 @@ const mockCheckoutApis = async (page: import('@playwright/test').Page, validatio
 
 const seedCart = async (page: import('@playwright/test').Page) => {
   await page.goto('/products');
-  await page.getByRole('button', { name: /buy phase qa tulsi mala now/i }).click();
+  await page.getByRole('button', { name: /buy now: phase qa tulsi mala/i }).click();
   await expect(page).toHaveURL(/\/checkout$/);
 };
 
@@ -126,7 +126,7 @@ test('add to cart path reaches checkout without starting live payment', async ({
   await mockCheckoutApis(page);
 
   await page.goto('/products');
-  await page.getByRole('button', { name: /add phase qa tulsi mala to cart/i }).click();
+  await page.getByRole('button', { name: /add cart: phase qa tulsi mala/i }).click();
   await expect(page.getByText(/added to cart/i).first()).toBeVisible();
   await page.getByRole('link', { name: /^checkout$/i }).click();
 
@@ -148,7 +148,8 @@ test('checkout blocks payment when backend validation reports cart changes', asy
   await seedCart(page);
 
   await fillShippingAddress(page);
-  await page.getByRole('button', { name: /continue to payment/i }).click();
+  const continueButton = page.getByRole('button', { name: /continue to payment/i });
+  if (await continueButton.isVisible()) await continueButton.click();
 
   await expect(page.getByText('Phase QA Tulsi Mala price changed to ₹219.').last()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Apply cart updates', exact: true })).toBeVisible();

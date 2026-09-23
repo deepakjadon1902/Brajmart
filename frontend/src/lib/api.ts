@@ -208,7 +208,13 @@ export const setAuthToken = (token: string) => {
 };
 
 // Products
-export const fetchProducts = (opts?: { fresh?: boolean }) => getJson(`/products${opts?.fresh ? '?fresh=1' : ''}`, { cache: opts?.fresh ? 'no-store' : 'default' });
+export const fetchProducts = (opts?: { fresh?: boolean; detail?: boolean }) => {
+  const params = new URLSearchParams();
+  if (opts?.fresh) params.set('fresh', '1');
+  if (opts?.detail) params.set('view', 'detail');
+  const query = params.toString();
+  return getJson(`/products${query ? `?${query}` : ''}`, { cache: opts?.fresh ? 'no-store' : 'default' });
+};
 export const fetchProductBySlug = (slug: string) => getJson(`/products/${slug}`);
 export const fetchProductsSchema = () => getJson('/products/schema');
 export type ProductAuditReport = {

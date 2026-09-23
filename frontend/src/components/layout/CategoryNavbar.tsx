@@ -3,6 +3,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight, Menu, X } from 'lucide-react';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
 import { brajDestinations } from '@/data/brajDestinations';
+import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 
 const displayCategoryName = (name: string) =>
   (name || '').trim().toLowerCase() === 'best selling' ? 'Most Selling Products' : name;
@@ -19,8 +20,10 @@ const CategoryIcon = ({ icon, name }: { icon?: string; name: string }) => {
   return isImageIcon(value) ? (
     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-200/80 bg-white shadow-sm">
       <img
-        src={value}
+        src={toResponsiveImageUrl(value, { width: 56, height: 56, quality: 72, fit: 'cover' })}
         alt=""
+        width={28}
+        height={28}
         className="h-6 w-6 rounded-full object-cover"
         loading="lazy"
         decoding="async"
@@ -223,9 +226,13 @@ const CategoryNavbar = () => {
                       onClick={closeMenus}
                     >
                       <img
-                        src={destination.templeIcon}
+                        src={toResponsiveImageUrl(destination.templeIcon, { width: 72, height: 72, quality: 72, fit: 'cover' })}
                         alt={`${destination.name} temple icon`}
+                        width={36}
+                        height={36}
                         className="h-9 w-9 shrink-0 rounded-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                       />
                       <span>{destination.name}</span>
                     </RouterLink>

@@ -205,6 +205,7 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'brajmart-auth',
+      skipHydration: true,
       onRehydrateStorage: () => (state) => {
         if (!state) return;
         if (state.token) {

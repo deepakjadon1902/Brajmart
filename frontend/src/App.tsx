@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, startTransition, Suspense, useEffect, useState } from "react";
+import type { ComponentType, ReactElement } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -16,6 +17,7 @@ import { DEFAULT_IMAGE, SITE_URL } from "./lib/seo";
 import WhatsAppButton from "./components/layout/WhatsAppButton";
 import RouteSEO from "./components/seo/RouteSEO";
 import MobileBottomNav from "./components/layout/MobileBottomNav";
+import { loadCartDrawer } from "./components/cart/lazyCartDrawer";
 
 const queryClient = new QueryClient();
 const DEFAULT_FAVICON_URL = "/favicon.ico";
@@ -40,28 +42,79 @@ const VerifyOtpPage = lazy(() => import("./pages/VerifyOtpPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const CartPage = lazy(() => import("./pages/CartPage"));
 const WishlistPage = lazy(() => import("./pages/WishlistPage"));
-const CategoryPage = lazy(() => import("./pages/CategoryPage"));
-const ProductDetailPage = lazy(() => import("./pages/ProductDetailPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
-const AboutPage = lazy(() => import("./pages/AboutPage"));
-const BlogPage = lazy(() => import("./pages/BlogPage"));
-const BlogPostPage = lazy(() => import("./pages/BlogPostPage"));
-const ContactPage = lazy(() => import("./pages/ContactPage"));
-const HelpCenterPage = lazy(() => import("./pages/HelpCenterPage"));
-const CustomerServicePage = lazy(() => import("./pages/CustomerServicePage"));
-const ShippingDeliveryPage = lazy(() => import("./pages/ShippingDeliveryPage"));
-const ReturnPolicyPage = lazy(() => import("./pages/ReturnPolicyPage"));
-const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
-const PaymentMethodPage = lazy(() => import("./pages/PaymentMethodPage"));
-const TermsPage = lazy(() => import("./pages/TermsPage"));
 const ComparePage = lazy(() => import("./pages/ComparePage"));
-const CartDrawer = lazy(() => import("./components/cart/CartDrawer"));
-const ProductsPage = lazy(() => import("./pages/ProductsPage"));
-const CategoriesPage = lazy(() => import("./pages/CategoriesPage"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const BrajDarshanPage = lazy(() => import("./pages/BrajDarshanPage"));
+const CartDrawer = lazy(loadCartDrawer);
+type RouteModule<P extends object = Record<string, never>> = { default: ComponentType<P> };
+type PreloadableRoute<P extends object = Record<string, never>> = ComponentType<P> & {
+  preload: () => Promise<RouteModule<P>>;
+};
+
+const preloadableRoute = <P extends object = Record<string, never>>(
+  load: () => Promise<RouteModule<P>>
+): PreloadableRoute<P> => {
+  let loaded: RouteModule<P> | null = null;
+  let pending: Promise<RouteModule<P>> | null = null;
+
+  const preload = () => {
+    if (loaded) return Promise.resolve(loaded);
+    pending ||= load().then((module) => {
+      loaded = module;
+      return module;
+    });
+    return pending;
+  };
+
+  const RouteComponent = ((props: P) => {
+    const [module, setModule] = useState<RouteModule<P> | null>(loaded);
+
+    useEffect(() => {
+      if (module) return undefined;
+      let active = true;
+      preload().then((nextModule) => {
+        if (active) setModule(nextModule);
+      });
+      return () => {
+        active = false;
+      };
+    }, [module]);
+
+    if (module) {
+      const LoadedComponent = module.default;
+      return <LoadedComponent {...props} />;
+    }
+
+    if (loaded) {
+      const LoadedComponent = loaded.default;
+      return <LoadedComponent {...props} />;
+    }
+
+    return routeFallback;
+  }) as PreloadableRoute<P>;
+
+  RouteComponent.preload = preload;
+  return RouteComponent;
+};
+
+const ProductsPage = preloadableRoute(() => import("./pages/ProductsPage"));
+const CategoriesPage = preloadableRoute(() => import("./pages/CategoriesPage"));
+const CategoryPage = preloadableRoute(() => import("./pages/CategoryPage"));
+const ProductDetailPage = preloadableRoute(() => import("./pages/ProductDetailPage"));
+const AboutPage = preloadableRoute(() => import("./pages/AboutPage"));
+const BlogPage = preloadableRoute(() => import("./pages/BlogPage"));
+const BlogPostPage = preloadableRoute(() => import("./pages/BlogPostPage"));
+const ContactPage = preloadableRoute(() => import("./pages/ContactPage"));
+const HelpCenterPage = preloadableRoute(() => import("./pages/HelpCenterPage"));
+const CustomerServicePage = preloadableRoute(() => import("./pages/CustomerServicePage"));
+const ShippingDeliveryPage = preloadableRoute(() => import("./pages/ShippingDeliveryPage"));
+const ReturnPolicyPage = preloadableRoute(() => import("./pages/ReturnPolicyPage"));
+const PrivacyPolicyPage = preloadableRoute(() => import("./pages/PrivacyPolicyPage"));
+const PaymentMethodPage = preloadableRoute(() => import("./pages/PaymentMethodPage"));
+const TermsPage = preloadableRoute(() => import("./pages/TermsPage"));
+const BrajDarshanPage = preloadableRoute(() => import("./pages/BrajDarshanPage"));
+const NotFound = preloadableRoute(() => import("./pages/NotFound"));
 const UserOrderTracking = lazy(() => import("./pages/UserOrderTracking"));
 const PaymentStatusPage = lazy(() => import("./pages/PaymentStatusPage"));
 const ProfileOrdersPage = lazy(() => import("./pages/ProfileOrdersPage"));
@@ -86,6 +139,34 @@ const AdminHero = lazy(() => import("./pages/admin/AdminHero"));
 const AdminBlogs = lazy(() => import("./pages/admin/AdminBlogs"));
 const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 const AdminReviews = lazy(() => import("./pages/admin/AdminReviews"));
+
+const routeFallback = <div className="min-h-screen bg-background" />;
+const suspenseRoute = (element: ReactElement) => (
+  <Suspense fallback={routeFallback}>{element}</Suspense>
+);
+
+export const preloadRouteForPath = (pathname: string) => {
+  const preloaders: Array<Promise<unknown>> = [];
+
+  if (pathname === '/products' || pathname === '/shop') preloaders.push(ProductsPage.preload());
+  if (pathname === '/categories') preloaders.push(CategoriesPage.preload());
+  if (pathname.startsWith('/category/')) preloaders.push(CategoryPage.preload());
+  if (pathname.startsWith('/product/')) preloaders.push(ProductDetailPage.preload());
+  if (pathname === '/about') preloaders.push(AboutPage.preload());
+  if (pathname === '/blog') preloaders.push(BlogPage.preload());
+  if (pathname.startsWith('/blog/')) preloaders.push(BlogPostPage.preload());
+  if (pathname === '/contact') preloaders.push(ContactPage.preload());
+  if (pathname === '/help-center') preloaders.push(HelpCenterPage.preload());
+  if (pathname === '/customer-service') preloaders.push(CustomerServicePage.preload());
+  if (pathname === '/shipping-delivery') preloaders.push(ShippingDeliveryPage.preload());
+  if (pathname === '/return-policy') preloaders.push(ReturnPolicyPage.preload());
+  if (pathname === '/privacy-policy') preloaders.push(PrivacyPolicyPage.preload());
+  if (pathname === '/payment-method') preloaders.push(PaymentMethodPage.preload());
+  if (pathname === '/terms') preloaders.push(TermsPage.preload());
+  if (pathname.startsWith('/braj-darshan/')) preloaders.push(BrajDarshanPage.preload());
+
+  return Promise.all(preloaders);
+};
 
 const LegacyCategoryRedirect = () => {
   const { slug } = useParams();
@@ -136,6 +217,17 @@ const StorefrontWhatsAppButton = () => {
   return <WhatsAppButton />;
 };
 
+const StorefrontCartDrawer = () => {
+  const drawerOpen = useCartStore((s) => s.drawerOpen);
+  if (!drawerOpen) return null;
+
+  return (
+    <Suspense fallback={null}>
+      <CartDrawer />
+    </Suspense>
+  );
+};
+
 const ScrollToTop = () => {
   const { pathname, search } = useLocation();
 
@@ -175,37 +267,50 @@ const App = () => {
     (badges || []).filter((b) => !/\bCOD\b/i.test(b) && !/cash on delivery/i.test(b));
 
   useEffect(() => {
+    return runWhenIdle(() => {
+      startTransition(() => {
+        useSettingsStore.persist.rehydrate();
+        useAuthStore.persist.rehydrate();
+        useCartStore.persist.rehydrate();
+        useWishlistStore.persist.rehydrate();
+      });
+    }, 800);
+  }, []);
+
+  useEffect(() => {
     let active = true;
     const loadSettings = async () => {
       try {
         const data = await fetchPublicSettings({ fresh: true });
         if (!active || !data) return;
+        startTransition(() => {
           updateSettings({
-          storeName: data.storeName,
-          tagline: data.tagline,
-          currency: data.currency,
-          freeShippingThreshold: data.freeShippingThreshold,
-          shippingFee: data.shippingFee,
-          storeEmail: data.storeEmail,
-          storePhone: data.storePhone,
-          storeAddress: data.storeAddress,
-          packagingRate: data.packagingRate ?? data.taxRate ?? 0,
-          minOrderAmount: data.minOrderAmount,
-          maxOrderQuantity: data.maxOrderQuantity,
-          deliveryEtaMinDays: data.deliveryEtaMinDays ?? 3,
-          deliveryEtaMaxDays: data.deliveryEtaMaxDays ?? 7,
-          codFee: data.codFee ?? 40,
-          upiEnabled: data.upiEnabled,
-          cardEnabled: data.cardEnabled,
-          maintenanceMode: data.maintenanceMode,
-          metaTitle: data.metaTitle,
-          metaDescription: data.metaDescription,
-          storeLogo: data.storeLogo,
-          favicon: data.favicon,
-          socialLinks: data.socialLinks,
-          announcementBar: data.announcementBar,
-          notifications: data.notifications,
-          heroBadges: sanitizeBadges(data.heroBadges),
+            storeName: data.storeName,
+            tagline: data.tagline,
+            currency: data.currency,
+            freeShippingThreshold: data.freeShippingThreshold,
+            shippingFee: data.shippingFee,
+            storeEmail: data.storeEmail,
+            storePhone: data.storePhone,
+            storeAddress: data.storeAddress,
+            packagingRate: data.packagingRate ?? data.taxRate ?? 0,
+            minOrderAmount: data.minOrderAmount,
+            maxOrderQuantity: data.maxOrderQuantity,
+            deliveryEtaMinDays: data.deliveryEtaMinDays ?? 3,
+            deliveryEtaMaxDays: data.deliveryEtaMaxDays ?? 7,
+            codFee: data.codFee ?? 40,
+            upiEnabled: data.upiEnabled,
+            cardEnabled: data.cardEnabled,
+            maintenanceMode: data.maintenanceMode,
+            metaTitle: data.metaTitle,
+            metaDescription: data.metaDescription,
+            storeLogo: data.storeLogo,
+            favicon: data.favicon,
+            socialLinks: data.socialLinks,
+            announcementBar: data.announcementBar,
+            notifications: data.notifications,
+            heroBadges: sanitizeBadges(data.heroBadges),
+          });
         });
       } catch {
         // Keep locally persisted defaults
@@ -274,26 +379,25 @@ const App = () => {
         </Helmet>
         <Toaster />
         <Sonner />
-          <ScrollToTop />
-          <RouteSEO />
-          <Suspense fallback={<div className="min-h-screen bg-background" />}>
+        <ScrollToTop />
+        <RouteSEO />
           <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/verify-email" element={<VerifyEmailPage />} />
-          <Route path="/verify-otp" element={<VerifyOtpPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/oauth-callback" element={<OAuthCallbackPage />} />
-          <Route path="/cart" element={<CartPage />} />
-          <Route path="/wishlist" element={<WishlistPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/profile/orders" element={<ProfileOrdersPage />} />
-          <Route path="/profile/addresses" element={<ProfileAddressesPage />} />
-          <Route path="/orders" element={<ProfileOrdersPage />} />
-          <Route path="/track-orders" element={<UserOrderTracking />} />
-          <Route path="/search" element={<SearchPage />} />
+          <Route path="/login" element={suspenseRoute(<LoginPage />)} />
+          <Route path="/register" element={suspenseRoute(<RegisterPage />)} />
+          <Route path="/verify-email" element={suspenseRoute(<VerifyEmailPage />)} />
+          <Route path="/verify-otp" element={suspenseRoute(<VerifyOtpPage />)} />
+          <Route path="/forgot-password" element={suspenseRoute(<ForgotPasswordPage />)} />
+          <Route path="/oauth-callback" element={suspenseRoute(<OAuthCallbackPage />)} />
+          <Route path="/cart" element={suspenseRoute(<CartPage />)} />
+          <Route path="/wishlist" element={suspenseRoute(<WishlistPage />)} />
+          <Route path="/checkout" element={suspenseRoute(<CheckoutPage />)} />
+          <Route path="/profile" element={suspenseRoute(<ProfilePage />)} />
+          <Route path="/profile/orders" element={suspenseRoute(<ProfileOrdersPage />)} />
+          <Route path="/profile/addresses" element={suspenseRoute(<ProfileAddressesPage />)} />
+          <Route path="/orders" element={suspenseRoute(<ProfileOrdersPage />)} />
+          <Route path="/track-orders" element={suspenseRoute(<UserOrderTracking />)} />
+          <Route path="/search" element={suspenseRoute(<SearchPage />)} />
           <Route path="/category/:slug" element={<CategoryPage />} />
           <Route path="/category/:slug/:subSlug" element={<CategoryPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
@@ -306,49 +410,46 @@ const App = () => {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/help-center" element={<HelpCenterPage />} />
           <Route path="/customer-service" element={<CustomerServicePage />} />
-          <Route path="/compare" element={<ComparePage />} />
-          <Route path="/track-order" element={<UserOrderTracking />} />
+          <Route path="/compare" element={suspenseRoute(<ComparePage />)} />
+          <Route path="/track-order" element={suspenseRoute(<UserOrderTracking />)} />
           <Route path="/shipping-delivery" element={<ShippingDeliveryPage />} />
           <Route path="/return-policy" element={<ReturnPolicyPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/payment-method" element={<PaymentMethodPage />} />
-          <Route path="/payment-status/:token" element={<PaymentStatusPage />} />
+          <Route path="/payment-status/:token" element={suspenseRoute(<PaymentStatusPage />)} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/braj-darshan/:slug" element={<BrajDarshanPage />} />
           <Route path="/product-category/:slug" element={<LegacyCategoryRedirect />} />
 
           {/* Admin Routes */}
-          <Route path="/admin" element={<AdminLogin />} />
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin/*" element={<AdminLayout />}>
-            <Route path="dashboard" element={<AdminDashboard />} />
-            <Route path="orders" element={<AdminOrders />} />
-            <Route path="products" element={<AdminProducts />} />
-            <Route path="cod" element={<AdminCod />} />
-            <Route path="inventory" element={<AdminInventory />} />
-            <Route path="bundles" element={<AdminBundles />} />
-            <Route path="reviews" element={<AdminReviews />} />
-            <Route path="audit-logs" element={<AdminAuditLogs />} />
-            <Route path="categories" element={<AdminCategories />} />
-            <Route path="blogs" element={<AdminBlogs />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="cart-favorites" element={<AdminCartFavorites />} />
-            <Route path="pending-payments" element={<AdminPendingPayments />} />
-            <Route path="analytics" element={<AdminAnalytics />} />
-            <Route path="shipments" element={<AdminShipments />} />
-            <Route path="payments" element={<AdminPayments />} />
-            <Route path="settings" element={<AdminSettings />} />
-            <Route path="hero" element={<AdminHero />} />
+          <Route path="/admin" element={suspenseRoute(<AdminLogin />)} />
+          <Route path="/admin/login" element={suspenseRoute(<AdminLogin />)} />
+          <Route path="/admin/*" element={suspenseRoute(<AdminLayout />)}>
+            <Route path="dashboard" element={suspenseRoute(<AdminDashboard />)} />
+            <Route path="orders" element={suspenseRoute(<AdminOrders />)} />
+            <Route path="products" element={suspenseRoute(<AdminProducts />)} />
+            <Route path="cod" element={suspenseRoute(<AdminCod />)} />
+            <Route path="inventory" element={suspenseRoute(<AdminInventory />)} />
+            <Route path="bundles" element={suspenseRoute(<AdminBundles />)} />
+            <Route path="reviews" element={suspenseRoute(<AdminReviews />)} />
+            <Route path="audit-logs" element={suspenseRoute(<AdminAuditLogs />)} />
+            <Route path="categories" element={suspenseRoute(<AdminCategories />)} />
+            <Route path="blogs" element={suspenseRoute(<AdminBlogs />)} />
+            <Route path="users" element={suspenseRoute(<AdminUsers />)} />
+            <Route path="cart-favorites" element={suspenseRoute(<AdminCartFavorites />)} />
+            <Route path="pending-payments" element={suspenseRoute(<AdminPendingPayments />)} />
+            <Route path="analytics" element={suspenseRoute(<AdminAnalytics />)} />
+            <Route path="shipments" element={suspenseRoute(<AdminShipments />)} />
+            <Route path="payments" element={suspenseRoute(<AdminPayments />)} />
+            <Route path="settings" element={suspenseRoute(<AdminSettings />)} />
+            <Route path="hero" element={suspenseRoute(<AdminHero />)} />
           </Route>
 
           <Route path="*" element={<NotFound />} />
           </Routes>
-          </Suspense>
           <NoIndexRoutes />
           <MobileBottomNav />
-          <Suspense fallback={null}>
-            <CartDrawer />
-          </Suspense>
+          <StorefrontCartDrawer />
           <StorefrontWhatsAppButton />
       </TooltipProvider>
     </QueryClientProvider>

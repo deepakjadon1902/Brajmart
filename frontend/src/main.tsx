@@ -2,7 +2,7 @@ import { createRoot, hydrateRoot } from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "next-themes";
 import { BrowserRouter } from "react-router-dom";
-import App from "./App.tsx";
+import App, { preloadRouteForPath } from "./App.tsx";
 import "./index.css";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { applyInitialData, readInitialData } from "./lib/initialData";
@@ -23,8 +23,13 @@ const application = (
   </ErrorBoundary>
 );
 
-if (root.hasChildNodes() && initialData) {
-  hydrateRoot(root, application);
-} else {
-  createRoot(root).render(application);
-}
+const render = async () => {
+  if (root.hasChildNodes() && initialData) {
+    await preloadRouteForPath(window.location.pathname);
+    hydrateRoot(root, application);
+  } else {
+    createRoot(root).render(application);
+  }
+};
+
+void render();

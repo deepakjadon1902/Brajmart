@@ -127,6 +127,6 @@ export const useSettingsStore = create<SettingsStore>()(
           },
         })),
     }),
-    { name: 'brajmart-settings' }
+    { name: 'brajmart-settings', skipHydration: true }
   )
 );

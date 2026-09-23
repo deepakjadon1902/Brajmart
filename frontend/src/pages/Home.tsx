@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import CategoryNavbar from '@/components/layout/CategoryNavbar';
@@ -7,11 +8,11 @@ import { useProductStore, categoryToSlug } from '@/store/productStore';
 import SEO from '@/components/seo/SEO';
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, SITE_URL, breadcrumbSchema } from '@/lib/seo';
 import TrustBar from '@/components/sections/TrustBar';
+import PurposeDiscovery from '@/components/sections/PurposeDiscovery';
 import {
   BrajStory,
   BundledFavorites,
   NewsletterEngagement,
-  PurposeDiscovery,
   WhyBrajMart,
 } from '@/components/sections/HomeExperience';
 import CollectionSection from '@/components/sections/CollectionSection';
@@ -25,12 +26,14 @@ const displayCategoryName = (name: string) =>
   (name || '').trim().toLowerCase() === 'best selling' ? 'Most Selling Products' : name;
 
 const Home = () => {
-  const { products, categories, getBestSellers, getByTag, getProductsByCategory } = useProductStore();
-  const bestSellingProducts = getBestSellers();
-  const devotionalAccessories = getByTag('accessories');
+  const products = useProductStore((state) => state.products);
+  const categories = useProductStore((state) => state.categories);
+  const getProductsByCategory = useProductStore((state) => state.getProductsByCategory);
+  const bestSellingProducts = useMemo(() => products.filter((product) => product.tags?.includes('bestseller')), [products]);
+  const devotionalAccessories = useMemo(() => products.filter((product) => product.tags?.includes('accessories')), [products]);
   // Show every category as a home-page section (even if a category currently has 0 products).
   // This matches the "all categories on home" requirement and avoids hiding categories due to naming mismatches.
-  const categorySections = categories || [];
+  const categorySections = useMemo(() => categories || [], [categories]);
   const isBrajmartSpecial = (name: string) => (name || '').trim().toLowerCase() === 'brajmart special';
   const isPrasadam = (name: string) => (name || '').trim().toLowerCase() === 'prasadam';
   const isBooks = (name: string) => ['books', 'spiritual books'].includes((name || '').trim().toLowerCase());
@@ -88,22 +91,23 @@ const Home = () => {
       <AnnouncementBar />
       <Navbar />
       <CategoryNavbar />
-      <HeroCarousel />
-      <TrustBar />
-      <PurposeDiscovery categories={categories} />
+      <main id="main-content">
+        <HeroCarousel />
+        <TrustBar />
+        <PurposeDiscovery categories={categories} />
 
-      {brajmartSpecialCategory && (
-        <DeferredMount minHeight={390}>
-          <CollectionSection
-            tag="BRAJMART COLLECTION"
-            title={displayCategoryName(brajmartSpecialCategory.name)}
-            subtitle={`Explore ${displayCategoryName(brajmartSpecialCategory.name)} collection`}
-            products={getProductsByCategory(brajmartSpecialCategory.name)}
-            viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
-            priority
-          />
-        </DeferredMount>
-      )}
+        {brajmartSpecialCategory && (
+          <DeferredMount minHeight={390}>
+            <CollectionSection
+              tag="BRAJMART COLLECTION"
+              title={displayCategoryName(brajmartSpecialCategory.name)}
+              subtitle={`Explore ${displayCategoryName(brajmartSpecialCategory.name)} collection`}
+              products={getProductsByCategory(brajmartSpecialCategory.name)}
+              viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
+              priority
+            />
+          </DeferredMount>
+        )}
 
       <DeferredMount minHeight={390}>
         <CollectionSection
@@ -183,6 +187,7 @@ const Home = () => {
       <DeferredMount minHeight={180}>
         <NewsletterEngagement />
       </DeferredMount>
+      </main>
 
       <DeferredMount>
         <Footer />

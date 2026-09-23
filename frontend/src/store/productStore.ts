@@ -74,7 +74,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
           if (!get().loading) set({ loading: true, error: null });
           try {
             const [products, categories] = await Promise.all([
-              fetchProducts({ fresh: force || isAdminPath }),
+              fetchProducts({ fresh: force || isAdminPath, detail: isAdminPath }),
               fetchCategories({ fresh: force || isAdminPath }),
             ]);
             const mappedProducts = (Array.isArray(products) ? products : []).map((p: any) => {

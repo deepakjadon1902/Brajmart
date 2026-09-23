@@ -65,6 +65,17 @@ const ensureCollectionsTable = async () => {
   `);
 };
 
+let collectionsSchemaReady: Promise<void> | null = null;
+const ensureCollectionsTableOnce = () => {
+  if (!collectionsSchemaReady) {
+    collectionsSchemaReady = ensureCollectionsTable().catch((err) => {
+      collectionsSchemaReady = null;
+      throw err;
+    });
+  }
+  return collectionsSchemaReady;
+};
+
 const getCollectionBySlug = async (slug: string, includeInactive = false) => {
   const rows = await dbQuery<any>(
     `SELECT * FROM collections WHERE slug = ? ${includeInactive ? '' : 'AND is_active = 1 AND archived_at IS NULL'} LIMIT 1`,
@@ -91,7 +102,7 @@ const getCollectionProducts = async (collectionId: string | number) => {
 router.get('/', async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureCollectionsTable();
+    await ensureCollectionsTableOnce();
     const rows = await dbQuery<any>(
       'SELECT * FROM collections WHERE is_active = 1 AND archived_at IS NULL ORDER BY (sort_order IS NULL OR sort_order = 0) ASC, sort_order ASC, created_at DESC'
     );
@@ -105,7 +116,7 @@ router.get('/', async (_req, res) => {
 router.get('/admin', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureCollectionsTable();
+    await ensureCollectionsTableOnce();
     const rows = await dbQuery<any>(
       'SELECT * FROM collections ORDER BY (sort_order IS NULL OR sort_order = 0) ASC, sort_order ASC, created_at DESC'
     );
@@ -118,7 +129,7 @@ router.get('/admin', auth, adminOnly, async (_req, res) => {
 router.get('/:slug/products', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureCollectionsTable();
+    await ensureCollectionsTableOnce();
     const slug = normalizeSlug(req.params.slug);
     const collection = await getCollectionBySlug(slug);
     if (!collection) return res.status(404).json({ message: 'Collection not found' });
@@ -133,7 +144,7 @@ router.get('/:slug/products', async (req, res) => {
 router.post('/', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureCollectionsTable();
+    await ensureCollectionsTableOnce();
     const data = req.body || {};
     const name = String(data.name || '').trim();
     const slug = normalizeSlug(data.slug || name);
@@ -169,7 +180,7 @@ router.post('/', auth, adminOnly, async (req, res) => {
 router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureCollectionsTable();
+    await ensureCollectionsTableOnce();
     const data = req.body || {};
     const fields: string[] = [];
     const values: any[] = [];
@@ -212,7 +223,7 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
 router.put('/:id/products', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureCollectionsTable();
+    await ensureCollectionsTableOnce();
     const productIds = Array.isArray(req.body?.productIds) ? req.body.productIds : [];
     if (productIds.length > 120) return res.status(400).json({ message: 'A collection can contain up to 120 products' });
 

@@ -1,4 +1,4 @@
-import { toResponsiveImageUrl } from './responsiveImage';
+import { toResponsiveImageSrcSet, toResponsiveImageUrl } from './responsiveImage';
 
 export const DEFAULT_SQUARE_IMAGE_SIZE = 720;
 
@@ -12,4 +12,15 @@ export function toSquareImageUrl(
   if (!Number.isFinite(size) || size <= 0) return url;
 
   return toResponsiveImageUrl(url, { width: size, height: size, quality: 78, fit: 'cover' });
+}
+
+export function toSquareImageSrcSet(url: string, sizes: number[] = [220, 320, 480]): string {
+  if (!url) return url;
+  return toResponsiveImageSrcSet(url, {
+    widths: sizes,
+    width: 480,
+    height: 480,
+    quality: 76,
+    fit: 'cover',
+  });
 }

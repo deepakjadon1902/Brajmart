@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mapProductRow = void 0;
+exports.mapProductListRow = exports.mapProductRow = void 0;
 const express_1 = require("express");
 const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
@@ -283,6 +283,38 @@ const mapProductRow = (row) => ({
     archiveReason: row.archive_reason || '',
 });
 exports.mapProductRow = mapProductRow;
+const mapProductListRow = (row) => ({
+    id: String(row.id),
+    name: row.name,
+    slug: row.slug,
+    price: Number(row.price),
+    originalPrice: row.original_price !== null ? Number(row.original_price) : undefined,
+    image: row.image,
+    images: (() => {
+        const parsed = (0, dbHelpers_1.parseJson)(row.images, []);
+        if (Array.isArray(parsed) && parsed.length)
+            return parsed.slice(0, 2);
+        return row.image ? [row.image] : [];
+    })(),
+    categoryId: row.category_id !== undefined && row.category_id !== null ? Number(row.category_id) : undefined,
+    subcategoryId: row.subcategory_id !== undefined && row.subcategory_id !== null ? Number(row.subcategory_id) : undefined,
+    category: String(row.category_name ?? row.category ?? ''),
+    subcategory: row.subcategory_name !== undefined && row.subcategory_name !== null ? String(row.subcategory_name) : (row.subcategory ?? null),
+    rating: Number(row.real_review_count || 0) > 0 ? Number(row.real_rating ?? 0) : Number(row.rating ?? 0),
+    reviewCount: Number(row.real_review_count || 0) > 0 ? Number(row.real_review_count ?? 0) : Number(row.review_count ?? 0),
+    badge: row.badge ?? null,
+    tags: (0, dbHelpers_1.parseJson)(row.tags, []),
+    inStock: (0, dbHelpers_1.boolFromDb)(row.in_stock),
+    codEnabled: row.cod_enabled === undefined || row.cod_enabled === null ? null : (0, dbHelpers_1.boolFromDb)(row.cod_enabled),
+    categoryCodEnabled: row.category_cod_enabled === undefined || row.category_cod_enabled === null ? undefined : (0, dbHelpers_1.boolFromDb)(row.category_cod_enabled),
+    stockQuantity: row.stock_quantity === undefined || row.stock_quantity === null ? null : Number(row.stock_quantity),
+    sku: row.sku ?? '',
+    soldCount: Number(row.sold_count ?? 0),
+    description: row.description ?? '',
+    createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
+    updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
+});
+exports.mapProductListRow = mapProductListRow;
 const buildUpdate = (data) => {
     const fields = [];
     const values = [];
@@ -378,22 +410,29 @@ router.get('/', async (req, res) => {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
         const fresh = req.query.fresh === '1';
+        const view = ['detail', 'full', 'admin'].includes(String(req.query.view || '')) ? 'detail' : 'list';
         res.setHeader('Cache-Control', fresh ? 'no-store, max-age=0' : LIST_CACHE_CONTROL);
-        if (!fresh && listCache && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
+        if (!fresh && listCache && listCache.view === view && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
             return res.json(listCache.data);
         }
         await ensureProductCategorySchema();
         await ensureProductSeoColumns();
         await ensureCodSchema();
-        const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name, ra.real_rating, ra.real_review_count
+        const productProjection = view === 'detail'
+            ? 'p.*'
+            : `p.id, p.name, p.slug, p.price, p.original_price, p.image, p.images,
+         p.category_id, p.subcategory_id, p.rating, p.review_count, p.badge, p.tags,
+         p.in_stock, p.cod_enabled, p.stock_quantity, p.sku, p.sold_count,
+         p.description, p.created_at, p.updated_at`;
+        const rows = await (0, db_1.dbQuery)(`SELECT ${productProjection}, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name, ra.real_rating, ra.real_review_count
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
        LEFT JOIN subcategories s ON p.subcategory_id = s.id
        LEFT JOIN (${reviewAggregates_1.approvedReviewAggregateSql}) ra ON ra.product_id = p.id
        WHERE p.archived_at IS NULL
        ORDER BY p.created_at DESC`);
-        const data = rows.map(exports.mapProductRow);
-        listCache = { at: Date.now(), data };
+        const data = rows.map(view === 'detail' ? exports.mapProductRow : exports.mapProductListRow);
+        listCache = { at: Date.now(), view, data };
         res.json(data);
     }
     catch (err) {

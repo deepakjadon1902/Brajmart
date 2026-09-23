@@ -1,5 +1,4 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Suspense } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Route, Routes } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -25,6 +24,7 @@ import BrajDarshanPage from '@/pages/BrajDarshanPage';
 import NotFound from '@/pages/NotFound';
 import RouteSEO from '@/components/seo/RouteSEO';
 import WhatsAppButton from '@/components/layout/WhatsAppButton';
+import MobileBottomNav from '@/components/layout/MobileBottomNav';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 
@@ -52,7 +52,6 @@ const ServerApp = () => {
         <Toaster />
         <Sonner />
         <RouteSEO />
-        <Suspense fallback={<div className="min-h-screen bg-background" />}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/categories" element={<CategoriesPage />} />
@@ -74,7 +73,7 @@ const ServerApp = () => {
           <Route path="/braj-darshan/:slug" element={<BrajDarshanPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
-        </Suspense>
+        <MobileBottomNav />
         <WhatsAppButton />
       </TooltipProvider>
     </QueryClientProvider>

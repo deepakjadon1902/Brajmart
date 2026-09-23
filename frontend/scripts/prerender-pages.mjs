@@ -9,7 +9,15 @@ const template = await fs.readFile(path.join(dist, 'index.html'), 'utf8');
 const { render } = await import(`${pathToFileURL(serverEntry).href}?t=${Date.now()}`);
 const buildData = await getBuildData();
 const buildDataCache = path.resolve(process.cwd(), '.seo-build-data-cache.json');
+const buildDataMeta = path.resolve(process.cwd(), '.seo-build-data-meta.json');
+const buildSummary = {
+  generatedAt: buildData.generatedAt,
+  live: buildData.live,
+  error: buildData.error ? buildData.error.message : null,
+  meta: buildData.meta,
+};
 await fs.writeFile(buildDataCache, JSON.stringify(buildData));
+await fs.writeFile(buildDataMeta, JSON.stringify(buildSummary, null, 2));
 
 const publicPages = [
   '/', '/categories', '/products', '/about', '/contact', '/blog', '/help-center',
@@ -28,13 +36,94 @@ const categoryPages = buildData.categories.flatMap((category) => {
 const productPages = buildData.products.map((product) => `/product/${slugify(product.slug || product.name)}`).filter((route) => !route.endsWith('/'));
 const blogPages = buildData.blogs.map((post) => `/blog/${slugify(post.slug)}`).filter((route) => !route.endsWith('/'));
 const routes = [...new Set([...publicPages, ...brajPages, ...categoryPages, ...productPages, ...blogPages])];
+const prerenderCounts = {
+  productsFetched: buildData.products.length,
+  categoriesFetched: buildData.categories.length,
+  blogsFetched: buildData.blogs.length,
+  heroSlidesFetched: buildData.heroSlides.length,
+  productRoutes: productPages.length,
+  categoryRoutes: categoryPages.length,
+  blogRoutes: blogPages.length,
+  staticRoutes: publicPages.length + brajPages.length,
+  totalRoutes: routes.length,
+};
+
+const normalizedName = (value) => (value || '').trim().toLowerCase();
+const isBrajmartSpecial = (name) => normalizedName(name) === 'brajmart special';
+const isPrasadam = (name) => normalizedName(name) === 'prasadam';
+const isBooks = (name) => ['books', 'spiritual books'].includes(normalizedName(name));
+const isAccessories = (name) => normalizedName(name) === 'accessories';
+const uniqueByProductKey = (products) => {
+  const seen = new Set();
+  return products.filter((product) => {
+    const key = String(product.id || product.slug || product.name || '');
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+const toProductListData = (product) => ({
+  id: String(product.id || product._id || ''),
+  name: product.name,
+  slug: product.slug,
+  price: product.price,
+  originalPrice: product.originalPrice,
+  image: product.image,
+  images: Array.isArray(product.images) ? product.images.slice(0, 2) : (product.image ? [product.image] : []),
+  categoryId: product.categoryId,
+  subcategoryId: product.subcategoryId,
+  category: product.category,
+  subcategory: product.subcategory,
+  rating: product.rating,
+  reviewCount: product.reviewCount,
+  badge: product.badge,
+  tags: product.tags,
+  inStock: product.inStock,
+  codEnabled: product.codEnabled,
+  categoryCodEnabled: product.categoryCodEnabled,
+  stockQuantity: product.stockQuantity,
+  sku: product.sku,
+  soldCount: product.soldCount,
+  description: product.description,
+  createdAt: product.createdAt,
+  updatedAt: product.updatedAt,
+});
+const homeRouteProducts = () => {
+  const categorySections = buildData.categories || [];
+  const brajmartSpecialCategory = categorySections.find((category) => isBrajmartSpecial(category.name));
+  const regularCategories = categorySections.filter((category) => !isBrajmartSpecial(category.name) && !isPrasadam(category.name));
+  const prasadamCategory = categorySections.find((category) => isPrasadam(category.name));
+  const booksIndex = regularCategories.findIndex((category) => isBooks(category.name));
+  const orderedCategories = prasadamCategory
+    ? [
+        ...regularCategories.slice(0, booksIndex >= 0 ? booksIndex : regularCategories.length),
+        prasadamCategory,
+        ...regularCategories.slice(booksIndex >= 0 ? booksIndex : regularCategories.length),
+      ]
+    : regularCategories;
+  const productsForCategory = (category) => category
+    ? buildData.products.filter((product) => slugify(product.category || '') === slugify(category.name)).slice(0, 12)
+    : [];
+  const homepageGroups = [
+    productsForCategory(brajmartSpecialCategory),
+    buildData.products.filter((product) => (product.tags || []).includes('bestseller')).slice(0, 12),
+    productsForCategory(prasadamCategory),
+    ...orderedCategories.filter((category) => !isPrasadam(category.name)).slice(0, 4).map(productsForCategory),
+    buildData.products.filter((product) => isBooks(product.category)).slice(0, 4),
+    buildData.products.filter((product) => (product.tags || []).includes('accessories') || isAccessories(product.category)).slice(0, 12),
+  ];
+
+  return uniqueByProductKey(homepageGroups.flat()).map(toProductListData);
+};
 
 const dataForRoute = (route) => {
   const parts = route.split('/').filter(Boolean);
   let products = [];
   let blogs = [];
   let catalogComplete = false;
-  if (route === '/' || route === '/products') {
+  if (route === '/') {
+    products = homeRouteProducts();
+  } else if (route === '/products') {
     products = buildData.products;
     catalogComplete = true;
   } else if (parts[0] === 'category') {
@@ -83,6 +172,13 @@ for (const route of routes) {
     : path.join(dist, ...route.split('/').filter(Boolean), 'index.html');
   await fs.mkdir(path.dirname(output), { recursive: true });
   await fs.writeFile(output, html);
+
+  if (route !== '/') {
+    const parts = route.split('/').filter(Boolean);
+    const aliasOutput = path.join(dist, ...parts.slice(0, -1), `${parts.at(-1)}.html`);
+    await fs.mkdir(path.dirname(aliasOutput), { recursive: true });
+    await fs.writeFile(aliasOutput, html);
+  }
 }
 
 // Vercel serves this document with a real HTTP 404 for paths that are not in
@@ -97,3 +193,7 @@ const notFoundDocument = stripManagedHead(template)
 await fs.writeFile(path.join(dist, '404.html'), notFoundDocument);
 
 console.log(`Pre-rendered complete React HTML for ${routes.length} public routes (${productPages.length} products).`);
+console.log(`Prerender catalog counts: ${JSON.stringify(prerenderCounts)}`);
+if (!buildData.live) {
+  console.warn(`Prerender catalog warning: live catalog data unavailable. ${buildData.error?.message || 'Unknown error'}`);
+}

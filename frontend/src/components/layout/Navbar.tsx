@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, Heart, ShoppingCart, Menu, X, User, LogOut, Package, MapPin, BookOpen } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
@@ -16,6 +16,7 @@ const Navbar = () => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const scrolledRef = useRef(false);
   const navigate = useNavigate();
 
   const cartCount = useCartStore(s => s.totalItems());
@@ -31,8 +32,14 @@ const Navbar = () => {
     .slice(0, 3);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 80);
+    const onScroll = () => {
+      const nextScrolled = window.scrollY > 80;
+      if (scrolledRef.current === nextScrolled) return;
+      scrolledRef.current = nextScrolled;
+      setScrolled(nextScrolled);
+    };
     window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
@@ -111,7 +118,15 @@ const Navbar = () => {
                       <div className="grid gap-2">
                         {liveSuggestions.map((product) => (
                           <Link key={product.id} to={`/product/${product.slug}`} className="flex items-center gap-3 rounded-md p-2 hover:bg-muted premium-focus">
-                            <img src={product.image} alt="" className="h-10 w-10 rounded bg-brand-raised object-contain" />
+                            <img
+                              src={toResponsiveImageUrl(product.image, { width: 80, height: 80, fit: 'contain', quality: 72 })}
+                              alt=""
+                              width={40}
+                              height={40}
+                              className="h-10 w-10 rounded bg-brand-raised object-contain"
+                              loading="lazy"
+                              decoding="async"
+                            />
                             <span className="min-w-0 flex-1 text-sm font-semibold text-foreground line-clamp-1">{product.name}</span>
                           </Link>
                         ))}
@@ -224,10 +239,10 @@ const Navbar = () => {
             </div>
           ) : (
             <>
-              <Link to="/login" className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-maroon text-maroon text-sm font-medium hover:bg-maroon hover:text-primary-foreground transition-colors">
+              <Link to="/login" className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-maroon text-maroon text-sm font-medium hover:bg-maroon hover:text-primary-foreground transition-colors">
                 <User size={15} /> Login
               </Link>
-              <Link to="/register" className="hidden sm:block px-4 py-1.5 rounded-full bg-gold-gradient text-maroon-dark text-sm font-bold shimmer active:scale-[0.97] transition-transform">
+              <Link to="/register" className="hidden lg:block px-4 py-1.5 rounded-full bg-gold-gradient text-maroon-dark text-sm font-bold shimmer active:scale-[0.97] transition-transform">
                 Sign Up
               </Link>
             </>

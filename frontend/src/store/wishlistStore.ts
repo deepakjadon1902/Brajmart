@@ -107,6 +107,6 @@ export const useWishlistStore = create<WishlistStore>()(
         set({ items: [] });
       },
     }),
-    { name: 'brajmart-wishlist', storage: createJSONStorage(() => createUserScopedStorage('brajmart-wishlist')) }
+    { name: 'brajmart-wishlist', storage: createJSONStorage(() => createUserScopedStorage('brajmart-wishlist')), skipHydration: true }
   )
 );

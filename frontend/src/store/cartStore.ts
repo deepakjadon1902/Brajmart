@@ -199,6 +199,6 @@ export const useCartStore = create<CartStore>()(
         return sum + getValidSavings(i.product) * i.quantity;
       }, 0),
     }),
-    { name: 'brajmart-cart', storage: createJSONStorage(() => createUserScopedStorage('brajmart-cart')) }
+    { name: 'brajmart-cart', storage: createJSONStorage(() => createUserScopedStorage('brajmart-cart')), skipHydration: true }
   )
 );

@@ -14,6 +14,7 @@ interface CollectionSectionProps {
   viewAllIconUrl?: string;
   ornamentIconUrl?: string;
   bgClass?: string;
+  maxProducts?: number;
 }
 
 const CollectionSection = ({
@@ -27,6 +28,7 @@ const CollectionSection = ({
   viewAllIconUrl,
   ornamentIconUrl,
   bgClass = '',
+  maxProducts = 12,
 }: CollectionSectionProps) => (
   <section className={`py-4 sm:py-5 md:py-6 ${bgClass}`}>
     <div className="container mx-auto px-4">
@@ -49,7 +51,7 @@ const CollectionSection = ({
           </Link>
         </div>
       )}
-      <ProductCarousel products={products} priority={priority} />
+      <ProductCarousel products={products.slice(0, maxProducts)} priority={priority} />
     </div>
   </section>
 );

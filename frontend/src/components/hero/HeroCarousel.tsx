@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useHeroStore } from '@/store/heroStore';
-import { toResponsiveImageUrl } from '@/utils/responsiveImage';
+import { toResponsiveImageSrcSet, toResponsiveImageUrl } from '@/utils/responsiveImage';
 
 const HeroCarousel = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -21,7 +21,7 @@ const HeroCarousel = () => {
   );
 
   useEffect(() => {
-    loadSlides({ force: true });
+    if (slides.length === 0) loadSlides({ force: true });
     const refreshSlides = () => {
       if (document.visibilityState === 'visible') loadSlides({ force: true });
     };
@@ -31,7 +31,7 @@ const HeroCarousel = () => {
       window.clearInterval(interval);
       window.removeEventListener('focus', refreshSlides);
     };
-  }, [loadSlides]);
+  }, [loadSlides, slides.length]);
 
   const displaySlides = useMemo(
     () => slides.filter((slide) => !failedSlideIds.has(slide.id)),
@@ -55,22 +55,13 @@ const HeroCarousel = () => {
     if (!canNavigateSlides) return;
     const interval = window.setInterval(() => {
       setSelectedIndex((current) => (current + 1) % displaySlides.length);
-    }, 3000);
+    }, 8000);
     return () => window.clearInterval(interval);
   }, [canNavigateSlides, displaySlides.length]);
 
   useEffect(() => {
     if (selectedIndex >= displaySlides.length) setSelectedIndex(0);
   }, [displaySlides.length, selectedIndex]);
-
-  useEffect(() => {
-    const preload = displaySlides.slice(0, 2).map((slide) => slide.image).filter((url): url is string => Boolean(url));
-    for (const url of preload) {
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = url;
-    }
-  }, [displaySlides]);
 
   return (
     <section className="relative bg-background">
@@ -79,11 +70,20 @@ const HeroCarousel = () => {
           <div className="relative aspect-[480/168] w-full sm:aspect-[480/133] sm:min-h-[260px] md:min-h-0">
             {visibleSlide?.image ? (
               <img
-                src={toResponsiveImageUrl(visibleSlide.image, { width: 1920, height: 532, quality: 76 })}
+                src={toResponsiveImageUrl(visibleSlide.image, { width: 960, height: 336, quality: 74, fit: 'cover' })}
+                srcSet={toResponsiveImageSrcSet(visibleSlide.image, {
+                  widths: [480, 768, 960, 1280, 1600],
+                  width: 1600,
+                  height: 560,
+                  quality: 74,
+                  fit: 'cover',
+                })}
                 alt={visibleSlide.title}
                 loading="eager"
                 decoding="async"
                 {...({ fetchpriority: 'high' } as Record<string, string>)}
+                width={1600}
+                height={560}
                 sizes="100vw"
                 className="absolute inset-0 h-full w-full object-contain object-center sm:object-cover"
                 onError={() => {
@@ -157,14 +157,14 @@ const HeroCarousel = () => {
                 <button
                   key={slide.id}
                   onClick={() => setSelectedIndex(i)}
-                  className={`!h-[9px] !min-h-[9px] !w-[9px] !min-w-[9px] shrink-0 rounded-full border-2 border-black p-0 leading-none shadow-[0_1px_4px_rgba(255,255,255,0.65)] [box-sizing:border-box] transition-transform duration-200 ease-out hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:!h-[11px] sm:!min-h-[11px] sm:!w-[11px] sm:!min-w-[11px] md:!h-[12px] md:!min-h-[12px] md:!w-[12px] md:!min-w-[12px] ${
-                    selectedIndex === i
-                      ? 'bg-black'
-                      : 'bg-white'
-                  }`}
+                  className="group flex h-6 w-6 shrink-0 items-center justify-center rounded-full p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
                   aria-label={`Go to slide ${i + 1}`}
                   aria-current={selectedIndex === i ? 'true' : undefined}
-                />
+                >
+                  <span className={`h-[9px] w-[9px] rounded-full border-2 border-black shadow-[0_1px_4px_rgba(255,255,255,0.65)] transition-transform duration-200 ease-out group-hover:scale-110 sm:h-[11px] sm:w-[11px] md:h-3 md:w-3 ${
+                    selectedIndex === i ? 'bg-black' : 'bg-white'
+                  }`} aria-hidden="true" />
+                </button>
               ))}
               </div>
             </>

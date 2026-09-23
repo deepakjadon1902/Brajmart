@@ -129,7 +129,7 @@ const Footer = () => {
               {settings.storeLogo ? (
                 <img
                   src={toResponsiveImageUrl(settings.storeLogo, { width: 160, height: 160, fit: 'contain', quality: 72 })}
-                  alt={settings.storeName}
+                  alt=""
                   className="w-16 h-16 rounded object-contain"
                 />
               ) : (
@@ -166,7 +166,7 @@ const Footer = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
             {Object.entries(footerLinks).map(([title, links]) => (
               <div key={title}>
-                <h4 className="font-semibold text-sm text-gold mb-2">{title}</h4>
+                <h3 className="font-semibold text-sm text-gold mb-2">{title}</h3>
                 <ul className="space-y-1.5">
                   {links.map((link) => (
                     <li key={link.label}>

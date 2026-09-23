@@ -5,6 +5,10 @@ type ResponsiveImageOptions = {
   quality?: number;
 };
 
+type ResponsiveImageSetOptions = ResponsiveImageOptions & {
+  widths: number[];
+};
+
 const appendOrReplaceParam = (url: URL, key: string, value: string) => {
   url.searchParams.set(key, value);
 };
@@ -85,4 +89,23 @@ export function toResponsiveImageUrl(url: string, options: ResponsiveImageOption
   } catch {
     return url;
   }
+}
+
+export function toResponsiveImageSrcSet(url: string, options: ResponsiveImageSetOptions): string {
+  const uniqueWidths = Array.from(
+    new Set(
+      options.widths
+        .map((width) => Math.max(1, Math.round(width)))
+        .filter((width) => Number.isFinite(width))
+    )
+  ).sort((a, b) => a - b);
+
+  return uniqueWidths
+    .map((width) => {
+      const height = options.height && options.width
+        ? Math.round((width / options.width) * options.height)
+        : options.height;
+      return `${toResponsiveImageUrl(url, { ...options, width, height })} ${width}w`;
+    })
+    .join(', ');
 }

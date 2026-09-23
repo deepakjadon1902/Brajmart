@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Heart, ShoppingCart, Star, Eye, Truck } from 'lucide-react';
 import { Product } from '@/types/product';
 import { formatPrice } from '@/utils/formatPrice';
-import { toSquareImageUrl } from '@/utils/image';
+import { toSquareImageSrcSet, toSquareImageUrl } from '@/utils/image';
 import { useCartStore } from '@/store/cartStore';
+import { preloadCartDrawer } from '@/components/cart/lazyCartDrawer';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { productToMetaPixelParams, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { toast } from 'sonner';
@@ -63,8 +64,8 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
 
   const addToCart = useCartStore(s => s.addItem);
   const openCartDrawer = useCartStore(s => s.openDrawer);
-  const { toggleItem, isInWishlist } = useWishlistStore();
-  const inWishlist = isInWishlist(product.id);
+  const toggleItem = useWishlistStore((s) => s.toggleItem);
+  const inWishlist = useWishlistStore((s) => s.items.some((item) => item.id === product.id));
   const navigate = useNavigate();
 
   const handleAddToCart = (e: React.MouseEvent) => {
@@ -132,11 +133,15 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
       <div className={`image-wrap relative ${mediaAspectClass} overflow-hidden bg-brand-raised`}>
         <Link to={`/product/${product.slug}`} aria-label={`View ${product.name}`} className="block h-full w-full">
         <img
-          src={toSquareImageUrl(displayImage)}
+          src={toSquareImageUrl(displayImage, isAboveTheFold ? 480 : 320)}
+          srcSet={toSquareImageSrcSet(displayImage, isAboveTheFold ? [320, 480, 640] : [220, 320, 480])}
+          sizes="(min-width: 1024px) 250px, (min-width: 768px) 236px, (min-width: 640px) 218px, 48vw"
           alt={product.name}
           loading={isAboveTheFold ? 'eager' : 'lazy'}
           decoding="async"
           {...({ fetchpriority: isAboveTheFold ? 'high' : 'low' } as Record<string, string>)}
+          width={480}
+          height={480}
           className={`w-full h-full ${mediaFitClass} transition-all duration-300 ease-out group-hover:scale-[1.02]`}
         />
         </Link>
@@ -241,9 +246,12 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
           <button
             type="button"
             onClick={handleAddToCart}
+            onPointerEnter={preloadCartDrawer}
+            onPointerDown={preloadCartDrawer}
+            onFocus={preloadCartDrawer}
             disabled={!purchasable}
             className={`add-to-cart-btn btn-action w-full !min-h-11 !px-1.5 !py-2 !text-[11px] sm:!px-2.5 sm:!text-[12px] ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
-            aria-label={purchasable ? `Add ${product.name} to cart` : `${product.name} is out of stock`}
+            aria-label={purchasable ? `Add Cart: ${product.name}` : `Out Stock: ${product.name}`}
           >
             <ShoppingCart size={14} className="shrink-0" />
             <span className="truncate">{purchasable ? 'Add Cart' : 'Out Stock'}</span>
@@ -253,7 +261,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
             onClick={handleBuyNow}
             disabled={!purchasable}
             className={`buy-now-btn btn-action-secondary w-full !min-h-11 !px-1.5 !py-2 !text-[11px] sm:!px-2.5 sm:!text-[12px] ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
-            aria-label={purchasable ? `Buy ${product.name} now` : `${product.name} is out of stock`}
+            aria-label={purchasable ? `Buy Now: ${product.name}` : `Buy Now: ${product.name} (out of stock)`}
           >
             <span className="truncate">Buy Now</span>
           </button>

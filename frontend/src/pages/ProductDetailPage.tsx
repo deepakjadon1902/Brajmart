@@ -5,6 +5,7 @@ import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minu
 import { motion } from 'framer-motion';
 import { useProductStore } from '@/store/productStore';
 import { useCartStore } from '@/store/cartStore';
+import { preloadCartDrawer } from '@/components/cart/lazyCartDrawer';
 import { useWishlistStore } from '@/store/wishlistStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { formatPrice } from '@/utils/formatPrice';
@@ -1014,6 +1015,9 @@ const ProductDetailPage = () => {
                 <button
                   type="button"
                   onClick={handleAddToCart}
+                  onPointerEnter={preloadCartDrawer}
+                  onPointerDown={preloadCartDrawer}
+                  onFocus={preloadCartDrawer}
                   disabled={!purchasable}
                   className={`add-to-cart-btn btn-action w-full ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
                 >
@@ -1277,6 +1281,9 @@ const ProductDetailPage = () => {
           <button
             type="button"
             onClick={handleAddToCart}
+            onPointerEnter={preloadCartDrawer}
+            onPointerDown={preloadCartDrawer}
+            onFocus={preloadCartDrawer}
             disabled={!purchasable}
             className={`add-to-cart-btn min-h-11 rounded-lg bg-maroon px-2 text-xs font-bold text-white transition hover:bg-saffron disabled:bg-muted disabled:text-muted-foreground ${purchasable ? '' : 'hover:bg-muted'}`}
           >

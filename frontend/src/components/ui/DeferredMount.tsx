@@ -5,6 +5,7 @@ interface DeferredMountProps {
   className?: string;
   minHeight?: number | string;
   rootMargin?: string;
+  deferUntilVisible?: boolean;
 }
 
 const DeferredMount = ({
@@ -12,10 +13,11 @@ const DeferredMount = ({
   className = '',
   minHeight,
   rootMargin = '180px 0px',
+  deferUntilVisible = false,
 }: DeferredMountProps) => {
   const ref = useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = useState(() =>
-    typeof window === 'undefined' || Boolean(window.__BRAJMART_INITIAL_DATA__)
+    typeof window === 'undefined' || Boolean(window.__BRAJMART_INITIAL_DATA__) || !deferUntilVisible
   );
 
   useEffect(() => {
@@ -40,7 +42,11 @@ const DeferredMount = ({
   }, [rootMargin]);
 
   return (
-    <div ref={ref} className={className} style={minHeight ? { minHeight } : undefined}>
+    <div
+      ref={ref}
+      className={className}
+      style={minHeight ? { minHeight } : undefined}
+    >
       {isVisible ? children : null}
     </div>
   );

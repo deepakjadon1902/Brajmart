@@ -72,7 +72,7 @@ const mapBundleRow = (row: any, products: any[] = []) => {
   };
 };
 
-export const ensureCommerceIntelligenceSchema = async () => {
+const ensureCommerceIntelligenceSchemaRaw = async () => {
   await dbExecute(`
     CREATE TABLE IF NOT EXISTS bundles (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -117,6 +117,17 @@ export const ensureCommerceIntelligenceSchema = async () => {
       CONSTRAINT fk_bundle_products_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
+};
+
+let commerceIntelligenceSchemaReady: Promise<void> | null = null;
+export const ensureCommerceIntelligenceSchema = () => {
+  if (!commerceIntelligenceSchemaReady) {
+    commerceIntelligenceSchemaReady = ensureCommerceIntelligenceSchemaRaw().catch((err) => {
+      commerceIntelligenceSchemaReady = null;
+      throw err;
+    });
+  }
+  return commerceIntelligenceSchemaReady;
 };
 
 const validProductWhere = (alias = 'p') => `

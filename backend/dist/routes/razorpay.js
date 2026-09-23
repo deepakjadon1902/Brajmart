@@ -529,6 +529,80 @@ router.post('/create-order', razorpayCreateLimiter, auth_1.optionalAuth, async (
         return res.status(500).json({ message: err?.message || 'Failed to create Razorpay order' });
     }
 });
+router.post('/retry-order', razorpayCreateLimiter, async (req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        const { keyId, keySecret } = getRazorpayConfig();
+        if (!keyId || !keySecret)
+            return res.status(500).json({ message: 'Razorpay credentials are not configured' });
+        const previousToken = String(req.body?.token || '').trim();
+        if (!previousToken)
+            return res.status(400).json({ message: 'Missing payment token' });
+        const statusRows = await (0, db_1.dbQuery)('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [previousToken]);
+        const statusRow = statusRows[0];
+        if (!statusRow?.order_id)
+            return res.status(404).json({ message: 'Payment not found' });
+        if (String(statusRow.method || '') !== 'Razorpay') {
+            return res.status(400).json({ message: 'Only Razorpay payments can be retried here' });
+        }
+        if (String(statusRow.status || '') === 'paid' || await hasPaidSettlement(statusRow.order_id)) {
+            return res.status(409).json({ message: 'This order is already paid' });
+        }
+        const capturedPayment = await findCapturedRazorpayPayment(previousToken).catch(() => null);
+        if (capturedPayment) {
+            const result = await updateOrderForPayment({
+                razorpayOrderId: previousToken,
+                razorpayPaymentId: String(capturedPayment.id),
+                status: 'paid',
+                note: 'Payment corrected before retry from Razorpay captured status',
+            });
+            return res.status(409).json({ message: 'This order is already paid', ...result });
+        }
+        const orderRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
+        const orderRow = orderRows[0];
+        if (!orderRow)
+            return res.status(404).json({ message: 'Order not found' });
+        const amount = Number(statusRow.amount || orderRow.total || 0);
+        if (!Number.isFinite(amount) || amount <= 0)
+            return res.status(400).json({ message: 'Invalid retry amount' });
+        const razorpayOrder = await createRazorpayOrder({
+            keyId,
+            keySecret,
+            amountPaise: Math.round(amount * 100),
+            currency: 'INR',
+            receipt: `BM-${orderRow.id}-retry-${Date.now()}`,
+            notes: {
+                brajmart_order_id: String(orderRow.id),
+                previous_razorpay_order_id: previousToken,
+                customer_email: String(orderRow.customer_email || ''),
+            },
+        });
+        await (0, db_1.dbExecute)('INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [orderRow.id, orderRow.customer_name || '', orderRow.customer_email || '', 'Razorpay', amount, 'pending', razorpayOrder.id]);
+        await (0, db_1.dbExecute)('INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?)', [razorpayOrder.id, 'pending', orderRow.id, amount, 'Razorpay', null]);
+        const billingAddress = (0, dbHelpers_1.parseJson)(orderRow.billing_address, {});
+        const shippingAddress = (0, dbHelpers_1.parseJson)(orderRow.shipping_address, {});
+        const prefillName = String(orderRow.customer_name || billingAddress.fullName || shippingAddress.fullName || '').trim();
+        const prefillPhone = String(billingAddress.mobile || shippingAddress.mobile || billingAddress.phone || shippingAddress.phone || '').trim();
+        return res.json({
+            keyId,
+            orderId: razorpayOrder.id,
+            statusToken: razorpayOrder.id,
+            amount: razorpayOrder.amount,
+            currency: razorpayOrder.currency || 'INR',
+            name: 'BrajMart',
+            description: `Order #${orderRow.id}`,
+            prefill: {
+                name: prefillName,
+                email: String(orderRow.customer_email || ''),
+                contact: prefillPhone,
+            },
+        });
+    }
+    catch (err) {
+        return res.status(500).json({ message: err?.message || 'Failed to retry Razorpay payment' });
+    }
+});
 router.post('/verify', razorpayReportLimiter, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
@@ -566,8 +640,8 @@ router.post('/failed', razorpayReportLimiter, async (req, res) => {
         const { razorpay_order_id, razorpay_payment_id, customer_email, reason, } = req.body || {};
         const razorpayOrderId = String(razorpay_order_id || '').trim();
         const customerEmail = String(customer_email || '').trim().toLowerCase();
-        if (!razorpayOrderId || !customerEmail) {
-            return res.status(400).json({ message: 'Missing Razorpay order or customer email' });
+        if (!razorpayOrderId) {
+            return res.status(400).json({ message: 'Missing Razorpay order' });
         }
         const statusRows = await (0, db_1.dbQuery)('SELECT order_id FROM payment_status WHERE token = ? LIMIT 1', [razorpayOrderId]);
         const statusRow = statusRows[0];
@@ -575,7 +649,7 @@ router.post('/failed', razorpayReportLimiter, async (req, res) => {
             return res.status(404).json({ message: 'Payment not found' });
         const orderRows = await (0, db_1.dbQuery)('SELECT customer_email FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
         const orderEmail = String(orderRows[0]?.customer_email || '').trim().toLowerCase();
-        if (!orderEmail || orderEmail !== customerEmail) {
+        if (customerEmail && (!orderEmail || orderEmail !== customerEmail)) {
             return res.status(403).json({ message: 'Payment does not match this customer' });
         }
         const capturedPayment = await findCapturedRazorpayPayment(razorpayOrderId, razorpay_payment_id ? String(razorpay_payment_id) : undefined).catch(() => null);

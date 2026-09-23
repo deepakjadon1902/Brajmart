@@ -12,3 +12,8 @@ frontend/node_modules/
 backend/uploads/
 backend/dist/
 .seo-build-data-cache.json
+frontend/.seo-build-data-cache.json
+frontend/.seo-build-data-meta.json
+phase5-*-browser.json
+phase6-*.json
+phase7-*.json

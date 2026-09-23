@@ -1,0 +1,144 @@
+{
+  "createdAt": "2026-09-23T10:50:40.207Z",
+  "baseUrl": "http://127.0.0.1:4178",
+  "direct": [
+    {
+      "run": 1,
+      "loadedAtStart": false,
+      "intentLeadMs": 0,
+      "openMs": 1965,
+      "resource": {
+        "name": "http://127.0.0.1:4178/assets/CartDrawer-DSWSLg-d.js",
+        "duration": 49,
+        "transferSize": 2657,
+        "encodedBodySize": 2357,
+        "decodedBodySize": 6487
+      }
+    },
+    {
+      "run": 2,
+      "loadedAtStart": false,
+      "intentLeadMs": 0,
+      "openMs": 1339,
+      "resource": {
+        "name": "http://127.0.0.1:4178/assets/CartDrawer-DSWSLg-d.js",
+        "duration": 185,
+        "transferSize": 2657,
+        "encodedBodySize": 2357,
+        "decodedBodySize": 6487
+      }
+    },
+    {
+      "run": 3,
+      "loadedAtStart": false,
+      "intentLeadMs": 0,
+      "openMs": 994,
+      "resource": {
+        "name": "http://127.0.0.1:4178/assets/CartDrawer-DSWSLg-d.js",
+        "duration": 64,
+        "transferSize": 2657,
+        "encodedBodySize": 2357,
+        "decodedBodySize": 6487
+      }
+    },
+    {
+      "run": 4,
+      "loadedAtStart": false,
+      "intentLeadMs": 0,
+      "openMs": 1175,
+      "resource": {
+        "name": "http://127.0.0.1:4178/assets/CartDrawer-DSWSLg-d.js",
+        "duration": 94,
+        "transferSize": 2657,
+        "encodedBodySize": 2357,
+        "decodedBodySize": 6487
+      }
+    },
+    {
+      "run": 5,
+      "loadedAtStart": false,
+      "intentLeadMs": 0,
+      "openMs": 1067,
+      "resource": {
+        "name": "http://127.0.0.1:4178/assets/CartDrawer-DSWSLg-d.js",
+        "duration": 101,
+        "transferSize": 2657,
+        "encodedBodySize": 2357,
+        "decodedBodySize": 6487
+      }
+    }
+  ],
+  "intent": [
+    {
+      "run": 1,
+      "loadedAtStart": false,
+      "intentLeadMs": 1144,
+      "openMs": 719,
+      "resource": {
+        "name": "http://127.0.0.1:4178/assets/CartDrawer-DSWSLg-d.js",
+        "duration": 89,
+        "transferSize": 2657,
+        "encodedBodySize": 2357,
+        "decodedBodySize": 6487
+      }
+    },
+    {
+      "run": 2,
+      "loadedAtStart": false,
+      "intentLeadMs": 1065,
+      "openMs": 1066,
+      "resource": {
+        "name": "http://127.0.0.1:4178/assets/CartDrawer-DSWSLg-d.js",
+        "duration": 31,
+        "transferSize": 2657,
+        "encodedBodySize": 2357,
+        "decodedBodySize": 6487
+      }
+    },
+    {
+      "run": 3,
+      "loadedAtStart": false,
+      "intentLeadMs": 1248,
+      "openMs": 578,
+      "resource": {
+        "name": "http://127.0.0.1:4178/assets/CartDrawer-DSWSLg-d.js",
+        "duration": 118,
+        "transferSize": 2657,
+        "encodedBodySize": 2357,
+        "decodedBodySize": 6487
+      }
+    },
+    {
+      "run": 4,
+      "loadedAtStart": false,
+      "intentLeadMs": 987,
+      "openMs": 679,
+      "resource": {
+        "name": "http://127.0.0.1:4178/assets/CartDrawer-DSWSLg-d.js",
+        "duration": 42,
+        "transferSize": 2657,
+        "encodedBodySize": 2357,
+        "decodedBodySize": 6487
+      }
+    },
+    {
+      "run": 5,
+      "loadedAtStart": false,
+      "intentLeadMs": 1042,
+      "openMs": 775,
+      "resource": {
+        "name": "http://127.0.0.1:4178/assets/CartDrawer-DSWSLg-d.js",
+        "duration": 177,
+        "transferSize": 2657,
+        "encodedBodySize": 2357,
+        "decodedBodySize": 6487
+      }
+    }
+  ],
+  "summary": {
+    "directOpenMs": 1175,
+    "intentOpenMs": 719,
+    "intentLeadMs": 1065,
+    "improvementMs": 456
+  }
+}
