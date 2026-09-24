@@ -154,12 +154,61 @@ const stripManagedHead = (html) => html
 
 const serialize = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
 
+const toResponsiveImageUrl = (rawUrl, { width, height, fit = 'cover', quality = 74 } = {}) => {
+  if (!rawUrl) return '';
+  const roundedWidth = Math.max(1, Math.round(width || 720));
+  const roundedHeight = Math.max(1, Math.round(height || roundedWidth));
+  const roundedQuality = Math.min(100, Math.max(35, Math.round(quality)));
+  if (rawUrl.includes('ik.imagekit.io')) {
+    try {
+      const parsed = new URL(rawUrl);
+      const crop = fit === 'contain' ? 'c-at_max' : 'c-at_least';
+      parsed.searchParams.set('tr', `w-${roundedWidth},h-${roundedHeight},${crop},q-${roundedQuality},f-webp`);
+      return parsed.toString();
+    } catch {
+      return rawUrl;
+    }
+  }
+  return rawUrl;
+};
+
+const toResponsiveImageSrcSet = (rawUrl, widths, options) => widths
+  .map((width) => `${toResponsiveImageUrl(rawUrl, { ...options, width })} ${width}w`)
+  .join(', ');
+
+const escapeAttribute = (value) => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/"/g, '&quot;');
+
+const getHomeHeroPreload = (routeData) => {
+  const slide = Array.isArray(routeData.heroSlides)
+    ? routeData.heroSlides.find((item) => item?.image && item?.isActive !== false) || routeData.heroSlides.find((item) => item?.image)
+    : null;
+  if (!slide?.image) return '';
+
+  const widths = [360, 480, 640, 720, 840];
+  const href = toResponsiveImageUrl(slide.image, { width: 720, fit: 'contain', quality: 70 });
+  const srcSet = toResponsiveImageSrcSet(slide.image, widths, { fit: 'contain', quality: 70 });
+  const attrs = [
+    'rel="preload"',
+    'as="image"',
+    `href="${escapeAttribute(href)}"`,
+    `imagesrcset="${escapeAttribute(srcSet)}"`,
+    'imagesizes="84vw"',
+    'fetchpriority="high"',
+    'media="(max-width: 639px)"',
+  ];
+  const preconnect = '<link rel="preconnect" href="https://ik.imagekit.io" crossorigin />';
+  return `${preconnect}\n<link ${attrs.join(' ')} />`;
+};
+
 for (const route of routes) {
   const routeData = dataForRoute(route);
   const { appHtml, head } = await render(route, routeData);
   const initialDataScript = `<script>window.__BRAJMART_INITIAL_DATA__=${serialize(routeData)};</script>`;
+  const heroPreload = route === '/' ? getHomeHeroPreload(routeData) : '';
   const html = stripManagedHead(template)
-    .replace('</head>', `${head}\n${initialDataScript}\n</head>`)
+    .replace('</head>', `${head}\n${heroPreload}\n${initialDataScript}\n</head>`)
     .replace('<div id="root"></div>', `<div id="root">${appHtml}</div>`);
   const output = route === '/'
     ? path.join(dist, 'index.html')

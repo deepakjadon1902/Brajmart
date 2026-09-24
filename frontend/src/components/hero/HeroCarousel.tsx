@@ -4,8 +4,14 @@ import { Link } from 'react-router-dom';
 import { useHeroStore } from '@/store/heroStore';
 import { toResponsiveImageSrcSet, toResponsiveImageUrl } from '@/utils/responsiveImage';
 
+const mobileHeroWidths = [360, 480, 640, 720, 840];
+const desktopHeroWidths = [768, 960, 1280, 1600];
+const mobileHeroSizes = '84vw';
+const desktopHeroSizes = '100vw';
+
 const HeroCarousel = () => {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [canAutoPlay, setCanAutoPlay] = useState(false);
   const [failedSlideIds, setFailedSlideIds] = useState<Set<string>>(() => new Set());
   const slides = useHeroStore((s) => s.slides);
   const loadSlides = useHeroStore((s) => s.loadFromApi);
@@ -21,17 +27,42 @@ const HeroCarousel = () => {
   );
 
   useEffect(() => {
-    if (slides.length === 0) loadSlides({ force: true });
+    let refreshInterval: number | undefined;
+    let focusListenerAttached = false;
+    const runAfterStartup = (callback: () => void, delay: number) => {
+      const timeout = window.setTimeout(() => {
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(callback, { timeout: 3000 });
+        } else {
+          callback();
+        }
+      }, delay);
+      return () => window.clearTimeout(timeout);
+    };
+
+    const cleanupInitialLoad = slides.length === 0
+      ? runAfterStartup(() => { void loadSlides({ force: true }); }, 2500)
+      : undefined;
     const refreshSlides = () => {
       if (document.visibilityState === 'visible') loadSlides({ force: true });
     };
-    const interval = window.setInterval(refreshSlides, 60_000);
-    window.addEventListener('focus', refreshSlides);
+    const cleanupRefresh = runAfterStartup(() => {
+      refreshInterval = window.setInterval(refreshSlides, 60_000);
+      window.addEventListener('focus', refreshSlides);
+      focusListenerAttached = true;
+    }, 12_000);
     return () => {
-      window.clearInterval(interval);
-      window.removeEventListener('focus', refreshSlides);
+      cleanupInitialLoad?.();
+      cleanupRefresh();
+      if (refreshInterval) window.clearInterval(refreshInterval);
+      if (focusListenerAttached) window.removeEventListener('focus', refreshSlides);
     };
   }, [loadSlides, slides.length]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setCanAutoPlay(true), 4000);
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   const displaySlides = useMemo(
     () => slides.filter((slide) => !failedSlideIds.has(slide.id)),
@@ -52,12 +83,12 @@ const HeroCarousel = () => {
   };
 
   useEffect(() => {
-    if (!canNavigateSlides) return;
+    if (!canNavigateSlides || !canAutoPlay) return;
     const interval = window.setInterval(() => {
       setSelectedIndex((current) => (current + 1) % displaySlides.length);
     }, 8000);
     return () => window.clearInterval(interval);
-  }, [canNavigateSlides, displaySlides.length]);
+  }, [canAutoPlay, canNavigateSlides, displaySlides.length]);
 
   useEffect(() => {
     if (selectedIndex >= displaySlides.length) setSelectedIndex(0);
@@ -69,32 +100,43 @@ const HeroCarousel = () => {
         <div className="relative overflow-hidden bg-brand-raised">
           <div className="relative aspect-[480/168] w-full sm:aspect-[480/133] sm:min-h-[260px] md:min-h-0">
             {visibleSlide?.image ? (
-              <img
-                src={toResponsiveImageUrl(visibleSlide.image, { width: 960, height: 336, quality: 74, fit: 'cover' })}
-                srcSet={toResponsiveImageSrcSet(visibleSlide.image, {
-                  widths: [480, 768, 960, 1280, 1600],
-                  width: 1600,
-                  height: 560,
-                  quality: 74,
-                  fit: 'cover',
-                })}
-                alt={visibleSlide.title}
-                loading="eager"
-                decoding="async"
-                {...({ fetchpriority: 'high' } as Record<string, string>)}
-                width={1600}
-                height={560}
-                sizes="100vw"
-                className="absolute inset-0 h-full w-full object-contain object-center sm:object-cover"
-                onError={() => {
-                  if (visibleSlide.id === fallbackSlide.id) return;
-                  setFailedSlideIds((current) => {
-                    const next = new Set(current);
-                    next.add(visibleSlide.id);
-                    return next;
-                  });
-                }}
-              />
+              <picture>
+                <source
+                  media="(max-width: 639px)"
+                  srcSet={toResponsiveImageSrcSet(visibleSlide.image, {
+                    widths: mobileHeroWidths,
+                    quality: 70,
+                    fit: 'contain',
+                  })}
+                  sizes={mobileHeroSizes}
+                />
+                <img
+                  src={toResponsiveImageUrl(visibleSlide.image, { width: 960, height: 336, quality: 74, fit: 'cover' })}
+                  srcSet={toResponsiveImageSrcSet(visibleSlide.image, {
+                    widths: desktopHeroWidths,
+                    width: 1600,
+                    height: 560,
+                    quality: 74,
+                    fit: 'cover',
+                  })}
+                  alt={visibleSlide.title}
+                  loading="eager"
+                  decoding="async"
+                  {...({ fetchpriority: 'high' } as Record<string, string>)}
+                  width={1600}
+                  height={560}
+                  sizes={desktopHeroSizes}
+                  className="absolute inset-0 h-full w-full object-contain object-center sm:object-cover"
+                  onError={() => {
+                    if (visibleSlide.id === fallbackSlide.id) return;
+                    setFailedSlideIds((current) => {
+                      const next = new Set(current);
+                      next.add(visibleSlide.id);
+                      return next;
+                    });
+                  }}
+                />
+              </picture>
             ) : (
               <div className="absolute inset-0 bg-brand-soft" aria-hidden="true" />
             )}

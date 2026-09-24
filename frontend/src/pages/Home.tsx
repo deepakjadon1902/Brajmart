@@ -104,7 +104,6 @@ const Home = () => {
               subtitle={`Explore ${displayCategoryName(brajmartSpecialCategory.name)} collection`}
               products={getProductsByCategory(brajmartSpecialCategory.name)}
               viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
-              priority
             />
           </DeferredMount>
         )}
