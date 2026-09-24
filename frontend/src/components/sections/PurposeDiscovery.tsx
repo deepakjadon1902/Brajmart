@@ -16,7 +16,7 @@ const PurposeDiscovery = ({ categories }: { categories: Category[] }) => {
   void categories;
 
   return (
-    <section className="bg-background py-8 sm:py-10 md:py-12">
+    <section className="hidden bg-background py-8 md:block md:py-12">
       <div className="storefront-shell">
         <div className="mb-5 flex flex-col gap-2 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
           <div>
