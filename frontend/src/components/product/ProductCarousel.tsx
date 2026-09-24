@@ -1,6 +1,4 @@
-import { useCallback } from 'react';
-import useEmblaCarousel from 'embla-carousel-react';
-import Autoplay from 'embla-carousel-autoplay';
+import { useCallback, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '@/types/product';
 import ProductCard from './ProductCard';
@@ -11,20 +9,29 @@ interface ProductCarouselProps {
 }
 
 const ProductCarousel = ({ products, priority = false }: ProductCarouselProps) => {
-  const [emblaRef, emblaApi] = useEmblaCarousel(
-    { loop: true, align: 'start', slidesToScroll: 1, containScroll: 'trimSnaps' },
-    [Autoplay({ delay: 4000, stopOnInteraction: true, stopOnMouseEnter: true })]
-  );
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
-  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+  const scrollByPage = useCallback((direction: -1 | 1) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollBy({
+      left: direction * Math.max(scroller.clientWidth * 0.86, 260),
+      behavior: 'smooth',
+    });
+  }, []);
+
+  const scrollPrev = useCallback(() => scrollByPage(-1), [scrollByPage]);
+  const scrollNext = useCallback(() => scrollByPage(1), [scrollByPage]);
 
   return (
     <div className="relative group/carousel">
-      <div className="overflow-hidden" ref={emblaRef}>
-        <div className="flex gap-2.5 sm:gap-3 md:gap-4">
+      <div
+        ref={scrollerRef}
+        className="overflow-x-auto overscroll-x-contain scroll-smooth scrollbar-hide"
+      >
+        <div className="flex snap-x snap-mandatory gap-2.5 sm:gap-3 md:gap-4">
           {products.map((product, i) => (
-            <div key={product.id} className="flex-none w-[48vw] min-w-[176px] sm:w-[218px] md:w-[236px] lg:w-[250px]">
+            <div key={product.id} className="flex-none snap-start w-[48vw] min-w-[176px] sm:w-[218px] md:w-[236px] lg:w-[250px]">
               <ProductCard product={product} index={i} variant="compact" priority={priority} />
             </div>
           ))}

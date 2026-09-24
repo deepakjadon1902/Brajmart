@@ -34,6 +34,22 @@ const runWhenIdle = (callback: () => void, timeout = 1200) => {
   const id = window.setTimeout(callback, timeout);
   return () => window.clearTimeout(id);
 };
+const runAfterStartup = (callback: () => void, delay = 9000) => {
+  if (typeof window === 'undefined') {
+    callback();
+    return () => undefined;
+  }
+
+  let cleanupIdle = () => undefined;
+  const timeoutId = window.setTimeout(() => {
+    cleanupIdle = runWhenIdle(callback, 3000);
+  }, delay);
+
+  return () => {
+    window.clearTimeout(timeoutId);
+    cleanupIdle();
+  };
+};
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
@@ -316,7 +332,10 @@ const App = () => {
         // Keep locally persisted defaults
       }
     };
-    loadSettings();
+    const isAdminPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
+    const cleanupStartupSettings = isAdminPath
+      ? (loadSettings(), () => undefined)
+      : runAfterStartup(loadSettings, 7000);
     const refreshSettings = () => {
       if (document.visibilityState === 'visible') loadSettings();
     };
@@ -324,6 +343,7 @@ const App = () => {
     window.addEventListener('focus', refreshSettings);
     return () => {
       active = false;
+      cleanupStartupSettings();
       window.clearInterval(interval);
       window.removeEventListener('focus', refreshSettings);
     };
@@ -338,7 +358,7 @@ const App = () => {
     // Prerendered data makes the first paint fast, but it is only a snapshot from
     // build time. Always refresh in the background so newly added products and
     // images appear on every device without requiring another deployment.
-    return runWhenIdle(() => {
+    return runAfterStartup(() => {
       loadProducts({ force: true });
     });
   }, [loadProducts]);

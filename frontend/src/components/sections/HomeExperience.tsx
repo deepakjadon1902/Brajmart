@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MessageCircle, ShieldCheck, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SectionHeader from '@/components/ui/SectionHeader';
@@ -102,27 +102,52 @@ export const NewsletterEngagement = () => (
 );
 
 export const BundledFavorites = () => {
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [bundles, setBundles] = useState<CommerceBundle[]>([]);
 
   useEffect(() => {
     let active = true;
-    fetchBundles({ location: 'home', limit: 3 })
-      .then((data) => {
-        if (active) setBundles(Array.isArray(data) ? data : []);
-      })
-      .catch(() => {
-        if (active) setBundles([]);
-      });
+    let observer: IntersectionObserver | null = null;
+    let timeoutId: number | undefined;
+
+    const load = () => {
+      fetchBundles({ location: 'home', limit: 3 })
+        .then((data) => {
+          if (active) setBundles(Array.isArray(data) ? data : []);
+        })
+        .catch(() => {
+          if (active) setBundles([]);
+        });
+    };
+
+    if (typeof IntersectionObserver === 'undefined' || !rootRef.current) {
+      timeoutId = window.setTimeout(load, 5000);
+    } else {
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          if (!entry?.isIntersecting) return;
+          observer?.disconnect();
+          load();
+        },
+        { rootMargin: '640px 0px' }
+      );
+      observer.observe(rootRef.current);
+    }
+
     return () => {
       active = false;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      observer?.disconnect();
     };
   }, []);
 
   return (
-    <BundleShelf
-      bundles={bundles}
-      title="Curated Devotional Sets"
-      subtitle="Ready-to-shop combinations selected by the BrajMart team from currently available products."
-    />
+    <div ref={rootRef}>
+      <BundleShelf
+        bundles={bundles}
+        title="Curated Devotional Sets"
+        subtitle="Ready-to-shop combinations selected by the BrajMart team from currently available products."
+      />
+    </div>
   );
 };
