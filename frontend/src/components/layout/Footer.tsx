@@ -125,7 +125,7 @@ const Footer = () => {
       <div className="container mx-auto px-4 py-2 md:py-2">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_2.8fr] gap-7 lg:gap-9 items-start">
           <div>
-            <Link to="/" className="flex items-center gap-2.5 mb-3">
+            <Link to="/" className="flex items-center gap-2.5 mb-3" aria-label={`${settings.storeName || 'BrajMart'} home`}>
               {settings.storeLogo ? (
                 <img
                   src={toResponsiveImageUrl(settings.storeLogo, { width: 160, height: 160, fit: 'contain', quality: 72 })}
@@ -133,9 +133,9 @@ const Footer = () => {
                   className="w-16 h-16 rounded object-contain"
                 />
               ) : (
-                <span className="sr-only">{settings.storeName}</span>
+                <span className="sr-only">{settings.storeName || 'BrajMart'}</span>
               )}
-              <span className="font-cinzel text-2xl font-bold text-gold">{settings.storeName}</span>
+              <span className="font-cinzel text-2xl font-bold text-gold">{settings.storeName || 'BrajMart'}</span>
             </Link>
             <p className="text-white text-sm leading-relaxed mb-2">{settings.tagline}</p>
             {footerAddressLines.length > 0 && (

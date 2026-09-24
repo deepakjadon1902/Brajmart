@@ -48,7 +48,7 @@
           if (document.readyState === 'complete') afterCriticalStartup();
           else window.addEventListener('load', afterCriticalStartup, { once: true });
         };
-        ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach(function (eventName) {
+        ['pointerdown', 'keydown', 'touchstart'].forEach(function (eventName) {
           window.addEventListener(eventName, loadMarketing, { once: true, passive: true });
         });
         schedule();
@@ -57,6 +57,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="ai-catalog" type="application/ai-catalog+json" href="/.well-known/ai-catalog.json" />
     <title>Brajmart – Spiritual Books, Puja Items, Prasadam & Braj Yatra Online</title>
     <meta
       name="description"

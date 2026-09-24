@@ -123,17 +123,19 @@ if (!categories.length || !products.length || !blogs.length) {
   }
 }
 
+const markdownLink = (label, pathname) => `[${label}](${absolute(pathname)})`;
+
 const categoryLines = categories.length
   ? categories.map((category) => {
       const suffix = category.productCount > 0 ? ` (${category.productCount} products)` : '';
-      return `- ${category.name}${suffix}: ${absolute(category.path)}`;
+      return `- ${markdownLink(`${category.name}${suffix}`, category.path)}`;
     }).join('\n')
-  : '- Browse categories: https://www.brajmart.com/categories';
+  : `- ${markdownLink('Browse categories', '/categories')}`;
 
 const subcategoryLines = categories
   .flatMap((category) => category.subcategories || [])
   .slice(0, 40)
-  .map((subcategory) => `- ${subcategory.name}: ${absolute(subcategory.path)}`)
+  .map((subcategory) => `- ${markdownLink(subcategory.name, subcategory.path)}`)
   .join('\n');
 
 const productLines = products.length
@@ -143,13 +145,13 @@ const productLines = products.length
         product.price > 0 ? `price: INR ${product.price}` : '',
         product.available ? 'availability: check product page' : 'availability: may be unavailable',
       ].filter(Boolean).join('; ');
-      return `- ${product.name}: ${absolute(product.path)}${detail ? ` (${detail})` : ''}${product.description ? ` - ${product.description}` : ''}`;
+      return `- ${markdownLink(product.name, product.path)}${detail ? ` (${detail})` : ''}${product.description ? ` - ${product.description}` : ''}`;
     }).join('\n')
-  : '- Product catalog: https://www.brajmart.com/products';
+  : `- ${markdownLink('Product catalog', '/products')}`;
 
 const blogLines = blogs.length
-  ? blogs.map((post) => `- ${post.title}: ${absolute(post.path)}${post.description ? ` - ${post.description}` : ''}`).join('\n')
-  : '- Blog: https://www.brajmart.com/blog';
+  ? blogs.map((post) => `- ${markdownLink(post.title, post.path)}${post.description ? ` - ${post.description}` : ''}`).join('\n')
+  : `- ${markdownLink('Blog', '/blog')}`;
 
 const freshnessNote = data.live
   ? `Generated from public catalog API on ${data.generatedAt}.`
@@ -163,14 +165,14 @@ Canonical site: ${SITE_URL}
 
 ## Main Public Sections
 
-- Homepage: ${absolute('/')}
-- Products: ${absolute('/products')}
-- Categories: ${absolute('/categories')}
-- Blog: ${absolute('/blog')}
-- About Brajmart: ${absolute('/about')}
-- Contact: ${absolute('/contact')}
-- Help Center: ${absolute('/help-center')}
-- Customer Service: ${absolute('/customer-service')}
+- [Homepage](${absolute('/')})
+- [Products](${absolute('/products')})
+- [Categories](${absolute('/categories')})
+- [Blog](${absolute('/blog')})
+- [About Brajmart](${absolute('/about')})
+- [Contact](${absolute('/contact')})
+- [Help Center](${absolute('/help-center')})
+- [Customer Service](${absolute('/customer-service')})
 
 ## Shopping And Product Information
 
@@ -193,21 +195,21 @@ ${blogLines}
 
 ## Public Policies
 
-- Shipping and Delivery: ${absolute('/shipping-delivery')}
-- Return Policy: ${absolute('/return-policy')}
-- Privacy Policy: ${absolute('/privacy-policy')}
-- Payment Methods: ${absolute('/payment-method')}
-- Terms and Conditions: ${absolute('/terms')}
+- [Shipping and Delivery](${absolute('/shipping-delivery')})
+- [Return Policy](${absolute('/return-policy')})
+- [Privacy Policy](${absolute('/privacy-policy')})
+- [Payment Methods](${absolute('/payment-method')})
+- [Terms and Conditions](${absolute('/terms')})
 
 ## Machine-Readable Resources
 
-- Robots policy: ${absolute('/robots.txt')}
-- Sitemap index: ${absolute('/sitemap-index.xml')}
-- Sitemap alias: ${absolute('/sitemap.xml')}
-- Product sitemap: ${absolute('/sitemap-products.xml')}
-- Category sitemap: ${absolute('/sitemap-categories.xml')}
-- Page sitemap: ${absolute('/sitemap-pages.xml')}
-- Blog sitemap: ${absolute('/sitemap-blog.xml')}
+- [Robots policy](${absolute('/robots.txt')})
+- [Sitemap index](${absolute('/sitemap-index.xml')})
+- [Sitemap alias](${absolute('/sitemap.xml')})
+- [Product sitemap](${absolute('/sitemap-products.xml')})
+- [Category sitemap](${absolute('/sitemap-categories.xml')})
+- [Page sitemap](${absolute('/sitemap-pages.xml')})
+- [Blog sitemap](${absolute('/sitemap-blog.xml')})
 
 ## Notes For Crawlers And AI Systems
 

@@ -81,12 +81,6 @@ const toProductListData = (product) => ({
   inStock: product.inStock,
   codEnabled: product.codEnabled,
   categoryCodEnabled: product.categoryCodEnabled,
-  stockQuantity: product.stockQuantity,
-  sku: product.sku,
-  soldCount: product.soldCount,
-  description: product.description,
-  createdAt: product.createdAt,
-  updatedAt: product.updatedAt,
 });
 const homeRouteProducts = () => {
   const categorySections = buildData.categories || [];

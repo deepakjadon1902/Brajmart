@@ -1,0 +1,34 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "BrajMart",
+    "documentationUrl": "https://www.brajmart.com/llms.txt",
+    "logoUrl": "https://www.brajmart.com/logo.png"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:brajmart:storefront:public-catalog",
+      "displayName": "BrajMart public storefront catalog",
+      "type": "application/ai-catalog+json",
+      "url": "https://www.brajmart.com/llms.txt",
+      "description": "Public shopping, product, category, policy, and guide URLs for BrajMart devotional commerce.",
+      "tags": [
+        "devotional-commerce",
+        "products",
+        "categories",
+        "policies"
+      ],
+      "capabilities": [
+        "ProductDiscovery",
+        "CategoryNavigation",
+        "PolicyLookup"
+      ],
+      "representativeQueries": [
+        "find BrajMart tulsi mala products",
+        "browse BrajMart prasadam categories",
+        "check BrajMart shipping and return policies"
+      ],
+      "updatedAt": "2026-09-24T00:00:00Z"
+    }
+  ]
+}

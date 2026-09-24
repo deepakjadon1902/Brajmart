@@ -147,7 +147,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
         </Link>
 
         {!purchasable && (
-          <span className="absolute bottom-2 right-2 px-2 py-0.5 text-[0.62rem] font-extrabold rounded-full bg-destructive text-primary-foreground tracking-wide">
+          <span className="absolute bottom-2 right-2 px-2 py-0.5 text-[0.62rem] font-extrabold rounded-full bg-[#b42318] text-white tracking-wide">
             OUT OF STOCK
           </span>
         )}
@@ -163,7 +163,8 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
             type="button"
             onClick={handleToggleWishlist}
             className={`flex h-11 w-11 items-center justify-center rounded-full shadow transition-colors sm:h-9 sm:w-9 ${inWishlist ? 'bg-saffron text-primary-foreground' : 'bg-card/95 text-foreground hover:bg-saffron hover:text-primary-foreground'}`}
-            aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+            aria-label={inWishlist ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
+            aria-pressed={inWishlist}
           >
             <Heart size={15} className={inWishlist ? 'fill-current' : ''} />
           </button>
@@ -251,7 +252,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
             onFocus={preloadCartDrawer}
             disabled={!purchasable}
             className={`add-to-cart-btn btn-action w-full !min-h-11 !px-1.5 !py-2 !text-[11px] sm:!px-2.5 sm:!text-[12px] ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
-            aria-label={purchasable ? `Add Cart: ${product.name}` : `Out Stock: ${product.name}`}
+            aria-label={purchasable ? `Add ${product.name} to cart` : `${product.name} is out of stock`}
           >
             <ShoppingCart size={14} className="shrink-0" />
             <span className="truncate">{purchasable ? 'Add Cart' : 'Out Stock'}</span>
