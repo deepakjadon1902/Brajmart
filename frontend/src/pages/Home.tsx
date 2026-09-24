@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import CategoryNavbar from '@/components/layout/CategoryNavbar';
@@ -15,12 +15,15 @@ import {
   NewsletterEngagement,
   WhyBrajMart,
 } from '@/components/sections/HomeExperience';
+import { productTrustFaqs } from '@/data/productTrustFaqs';
 import CollectionSection from '@/components/sections/CollectionSection';
 import ExclusiveBooks from '@/components/sections/ExclusiveBooks';
 import ExclusiveShop from '@/components/sections/ExclusiveShop';
 import BrajYatra from '@/components/sections/BrajYatra';
 import Testimonials from '@/components/sections/Testimonials';
 import Footer from '@/components/layout/Footer';
+
+const ProductTrustFAQ = lazy(() => import('@/components/sections/ProductTrustFAQ'));
 
 const displayCategoryName = (name: string) =>
   (name || '').trim().toLowerCase() === 'best selling' ? 'Most Selling Products' : name;
@@ -83,6 +86,18 @@ const Home = () => {
       url: SITE_URL,
     },
     breadcrumbSchema([{ name: 'Home', path: '/' }]),
+    {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: productTrustFaqs.map((faq) => ({
+        '@type': 'Question',
+        name: faq.question,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: faq.answer,
+        },
+      })),
+    },
   ];
 
   return (
@@ -161,6 +176,12 @@ const Home = () => {
 
       <DeferredMount minHeight={220}>
         <WhyBrajMart />
+      </DeferredMount>
+
+      <DeferredMount minHeight={360}>
+        <Suspense fallback={null}>
+          <ProductTrustFAQ />
+        </Suspense>
       </DeferredMount>
 
       <DeferredMount minHeight={220}>
