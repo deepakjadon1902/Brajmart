@@ -30,19 +30,21 @@ const CollectionSection = ({
   bgClass = '',
   maxProducts = 12,
 }: CollectionSectionProps) => (
-  <section className={`py-4 sm:py-5 md:py-6 ${bgClass}`}>
-    <div className="container mx-auto px-4">
-      <SectionHeader
-        tag={tag}
-        title={title}
-        subtitle={subtitle}
-        viewAllLink={undefined}
-        titleIconUrl={titleIconUrl}
-        viewAllIconUrl={viewAllIconUrl}
-        ornamentIconUrl={ornamentIconUrl}
-      />
+  <section className={`pt-3 pb-4 sm:pt-4 sm:pb-5 md:pt-4 md:pb-5 ${bgClass}`}>
+    <div className="container mx-auto px-0 sm:px-4">
+      <div className="px-3 sm:px-0">
+        <SectionHeader
+          tag={tag}
+          title={title}
+          subtitle={subtitle}
+          viewAllLink={undefined}
+          titleIconUrl={titleIconUrl}
+          viewAllIconUrl={viewAllIconUrl}
+          ornamentIconUrl={ornamentIconUrl}
+        />
+      </div>
       {viewAllLink && viewAllLink !== '#' && (
-        <div className="flex justify-end -mt-3 mb-2">
+        <div className="flex justify-end -mt-3 mb-2 px-3 sm:px-0">
           <Link
             to={viewAllLink}
             className="inline-flex items-center gap-2 text-saffron font-semibold text-sm hover:underline"

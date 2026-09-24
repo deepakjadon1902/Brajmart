@@ -135,7 +135,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
         <img
           src={toSquareImageUrl(displayImage, isAboveTheFold ? 480 : 320)}
           srcSet={toSquareImageSrcSet(displayImage, isAboveTheFold ? [320, 480, 640] : [220, 320, 480])}
-          sizes="(min-width: 1024px) 250px, (min-width: 768px) 236px, (min-width: 640px) 218px, 48vw"
+          sizes="(min-width: 1024px) 250px, (min-width: 768px) 236px, (min-width: 640px) 218px, calc((100vw - 0.625rem) / 2)"
           alt={product.name}
           loading={isAboveTheFold ? 'eager' : 'lazy'}
           decoding="async"

@@ -6,7 +6,7 @@ import { toResponsiveImageSrcSet, toResponsiveImageUrl } from '@/utils/responsiv
 
 const mobileHeroWidths = [360, 480, 640, 720, 840];
 const desktopHeroWidths = [768, 960, 1280, 1600];
-const mobileHeroSizes = '84vw';
+const mobileHeroSizes = '100vw';
 const desktopHeroSizes = '100vw';
 
 const HeroCarousel = () => {
@@ -98,15 +98,17 @@ const HeroCarousel = () => {
     <section className="relative bg-background">
       <div className="relative w-full">
         <div className="relative overflow-hidden bg-brand-raised">
-          <div className="relative aspect-[480/168] w-full sm:aspect-[480/133] sm:min-h-[260px] md:min-h-0">
+          <div className="relative h-[clamp(150px,46vw,196px)] w-full sm:aspect-[480/133] sm:h-auto sm:min-h-[260px] md:min-h-0">
             {visibleSlide?.image ? (
               <picture>
                 <source
                   media="(max-width: 639px)"
                   srcSet={toResponsiveImageSrcSet(visibleSlide.image, {
                     widths: mobileHeroWidths,
+                    width: 840,
+                    height: 380,
                     quality: 70,
-                    fit: 'contain',
+                    fit: 'cover',
                   })}
                   sizes={mobileHeroSizes}
                 />
@@ -126,7 +128,7 @@ const HeroCarousel = () => {
                   width={1600}
                   height={560}
                   sizes={desktopHeroSizes}
-                  className="absolute inset-0 h-full w-full object-contain object-center sm:object-cover"
+                  className="absolute inset-0 h-full w-full object-cover object-center"
                   onError={() => {
                     if (visibleSlide.id === fallbackSlide.id) return;
                     setFailedSlideIds((current) => {

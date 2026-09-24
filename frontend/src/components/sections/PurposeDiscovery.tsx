@@ -16,7 +16,7 @@ const PurposeDiscovery = ({ categories }: { categories: Category[] }) => {
   void categories;
 
   return (
-    <section className="hidden bg-background py-8 md:block md:py-12">
+    <section className="hidden bg-background pt-6 pb-3 md:block md:pt-8 md:pb-5">
       <div className="storefront-shell">
         <div className="mb-5 flex flex-col gap-2 border-b border-border pb-4 md:flex-row md:items-end md:justify-between">
           <div>
@@ -39,7 +39,7 @@ const PurposeDiscovery = ({ categories }: { categories: Category[] }) => {
                 key={card.title}
                 to={to}
                 className={[
-                  'group flex min-h-[118px] flex-col justify-between border-border bg-card p-4 transition-colors hover:bg-brand-soft/55 premium-focus',
+                  'group flex min-h-[108px] flex-col justify-between border-border bg-card p-4 transition-colors hover:bg-brand-soft/55 premium-focus',
                   index % 2 === 0 ? 'bg-white' : 'bg-brand-raised',
                   'border-b sm:border-r lg:border-b-0',
                 ].join(' ')}

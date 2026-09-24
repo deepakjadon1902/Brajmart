@@ -14,7 +14,7 @@ const storyLinks = [
 ];
 
 export const WhyBrajMart = () => (
-  <section className="storefront-band bg-pearl">
+  <section className="bg-pearl py-8 md:py-10">
     <div className="storefront-shell">
       <SectionHeader
         tag="WHY BRAJMART"

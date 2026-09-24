@@ -31,7 +31,7 @@ const ProductCarousel = ({ products, priority = false }: ProductCarouselProps) =
       >
         <div className="flex snap-x snap-mandatory gap-2.5 sm:gap-3 md:gap-4">
           {products.map((product, i) => (
-            <div key={product.id} className="flex-none snap-start w-[48vw] min-w-[176px] sm:w-[218px] md:w-[236px] lg:w-[250px]">
+            <div key={product.id} className="flex-none snap-start w-[calc((100vw-0.625rem)/2)] min-w-0 sm:w-[218px] md:w-[236px] lg:w-[250px]">
               <ProductCard product={product} index={i} variant="compact" priority={priority} />
             </div>
           ))}

@@ -188,7 +188,7 @@ const Home = () => {
         <ExclusiveShop />
       </DeferredMount>
 
-      <DeferredMount minHeight={220}>
+      <DeferredMount>
         <BundledFavorites />
       </DeferredMount>
 

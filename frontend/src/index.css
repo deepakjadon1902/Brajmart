@@ -1285,14 +1285,6 @@
   }
 
   @media (max-width: 768px) {
-    .container,
-    .page-wrapper,
-    main,
-    section {
-      padding-left: 16px !important;
-      padding-right: 16px !important;
-    }
-
     .product-grid {
       grid-template-columns: repeat(2, 1fr) !important;
       gap: 12px !important;
