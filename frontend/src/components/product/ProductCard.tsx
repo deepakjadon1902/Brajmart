@@ -251,7 +251,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
             onPointerDown={preloadCartDrawer}
             onFocus={preloadCartDrawer}
             disabled={!purchasable}
-            className={`add-to-cart-btn btn-action w-full !min-h-11 !px-1.5 !py-2 !text-[11px] sm:!px-2.5 sm:!text-[12px] ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            className={`add-to-cart-btn btn-action w-full !min-h-9 !px-1.5 !py-1.5 !text-[11px] sm:!min-h-10 sm:!px-2.5 sm:!text-[12px] ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
             aria-label={purchasable ? `Add ${product.name} to cart` : `${product.name} is out of stock`}
           >
             <ShoppingCart size={14} className="shrink-0" />
@@ -261,7 +261,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
             type="button"
             onClick={handleBuyNow}
             disabled={!purchasable}
-            className={`buy-now-btn btn-action-secondary w-full !min-h-11 !px-1.5 !py-2 !text-[11px] sm:!px-2.5 sm:!text-[12px] ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
+            className={`buy-now-btn btn-action-secondary w-full !min-h-9 !px-1.5 !py-1.5 !text-[11px] sm:!min-h-10 sm:!px-2.5 sm:!text-[12px] ${purchasable ? '' : 'bg-muted text-muted-foreground hover:bg-muted'}`}
             aria-label={purchasable ? `Buy Now: ${product.name}` : `Buy Now: ${product.name} (out of stock)`}
           >
             <span className="truncate">Buy Now</span>

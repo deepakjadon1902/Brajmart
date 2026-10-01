@@ -18,20 +18,20 @@ const CategoryIcon = ({ icon, name }: { icon?: string; name: string }) => {
   if (!value) return null;
 
   return isImageIcon(value) ? (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-200/80 bg-white shadow-sm">
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-amber-200/80 bg-white shadow-sm md:h-7 md:w-7">
       <img
         src={toResponsiveImageUrl(value, { width: 56, height: 56, quality: 72, fit: 'cover' })}
         alt=""
         width={28}
         height={28}
-        className="h-6 w-6 rounded-full object-cover"
+        className="h-5 w-5 rounded-full object-cover md:h-6 md:w-6"
         loading="lazy"
         decoding="async"
       />
     </span>
   ) : (
     <span
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-200/80 bg-brand-soft text-[15px] leading-none shadow-sm"
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-amber-200/80 bg-brand-soft !text-[13px] leading-none shadow-sm md:h-7 md:w-7 md:!text-[15px]"
       aria-hidden="true"
       title={name}
     >
@@ -45,6 +45,7 @@ const CategoryNavbar = () => {
   const [allOpen, setAllOpen] = useState(false);
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
   const [brajYatraOpen, setBrajYatraOpen] = useState(false);
+  const [isMobileCompact, setIsMobileCompact] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -87,6 +88,20 @@ const CategoryNavbar = () => {
     setBrajYatraOpen(false);
   }, [location.pathname, location.search]);
 
+  useEffect(() => {
+    const updateCompactMode = () => {
+      setIsMobileCompact(window.innerWidth < 768 && window.scrollY > 96);
+    };
+
+    updateCompactMode();
+    window.addEventListener('scroll', updateCompactMode, { passive: true });
+    window.addEventListener('resize', updateCompactMode);
+    return () => {
+      window.removeEventListener('scroll', updateCompactMode);
+      window.removeEventListener('resize', updateCompactMode);
+    };
+  }, []);
+
   const closeMenus = () => {
     setAllOpen(false);
     setExpandedCategoryId(null);
@@ -95,9 +110,13 @@ const CategoryNavbar = () => {
 
   return (
     <div className="sticky top-16 z-[70] md:top-[68px]" ref={rootRef}>
-      <section className="relative overflow-visible border-b border-border bg-card shadow-sm">
+      <section className={`relative overflow-visible border-b border-border bg-card transition-shadow duration-300 ${isMobileCompact ? 'shadow-md' : 'shadow-sm'}`}>
         <div className="container mx-auto px-3 md:px-4">
-          <div className="flex h-11 items-center gap-2 overflow-x-auto scrollbar-hide md:h-12 md:justify-between md:gap-1">
+          <div className={`scrollbar-hide transition-all duration-300 md:flex md:h-12 md:flex-nowrap md:justify-between md:gap-1 md:overflow-x-auto md:py-0 ${
+            isMobileCompact
+              ? 'flex items-center gap-1.5 overflow-x-auto py-1.5'
+              : 'grid grid-cols-2 items-center gap-2 overflow-visible py-2'
+          }`}>
             <button
               type="button"
               onClick={() => {
@@ -105,7 +124,7 @@ const CategoryNavbar = () => {
                 setExpandedCategoryId(null);
                 setBrajYatraOpen(false);
               }}
-              className="sticky left-0 z-[75] inline-flex h-11 w-[92px] shrink-0 items-center justify-center gap-2 border-r border-border bg-card text-[15px] font-bold text-maroon shadow-[8px_0_10px_-10px_rgba(0,0,0,0.4)] transition-colors hover:text-saffron md:h-12"
+              className="hidden shrink-0 items-center justify-center gap-1.5 rounded-full border border-border bg-card text-[13px] font-bold text-maroon transition-colors hover:text-saffron md:sticky md:left-0 md:z-[75] md:inline-flex md:h-12 md:w-[92px] md:gap-2 md:rounded-none md:border-y-0 md:border-l-0 md:text-[15px] md:shadow-[8px_0_10px_-10px_rgba(0,0,0,0.4)]"
               aria-expanded={allOpen}
               aria-haspopup="menu"
             >
@@ -114,22 +133,35 @@ const CategoryNavbar = () => {
             </button>
 
             {categories.map((cat) => (
-              <div key={cat.id} className="shrink-0 snap-start md:flex md:flex-1 md:justify-center">
+              <div
+                key={cat.id}
+                className={`min-w-0 snap-start transition-[flex-basis,width] duration-300 md:flex md:flex-1 md:shrink-0 md:justify-center ${
+                  isMobileCompact ? 'w-auto shrink-0' : ''
+                }`}
+              >
                 <RouterLink
                   to={`/category/${categoryToSlug(cat.name)}`}
-                  className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[15px] font-semibold text-foreground transition-colors hover:bg-brand-soft hover:text-saffron md:h-11 md:px-3.5"
+                  className={`inline-flex min-w-0 items-center gap-1.5 rounded-full border border-amber-100 bg-white text-center text-[12px] font-semibold leading-tight text-foreground shadow-[0_1px_4px_rgba(88,58,36,0.06)] transition-all duration-300 hover:bg-brand-soft hover:text-saffron md:h-11 md:w-auto md:justify-start md:gap-2 md:border-0 md:bg-transparent md:px-3.5 md:text-[15px] md:shadow-none ${
+                    isMobileCompact
+                      ? 'h-8 w-auto justify-center px-2.5'
+                      : 'h-10 w-full justify-start px-2.5'
+                  }`}
                   onClick={closeMenus}
                 >
                   <CategoryIcon icon={cat.icon} name={cat.name} />
-                  {displayCategoryName(cat.name)}
+                  <span className="min-w-0 truncate !text-[12px] !leading-tight md:!text-[15px]">{displayCategoryName(cat.name)}</span>
                 </RouterLink>
               </div>
             ))}
 
-            <div className="shrink-0 snap-start md:flex md:flex-1 md:justify-center">
+            <div className={`min-w-0 snap-start transition-[flex-basis,width] duration-300 md:col-auto md:flex md:flex-1 md:shrink-0 md:justify-center ${
+              isMobileCompact ? 'w-auto shrink-0' : 'col-span-2'
+            }`}>
               <button
                 type="button"
-                className="inline-flex h-10 items-center whitespace-nowrap rounded-full px-3 text-[15px] font-semibold text-foreground transition-colors hover:bg-brand-soft hover:text-saffron md:h-11 md:px-3.5"
+                className={`inline-flex items-center justify-center rounded-full border border-amber-100 bg-white px-2.5 text-center text-[12px] font-semibold leading-tight text-foreground shadow-[0_1px_4px_rgba(88,58,36,0.06)] transition-all duration-300 hover:bg-brand-soft hover:text-saffron md:h-11 md:w-auto md:border-0 md:bg-transparent md:px-3.5 md:text-[15px] md:shadow-none ${
+                  isMobileCompact ? 'h-8 w-auto whitespace-nowrap' : 'min-h-10 w-full'
+                }`}
                 onClick={() => {
                   setBrajYatraOpen((open) => !open);
                   setAllOpen(false);

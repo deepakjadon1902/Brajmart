@@ -98,7 +98,7 @@ const HeroCarousel = () => {
     <section className="relative bg-background">
       <div className="relative w-full">
         <div className="relative overflow-hidden bg-brand-raised">
-          <div className="relative h-[clamp(150px,46vw,196px)] w-full sm:aspect-[480/133] sm:h-auto sm:min-h-[260px] md:min-h-0">
+          <div className="relative h-[clamp(140px,41vw,178px)] w-full sm:aspect-[480/133] sm:h-auto sm:min-h-[260px] md:min-h-0">
             {visibleSlide?.image ? (
               <picture>
                 <source
@@ -106,9 +106,9 @@ const HeroCarousel = () => {
                   srcSet={toResponsiveImageSrcSet(visibleSlide.image, {
                     widths: mobileHeroWidths,
                     width: 840,
-                    height: 380,
+                    height: 294,
                     quality: 70,
-                    fit: 'cover',
+                    fit: 'contain',
                   })}
                   sizes={mobileHeroSizes}
                 />
@@ -128,7 +128,7 @@ const HeroCarousel = () => {
                   width={1600}
                   height={560}
                   sizes={desktopHeroSizes}
-                  className="absolute inset-0 h-full w-full object-cover object-center"
+                  className="absolute inset-0 h-full w-full object-contain object-center sm:object-cover"
                   onError={() => {
                     if (visibleSlide.id === fallbackSlide.id) return;
                     setFailedSlideIds((current) => {
@@ -145,7 +145,7 @@ const HeroCarousel = () => {
 
             <div className="absolute inset-0 bg-gradient-to-r from-black/62 via-black/22 to-transparent md:from-black/48" aria-hidden="true" />
 
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-start px-4 pb-6 pt-8 sm:px-7 sm:pb-9 md:px-14 md:pb-10 lg:px-20">
+            <div className="absolute inset-x-0 bottom-0 hidden items-end justify-start px-4 pb-6 pt-8 sm:flex sm:px-7 sm:pb-9 md:px-14 md:pb-10 lg:px-20">
               <div className="max-w-[18rem] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)] sm:max-w-sm md:max-w-[34rem]">
                 {visibleSlide.tag && (
                   <span className="block text-[0.58rem] font-bold uppercase tracking-[0.16em] text-gold-light sm:text-[0.68rem] md:text-xs">
