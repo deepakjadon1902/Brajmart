@@ -17,6 +17,10 @@ const product = (price: number): Product => ({
 describe('metaPixel', () => {
   beforeEach(() => {
     window.fbq = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ ok: true }),
+    }) as unknown as typeof fetch;
   });
 
   it('normalizes valid values to positive numeric money values', () => {
@@ -35,7 +39,9 @@ describe('metaPixel', () => {
   it('does not send invalid value fields to Meta Pixel', () => {
     trackMetaPixelEvent('Purchase', { value: 0, currency: 'INR' });
 
-    expect(window.fbq).toHaveBeenCalledWith('track', 'Purchase', { currency: 'INR' });
+    expect(window.fbq).toHaveBeenCalledWith('track', 'Purchase', { currency: 'INR' }, expect.objectContaining({
+      eventID: expect.stringContaining('brajmart.Purchase.'),
+    }));
   });
 
   it('sends valid value fields as numbers to Meta Pixel', () => {
@@ -44,7 +50,19 @@ describe('metaPixel', () => {
     expect(window.fbq).toHaveBeenCalledWith('track', 'Purchase', {
       currency: 'INR',
       value: 9.9,
-    });
+    }, expect.objectContaining({
+      eventID: expect.stringContaining('brajmart.Purchase.'),
+    }));
+  });
+
+  it('sends matching browser and server event IDs for deduplication', () => {
+    const eventId = trackMetaPixelEvent('AddToCart', { content_ids: ['tilak-1'] });
+
+    expect(window.fbq).toHaveBeenCalledWith('track', 'AddToCart', expect.any(Object), { eventID: eventId });
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/meta/conversions'), expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining(`"eventId":"${eventId}"`),
+    }));
   });
 
   it('builds product params with a positive numeric value', () => {

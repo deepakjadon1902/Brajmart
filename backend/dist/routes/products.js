@@ -212,6 +212,12 @@ const ensureProductCodColumn = async () => {
         await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN cod_enabled TINYINT(1) NULL AFTER in_stock');
     }
 };
+const ensureProductHomeColumn = async () => {
+    const missing = await getMissingProductColumns(['show_on_home']);
+    if (missing.show_on_home) {
+        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN show_on_home TINYINT(1) NOT NULL DEFAULT 0 AFTER tags');
+    }
+};
 const ensureCategoryCodColumn = async () => {
     const rows = await (0, db_1.dbQuery)(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'categories' AND COLUMN_NAME = 'cod_enabled'
@@ -223,6 +229,9 @@ const ensureCategoryCodColumn = async () => {
 const ensureCodSchema = async () => {
     await ensureProductCodColumn();
     await ensureCategoryCodColumn();
+};
+const ensureProductPlacementSchema = async () => {
+    await ensureProductHomeColumn();
 };
 const variantFieldsProvided = (data) => data?.sizes !== undefined ||
     data?.sizePricing !== undefined ||
@@ -259,6 +268,7 @@ const mapProductRow = (row) => ({
     reviewCount: Number(row.real_review_count || 0) > 0 ? Number(row.real_review_count ?? 0) : Number(row.review_count ?? 0),
     badge: row.badge ?? null,
     tags: (0, dbHelpers_1.parseJson)(row.tags, []),
+    showOnHome: (0, dbHelpers_1.boolFromDb)(row.show_on_home),
     inStock: (0, dbHelpers_1.boolFromDb)(row.in_stock),
     codEnabled: row.cod_enabled === undefined || row.cod_enabled === null ? null : (0, dbHelpers_1.boolFromDb)(row.cod_enabled),
     categoryCodEnabled: row.category_cod_enabled === undefined || row.category_cod_enabled === null ? undefined : (0, dbHelpers_1.boolFromDb)(row.category_cod_enabled),
@@ -304,6 +314,7 @@ const mapProductListRow = (row) => ({
     reviewCount: Number(row.real_review_count || 0) > 0 ? Number(row.real_review_count ?? 0) : Number(row.review_count ?? 0),
     badge: row.badge ?? null,
     tags: (0, dbHelpers_1.parseJson)(row.tags, []),
+    showOnHome: (0, dbHelpers_1.boolFromDb)(row.show_on_home),
     inStock: (0, dbHelpers_1.boolFromDb)(row.in_stock),
     codEnabled: row.cod_enabled === undefined || row.cod_enabled === null ? null : (0, dbHelpers_1.boolFromDb)(row.cod_enabled),
     categoryCodEnabled: row.category_cod_enabled === undefined || row.category_cod_enabled === null ? undefined : (0, dbHelpers_1.boolFromDb)(row.category_cod_enabled),
@@ -354,6 +365,8 @@ const buildUpdate = (data) => {
         set('badge', data.badge);
     if (data.tags !== undefined)
         set('tags', JSON.stringify(data.tags || []));
+    if (data.showOnHome !== undefined || data.show_on_home !== undefined)
+        set('show_on_home', (data.showOnHome ?? data.show_on_home) ? 1 : 0);
     if (data.inStock !== undefined)
         set('in_stock', data.inStock ? 1 : 0);
     if (data.codEnabled !== undefined) {
@@ -418,11 +431,12 @@ router.get('/', async (req, res) => {
         await ensureProductCategorySchema();
         await ensureProductSeoColumns();
         await ensureCodSchema();
+        await ensureProductPlacementSchema();
         const productProjection = view === 'detail'
             ? 'p.*'
             : `p.id, p.name, p.slug, p.price, p.original_price, p.image, p.images,
          p.category_id, p.subcategory_id, p.rating, p.review_count, p.badge, p.tags,
-         p.in_stock, p.cod_enabled, p.stock_quantity, p.sku, p.sold_count,
+         p.show_on_home, p.in_stock, p.cod_enabled, p.stock_quantity, p.sku, p.sold_count,
          p.description, p.created_at, p.updated_at`;
         const rows = await (0, db_1.dbQuery)(`SELECT ${productProjection}, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name, ra.real_rating, ra.real_review_count
        FROM products p
@@ -444,9 +458,10 @@ router.get('/schema', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        await ensureProductPlacementSchema();
         const dbRow = await (0, db_1.dbQuery)('SELECT DATABASE() AS db');
         const database = dbRow?.[0]?.db ?? null;
-        const cols = ['meta_title', 'meta_description', 'cod_enabled', 'sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants'];
+        const cols = ['meta_title', 'meta_description', 'cod_enabled', 'show_on_home', 'sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants'];
         const missing = await getMissingProductColumns(cols);
         res.json({
             database,
@@ -468,6 +483,7 @@ router.get('/audit', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
         await ensureProductCategorySchema();
         await ensureProductSeoColumns();
         await ensureCodSchema();
+        await ensureProductPlacementSchema();
         const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
@@ -490,6 +506,7 @@ router.get('/:slug', async (req, res) => {
         await ensureProductCategorySchema();
         await ensureProductSeoColumns();
         await ensureCodSchema();
+        await ensureProductPlacementSchema();
         const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name, ra.real_rating, ra.real_review_count
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
@@ -513,6 +530,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         await ensureProductCategorySchema();
         await ensureProductSeoColumns();
         await ensureCodSchema();
+        await ensureProductPlacementSchema();
         const data = req.body || {};
         if (data.sku !== undefined) {
             data.sku = normalizeSku(data.sku);
@@ -587,7 +605,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             if (found)
                 categoryIdToSave = Number(found);
         }
-        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `sku`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `stock_quantity`, `low_stock_threshold`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `sku`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `show_on_home`, `in_stock`, `stock_quantity`, `low_stock_threshold`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.sku || null,
@@ -602,6 +620,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.reviewCount ?? 0,
             data.badge ?? null,
             JSON.stringify(data.tags || []),
+            data.showOnHome ? 1 : 0,
             data.inStock === undefined ? 1 : data.inStock ? 1 : 0,
             data.stockQuantity === undefined ? null : data.stockQuantity,
             data.lowStockThreshold === undefined ? 3 : data.lowStockThreshold,
@@ -617,7 +636,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             JSON.stringify(sanitizeVariantPricing(data.variantPricing || [])),
             JSON.stringify(sanitizeColorVariants(data.colorVariants || [])),
         ]);
-        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `sku`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `in_stock`, `stock_quantity`, `low_stock_threshold`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `sku`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `show_on_home`, `in_stock`, `stock_quantity`, `low_stock_threshold`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.sku || null,
@@ -632,6 +651,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.reviewCount ?? 0,
             data.badge ?? null,
             JSON.stringify(data.tags || []),
+            data.showOnHome ? 1 : 0,
             data.inStock === undefined ? 1 : data.inStock ? 1 : 0,
             data.stockQuantity === undefined ? null : data.stockQuantity,
             data.lowStockThreshold === undefined ? 3 : data.lowStockThreshold,
@@ -692,6 +712,7 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         await ensureProductCategorySchema();
         await ensureProductSeoColumns();
         await ensureCodSchema();
+        await ensureProductPlacementSchema();
         const body = req.body || {};
         if (body.sku !== undefined) {
             body.sku = normalizeSku(body.sku);

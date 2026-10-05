@@ -9,6 +9,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 import PublicBreadcrumbs from '@/components/seo/PublicBreadcrumbs';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
+import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -45,7 +46,15 @@ const Navbar = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+    const term = searchQuery.trim();
+    if (!term) return;
+    trackMetaPixelEvent('Search', { search_string: term, content_type: 'product' });
+    try {
+      sessionStorage.setItem('brajmart-last-search-track', JSON.stringify({ term: term.toLowerCase(), at: Date.now() }));
+    } catch {
+      // Search tracking should never block navigation.
+    }
+    navigate(`/search?q=${encodeURIComponent(term)}`);
   };
 
   const handleLogout = () => {
@@ -101,6 +110,12 @@ const Navbar = () => {
                         type="button"
                         onMouseDown={(event) => {
                           event.preventDefault();
+                          trackMetaPixelEvent('Search', { search_string: term, content_type: 'product' });
+                          try {
+                            sessionStorage.setItem('brajmart-last-search-track', JSON.stringify({ term: term.toLowerCase(), at: Date.now() }));
+                          } catch {
+                            // ignore storage errors
+                          }
                           navigate(`/search?q=${encodeURIComponent(term)}`);
                         }}
                         className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-gold hover:text-saffron"
@@ -154,7 +169,15 @@ const Navbar = () => {
                     type="button"
                     onMouseDown={(event) => {
                       event.preventDefault();
-                      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+                      const term = searchQuery.trim();
+                      if (!term) return;
+                      trackMetaPixelEvent('Search', { search_string: term, content_type: 'product' });
+                      try {
+                        sessionStorage.setItem('brajmart-last-search-track', JSON.stringify({ term: term.toLowerCase(), at: Date.now() }));
+                      } catch {
+                        // ignore storage errors
+                      }
+                      navigate(`/search?q=${encodeURIComponent(term)}`);
                     }}
                     className="rounded-md bg-maroon px-4 py-2 text-sm font-bold text-white transition hover:bg-saffron"
                   >

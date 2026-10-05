@@ -79,7 +79,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
             ]);
             const mappedProducts = (Array.isArray(products) ? products : []).map((p: any) => {
               const tags = Array.isArray(p.tags) ? p.tags : (p.badge ? [p.badge] : []);
-              return { ...p, id: p.id || p._id, tags };
+              return { ...p, id: p.id || p._id, tags, showOnHome: Boolean(p.showOnHome) };
             });
             const orderValue = (value: unknown) => {
               const n = typeof value === 'number' ? value : Number(value ?? 0);

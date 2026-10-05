@@ -53,6 +53,27 @@ const isBrajmartSpecial = (name) => normalizedName(name) === 'brajmart special';
 const isPrasadam = (name) => normalizedName(name) === 'prasadam';
 const isBooks = (name) => ['books', 'spiritual books'].includes(normalizedName(name));
 const isAccessories = (name) => normalizedName(name) === 'accessories';
+const isProductPurchasable = (product) => {
+  const price = Number(product?.price || 0);
+  if (!Number.isFinite(price) || price <= 0) return false;
+  const stockQuantity = product?.stockQuantity === null || product?.stockQuantity === undefined ? null : Number(product.stockQuantity);
+  const reservedQuantity = Number(product?.reservedQuantity || 0);
+  if (stockQuantity !== null && (!Number.isFinite(stockQuantity) || !Number.isFinite(reservedQuantity) || stockQuantity < 0 || reservedQuantity < 0 || reservedQuantity > stockQuantity)) return false;
+  if (stockQuantity !== null) return stockQuantity - reservedQuantity > 0;
+  return product?.inStock !== false;
+};
+const compareProductsByQuality = (a, b) => {
+  const stockDiff = Number(isProductPurchasable(b)) - Number(isProductPurchasable(a));
+  if (stockDiff) return stockDiff;
+  const reviewsDiff = Number(b?.reviewCount || 0) - Number(a?.reviewCount || 0);
+  if (reviewsDiff) return reviewsDiff;
+  return Number(b?.rating || 0) - Number(a?.rating || 0);
+};
+const pickHomeProducts = (items) => {
+  const selected = items.filter((product) => product.showOnHome);
+  const source = selected.length ? selected : [...items].sort(compareProductsByQuality);
+  return source.slice(0, 6);
+};
 const uniqueByProductKey = (products) => {
   const seen = new Set();
   return products.filter((product) => {
@@ -78,6 +99,7 @@ const toProductListData = (product) => ({
   reviewCount: product.reviewCount,
   badge: product.badge,
   tags: product.tags,
+  showOnHome: Boolean(product.showOnHome),
   inStock: product.inStock,
   codEnabled: product.codEnabled,
   categoryCodEnabled: product.categoryCodEnabled,
@@ -96,15 +118,15 @@ const homeRouteProducts = () => {
       ]
     : regularCategories;
   const productsForCategory = (category) => category
-    ? buildData.products.filter((product) => slugify(product.category || '') === slugify(category.name)).slice(0, 12)
+    ? pickHomeProducts(buildData.products.filter((product) => slugify(product.category || '') === slugify(category.name)))
     : [];
   const homepageGroups = [
     productsForCategory(brajmartSpecialCategory),
-    buildData.products.filter((product) => (product.tags || []).includes('bestseller')).slice(0, 12),
+    pickHomeProducts(buildData.products.filter((product) => (product.tags || []).includes('bestseller'))),
     productsForCategory(prasadamCategory),
-    ...orderedCategories.filter((category) => !isPrasadam(category.name)).slice(0, 4).map(productsForCategory),
-    buildData.products.filter((product) => isBooks(product.category)).slice(0, 4),
-    buildData.products.filter((product) => (product.tags || []).includes('accessories') || isAccessories(product.category)).slice(0, 12),
+    ...orderedCategories.filter((category) => !isPrasadam(category.name)).map(productsForCategory),
+    pickHomeProducts(buildData.products.filter((product) => isBooks(product.category))),
+    pickHomeProducts(buildData.products.filter((product) => (product.tags || []).includes('accessories') || isAccessories(product.category))),
   ];
 
   return uniqueByProductKey(homepageGroups.flat()).map(toProductListData);

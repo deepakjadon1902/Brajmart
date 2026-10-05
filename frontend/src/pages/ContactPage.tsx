@@ -22,9 +22,14 @@ const ContactPage = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    trackMetaPixelEvent('Lead', {
+    trackMetaPixelEvent('Contact', {
       content_name: form.subject,
-      lead_type: 'contact_form',
+      contact_type: 'contact_form',
+    }, {
+      userData: {
+        email: form.email,
+        phone: form.phone,
+      },
     });
     toast({ title: 'Message Sent! 🙏', description: 'We\'ll get back to you within 24 hours.' });
     setForm({ name: '', email: '', phone: '', subject: '', message: '' });

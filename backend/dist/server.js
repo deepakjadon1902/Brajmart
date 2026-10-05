@@ -30,6 +30,7 @@ const adminAuditLogs_1 = __importDefault(require("./routes/adminAuditLogs"));
 const reviews_1 = __importDefault(require("./routes/reviews"));
 const recommendations_1 = __importDefault(require("./routes/recommendations"));
 const bundles_1 = __importDefault(require("./routes/bundles"));
+const metaConversions_1 = __importDefault(require("./routes/metaConversions"));
 const db_1 = require("./lib/db");
 const app = (0, express_1.default)();
 const SITE_URL = (process.env.SITE_URL || 'https://www.brajmart.com').replace(/\/$/, '');
@@ -182,6 +183,7 @@ app.use('/api/admin/audit-logs', adminAuditLogs_1.default);
 app.use('/api/reviews', reviews_1.default);
 app.use('/api/recommendations', recommendations_1.default);
 app.use('/api/bundles', bundles_1.default);
+app.use('/api/meta/conversions', metaConversions_1.default);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 const xmlEscape = (value) => String(value ?? '')
     .replace(/&/g, '&amp;')

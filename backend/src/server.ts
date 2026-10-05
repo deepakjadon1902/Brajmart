@@ -26,6 +26,7 @@ import adminAuditLogRoutes from './routes/adminAuditLogs';
 import reviewRoutes from './routes/reviews';
 import recommendationRoutes from './routes/recommendations';
 import bundleRoutes from './routes/bundles';
+import metaConversionRoutes from './routes/metaConversions';
 import { isDbConnected, dbQuery } from './lib/db';
 
 const app = express();
@@ -189,6 +190,7 @@ app.use('/api/admin/audit-logs', adminAuditLogRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/bundles', bundleRoutes);
+app.use('/api/meta/conversions', metaConversionRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

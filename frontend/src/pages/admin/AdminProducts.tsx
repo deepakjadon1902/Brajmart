@@ -2,7 +2,7 @@ import * as React from "react";
 import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Product, Category, Subcategory } from '@/types/product';
-import { AlertTriangle, Search, Plus, Edit2, Trash2, X, Upload, ImageIcon, Truck } from 'lucide-react';
+import { AlertTriangle, Search, Plus, Edit2, Trash2, X, Upload, ImageIcon, Truck, HomeIcon } from 'lucide-react';
 import {
   createProduct,
   deleteProduct as deleteProductApi,
@@ -117,6 +117,7 @@ const AdminProducts = () => {
     { header: 'Reserved Quantity', value: (p) => p.reservedQuantity ?? 0 },
     { header: 'Low Stock Threshold', value: (p) => p.lowStockThreshold ?? '-' },
     { header: 'COD', value: (p) => p.codEnabled === null || p.codEnabled === undefined ? (p.categoryCodEnabled ? 'Category enabled' : 'No') : p.codEnabled ? 'Yes' : 'No' },
+    { header: 'Home Page', value: (p) => p.showOnHome ? 'Yes' : 'No' },
     { header: 'Tags', value: (p) => (p.tags || []).join(', ') },
     { header: 'Sizes', value: (p) => (p.sizes || []).join(', ') },
     { header: 'Meta Title', value: (p) => p.metaTitle || '-' },
@@ -145,6 +146,23 @@ const AdminProducts = () => {
     }
   };
 
+  const handleHomePlacementToggle = async (product: Product) => {
+    const nextShowOnHome = !product.showOnHome;
+    try {
+      const updated: any = await updateProductApi(product.id, { showOnHome: nextShowOnHome });
+      updateProduct(product.id, { showOnHome: Boolean(updated?.showOnHome ?? nextShowOnHome) });
+      try {
+        localStorage.setItem(PRODUCT_SYNC_KEY, String(Date.now()));
+        window.dispatchEvent(new Event(PRODUCT_SYNC_EVENT));
+      } catch {
+        // ignore storage permission errors
+      }
+      toast.success(nextShowOnHome ? 'Product added to home page' : 'Product removed from home page');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update home page placement');
+    }
+  };
+
   const runProductAudit = async () => {
     setAuditLoading(true);
     try {
@@ -167,6 +185,7 @@ const AdminProducts = () => {
     images: Array.isArray(product.images) ? product.images : (product.image ? [product.image] : []),
     colorVariants: Array.isArray(product.colorVariants) ? product.colorVariants : [],
     tags: Array.isArray(product.tags) ? product.tags : (product.badge ? [product.badge] : []),
+    showOnHome: Boolean(product.showOnHome),
   });
 
   const openEditProduct = async (product: Product) => {
@@ -272,6 +291,7 @@ const AdminProducts = () => {
         attributes: normalizedAttributes,
         variantPricing: normalizedVariantPricing,
         colorVariants: normalizedColorVariants,
+        showOnHome: Boolean(product.showOnHome),
         codEnabled: product.codEnabled === undefined ? null : product.codEnabled,
         sizes: Array.isArray(product.sizes) ? product.sizes : [],
         sizePricing: Array.isArray(product.sizePricing) ? product.sizePricing : [],
@@ -345,6 +365,7 @@ const AdminProducts = () => {
               lowStockThreshold: 3,
               codEnabled: null,
               tags: [],
+              showOnHome: false,
               sizes: [],
               sizePricing: [],
               piecePricing: [],
@@ -445,6 +466,7 @@ const AdminProducts = () => {
               <th className="text-left px-5 py-3 font-medium hidden md:table-cell">Rating</th>
               <th className="text-left px-5 py-3 font-medium">Stock</th>
               <th className="text-left px-5 py-3 font-medium">COD</th>
+              <th className="text-left px-5 py-3 font-medium">Home</th>
               <th className="text-left px-5 py-3 font-medium">Actions</th>
             </tr></thead>
             <tbody>
@@ -465,6 +487,16 @@ const AdminProducts = () => {
                     <span className={`text-xs font-medium ${p.codEnabled === true || (p.codEnabled === null && p.categoryCodEnabled) ? 'text-emerald-400' : 'text-slate-400'}`}>
                       {p.codEnabled === null || p.codEnabled === undefined ? (p.categoryCodEnabled ? 'Category' : 'No') : p.codEnabled ? 'Yes' : 'No'}
                     </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => handleHomePlacementToggle(p)}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${p.showOnHome ? 'border-amber-500/50 bg-amber-500/15 text-amber-200' : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
+                    >
+                      <HomeIcon size={13} />
+                      {p.showOnHome ? 'On Home' : 'Add Home'}
+                    </button>
                   </td>
                   <td className="px-5 py-3 flex gap-2">
                     <button onClick={() => openEditProduct(p)} className="text-blue-400 hover:text-blue-300"><Edit2 size={15} /></button>
@@ -1402,6 +1434,23 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
             <button onClick={() => update('inStock', !form.inStock)} className={`w-10 h-5 rounded-full transition ${form.inStock ? 'bg-emerald-500' : 'bg-slate-600'}`}>
               <div className={`w-4 h-4 rounded-full bg-white transition-transform ${form.inStock ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">Show Product on Home Page</p>
+                <p className="mt-1 text-xs text-slate-500">Home page shows only selected products, up to 6 from each category. All products still remain visible on their category pages.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => update('showOnHome', !form.showOnHome)}
+                className={`mt-0.5 w-11 shrink-0 rounded-full p-0.5 transition ${form.showOnHome ? 'bg-amber-500' : 'bg-slate-600'}`}
+                aria-pressed={Boolean(form.showOnHome)}
+                aria-label="Toggle product on home page"
+              >
+                <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${form.showOnHome ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
             <div className="flex items-start gap-3">

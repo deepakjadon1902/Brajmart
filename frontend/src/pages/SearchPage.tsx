@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useProductStore } from '@/store/productStore';
@@ -10,11 +10,13 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { compareProductsByQuality } from '@/utils/productPresentation';
+import { trackMetaPixelEvent } from '@/lib/metaPixel';
 
 const SearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const { searchProducts, products, loading, lastFetchedAt, loadFromApi } = useProductStore();
+  const trackedSearchRef = useRef('');
   const results = query.length >= 2 ? [...searchProducts(query)].sort(compareProductsByQuality) : [];
   const featuredProducts = [...products].sort(compareProductsByQuality).slice(0, 8);
 
@@ -36,6 +38,23 @@ const SearchPage = () => {
     } else if (searchParams.get('q')) {
       setSearchParams({}, { replace: true });
     }
+  }, [query]);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2 || trackedSearchRef.current === term.toLowerCase()) return;
+    const timer = window.setTimeout(() => {
+      trackedSearchRef.current = term.toLowerCase();
+      try {
+        const recent = JSON.parse(sessionStorage.getItem('brajmart-last-search-track') || '{}');
+        if (recent?.term === term.toLowerCase() && Date.now() - Number(recent?.at || 0) < 3000) return;
+        sessionStorage.setItem('brajmart-last-search-track', JSON.stringify({ term: term.toLowerCase(), at: Date.now() }));
+      } catch {
+        // Search analytics should not affect browsing.
+      }
+      trackMetaPixelEvent('Search', { search_string: term, content_type: 'product' });
+    }, 700);
+    return () => window.clearTimeout(timer);
   }, [query]);
 
   return (

@@ -334,6 +334,18 @@ const CheckoutPage = () => {
     selectedAttributes: i.product.selectedAttributes,
   }));
 
+  const checkoutMetaParams = () => ({
+    content_ids: items.map((i) => String(i.product.id || i.product.slug || i.product.name)),
+    content_type: 'product',
+    contents: items.map((i) => ({
+      id: String(i.product.id || i.product.slug || i.product.name),
+      item_price: Number(i.product.price) || 0,
+      quantity: Number(i.quantity) || 1,
+    })),
+    num_items: items.reduce((sum, i) => sum + (Number(i.quantity) || 1), 0),
+    value: grandTotal,
+  });
+
   const runCheckoutValidation = async (mode: 'silent' | 'submit' = 'submit') => {
     setCheckoutValidating(true);
     setCheckoutValidationError('');
@@ -623,6 +635,12 @@ const CheckoutPage = () => {
     }
     const cartIsCurrent = await runCheckoutValidation('submit');
     if (!cartIsCurrent) return;
+    trackMetaPixelEvent('InitiateCheckout', checkoutMetaParams(), {
+      userData: {
+        email: effectiveEmail,
+        phone: billingAddress.mobile || shippingAddress.mobile,
+      },
+    });
     setStep(1);
   };
 
@@ -782,16 +800,13 @@ const CheckoutPage = () => {
     }
 
     trackMetaPixelEvent('AddPaymentInfo', {
-      content_ids: items.map((i) => String(i.product.id || i.product.slug || i.product.name)),
-      content_type: 'product',
-      contents: items.map((i) => ({
-        id: String(i.product.id || i.product.slug || i.product.name),
-        item_price: Number(i.product.price) || 0,
-        quantity: Number(i.quantity) || 1,
-      })),
-      num_items: items.reduce((sum, i) => sum + (Number(i.quantity) || 1), 0),
-      value: grandTotal,
+      ...checkoutMetaParams(),
       payment_method: paymentMethod,
+    }, {
+      userData: {
+        email: effectiveEmail,
+        phone: billingAddress.mobile || shippingAddress.mobile,
+      },
     });
 
     if (wantsCodService) {

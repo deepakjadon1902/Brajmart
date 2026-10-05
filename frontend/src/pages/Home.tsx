@@ -22,6 +22,7 @@ import ExclusiveShop from '@/components/sections/ExclusiveShop';
 import BrajYatra from '@/components/sections/BrajYatra';
 import Testimonials from '@/components/sections/Testimonials';
 import Footer from '@/components/layout/Footer';
+import { compareProductsByQuality } from '@/utils/productPresentation';
 
 const ProductTrustFAQ = lazy(() => import('@/components/sections/ProductTrustFAQ'));
 
@@ -32,10 +33,25 @@ const Home = () => {
   const products = useProductStore((state) => state.products);
   const categories = useProductStore((state) => state.categories);
   const getProductsByCategory = useProductStore((state) => state.getProductsByCategory);
-  const bestSellingProducts = useMemo(() => products.filter((product) => product.tags?.includes('bestseller')), [products]);
-  const devotionalAccessories = useMemo(() => products.filter((product) => product.tags?.includes('accessories')), [products]);
-  // Show every category as a home-page section (even if a category currently has 0 products).
-  // This matches the "all categories on home" requirement and avoids hiding categories due to naming mismatches.
+  const pickHomeProducts = useMemo(() => {
+    return (items: typeof products) => {
+      const selected = items.filter((product) => product.showOnHome);
+      const source = selected.length ? selected : [...items].sort(compareProductsByQuality);
+      return source.slice(0, 6);
+    };
+  }, []);
+  const bestSellingProducts = useMemo(() => {
+    const items = products.filter((product) => product.tags?.includes('bestseller'));
+    return pickHomeProducts(items);
+  }, [pickHomeProducts, products]);
+  const devotionalAccessories = useMemo(() => {
+    const items = products.filter((product) => product.tags?.includes('accessories') || product.category === 'Accessories');
+    return pickHomeProducts(items);
+  }, [pickHomeProducts, products]);
+  const getHomeProductsByCategory = useMemo(() => {
+    return (category: string) => pickHomeProducts(getProductsByCategory(category));
+  }, [getProductsByCategory, pickHomeProducts]);
+  // Build one home section per category. Until admin selects home products, it falls back to top 6.
   const categorySections = useMemo(() => categories || [], [categories]);
   const isBrajmartSpecial = (name: string) => (name || '').trim().toLowerCase() === 'brajmart special';
   const isPrasadam = (name: string) => (name || '').trim().toLowerCase() === 'prasadam';
@@ -117,21 +133,25 @@ const Home = () => {
               tag="BRAJMART COLLECTION"
               title={displayCategoryName(brajmartSpecialCategory.name)}
               subtitle={`Explore ${displayCategoryName(brajmartSpecialCategory.name)} collection`}
-              products={getProductsByCategory(brajmartSpecialCategory.name)}
+              products={getHomeProductsByCategory(brajmartSpecialCategory.name)}
+              maxProducts={6}
               viewAllLink={`/category/${categoryToSlug(brajmartSpecialCategory.name)}`}
             />
           </DeferredMount>
         )}
 
-      <DeferredMount minHeight={390}>
-        <CollectionSection
-          tag="MOST LOVED"
-          title="Most Selling Products"
-          subtitle="Top picks from our devotee community"
-          products={bestSellingProducts}
-          viewAllLink="/products?tag=bestseller"
-        />
-      </DeferredMount>
+      {bestSellingProducts.length > 0 && (
+        <DeferredMount minHeight={390}>
+          <CollectionSection
+            tag="MOST LOVED"
+            title="Most Selling Products"
+            subtitle="Top picks from our devotee community"
+            products={bestSellingProducts}
+            maxProducts={6}
+            viewAllLink="/products?tag=bestseller"
+          />
+        </DeferredMount>
+      )}
 
       {prasadamCategory && (
         <DeferredMount minHeight={390}>
@@ -139,20 +159,22 @@ const Home = () => {
             tag="PRASADAM COLLECTION"
             title={displayCategoryName(prasadamCategory.name)}
             subtitle="Blessed offerings selected for devotees and families"
-            products={getProductsByCategory(prasadamCategory.name)}
+            products={getHomeProductsByCategory(prasadamCategory.name)}
+            maxProducts={6}
             bgClass="bg-pearl"
             viewAllLink={`/category/${categoryToSlug(prasadamCategory.name)}`}
           />
         </DeferredMount>
       )}
 
-      {orderedCategories.filter((cat) => !isPrasadam(cat.name)).slice(0, 4).map((cat, idx) => (
+      {orderedCategories.filter((cat) => !isPrasadam(cat.name)).map((cat, idx) => (
         <DeferredMount key={cat.id} minHeight={390}>
           <CollectionSection
             tag="CATEGORY"
             title={displayCategoryName(cat.name)}
             subtitle={`Explore ${displayCategoryName(cat.name)} collection`}
-            products={getProductsByCategory(cat.name)}
+            products={getHomeProductsByCategory(cat.name)}
+            maxProducts={6}
             bgClass={idx % 2 === 0 ? 'bg-pearl' : ''}
             viewAllLink={`/category/${categoryToSlug(cat.name)}`}
           />
@@ -168,7 +190,8 @@ const Home = () => {
           tag="BRAJMART COLLECTION"
           title="Top Devotional Accessories"
           subtitle="Malas, Rudraksha, Bracelets & More"
-          products={devotionalAccessories.length ? devotionalAccessories : products.filter(p => p.category === 'Accessories')}
+          products={devotionalAccessories}
+          maxProducts={6}
           bgClass="bg-pearl"
           viewAllLink="/products?tag=accessories"
         />

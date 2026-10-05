@@ -175,7 +175,7 @@ const PaymentStatusPage = () => {
       num_items: items.reduce((sum, i) => sum + i.quantity, 0),
       order_id: orderId || undefined,
       payment_type: method || undefined,
-      value: purchaseValue,
+      value: analyticsValue,
     });
 
     // Push GA4 ecommerce purchase event to GTM dataLayer.

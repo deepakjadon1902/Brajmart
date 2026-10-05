@@ -18,6 +18,7 @@ export interface Product {
   reviewCount: number;
   badge?: 'new' | 'bestseller' | 'combo' | 'exclusive';
   tags?: string[];
+  showOnHome?: boolean;
   inStock: boolean;
   codEnabled?: boolean | null;
   categoryCodEnabled?: boolean;

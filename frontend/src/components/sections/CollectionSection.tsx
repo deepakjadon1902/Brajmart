@@ -29,7 +29,11 @@ const CollectionSection = ({
   ornamentIconUrl,
   bgClass = '',
   maxProducts = 12,
-}: CollectionSectionProps) => (
+}: CollectionSectionProps) => {
+  const visibleProducts = products.slice(0, maxProducts);
+  if (visibleProducts.length === 0) return null;
+
+  return (
   <section className={`pt-3 pb-4 sm:pt-4 sm:pb-5 md:pt-4 md:pb-5 ${bgClass}`}>
     <div className="container mx-auto px-0 sm:px-4">
       <div className="px-3 sm:px-0">
@@ -53,9 +57,10 @@ const CollectionSection = ({
           </Link>
         </div>
       )}
-      <ProductCarousel products={products.slice(0, maxProducts)} priority={priority} />
+      <ProductCarousel products={visibleProducts} priority={priority} />
     </div>
   </section>
-);
+  );
+};
 
 export default CollectionSection;

@@ -107,6 +107,11 @@ const ProductDetailPage = () => {
     loadFromApi({ force: products.length === 0 }).catch(() => undefined);
   }, [loadFromApi, loading, product, products.length, slug]);
 
+  useEffect(() => {
+    if (!product) return;
+    trackMetaPixelEvent('ViewContent', productToMetaPixelParams(product));
+  }, [product?.id]);
+
   const pieceOptions = useMemo(() => {
     if (!product) return [];
     const tiers = Array.isArray(product.piecePricing) ? product.piecePricing : [];

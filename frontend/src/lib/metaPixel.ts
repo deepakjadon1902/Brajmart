@@ -1,9 +1,15 @@
 import { Product } from '@/types/product';
+import { getApiBase } from './api';
 
 type MetaPixelEvent =
+  | 'PageView'
+  | 'ViewContent'
+  | 'Search'
+  | 'Contact'
   | 'AddPaymentInfo'
   | 'AddToCart'
   | 'AddToWishlist'
+  | 'InitiateCheckout'
   | 'Lead'
   | 'Purchase';
 
@@ -22,6 +28,17 @@ type MetaPixelParams = {
   [key: string]: unknown;
 };
 
+type MetaPixelUserData = {
+  email?: string;
+  phone?: string;
+};
+
+type MetaPixelOptions = {
+  eventId?: string;
+  eventSourceUrl?: string;
+  userData?: MetaPixelUserData;
+};
+
 declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
@@ -29,6 +46,12 @@ declare global {
 }
 
 const DEFAULT_CURRENCY = 'INR';
+
+const readCookie = (name: string) => {
+  if (typeof document === 'undefined') return '';
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&')}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : '';
+};
 
 export const toPositiveMetaValue = (value: unknown): number | undefined => {
   const amount = typeof value === 'number' ? value : Number(value);
@@ -51,13 +74,55 @@ const normalizeMetaPixelParams = (params: MetaPixelParams): MetaPixelParams => {
   return normalized;
 };
 
-export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixelParams = {}) => {
-  if (typeof window === 'undefined' || typeof window.fbq !== 'function') return;
+export const createMetaEventId = (eventName: MetaPixelEvent) => {
+  const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `brajmart.${eventName}.${random}`;
+};
 
-  window.fbq('track', eventName, {
+const sendMetaConversionEvent = (eventName: MetaPixelEvent, eventId: string, params: MetaPixelParams, options: MetaPixelOptions) => {
+  if (typeof window === 'undefined' || typeof fetch !== 'function') return;
+
+  const userData = {
+    ...(options.userData || {}),
+    fbp: readCookie('_fbp') || undefined,
+    fbc: readCookie('_fbc') || undefined,
+    clientUserAgent: window.navigator?.userAgent || undefined,
+  };
+
+  fetch(`${getApiBase()}/meta/conversions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      eventName,
+      eventId,
+      eventSourceUrl: options.eventSourceUrl || window.location.href,
+      userData,
+      customData: {
+        currency: DEFAULT_CURRENCY,
+        ...params,
+      },
+    }),
+    keepalive: true,
+  }).catch(() => undefined);
+};
+
+export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixelParams = {}, options: MetaPixelOptions = {}) => {
+  if (typeof window === 'undefined') return '';
+
+  const eventId = options.eventId || createMetaEventId(eventName);
+  const normalizedParams = {
     currency: DEFAULT_CURRENCY,
     ...normalizeMetaPixelParams(params),
-  });
+  };
+
+  if (typeof window.fbq === 'function') {
+    window.fbq('track', eventName, normalizedParams, { eventID: eventId });
+  }
+
+  sendMetaConversionEvent(eventName, eventId, normalizedParams, options);
+  return eventId;
 };
 
 export const productToMetaPixelParams = (product: Product, quantity = 1): MetaPixelParams => {
