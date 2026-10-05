@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { Product } from '@/types/product';
 import { fetchCart, updateCart, clearCartApi, getAuthToken, type PersistedProductInterestItem } from '@/lib/api';
+import { productToMetaPixelParams, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { createUserScopedStorage } from '@/lib/userStorage';
 import { getValidSavings } from '@/utils/productPresentation';
 
@@ -14,7 +15,7 @@ interface CartStore {
   items: CartItem[];
   drawerOpen: boolean;
   lastAddedProductId: string;
-  addItem: (product: Product) => void;
+  addItem: (product: Product, quantity?: number) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   reconcileValidatedItems: (items: Array<{
@@ -116,19 +117,19 @@ export const useCartStore = create<CartStore>()(
           // ignore
         }
       },
-      addItem: (product) => set((state) => {
+      addItem: (product, quantity = 1) => set((state) => {
+        const safeQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
         const existing = state.items.find(i => i.product.id === product.id);
+        let items: CartItem[];
         if (existing) {
-          const items = state.items.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
-          if (getAuthToken()) {
-            updateCart(toApiItems(items)).catch(() => {});
-          }
-          return { items, lastAddedProductId: product.id };
+          items = state.items.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + safeQuantity } : i);
+        } else {
+          items = [...state.items, { product, quantity: safeQuantity }];
         }
-        const items = [...state.items, { product, quantity: 1 }];
         if (getAuthToken()) {
           updateCart(toApiItems(items)).catch(() => {});
         }
+        trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product, safeQuantity));
         return { items, lastAddedProductId: product.id };
       }),
       removeItem: (productId) => set((state) => {

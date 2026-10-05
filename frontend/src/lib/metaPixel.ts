@@ -42,6 +42,7 @@ type MetaPixelOptions = {
 declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
+    __brajmartLoadMarketing?: () => void;
     __brajmartAllowMetaPurchaseEventId?: (eventId: string) => void;
   }
 }
@@ -148,6 +149,10 @@ export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixel
   }
 
   allowBrowserPurchaseEvent(eventName, eventId);
+
+  if (typeof window.fbq !== 'function') {
+    window.__brajmartLoadMarketing?.();
+  }
 
   if (typeof window.fbq === 'function') {
     window.fbq('track', eventName, normalizedParams, { eventID: eventId });

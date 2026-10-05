@@ -651,9 +651,8 @@ const ProductDetailPage = () => {
       toast.error('This product is out of stock');
       return;
     }
-    for (let i = 0; i < quantity; i++) addToCart(variantProduct);
+    addToCart(variantProduct, quantity);
     openCartDrawer(variantProduct.id);
-    trackMetaPixelEvent('AddToCart', productToMetaPixelParams(variantProduct, quantity));
     toast.success(`${variantProduct.name} added to cart!`);
   };
 
@@ -663,8 +662,7 @@ const ProductDetailPage = () => {
       toast.error('This product is out of stock');
       return;
     }
-    for (let i = 0; i < quantity; i++) addToCart(variantProduct);
-    trackMetaPixelEvent('AddToCart', productToMetaPixelParams(variantProduct, quantity));
+    addToCart(variantProduct, quantity);
     navigate('/checkout');
   };
 

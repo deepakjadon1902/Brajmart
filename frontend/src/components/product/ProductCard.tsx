@@ -77,7 +77,6 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
     }
     addToCart(product);
     openCartDrawer(product.id);
-    trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product));
     toast.success(`${product.name} added to cart!`);
   };
 
@@ -99,7 +98,6 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
       return;
     }
     addToCart(product);
-    trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product));
     navigate('/checkout');
   };
 

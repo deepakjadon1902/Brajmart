@@ -17,6 +17,8 @@ const product = (price: number): Product => ({
 describe('metaPixel', () => {
   beforeEach(() => {
     window.fbq = vi.fn();
+    delete window.__brajmartLoadMarketing;
+    delete window.__brajmartAllowMetaPurchaseEventId;
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ ok: true }),
@@ -91,6 +93,27 @@ describe('metaPixel', () => {
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/meta/conversions'), expect.objectContaining({
       method: 'POST',
       body: expect.stringContaining(`"eventId":"${eventId}"`),
+    }));
+  });
+
+  it('loads deferred marketing before sending browser pixel events', () => {
+    window.fbq = undefined;
+    const fbq = vi.fn();
+    window.__brajmartLoadMarketing = vi.fn(() => {
+      window.fbq = fbq;
+    });
+
+    trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product(99)));
+
+    expect(window.__brajmartLoadMarketing).toHaveBeenCalledOnce();
+    expect(fbq).toHaveBeenCalledWith('track', 'AddToCart', expect.objectContaining({
+      content_ids: ['tilak-1'],
+      content_type: 'product',
+      contents: [{ id: 'tilak-1', item_price: 99, quantity: 1 }],
+      currency: 'INR',
+      value: 99,
+    }), expect.objectContaining({
+      eventID: expect.stringContaining('brajmart.AddToCart.'),
     }));
   });
 

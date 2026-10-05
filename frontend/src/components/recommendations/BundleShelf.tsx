@@ -3,7 +3,6 @@ import { toast } from 'sonner';
 import ProductCard from '@/components/product/ProductCard';
 import SectionHeader from '@/components/ui/SectionHeader';
 import { CommerceBundle } from '@/lib/api';
-import { trackMetaPixelEvent, productToMetaPixelParams } from '@/lib/metaPixel';
 import { useCartStore } from '@/store/cartStore';
 import { preloadCartDrawer } from '@/components/cart/lazyCartDrawer';
 import { Product } from '@/types/product';
@@ -46,7 +45,6 @@ const BundleShelf = ({ bundles, title = 'Complete the Collection', subtitle = 'A
   const addBundle = () => {
     products.forEach((product) => {
       addItem(product);
-      trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product));
     });
     saveBundleSnapshot();
     openCartDrawer(products[0]?.id);
