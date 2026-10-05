@@ -10,13 +10,15 @@ import { toast } from 'sonner';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
-const META_PURCHASE_VALUE = 9.90;
-
 type PaymentStatusResponse = {
   status?: 'paid' | 'pending' | 'failed' | null;
   orderId?: number | null;
   amount?: number | string | null;
   method?: string | null;
+  paymentId?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  items?: OrderItem[];
 };
 
 type OrderItem = {
@@ -31,6 +33,24 @@ type OrderItem = {
 
 type TrackedOrder = {
   items?: OrderItem[];
+};
+
+const purchaseTrackedKey = (orderId: number | string) => `brajmart-purchase-tracked:${orderId}`;
+
+const hasTrackedPurchase = (orderId: number | string) => {
+  try {
+    return localStorage.getItem(purchaseTrackedKey(orderId)) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const markPurchaseTracked = (orderId: number | string) => {
+  try {
+    localStorage.setItem(purchaseTrackedKey(orderId), '1');
+  } catch {
+    // Analytics should never block the success page.
+  }
 };
 
 declare global {
@@ -81,6 +101,9 @@ const PaymentStatusPage = () => {
   const [orderId, setOrderId] = useState<number | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
   const [method, setMethod] = useState<string | null>(null);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [customerEmail, setCustomerEmail] = useState<string | null>(null);
+  const [customerPhone, setCustomerPhone] = useState<string | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[] | null>(null);
   const purchasePushedRef = useRef<string>('');
   const clearCart = useCartStore((state) => state.clearCart);
@@ -96,6 +119,10 @@ const PaymentStatusPage = () => {
         setOrderId(data.orderId || null);
         setAmount(data.amount === null || data.amount === undefined ? null : Number(data.amount));
         setMethod(data.method || null);
+        setPaymentId(data.paymentId || null);
+        setCustomerEmail(data.customerEmail || null);
+        setCustomerPhone(data.customerPhone || null);
+        if (Array.isArray(data.items)) setOrderItems(data.items);
       } catch {
         if (active) setStatus('failed');
       } finally {
@@ -115,6 +142,10 @@ const PaymentStatusPage = () => {
         setOrderId(data.orderId || null);
         setAmount(data.amount === null || data.amount === undefined ? null : Number(data.amount));
         setMethod(data.method || null);
+        setPaymentId(data.paymentId || null);
+        setCustomerEmail(data.customerEmail || null);
+        setCustomerPhone(data.customerPhone || null);
+        if (Array.isArray(data.items)) setOrderItems(data.items);
       } catch {
         // ignore polling errors
       }
@@ -125,7 +156,7 @@ const PaymentStatusPage = () => {
   useEffect(() => {
     let active = true;
     const loadOrder = async () => {
-      if (!orderId) return;
+      if (!orderId || orderItems !== null) return;
       try {
         const order = await trackOrder(orderId) as TrackedOrder;
         if (!active) return;
@@ -136,7 +167,7 @@ const PaymentStatusPage = () => {
     };
     if (status === 'paid' && orderId) loadOrder();
     return () => { active = false; };
-  }, [status, orderId]);
+  }, [status, orderId, orderItems]);
 
   useEffect(() => {
     if (status === 'paid') {
@@ -151,18 +182,23 @@ const PaymentStatusPage = () => {
   }, [status, clearCart]);
 
   useEffect(() => {
-    const purchaseValue = toPositiveMetaValue(META_PURCHASE_VALUE);
-    if (!token || status !== 'paid' || purchaseValue === undefined) return;
-    if (purchasePushedRef.current === token) return;
-    if (orderId && orderItems === null) return;
-    const analyticsValue = toPositiveMetaValue(amount) ?? purchaseValue;
+    if (!token || status !== 'paid' || !orderId) return;
+    const purchaseKey = String(orderId);
+    if (purchasePushedRef.current === purchaseKey || hasTrackedPurchase(purchaseKey)) return;
+    if (orderItems === null) return;
+    const analyticsValue = toPositiveMetaValue(amount);
+    if (analyticsValue === undefined) return;
 
     const items = (Array.isArray(orderItems) ? orderItems : []).map((i) => ({
       item_id: String(i.productId || i.id || i._id || i.slug || i.name || ''),
       item_name: String(i.name || ''),
       price: Number(i.price || 0),
       quantity: Number(i.quantity || 1),
-    }));
+    })).filter((i) => i.item_id);
+
+    if (items.length === 0) return;
+
+    const eventId = `brajmart.Purchase.order.${orderId}`;
 
     trackMetaPixelEvent('Purchase', {
       content_ids: items.map((i) => i.item_id),
@@ -173,9 +209,16 @@ const PaymentStatusPage = () => {
         quantity: i.quantity,
       })),
       num_items: items.reduce((sum, i) => sum + i.quantity, 0),
-      order_id: orderId || undefined,
+      order_id: orderId,
+      payment_id: paymentId || undefined,
       payment_type: method || undefined,
       value: analyticsValue,
+    }, {
+      eventId,
+      userData: {
+        email: customerEmail || undefined,
+        phone: customerPhone || undefined,
+      },
     });
 
     // Push GA4 ecommerce purchase event to GTM dataLayer.
@@ -189,6 +232,7 @@ const PaymentStatusPage = () => {
         ecommerce: {
           transaction_id: String(orderId || token),
           transaction_token: token,
+          payment_id: paymentId || undefined,
           affiliation: 'BrajMart',
           value: analyticsValue,
           currency: 'INR',
@@ -197,9 +241,10 @@ const PaymentStatusPage = () => {
           items,
         },
       });
-      purchasePushedRef.current = token;
     }
-  }, [token, status, amount, method, orderId, orderItems]);
+    purchasePushedRef.current = purchaseKey;
+    markPurchaseTracked(purchaseKey);
+  }, [token, status, amount, method, paymentId, customerEmail, customerPhone, orderId, orderItems]);
 
   const handleRetryPayment = async () => {
     if (!token || retrying || status === 'paid') return;

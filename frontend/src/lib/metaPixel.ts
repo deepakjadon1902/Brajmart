@@ -42,6 +42,7 @@ type MetaPixelOptions = {
 declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
+    __brajmartAllowMetaPurchaseEventId?: (eventId: string) => void;
   }
 }
 
@@ -108,10 +109,16 @@ const sendMetaConversionEvent = (eventName: MetaPixelEvent, eventId: string, par
   }).catch(() => undefined);
 };
 
+const allowBrowserPurchaseEvent = (eventName: MetaPixelEvent, eventId: string) => {
+  if (eventName !== 'Purchase' || typeof window === 'undefined') return;
+  window.__brajmartAllowMetaPurchaseEventId?.(eventId);
+};
+
 export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixelParams = {}, options: MetaPixelOptions = {}) => {
   if (typeof window === 'undefined') return '';
 
   const eventId = options.eventId || createMetaEventId(eventName);
+  allowBrowserPurchaseEvent(eventName, eventId);
   const normalizedParams = {
     currency: DEFAULT_CURRENCY,
     ...normalizeMetaPixelParams(params),

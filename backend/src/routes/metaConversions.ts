@@ -75,6 +75,21 @@ const normalizeCustomData = (value: unknown) => {
   return out;
 };
 
+const isValidPurchasePayload = (eventId: string, customData: Record<string, unknown>) => {
+  const orderId = cleanString(customData.order_id);
+  const value = Number(customData.value);
+  const contents = Array.isArray(customData.contents) ? customData.contents : [];
+  if (!orderId || !/^\d+$/.test(orderId)) return false;
+  if (eventId !== `brajmart.Purchase.order.${orderId}`) return false;
+  if (!Number.isFinite(value) || value <= 0) return false;
+  if (cleanString(customData.currency || 'INR') !== 'INR') return false;
+  return contents.some((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const record = item as Record<string, unknown>;
+    return Boolean(cleanString(record.id)) && Number(record.quantity || 0) > 0;
+  });
+};
+
 const normalizeSourceUrl = (value: unknown, req: express.Request) => {
   const raw = cleanString(value) || cleanString(req.headers.referer);
   if (/^https?:\/\//i.test(raw)) return raw;
@@ -102,6 +117,10 @@ router.post('/', async (req, res) => {
   if (!ALLOWED_EVENTS.has(eventName) || !eventId) {
     return res.status(400).json({ message: 'Invalid Meta event payload.' });
   }
+  const customData = normalizeCustomData(body.customData);
+  if (eventName === 'Purchase' && !isValidPurchasePayload(eventId, customData)) {
+    return res.status(400).json({ message: 'Invalid Purchase event payload.' });
+  }
 
   const userData = body.userData && typeof body.userData === 'object' ? body.userData as Record<string, unknown> : {};
   const emailHash = hashEmail(userData.email);
@@ -125,7 +144,7 @@ router.post('/', async (req, res) => {
       event_source_url: normalizeSourceUrl(body.eventSourceUrl, req),
       action_source: 'website',
       user_data: metaUserData,
-      custom_data: normalizeCustomData(body.customData),
+      custom_data: customData,
     }],
   };
 

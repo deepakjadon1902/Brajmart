@@ -17,13 +17,6 @@
           if (loaded) return;
           loaded = true;
 
-          window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
-          loadScript('https://www.googletagmanager.com/gtm.js?id=GTM-PBFHQWC4');
-
-          loadScript('https://www.googletagmanager.com/gtag/js?id=AW-17517087439');
-          window.gtag('js', new Date());
-          window.gtag('config', 'AW-17517087439');
-
           !function(f,b,e,v,n,t,s)
           {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
           n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -32,8 +25,42 @@
           t.src=v;s=b.getElementsByTagName(e)[0];
           s.parentNode.insertBefore(t,s)}(window, document,'script',
           'https://connect.facebook.net/en_US/fbevents.js');
+          window.fbq('set', 'autoConfig', false, '1824114108557446');
           window.fbq('init', '1824114108557446');
+          (function () {
+            var allowedPurchaseEventIds = {};
+            window.__brajmartAllowMetaPurchaseEventId = function (eventId) {
+              if (!eventId) return;
+              allowedPurchaseEventIds[String(eventId)] = Date.now() + 30000;
+            };
+            var rawFbq = window.fbq;
+            var guardedFbq = function () {
+              var args = Array.prototype.slice.call(arguments);
+              if (args[0] === 'track' && args[1] === 'Purchase') {
+                var options = args[3] || {};
+                var eventId = options.eventID || options.eventId || '';
+                var expiresAt = allowedPurchaseEventIds[String(eventId)] || 0;
+                if (!eventId || expiresAt < Date.now()) {
+                  if (window.console && window.console.warn) {
+                    window.console.warn('Blocked unapproved Meta Purchase event.', { eventID: eventId, url: window.location.href });
+                  }
+                  return;
+                }
+              }
+              return rawFbq.apply(this, arguments);
+            };
+            for (var key in rawFbq) guardedFbq[key] = rawFbq[key];
+            window.fbq = guardedFbq;
+            window._fbq = guardedFbq;
+          })();
           window.fbq('track', 'PageView');
+
+          window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+          loadScript('https://www.googletagmanager.com/gtm.js?id=GTM-PBFHQWC4');
+
+          loadScript('https://www.googletagmanager.com/gtag/js?id=AW-17517087439');
+          window.gtag('js', new Date());
+          window.gtag('config', 'AW-17517087439');
         };
         var schedule = function () {
           var afterCriticalStartup = function () {

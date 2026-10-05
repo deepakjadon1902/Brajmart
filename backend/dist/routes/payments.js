@@ -31,6 +31,38 @@ const mapPaymentStatusRow = (row) => ({
     createdAt: (0, dbHelpers_1.toIsoString)(row.created_at),
     updatedAt: (0, dbHelpers_1.toIsoString)(row.updated_at),
 });
+const mapOrderItemForMeta = (item) => {
+    const product = item?.product && typeof item.product === 'object' ? item.product : item;
+    return {
+        productId: product?.productId ?? product?.id ?? product?._id ?? item?.productId ?? item?.id ?? item?._id,
+        slug: product?.slug ?? item?.slug,
+        name: product?.name ?? item?.name,
+        price: Number(product?.price ?? item?.price ?? 0),
+        quantity: Math.max(1, Number(item?.quantity ?? product?.quantity ?? 1) || 1),
+    };
+};
+const mapPaymentStatusForClient = async (row) => {
+    const base = mapPaymentStatusRow(row);
+    if (String(row?.status || '') !== 'paid' || !row?.order_id)
+        return base;
+    const orderData = await getPaymentOrderDetails(row.order_id).catch(() => null);
+    const orderRow = orderData?.orderRow;
+    const details = orderData?.details;
+    if (!orderRow || !details)
+        return base;
+    const billingAddress = details.billingAddress && typeof details.billingAddress === 'object' ? details.billingAddress : {};
+    const shippingAddress = details.shippingAddress && typeof details.shippingAddress === 'object' ? details.shippingAddress : {};
+    return {
+        ...base,
+        orderId: orderRow.id,
+        amount: Number(row.amount || orderRow.total || 0),
+        method: row.method || orderRow.payment_method || base.method,
+        paymentId: row.payment_id || base.paymentId,
+        customerEmail: orderRow.customer_email || billingAddress.email || shippingAddress.email || undefined,
+        customerPhone: billingAddress.mobile || billingAddress.phone || shippingAddress.mobile || shippingAddress.phone || undefined,
+        items: Array.isArray(details.items) ? details.items.map(mapOrderItemForMeta) : [],
+    };
+};
 const getAdminPaymentRows = async () => {
     const rows = await (0, db_1.dbQuery)(`SELECT
        CONCAT('payment:', p.id) AS id,
@@ -467,13 +499,13 @@ router.get('/status/:token', async (req, res) => {
             try {
                 const reconciled = await reconcileRazorpayToken(token);
                 if (reconciled && String(reconciled.status) !== String(current.status))
-                    return res.json(mapPaymentStatusRow(reconciled));
+                    return res.json(await mapPaymentStatusForClient(reconciled));
             }
             catch {
                 // ignore reconciliation errors; fall back to current stored status
             }
         }
-        res.json(mapPaymentStatusRow(current));
+        res.json(await mapPaymentStatusForClient(current));
     }
     catch (err) {
         res.status(500).json({ message: err.message });
