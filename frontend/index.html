@@ -16,6 +16,81 @@
         var loadMarketing = function () {
           if (loaded) return;
           loaded = true;
+          var BRAJMART_META_PIXEL_ID = '1824114108557446';
+          var isBlockedMetaPixelUrl = function (value) {
+            try {
+              var url = new URL(String(value || ''), window.location.href);
+              if (url.hostname !== 'www.facebook.com' || url.pathname !== '/tr') return false;
+              var pixelId = url.searchParams.get('id') || '';
+              return pixelId && pixelId !== BRAJMART_META_PIXEL_ID;
+            } catch (error) {
+              return false;
+            }
+          };
+          var installMetaPixelNetworkGuard = function () {
+            if (window.__brajmartMetaPixelNetworkGuardInstalled) return;
+            window.__brajmartMetaPixelNetworkGuardInstalled = true;
+
+            if (typeof navigator.sendBeacon === 'function') {
+              var rawSendBeacon = navigator.sendBeacon.bind(navigator);
+              navigator.sendBeacon = function (url, data) {
+                if (isBlockedMetaPixelUrl(url)) {
+                  if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel request.', url);
+                  return true;
+                }
+                return rawSendBeacon(url, data);
+              };
+            }
+
+            if (typeof window.fetch === 'function') {
+              var rawFetch = window.fetch.bind(window);
+              window.fetch = function (input, init) {
+                var url = typeof input === 'string' ? input : input && input.url;
+                if (isBlockedMetaPixelUrl(url)) {
+                  if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel request.', url);
+                  return Promise.resolve(new Response(null, { status: 204 }));
+                }
+                return rawFetch(input, init);
+              };
+            }
+
+            if (window.XMLHttpRequest && window.XMLHttpRequest.prototype) {
+              var rawOpen = window.XMLHttpRequest.prototype.open;
+              window.XMLHttpRequest.prototype.open = function (method, url) {
+                if (isBlockedMetaPixelUrl(url)) {
+                  if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel request.', url);
+                  return rawOpen.apply(this, [method, 'about:blank']);
+                }
+                return rawOpen.apply(this, arguments);
+              };
+            }
+
+            var imageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+            if (imageSrc && imageSrc.set && imageSrc.get) {
+              Object.defineProperty(HTMLImageElement.prototype, 'src', {
+                configurable: true,
+                enumerable: imageSrc.enumerable,
+                get: imageSrc.get,
+                set: function (value) {
+                  if (isBlockedMetaPixelUrl(value)) {
+                    if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel image request.', value);
+                    return;
+                  }
+                  return imageSrc.set.call(this, value);
+                },
+              });
+            }
+
+            var rawSetAttribute = Element.prototype.setAttribute;
+            Element.prototype.setAttribute = function (name, value) {
+              if (this && this.tagName === 'IMG' && String(name).toLowerCase() === 'src' && isBlockedMetaPixelUrl(value)) {
+                if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel image request.', value);
+                return;
+              }
+              return rawSetAttribute.apply(this, arguments);
+            };
+          };
+          installMetaPixelNetworkGuard();
 
           !function(f,b,e,v,n,t,s)
           {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -25,8 +100,8 @@
           t.src=v;s=b.getElementsByTagName(e)[0];
           s.parentNode.insertBefore(t,s)}(window, document,'script',
           'https://connect.facebook.net/en_US/fbevents.js');
-          window.fbq('set', 'autoConfig', false, '1824114108557446');
-          window.fbq('init', '1824114108557446');
+          window.fbq('set', 'autoConfig', false, BRAJMART_META_PIXEL_ID);
+          window.fbq('init', BRAJMART_META_PIXEL_ID);
           (function () {
             var allowedPurchaseEventIds = {};
             window.__brajmartAllowMetaPurchaseEventId = function (eventId) {
@@ -36,6 +111,16 @@
             var rawFbq = window.fbq;
             var guardedFbq = function () {
               var args = Array.prototype.slice.call(arguments);
+              var command = args[0];
+              var pixelId = args[1];
+              if (command === 'init' && String(pixelId || '') !== BRAJMART_META_PIXEL_ID) {
+                if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel init.', pixelId);
+                return;
+              }
+              if ((command === 'trackSingle' || command === 'trackSingleCustom') && String(pixelId || '') !== BRAJMART_META_PIXEL_ID) {
+                if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel trackSingle.', pixelId);
+                return;
+              }
               if (args[0] === 'track' && args[1] === 'Purchase') {
                 var options = args[3] || {};
                 var eventId = options.eventID || options.eventId || '';

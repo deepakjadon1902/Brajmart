@@ -37,21 +37,50 @@ describe('metaPixel', () => {
   });
 
   it('does not send invalid value fields to Meta Pixel', () => {
-    trackMetaPixelEvent('Purchase', { value: 0, currency: 'INR' });
+    trackMetaPixelEvent('AddToCart', { value: 0, currency: 'INR' });
 
-    expect(window.fbq).toHaveBeenCalledWith('track', 'Purchase', { currency: 'INR' }, expect.objectContaining({
-      eventID: expect.stringContaining('brajmart.Purchase.'),
+    expect(window.fbq).toHaveBeenCalledWith('track', 'AddToCart', { currency: 'INR' }, expect.objectContaining({
+      eventID: expect.stringContaining('brajmart.AddToCart.'),
     }));
   });
 
   it('sends valid value fields as numbers to Meta Pixel', () => {
-    trackMetaPixelEvent('Purchase', { value: '9.90' });
+    trackMetaPixelEvent('AddToCart', { value: '9.90' });
 
-    expect(window.fbq).toHaveBeenCalledWith('track', 'Purchase', {
+    expect(window.fbq).toHaveBeenCalledWith('track', 'AddToCart', {
       currency: 'INR',
       value: 9.9,
     }, expect.objectContaining({
-      eventID: expect.stringContaining('brajmart.Purchase.'),
+      eventID: expect.stringContaining('brajmart.AddToCart.'),
+    }));
+  });
+
+  it('blocks purchase events without a confirmed order payload', () => {
+    const eventId = trackMetaPixelEvent('Purchase', { value: '9.90' });
+
+    expect(eventId).toBe('');
+    expect(window.fbq).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('sends purchase only with a confirmed order event ID and payload', () => {
+    const eventId = trackMetaPixelEvent('Purchase', {
+      content_ids: ['101'],
+      contents: [{ id: '101', item_price: 199, quantity: 2 }],
+      currency: 'INR',
+      order_id: 1234,
+      value: 398,
+    }, {
+      eventId: 'brajmart.Purchase.order.1234',
+    });
+
+    expect(eventId).toBe('brajmart.Purchase.order.1234');
+    expect(window.fbq).toHaveBeenCalledWith('track', 'Purchase', expect.objectContaining({
+      order_id: 1234,
+      value: 398,
+    }), { eventID: 'brajmart.Purchase.order.1234' });
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/meta/conversions'), expect.objectContaining({
+      body: expect.stringContaining('"eventId":"brajmart.Purchase.order.1234"'),
     }));
   });
 
