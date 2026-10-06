@@ -48,6 +48,13 @@ declare global {
 }
 
 const DEFAULT_CURRENCY = 'INR';
+const META_PIXEL_ID = '1824114108557446';
+const BROWSER_FALLBACK_EVENTS = new Set<MetaPixelEvent>([
+  'AddToCart',
+  'InitiateCheckout',
+  'AddPaymentInfo',
+  'Purchase',
+]);
 
 const readCookie = (name: string) => {
   if (typeof document === 'undefined') return '';
@@ -127,6 +134,46 @@ const sendMetaConversionEvent = (eventName: MetaPixelEvent, eventId: string, par
   }).catch(() => undefined);
 };
 
+const appendMetaPixelParam = (searchParams: URLSearchParams, key: string, value: unknown) => {
+  if (value === undefined || value === null || value === '') return;
+  const encodedValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  searchParams.set(key, encodedValue);
+};
+
+const sendBrowserMetaPixelFallback = (eventName: MetaPixelEvent, eventId: string, params: MetaPixelParams) => {
+  if (!BROWSER_FALLBACK_EVENTS.has(eventName) || typeof window === 'undefined' || typeof document === 'undefined') return;
+
+  const searchParams = new URLSearchParams({
+    id: META_PIXEL_ID,
+    ev: eventName,
+    dl: window.location.href,
+    if: 'false',
+    ts: String(Date.now()),
+  });
+
+  appendMetaPixelParam(searchParams, 'eid', eventId);
+  appendMetaPixelParam(searchParams, 'cd[currency]', params.currency || DEFAULT_CURRENCY);
+  appendMetaPixelParam(searchParams, 'cd[value]', params.value);
+  appendMetaPixelParam(searchParams, 'cd[content_ids]', params.content_ids);
+  appendMetaPixelParam(searchParams, 'cd[content_name]', params.content_name);
+  appendMetaPixelParam(searchParams, 'cd[content_type]', params.content_type);
+  appendMetaPixelParam(searchParams, 'cd[contents]', params.contents);
+  appendMetaPixelParam(searchParams, 'cd[num_items]', params.num_items);
+  appendMetaPixelParam(searchParams, 'cd[order_id]', params.order_id);
+  appendMetaPixelParam(searchParams, 'cd[payment_id]', params.payment_id);
+  appendMetaPixelParam(searchParams, 'cd[payment_method]', params.payment_method);
+  appendMetaPixelParam(searchParams, 'cd[payment_type]', params.payment_type);
+
+  const pixel = document.createElement('img');
+  pixel.width = 1;
+  pixel.height = 1;
+  pixel.alt = '';
+  pixel.style.display = 'none';
+  pixel.referrerPolicy = 'no-referrer-when-downgrade';
+  pixel.src = `https://www.facebook.com/tr?${searchParams.toString()}`;
+  (document.body || document.head || document.documentElement).appendChild(pixel);
+};
+
 const allowBrowserPurchaseEvent = (eventName: MetaPixelEvent, eventId: string) => {
   if (eventName !== 'Purchase' || typeof window === 'undefined') return;
   window.__brajmartAllowMetaPurchaseEventId?.(eventId);
@@ -158,6 +205,7 @@ export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixel
     window.fbq('track', eventName, normalizedParams, { eventID: eventId });
   }
 
+  sendBrowserMetaPixelFallback(eventName, eventId, normalizedParams);
   sendMetaConversionEvent(eventName, eventId, normalizedParams, options);
   return eventId;
 };

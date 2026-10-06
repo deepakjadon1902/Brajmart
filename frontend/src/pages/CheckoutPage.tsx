@@ -21,6 +21,7 @@ const steps = ['Delivery Details', 'Payment', 'Confirmation'];
 const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
 const DEFAULT_SHIPPING_FEE = 49;
 const CHECKOUT_IDEMPOTENCY_STORAGE_KEY = 'brajmart-checkout-idempotency';
+const INITIATE_CHECKOUT_TRACKING_STORAGE_KEY = 'brajmart-initiate-checkout-tracked';
 type ServiceabilityState = { pincode: string; serviceable: boolean; codAvailable: boolean; manualReview?: boolean; message?: string };
 type DeliveryCheckResponse = Partial<Omit<ServiceabilityState, 'pincode'>>;
 type CreatedOrderResponse = { orderId?: string | number; _id?: string | number; id?: string | number };
@@ -346,6 +347,36 @@ const CheckoutPage = () => {
     value: grandTotal,
   });
 
+  useEffect(() => {
+    if (!items.length || step >= 2 || grandTotal <= 0) return;
+
+    const checkoutSignature = JSON.stringify({
+      items: items.map((i) => ({
+        id: String(i.product.id || i.product.slug || i.product.name),
+        quantity: Number(i.quantity) || 1,
+        price: Number(i.product.price) || 0,
+        selectedSize: i.product.selectedSize || '',
+        selectedPieces: i.product.selectedPieces || '',
+        selectedAttributes: i.product.selectedAttributes || {},
+      })),
+      value: grandTotal,
+    });
+
+    try {
+      if (sessionStorage.getItem(INITIATE_CHECKOUT_TRACKING_STORAGE_KEY) === checkoutSignature) return;
+      sessionStorage.setItem(INITIATE_CHECKOUT_TRACKING_STORAGE_KEY, checkoutSignature);
+    } catch {
+      // Tracking should still run if storage is unavailable.
+    }
+
+    trackMetaPixelEvent('InitiateCheckout', checkoutMetaParams(), {
+      userData: {
+        email: effectiveEmail,
+        phone: billingAddress.mobile || shippingAddress.mobile,
+      },
+    });
+  }, [billingAddress.mobile, effectiveEmail, grandTotal, items, shippingAddress.mobile, step]);
+
   const runCheckoutValidation = async (mode: 'silent' | 'submit' = 'submit') => {
     setCheckoutValidating(true);
     setCheckoutValidationError('');
@@ -635,12 +666,6 @@ const CheckoutPage = () => {
     }
     const cartIsCurrent = await runCheckoutValidation('submit');
     if (!cartIsCurrent) return;
-    trackMetaPixelEvent('InitiateCheckout', checkoutMetaParams(), {
-      userData: {
-        email: effectiveEmail,
-        phone: billingAddress.mobile || shippingAddress.mobile,
-      },
-    });
     setStep(1);
   };
 

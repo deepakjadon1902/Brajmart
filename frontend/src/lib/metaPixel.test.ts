@@ -117,6 +117,111 @@ describe('metaPixel', () => {
     }));
   });
 
+  it('sends a direct browser AddToCart pixel fallback with product data', () => {
+    const imageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+    let fallbackSrc = '';
+    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+      configurable: true,
+      get() {
+        return imageSrc?.get?.call(this) || fallbackSrc;
+      },
+      set(value) {
+        fallbackSrc = String(value);
+        imageSrc?.set?.call(this, value);
+      },
+    });
+
+    try {
+      const eventId = trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product(99)));
+      const fallbackUrl = new URL(fallbackSrc);
+
+      expect(fallbackUrl.origin).toBe('https://www.facebook.com');
+      expect(fallbackUrl.pathname).toBe('/tr');
+      expect(fallbackUrl.searchParams.get('id')).toBe('1824114108557446');
+      expect(fallbackUrl.searchParams.get('ev')).toBe('AddToCart');
+      expect(fallbackUrl.searchParams.get('eid')).toBe(eventId);
+      expect(fallbackUrl.searchParams.get('cd[currency]')).toBe('INR');
+      expect(fallbackUrl.searchParams.get('cd[value]')).toBe('99');
+      expect(fallbackUrl.searchParams.get('cd[content_ids]')).toBe(JSON.stringify(['tilak-1']));
+      expect(fallbackUrl.searchParams.get('cd[content_type]')).toBe('product');
+      expect(JSON.parse(fallbackUrl.searchParams.get('cd[contents]') || '[]')).toEqual([{ id: 'tilak-1', item_price: 99, quantity: 1 }]);
+    } finally {
+      if (imageSrc) {
+        Object.defineProperty(HTMLImageElement.prototype, 'src', imageSrc);
+      }
+    }
+  });
+
+  it('sends direct browser pixel fallbacks for checkout, payment info, and purchase', () => {
+    const imageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+    const fallbackSrcs: string[] = [];
+    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+      configurable: true,
+      get() {
+        return imageSrc?.get?.call(this) || fallbackSrcs[fallbackSrcs.length - 1] || '';
+      },
+      set(value) {
+        fallbackSrcs.push(String(value));
+        imageSrc?.set?.call(this, value);
+      },
+    });
+
+    try {
+      trackMetaPixelEvent('InitiateCheckout', {
+        content_ids: ['tilak-1'],
+        content_type: 'product',
+        contents: [{ id: 'tilak-1', item_price: 99, quantity: 1 }],
+        num_items: 1,
+        value: 99,
+      });
+      trackMetaPixelEvent('AddPaymentInfo', {
+        content_ids: ['tilak-1'],
+        content_type: 'product',
+        contents: [{ id: 'tilak-1', item_price: 99, quantity: 1 }],
+        num_items: 1,
+        payment_method: 'Razorpay',
+        value: 99,
+      });
+      trackMetaPixelEvent('Purchase', {
+        content_ids: ['tilak-1'],
+        content_type: 'product',
+        contents: [{ id: 'tilak-1', item_price: 99, quantity: 1 }],
+        num_items: 1,
+        order_id: 1234,
+        payment_id: 'pay_123',
+        payment_type: 'Razorpay',
+        value: 99,
+      }, {
+        eventId: 'brajmart.Purchase.order.1234',
+      });
+
+      const fallbackUrls = fallbackSrcs.map((src) => new URL(src));
+      expect(fallbackUrls.map((url) => url.searchParams.get('ev'))).toEqual([
+        'InitiateCheckout',
+        'AddPaymentInfo',
+        'Purchase',
+      ]);
+      fallbackUrls.forEach((url) => {
+        expect(url.origin).toBe('https://www.facebook.com');
+        expect(url.pathname).toBe('/tr');
+        expect(url.searchParams.get('id')).toBe('1824114108557446');
+        expect(url.searchParams.get('cd[currency]')).toBe('INR');
+        expect(url.searchParams.get('cd[value]')).toBe('99');
+        expect(url.searchParams.get('cd[content_ids]')).toBe(JSON.stringify(['tilak-1']));
+        expect(JSON.parse(url.searchParams.get('cd[contents]') || '[]')).toEqual([{ id: 'tilak-1', item_price: 99, quantity: 1 }]);
+      });
+      expect(fallbackUrls[1].searchParams.get('cd[payment_method]')).toBe('Razorpay');
+      expect(fallbackUrls[2].searchParams.get('eid')).toBe('brajmart.Purchase.order.1234');
+      expect(fallbackUrls[2].searchParams.get('cd[order_id]')).toBe('1234');
+      expect(fallbackUrls[2].searchParams.get('cd[payment_id]')).toBe('pay_123');
+      expect(fallbackUrls[2].searchParams.get('cd[payment_type]')).toBe('Razorpay');
+    } finally {
+      if (imageSrc) {
+        Object.defineProperty(HTMLImageElement.prototype, 'src', imageSrc);
+      }
+    }
+  });
+
   it('builds product params with a positive numeric value', () => {
     expect(productToMetaPixelParams(product(49.995), 2)).toMatchObject({
       contents: [{ id: 'tilak-1', item_price: 50, quantity: 2 }],
