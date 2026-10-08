@@ -65,7 +65,7 @@ describe('metaPixel', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('sends purchase only with a confirmed order event ID and payload', () => {
+  it('sends purchase only to the server with a confirmed order event ID and payload', () => {
     const eventId = trackMetaPixelEvent('Purchase', {
       content_ids: ['101'],
       contents: [{ id: '101', item_price: 199, quantity: 2 }],
@@ -77,10 +77,7 @@ describe('metaPixel', () => {
     });
 
     expect(eventId).toBe('brajmart.Purchase.order.1234');
-    expect(window.fbq).toHaveBeenCalledWith('track', 'Purchase', expect.objectContaining({
-      order_id: 1234,
-      value: 398,
-    }), { eventID: 'brajmart.Purchase.order.1234' });
+    expect(window.fbq).not.toHaveBeenCalled();
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/meta/conversions'), expect.objectContaining({
       body: expect.stringContaining('"eventId":"brajmart.Purchase.order.1234"'),
     }));
@@ -152,7 +149,7 @@ describe('metaPixel', () => {
     }
   });
 
-  it('sends direct browser pixel fallbacks for checkout, payment info, and purchase', () => {
+  it('sends direct browser pixel fallbacks for checkout and payment info only', () => {
     const imageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
     const fallbackSrcs: string[] = [];
     Object.defineProperty(HTMLImageElement.prototype, 'src', {
@@ -182,24 +179,10 @@ describe('metaPixel', () => {
         payment_method: 'Razorpay',
         value: 99,
       });
-      trackMetaPixelEvent('Purchase', {
-        content_ids: ['tilak-1'],
-        content_type: 'product',
-        contents: [{ id: 'tilak-1', item_price: 99, quantity: 1 }],
-        num_items: 1,
-        order_id: 1234,
-        payment_id: 'pay_123',
-        payment_type: 'Razorpay',
-        value: 99,
-      }, {
-        eventId: 'brajmart.Purchase.order.1234',
-      });
-
       const fallbackUrls = fallbackSrcs.map((src) => new URL(src));
       expect(fallbackUrls.map((url) => url.searchParams.get('ev'))).toEqual([
         'InitiateCheckout',
         'AddPaymentInfo',
-        'Purchase',
       ]);
       fallbackUrls.forEach((url) => {
         expect(url.origin).toBe('https://www.facebook.com');
@@ -211,10 +194,6 @@ describe('metaPixel', () => {
         expect(JSON.parse(url.searchParams.get('cd[contents]') || '[]')).toEqual([{ id: 'tilak-1', item_price: 99, quantity: 1 }]);
       });
       expect(fallbackUrls[1].searchParams.get('cd[payment_method]')).toBe('Razorpay');
-      expect(fallbackUrls[2].searchParams.get('eid')).toBe('brajmart.Purchase.order.1234');
-      expect(fallbackUrls[2].searchParams.get('cd[order_id]')).toBe('1234');
-      expect(fallbackUrls[2].searchParams.get('cd[payment_id]')).toBe('pay_123');
-      expect(fallbackUrls[2].searchParams.get('cd[payment_type]')).toBe('Razorpay');
     } finally {
       if (imageSrc) {
         Object.defineProperty(HTMLImageElement.prototype, 'src', imageSrc);

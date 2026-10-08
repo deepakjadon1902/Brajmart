@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import express from 'express';
+import { dbQuery, isDbConnected } from '../lib/db';
 
 const router = express.Router();
 
@@ -90,6 +91,65 @@ const isValidPurchasePayload = (eventId: string, customData: Record<string, unkn
   });
 };
 
+const parseOrderItems = (value: unknown): Array<Record<string, unknown>> => {
+  if (Array.isArray(value)) return value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item)));
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return parseOrderItems(parsed);
+  } catch {
+    return [];
+  }
+};
+
+const orderItemId = (item: Record<string, unknown>) => {
+  const product = item.product && typeof item.product === 'object' && !Array.isArray(item.product)
+    ? item.product as Record<string, unknown>
+    : item;
+  return cleanString(product.productId || product.id || product._id || item.productId || item.id || item._id || product.slug || item.slug || product.name || item.name);
+};
+
+const hasPaidOrderForPurchase = async (customData: Record<string, unknown>) => {
+  if (!isDbConnected()) return false;
+
+  const orderId = cleanString(customData.order_id);
+  const purchaseValue = Number(customData.value);
+  const purchaseContents = Array.isArray(customData.contents) ? customData.contents : [];
+  if (!orderId || !Number.isFinite(purchaseValue) || purchaseValue <= 0 || purchaseContents.length === 0) return false;
+
+  const orderRows = await dbQuery<any>('SELECT id, total, items FROM orders WHERE id = ? LIMIT 1', [orderId]);
+  const order = orderRows[0];
+  if (!order) return false;
+
+  const orderTotal = Number(order.total || 0);
+  if (!Number.isFinite(orderTotal) || Math.abs(orderTotal - purchaseValue) > 1) return false;
+
+  const paidRows = await dbQuery<any>(
+    `SELECT 1 AS paid
+       FROM payments
+      WHERE order_id = ? AND status = 'paid'
+      LIMIT 1`,
+    [orderId]
+  );
+  const paidStatusRows = paidRows.length ? paidRows : await dbQuery<any>(
+    `SELECT 1 AS paid
+       FROM payment_status
+      WHERE order_id = ? AND status = 'paid'
+      LIMIT 1`,
+    [orderId]
+  );
+  if (!paidStatusRows.length) return false;
+
+  const orderIds = new Set(parseOrderItems(order.items).map(orderItemId).filter(Boolean));
+  if (!orderIds.size) return false;
+
+  return purchaseContents.every((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const id = cleanString((item as Record<string, unknown>).id);
+    return id && orderIds.has(id);
+  });
+};
+
 const normalizeSourceUrl = (value: unknown, req: express.Request) => {
   const raw = cleanString(value) || cleanString(req.headers.referer);
   if (/^https?:\/\//i.test(raw)) return raw;
@@ -120,6 +180,9 @@ router.post('/', async (req, res) => {
   const customData = normalizeCustomData(body.customData);
   if (eventName === 'Purchase' && !isValidPurchasePayload(eventId, customData)) {
     return res.status(400).json({ message: 'Invalid Purchase event payload.' });
+  }
+  if (eventName === 'Purchase' && !(await hasPaidOrderForPurchase(customData))) {
+    return res.status(409).json({ message: 'Purchase event does not match a paid order.' });
   }
 
   const userData = body.userData && typeof body.userData === 'object' ? body.userData as Record<string, unknown> : {};

@@ -53,7 +53,6 @@ const BROWSER_FALLBACK_EVENTS = new Set<MetaPixelEvent>([
   'AddToCart',
   'InitiateCheckout',
   'AddPaymentInfo',
-  'Purchase',
 ]);
 
 const readCookie = (name: string) => {
@@ -201,7 +200,7 @@ export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixel
     window.__brajmartLoadMarketing?.();
   }
 
-  if (typeof window.fbq === 'function') {
+  if (eventName !== 'Purchase' && typeof window.fbq === 'function') {
     window.fbq('track', eventName, normalizedParams, { eventID: eventId });
   }
 
