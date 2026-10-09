@@ -66,6 +66,7 @@ describe('metaPixel', () => {
   });
 
   it('sends purchase only to the server with a confirmed order event ID and payload', () => {
+    (window as unknown as { __brajmartAllowMetaPurchaseEventId?: ReturnType<typeof vi.fn> }).__brajmartAllowMetaPurchaseEventId = vi.fn();
     const eventId = trackMetaPixelEvent('Purchase', {
       content_ids: ['101'],
       contents: [{ id: '101', item_price: 199, quantity: 2 }],
@@ -78,6 +79,7 @@ describe('metaPixel', () => {
 
     expect(eventId).toBe('brajmart.Purchase.order.1234');
     expect(window.fbq).not.toHaveBeenCalled();
+    expect((window as unknown as { __brajmartAllowMetaPurchaseEventId?: ReturnType<typeof vi.fn> }).__brajmartAllowMetaPurchaseEventId).not.toHaveBeenCalled();
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/meta/conversions'), expect.objectContaining({
       body: expect.stringContaining('"eventId":"brajmart.Purchase.order.1234"'),
     }));

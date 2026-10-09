@@ -43,7 +43,6 @@ declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
     __brajmartLoadMarketing?: () => void;
-    __brajmartAllowMetaPurchaseEventId?: (eventId: string) => void;
   }
 }
 
@@ -173,11 +172,6 @@ const sendBrowserMetaPixelFallback = (eventName: MetaPixelEvent, eventId: string
   (document.body || document.head || document.documentElement).appendChild(pixel);
 };
 
-const allowBrowserPurchaseEvent = (eventName: MetaPixelEvent, eventId: string) => {
-  if (eventName !== 'Purchase' || typeof window === 'undefined') return;
-  window.__brajmartAllowMetaPurchaseEventId?.(eventId);
-};
-
 export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixelParams = {}, options: MetaPixelOptions = {}) => {
   if (typeof window === 'undefined') return '';
 
@@ -193,8 +187,6 @@ export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixel
     }
     return '';
   }
-
-  allowBrowserPurchaseEvent(eventName, eventId);
 
   if (typeof window.fbq !== 'function') {
     window.__brajmartLoadMarketing?.();
