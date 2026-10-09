@@ -12,25 +12,25 @@ const methods = [
 ];
 
 const PaymentMethodPage = () => (
-  <div className="min-h-screen bg-background">
+  <div className="min-h-screen overflow-x-hidden bg-background pb-20 md:pb-0">
     <Navbar />
 
-    <section className="relative bg-maroon-dark text-primary-foreground py-6 md:py-10">
-      <div className="container mx-auto px-4 text-center">
+    <section className="relative bg-maroon-dark py-8 text-primary-foreground md:py-10">
+      <div className="mx-auto w-full max-w-6xl px-3 text-center sm:px-4">
         <ScrollReveal>
           <p className="text-gold font-cinzel tracking-[0.2em] text-sm mb-4">SECURE PAYMENTS</p>
-          <h1 className="font-cinzel text-3xl md:text-5xl font-bold mb-4 text-white ">Payment Methods</h1>
+          <h1 className="mb-4 font-cinzel text-[2rem] font-bold leading-tight text-white md:text-5xl">Payment Methods</h1>
           <p className="text-primary-foreground/70 max-w-xl mx-auto">Multiple secure payment options for a seamless checkout experience.</p>
         </ScrollReveal>
       </div>
     </section>
 
-    <section className="py-16 bg-background">
-      <div className="container mx-auto px-4 max-w-4xl">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
+    <section className="bg-background py-10 sm:py-16">
+      <div className="mx-auto w-full max-w-4xl px-3 sm:px-4">
+        <div className="mb-10 grid gap-3 sm:mb-16 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
           {methods.map((m, i) => (
             <ScrollReveal key={m.title} delay={i * 0.08}>
-              <div className="bg-card rounded-2xl border border-border p-6 hover:border-gold/40 hover:shadow-lg transition-all duration-300 relative">
+              <div className="relative rounded-lg border border-border bg-card p-4 transition-all duration-300 hover:border-gold/40 hover:shadow-lg sm:rounded-2xl sm:p-6">
                 {m.tag && <span className="absolute top-4 right-4 text-[0.6rem] font-bold px-2 py-0.5 rounded-full bg-saffron/10 text-saffron">{m.tag}</span>}
                 <div className="w-12 h-12 rounded-xl bg-saffron/10 flex items-center justify-center mb-4">
                   <m.icon size={22} className="text-saffron" />
@@ -43,7 +43,7 @@ const PaymentMethodPage = () => (
         </div>
 
         <ScrollReveal>
-          <div className="bg-pearl rounded-2xl border border-border p-8 text-center">
+          <div className="rounded-lg border border-border bg-pearl p-5 text-center sm:rounded-2xl sm:p-8">
             <Shield size={32} className="text-gold mx-auto mb-4" />
             <h2 className="font-cinzel text-xl font-bold text-foreground mb-3">100% Secure Payments</h2>
             <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">

@@ -58,16 +58,16 @@ const SearchPage = () => {
   }, [query]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen overflow-x-hidden bg-background pb-20 md:pb-0">
       <AnnouncementBar /><Navbar />
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center gap-3 mb-6">
-          <Link to="/" className="text-muted-foreground hover:text-foreground"><ArrowLeft size={20} /></Link>
-          <h1 className="font-cinzel text-2xl font-bold">Search</h1>
+      <main className="mx-auto w-full max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
+        <div className="mb-5 flex items-center gap-3 sm:mb-6">
+          <Link to="/" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Back to home"><ArrowLeft size={20} /></Link>
+          <h1 className="font-cinzel text-[1.65rem] font-bold leading-tight sm:text-2xl">Search</h1>
         </div>
 
         {/* Search input */}
-        <div className="relative max-w-2xl mx-auto mb-8">
+        <div className="relative mx-auto mb-6 max-w-2xl sm:mb-8">
           <SearchIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
@@ -75,7 +75,7 @@ const SearchPage = () => {
             onChange={e => setQuery(e.target.value)}
             placeholder="Search Prasadam, Books, Shringar, Malas..."
             autoFocus
-            className="w-full pl-11 pr-4 py-3 rounded-2xl border border-gold/30 bg-card text-sm outline-none focus:border-gold transition-colors"
+            className="min-h-12 w-full rounded-xl border border-gold/30 bg-card py-3 pl-11 pr-4 text-sm outline-none transition-colors focus:border-gold sm:rounded-2xl"
           />
         </div>
 
@@ -97,7 +97,7 @@ const SearchPage = () => {
             {loading ? (
               <ProductGridSkeleton count={8} />
             ) : results.length > 0 ? (
-              <div className="product-grid grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)]">
+              <div className="product-grid grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)]">
                 {results.map((p, i) => <ProductCard key={p.id} product={p} index={i} variant="compact" />)}
               </div>
             ) : (
@@ -117,13 +117,13 @@ const SearchPage = () => {
             {loading ? (
               <ProductGridSkeleton count={8} />
             ) : (
-              <div className="product-grid grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)]">
+              <div className="product-grid grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)]">
                 {featuredProducts.map((p, i) => <ProductCard key={p.id} product={p} index={i} variant="compact" />)}
               </div>
             )}
           </div>
         )}
-      </div>
+      </main>
       <Footer />
     </div>
   );

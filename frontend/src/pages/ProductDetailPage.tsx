@@ -801,7 +801,7 @@ const ProductDetailPage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background pb-24 md:pb-0">
+    <div className="min-h-screen overflow-x-hidden bg-background pb-24 md:pb-0">
       <Helmet>
         <title>{metaTitle}</title>
         <meta name="description" content={truthfulMetaDescription || metaDescription} />
@@ -830,9 +830,9 @@ const ProductDetailPage = () => {
       </Helmet>
       <AnnouncementBar /><Navbar />
 
-      <div className="container mx-auto px-4 py-6">
+      <main className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-6 flex-wrap">
+        <div className="mb-4 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground sm:mb-6 sm:text-sm">
           <Link to="/" className="hover:text-saffron">Home</Link>
           <ChevronRight size={14} />
           <Link to={`/category/${categoryToSlug(product.category)}`} className="hover:text-saffron">{product.category}</Link>
@@ -843,9 +843,9 @@ const ProductDetailPage = () => {
           <span className="text-foreground line-clamp-1">{product.name}</span>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
+        <div className="grid min-w-0 gap-6 md:grid-cols-2 md:gap-8 lg:gap-12">
           {/* Image */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }} className="space-y-5">
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }} className="min-w-0 space-y-4 sm:space-y-5">
             <div className="flex flex-col sm:flex-row gap-3">
               {thumbImages.length > 1 && (
                 <div className="sm:hidden">
@@ -915,10 +915,10 @@ const ProductDetailPage = () => {
           </motion.div>
 
           {/* Details */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }} className="space-y-5">
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }} className="min-w-0 space-y-4 sm:space-y-5">
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{product.category}</span>
-              <h1 className="font-playfair text-2xl md:text-3xl font-bold text-foreground mt-1 leading-tight">{product.name}</h1>
+              <h1 className="mt-1 font-playfair text-[1.55rem] font-bold leading-tight text-foreground md:text-3xl">{product.name}</h1>
               <p className="mt-1 text-xs text-muted-foreground">SKU: {product.sku || product.id}</p>
             </div>
 
@@ -936,8 +936,8 @@ const ProductDetailPage = () => {
             </div>
 
             {/* Price */}
-            <div className="flex flex-wrap items-baseline gap-3">
-              <span className="product-detail-price-current font-sans text-[28px] font-bold leading-none text-[#212121] md:text-[30px]">{formatPrice(computedPrice)}</span>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-2">
+              <span className="product-detail-price-current font-sans text-[26px] font-bold leading-none text-[#212121] md:text-[30px]">{formatPrice(computedPrice)}</span>
               {validMrp && (
                 <>
                   <span className="product-detail-price-original font-sans text-[16px] font-medium leading-none text-[#878787] line-through">{formatPrice(validMrp)}</span>
@@ -952,7 +952,7 @@ const ProductDetailPage = () => {
               )}
             </div>
 
-            <div className={`grid gap-3 rounded-lg border border-border bg-card p-4 shadow-sm ${codEligible ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
+            <div className={`grid min-w-0 gap-3 rounded-lg border border-border bg-card p-3 shadow-sm sm:p-4 ${codEligible ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
               <div className="flex items-start gap-3">
                 <PackageCheck size={18} className="mt-0.5 text-tulsi" aria-hidden="true" />
                 <div>
@@ -987,7 +987,7 @@ const ProductDetailPage = () => {
               )}
             </div>
 
-            <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm">
+            <div className="min-w-0 space-y-4 rounded-lg border border-border bg-card p-3 shadow-sm sm:p-4">
               <div className="flex flex-wrap items-center gap-4">
                 <span className="text-sm font-semibold text-foreground">Quantity:</span>
                 <div className="qty-selector flex h-11 w-[130px] items-center justify-between rounded-lg border border-border bg-brand-soft">
@@ -1046,14 +1046,14 @@ const ProductDetailPage = () => {
                 </button>
               </div>
 
-              <div className={`grid gap-2 border-t border-border pt-3 ${codEligible ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+              <div className={`grid min-w-0 gap-2 border-t border-border pt-3 ${codEligible ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
                 {[
                   { icon: Truck, label: 'Delivery', sub: `${deliveryMin}-${deliveryMax} working days after dispatch`, href: '/shipping-delivery' },
                   ...(codEligible ? [{ icon: CheckCircle2, label: 'COD', sub: 'Cash accepted on delivery', href: '' }] : []),
                   { icon: PackageCheck, label: 'Order check', sub: 'Items are checked before dispatch', href: '' },
                   { icon: RotateCcw, label: 'Returns', sub: 'Review return policy', href: '/return-policy' },
                 ].map((badge) => (
-                  <div key={badge.label} className="rounded-lg bg-brand-soft p-2 text-center">
+                    <div key={badge.label} className="min-w-0 rounded-lg bg-brand-soft p-2 text-center">
                     <badge.icon size={18} className="mx-auto mb-1 text-gold" aria-hidden="true" />
                     <span className="block text-xs font-semibold text-foreground">{badge.label}</span>
                     {badge.href ? (
@@ -1250,7 +1250,7 @@ const ProductDetailPage = () => {
             <ProductCarousel products={recentlyViewedProducts} />
           </div>
         )}
-      </div>
+      </main>
       {zoomOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`${product.name} image preview`} onClick={() => setZoomOpen(false)}>
           <div className="relative max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
@@ -1288,7 +1288,7 @@ const ProductDetailPage = () => {
             onPointerDown={preloadCartDrawer}
             onFocus={preloadCartDrawer}
             disabled={!purchasable}
-            className={`add-to-cart-btn min-h-11 rounded-lg bg-maroon px-2 text-xs font-bold text-white transition hover:bg-saffron disabled:bg-muted disabled:text-muted-foreground ${purchasable ? '' : 'hover:bg-muted'}`}
+            className={`mobile-product-action min-h-11 rounded-lg bg-maroon px-2 text-xs font-bold text-white transition hover:bg-saffron disabled:bg-muted disabled:text-muted-foreground ${purchasable ? '' : 'hover:bg-muted'}`}
           >
             Add to Cart
           </button>
@@ -1296,7 +1296,7 @@ const ProductDetailPage = () => {
             type="button"
             onClick={handleBuyNow}
             disabled={!purchasable}
-            className={`buy-now-btn min-h-11 rounded-lg border border-maroon bg-white px-2 text-xs font-bold text-maroon transition hover:border-saffron hover:text-saffron disabled:border-muted disabled:bg-muted disabled:text-muted-foreground ${purchasable ? '' : 'hover:bg-muted'}`}
+            className={`mobile-product-action min-h-11 rounded-lg border border-maroon bg-white px-2 text-xs font-bold text-maroon transition hover:border-saffron hover:text-saffron disabled:border-muted disabled:bg-muted disabled:text-muted-foreground ${purchasable ? '' : 'hover:bg-muted'}`}
           >
             Buy Now
           </button>

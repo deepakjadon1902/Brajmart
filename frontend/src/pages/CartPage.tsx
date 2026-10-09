@@ -157,16 +157,16 @@ const CartPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen overflow-x-hidden bg-background pb-20 md:pb-0">
       <AnnouncementBar />
       <Navbar />
-      <div className="container mx-auto px-4 py-6 sm:py-8">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <main className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-8">
+        <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Link to="/" className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-saffron">
               <ArrowLeft size={16} /> Continue shopping
             </Link>
-            <h1 className="font-cinzel text-2xl font-bold text-foreground sm:text-3xl">Shopping Cart</h1>
+            <h1 className="font-cinzel text-[1.65rem] font-bold leading-tight text-foreground sm:text-3xl">Shopping Cart</h1>
             <p className="mt-1 text-sm text-muted-foreground">{itemCount} item{itemCount === 1 ? '' : 's'} in your cart, ready for secure checkout.</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -179,8 +179,8 @@ const CartPage = () => {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_416px]">
-          <div className="space-y-4">
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-6">
+          <div className="min-w-0 space-y-4">
             {(validationError || validating || (validation?.changes?.length || 0) > 0) && (
               <div className="rounded-lg border border-gold/35 bg-brand-raised p-4">
                 <p className="text-sm font-bold text-foreground">
@@ -207,7 +207,7 @@ const CartPage = () => {
                 )}
               </div>
             )}
-            <div className="rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5">
+            <section className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm sm:p-5">
               <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="font-cinzel text-lg font-bold text-foreground">Cart Items</h2>
@@ -236,50 +236,50 @@ const CartPage = () => {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 20, height: 0 }}
-                      className="rounded-lg border border-border bg-background/70 p-3 shadow-sm transition-shadow hover:shadow-md sm:p-4"
+                      className="min-w-0 rounded-lg border border-border bg-background/70 p-2 shadow-sm transition-shadow hover:shadow-md sm:p-4"
                     >
-                      <div className="flex flex-col gap-4 sm:flex-row">
+                      <div className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] gap-2.5 sm:grid-cols-[128px_minmax(0,1fr)] sm:gap-4">
                         <Link to={`/product/${item.product.slug}`} className="shrink-0">
-                          <span className="block h-28 w-28 overflow-hidden rounded-lg border border-border bg-brand-raised sm:h-32 sm:w-32">
-                            <img src={item.product.image} alt={item.product.name} className="h-full w-full object-contain p-2 transition-transform duration-300 hover:scale-[1.03]" />
+                          <span className="block aspect-square w-full overflow-hidden rounded-lg border border-border bg-brand-raised">
+                            <img src={item.product.image} alt={item.product.name} className="h-full w-full object-contain p-1.5 transition-transform duration-300 hover:scale-[1.03] sm:p-2" />
                           </span>
                         </Link>
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                             <div className="min-w-0">
                               <Link to={`/product/${item.product.slug}`}>
-                                <h3 className="font-playfair text-base font-semibold leading-snug text-foreground line-clamp-2 transition-colors hover:text-saffron">{item.product.name}</h3>
+                                <h3 className="line-clamp-2 font-playfair text-[12.5px] font-semibold leading-snug text-foreground transition-colors hover:text-saffron sm:text-base">{item.product.name}</h3>
                               </Link>
-                              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                                <span className="rounded-full border border-border bg-card px-2.5 py-1 font-medium text-muted-foreground">{item.product.category}</span>
-                                <span className="inline-flex items-center gap-1 rounded-full border border-[#D8EAD9] bg-[#F4FBF4] px-2.5 py-1 font-semibold text-[#2E7D32]">
+                              <div className="mt-1 flex flex-wrap items-center gap-1 text-[10.5px] sm:mt-2 sm:gap-2 sm:text-xs">
+                                <span className="max-w-[8.5rem] truncate rounded-full border border-border bg-card px-1.5 py-0.5 font-medium text-muted-foreground sm:max-w-none sm:px-2.5 sm:py-1">{item.product.category}</span>
+                                <span className="inline-flex items-center gap-1 rounded-full border border-[#D8EAD9] bg-[#F4FBF4] px-1.5 py-0.5 font-semibold text-[#2E7D32] sm:px-2.5 sm:py-1">
                                   <BadgeCheck size={12} /> {unavailable ? 'Unavailable' : 'Available'}
                                 </span>
                               </div>
-                              <div className="mt-3 flex items-center gap-2">
-                                <span className="font-playfair text-lg font-bold text-saffron">{formatPrice(currentPrice)}</span>
+                              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 sm:mt-3">
+                                <span className="font-playfair text-[15px] font-bold text-saffron sm:text-lg">{formatPrice(currentPrice)}</span>
                                 {currentMrp && (
                                   <span className="text-xs text-muted-foreground line-through">{formatPrice(currentMrp)}</span>
                                 )}
-                                {itemSavings > 0 && <span className="text-xs font-semibold text-tulsi">Save {formatPrice(itemSavings)}</span>}
+                                {itemSavings > 0 && <span className="text-[11px] font-semibold text-tulsi sm:text-xs">Save {formatPrice(itemSavings)}</span>}
                               </div>
                             </div>
-                            <div className="text-left sm:text-right">
-                              <p className="text-xs text-muted-foreground">Item total</p>
-                              <span className="font-playfair text-lg font-bold text-foreground">{formatPrice(currentPrice * item.quantity)}</span>
+                            <div className="flex items-baseline gap-1.5 text-left sm:block sm:text-right">
+                              <p className="text-[10.5px] text-muted-foreground sm:text-xs">Total</p>
+                              <span className="font-playfair text-[15px] font-bold text-foreground sm:text-lg">{formatPrice(currentPrice * item.quantity)}</span>
                             </div>
                           </div>
-                          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                          <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-1.5 sm:mt-4 sm:pt-3">
                             <div className="flex items-center rounded-md border border-border bg-card shadow-sm">
-                              <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} disabled={unavailable} className="flex h-9 w-9 items-center justify-center rounded-l-md transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50" aria-label="Decrease quantity">
+                              <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} disabled={unavailable} className="flex h-7 w-7 items-center justify-center rounded-l-md transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9" aria-label="Decrease quantity">
                                 <Minus size={14} />
                               </button>
-                              <span className="min-w-10 px-3 text-center text-sm font-bold">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item.product.id, Math.min(maxQuantity, item.quantity + 1))} disabled={unavailable || item.quantity >= maxQuantity} className="flex h-9 w-9 items-center justify-center rounded-r-md transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50" aria-label="Increase quantity">
+                              <span className="min-w-8 px-2 text-center text-xs font-bold sm:min-w-10 sm:px-3 sm:text-sm">{item.quantity}</span>
+                              <button onClick={() => updateQuantity(item.product.id, Math.min(maxQuantity, item.quantity + 1))} disabled={unavailable || item.quantity >= maxQuantity} className="flex h-7 w-7 items-center justify-center rounded-r-md transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9" aria-label="Increase quantity">
                                 <Plus size={14} />
                               </button>
                             </div>
-                            <button onClick={() => removeItem(item.product.id)} className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10">
+                            <button onClick={() => removeItem(item.product.id)} className="inline-flex min-h-7 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-destructive transition-colors hover:bg-destructive/10 sm:min-h-9 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm">
                               <Trash2 size={15} /> Remove
                             </button>
                           </div>
@@ -291,7 +291,7 @@ const CartPage = () => {
                   ))}
                 </AnimatePresence>
               </div>
-            </div>
+            </section>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border border-border bg-card p-4">
@@ -312,7 +312,7 @@ const CartPage = () => {
             </div>
 
             {recommendedProducts.length > 0 && (
-              <div className="rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5">
+              <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card p-3 shadow-sm sm:p-5">
                 <div className="mb-4">
                   <h2 className="font-cinzel text-lg font-bold text-foreground">
                     {serverRecommendations.some((item) => item.sourceType === 'CO_PURCHASE' || item.type === 'frequently_bought_together') ? 'Often Paired With Your Items' : 'Complete Your Order'}
@@ -320,12 +320,12 @@ const CartPage = () => {
                   <p className="text-sm text-muted-foreground">Available products selected from current catalog and order signals.</p>
                 </div>
                 <ProductCarousel products={recommendedProducts} />
-              </div>
+              </section>
             )}
           </div>
 
-          <div>
-            <div className="sticky top-24 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+          <aside className="min-w-0">
+            <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm lg:sticky lg:top-24">
               <div className="border-b border-border bg-brand-raised px-5 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -344,7 +344,7 @@ const CartPage = () => {
                   )}
                   <div className="flex justify-between gap-4"><span className="text-muted-foreground">Packaging cost ({packagingRate}%)</span><span className="font-semibold">{formatPrice(serverPackaging)}</span></div>
                   <div className="flex justify-between gap-4"><span className="text-muted-foreground">Shipping charge</span><span className="font-semibold">{serverShipping === 0 ? <span className="text-tulsi">FREE</span> : formatPrice(serverShipping)}</span></div>
-                  <div className="flex justify-between gap-4"><span className="text-muted-foreground">COD fee</span><span className="font-semibold">Shown after payment choice</span></div>
+                  <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">COD fee</span><span className="max-w-[52%] text-right font-semibold">Shown after payment choice</span></div>
                   {serverShipping > 0 && <p className="rounded-md bg-brand-raised px-3 py-2 text-xs text-muted-foreground">Free shipping applies on orders above {formatPrice(freeShippingThreshold)}.</p>}
                   <div className="border-t border-border pt-4">
                     <div className="flex justify-between gap-4 font-bold text-base">
@@ -374,9 +374,9 @@ const CartPage = () => {
                 </Link>
               </div>
             </div>
-          </div>
+          </aside>
         </div>
-      </div>
+      </main>
       <Footer />
     </div>
   );

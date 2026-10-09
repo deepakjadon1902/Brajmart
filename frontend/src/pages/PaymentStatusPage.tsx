@@ -334,11 +334,11 @@ const PaymentStatusPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen overflow-x-hidden bg-background pb-20 md:pb-0">
       <Navbar />
-      <section className="py-16">
-        <div className="container mx-auto px-4 max-w-xl">
-          <div className="bg-card rounded-3xl border border-border p-8 text-center">
+      <section className="px-3 py-10 sm:px-4 sm:py-16">
+        <div className="mx-auto w-full max-w-xl">
+          <div className="rounded-lg border border-border bg-card p-5 text-center shadow-sm sm:rounded-3xl sm:p-8">
             {loading ? (
               <div className="space-y-4">
                 <Loader2 size={40} className="mx-auto text-saffron animate-spin" />
@@ -347,46 +347,46 @@ const PaymentStatusPage = () => {
             ) : status === 'paid' ? (
               <>
                 <CheckCircle2 size={56} className="mx-auto text-tulsi mb-4" />
-                <h1 className="font-cinzel text-2xl font-bold mb-2">Payment Successful</h1>
+                <h1 className="mb-2 font-cinzel text-[1.65rem] font-bold leading-tight sm:text-2xl">Payment Successful</h1>
                 <p className="text-muted-foreground text-sm">Your payment has been confirmed.</p>
               </>
             ) : status === 'pending' ? (
               <>
                 <Loader2 size={56} className="mx-auto text-saffron animate-spin mb-4" />
-                <h1 className="font-cinzel text-2xl font-bold mb-2">Payment Pending</h1>
+                <h1 className="mb-2 font-cinzel text-[1.65rem] font-bold leading-tight sm:text-2xl">Payment Pending</h1>
                 <p className="text-muted-foreground text-sm">We are verifying your payment. This may take a few minutes.</p>
               </>
             ) : (
               <>
                 <XCircle size={56} className="mx-auto text-red-500 mb-4" />
-                <h1 className="font-cinzel text-2xl font-bold mb-2">Payment Failed</h1>
+                <h1 className="mb-2 font-cinzel text-[1.65rem] font-bold leading-tight sm:text-2xl">Payment Failed</h1>
                 <p className="text-muted-foreground text-sm">We could not verify the payment. Please try again.</p>
               </>
             )}
 
             <div className="mt-6 space-y-2 text-sm">
               {orderId && (
-                <div className="flex items-center justify-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
                   <span className="text-muted-foreground">Order ID:</span>
-                  <span className="font-mono text-saffron">{orderId}</span>
+                  <span className="break-all font-mono text-saffron">{orderId}</span>
                 </div>
               )}
               {amount !== null && (
-                <div className="flex items-center justify-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
                   <span className="text-muted-foreground">Amount:</span>
                   <span className="font-semibold">{formatPrice(amount)}</span>
                 </div>
               )}
               {method && (
-                <div className="flex items-center justify-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
                   <span className="text-muted-foreground">Method:</span>
-                  <span className="font-medium">{method}</span>
+                  <span className="break-all font-medium">{method}</span>
                 </div>
               )}
             </div>
 
-            <div className="mt-8 flex flex-wrap gap-3 justify-center">
-              <Link to="/track-orders" className="px-5 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors">
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
+              <Link to="/track-orders" className="flex min-h-11 items-center justify-center rounded-xl border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted">
                 Track Order
               </Link>
               {(status === 'pending' || status === 'failed') && method === 'Razorpay' ? (
@@ -394,13 +394,13 @@ const PaymentStatusPage = () => {
                   type="button"
                   onClick={handleRetryPayment}
                   disabled={retrying}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gold-gradient px-5 py-2.5 text-sm font-bold text-maroon-dark shimmer disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {retrying ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
                   {retrying ? 'Opening Payment...' : 'Pay Again'}
                 </button>
               ) : (
-                <Link to="/checkout" className="px-5 py-2.5 rounded-xl bg-gold-gradient text-maroon-dark text-sm font-bold shimmer">
+                <Link to="/checkout" className="flex min-h-11 items-center justify-center rounded-xl bg-gold-gradient px-5 py-2.5 text-sm font-bold text-maroon-dark shimmer">
                   Back to Checkout
                 </Link>
               )}

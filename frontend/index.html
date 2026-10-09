@@ -22,7 +22,8 @@
               var url = new URL(String(value || ''), window.location.href);
               if (url.hostname !== 'www.facebook.com' || url.pathname !== '/tr') return false;
               var pixelId = url.searchParams.get('id') || '';
-              return pixelId && pixelId !== BRAJMART_META_PIXEL_ID;
+              if (pixelId && pixelId !== BRAJMART_META_PIXEL_ID) return true;
+              return pixelId === BRAJMART_META_PIXEL_ID && url.searchParams.get('ev') === 'Purchase';
             } catch (error) {
               return false;
             }
@@ -103,11 +104,6 @@
           window.fbq('set', 'autoConfig', false, BRAJMART_META_PIXEL_ID);
           window.fbq('init', BRAJMART_META_PIXEL_ID);
           (function () {
-            var allowedPurchaseEventIds = {};
-            window.__brajmartAllowMetaPurchaseEventId = function (eventId) {
-              if (!eventId) return;
-              allowedPurchaseEventIds[String(eventId)] = Date.now() + 30000;
-            };
             var rawFbq = window.fbq;
             var guardedFbq = function () {
               var args = Array.prototype.slice.call(arguments);
@@ -122,15 +118,10 @@
                 return;
               }
               if (args[0] === 'track' && args[1] === 'Purchase') {
-                var options = args[3] || {};
-                var eventId = options.eventID || options.eventId || '';
-                var expiresAt = allowedPurchaseEventIds[String(eventId)] || 0;
-                if (!eventId || expiresAt < Date.now()) {
-                  if (window.console && window.console.warn) {
-                    window.console.warn('Blocked unapproved Meta Purchase event.', { eventID: eventId, url: window.location.href });
-                  }
-                  return;
+                if (window.console && window.console.warn) {
+                  window.console.warn('Blocked browser Meta Purchase event. Purchase is sent only by verified Conversions API.', { url: window.location.href });
                 }
+                return;
               }
               return rawFbq.apply(this, arguments);
             };

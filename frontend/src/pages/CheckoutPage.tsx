@@ -927,9 +927,9 @@ const CheckoutPage = () => {
     label: string,
     disabled = false
   ) => (
-    <div>
+    <div className="min-w-0">
       <h3 className="text-sm font-semibold text-foreground mb-3">{label}</h3>
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid gap-3 md:grid-cols-2 md:gap-4">
         {addressFields.map((f) => {
           const fieldId = `${label.replace(/\s+/g, '-').toLowerCase()}-${f.key}`;
           return (
@@ -946,7 +946,7 @@ const CheckoutPage = () => {
                 onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
                 placeholder={f.placeholder}
                 disabled={disabled}
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors resize-none disabled:cursor-not-allowed disabled:opacity-70"
+                className="min-h-11 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:opacity-70 sm:px-4"
               />
             ) : f.key === 'state' ? (
               <select
@@ -954,7 +954,7 @@ const CheckoutPage = () => {
                 value={String(addr.state || '')}
                 onChange={(e) => setAddr((a) => ({ ...a, state: e.target.value }))}
                 disabled={disabled}
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors disabled:cursor-not-allowed disabled:opacity-70"
+                className="min-h-11 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:opacity-70 sm:px-4"
               >
                 <option value="" disabled>Select state</option>
                 {INDIA_STATES.map((s) => (
@@ -969,7 +969,7 @@ const CheckoutPage = () => {
                 onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
                 placeholder={f.placeholder}
                 disabled={disabled}
-                className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:border-gold transition-colors disabled:cursor-not-allowed disabled:opacity-70"
+                className="min-h-11 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:opacity-70 sm:px-4"
               />
             )}
           </div>
@@ -980,26 +980,26 @@ const CheckoutPage = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen overflow-x-hidden bg-background">
       <AnnouncementBar />
       <Navbar />
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => (step > 0 ? setStep(step - 1) : navigate('/cart'))} className="text-muted-foreground hover:text-foreground">
+      <main className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-8">
+        <div className="mb-5 flex items-center gap-3 sm:mb-6">
+          <button onClick={() => (step > 0 ? setStep(step - 1) : navigate('/cart'))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Go back">
             <ArrowLeft size={20} />
           </button>
-          <h1 className="font-cinzel text-2xl font-bold text-foreground">Checkout</h1>
+          <h1 className="font-cinzel text-[1.65rem] font-bold leading-tight text-foreground sm:text-2xl">Checkout</h1>
         </div>
 
         {/* Stepper */}
-        <div className="flex items-center justify-center gap-2 mb-8">
+        <div className="mb-6 flex items-center justify-center gap-1.5 sm:mb-8 sm:gap-2">
           {steps.map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${i <= step ? 'bg-gold-gradient text-maroon-dark' : 'bg-muted text-muted-foreground'}`}>
+            <div key={s} className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${i <= step ? 'bg-gold-gradient text-maroon-dark' : 'bg-muted text-muted-foreground'}`}>
                 {i < step ? <Check size={14} /> : i + 1}
               </div>
               <span className={`text-sm hidden sm:block ${i <= step ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>{s}</span>
-              {i < steps.length - 1 && <span className="w-8 h-px bg-border mx-1" />}
+              {i < steps.length - 1 && <span className="mx-1 h-px w-8 bg-border sm:w-10" />}
             </div>
           ))}
         </div>
@@ -1035,19 +1035,19 @@ const CheckoutPage = () => {
           </div>
         )}
 
-        <div className="grid min-w-0 lg:grid-cols-3 gap-8">
+        <div className="grid min-w-0 gap-4 lg:grid-cols-3 lg:gap-8">
           <div className="min-w-0 lg:col-span-2">
             <AnimatePresence mode="wait">
               {step === 0 && (
                 <motion.div key="delivery" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}>
-                  <div className="min-w-0 bg-card rounded-2xl border border-border p-6 space-y-6">
+                  <div className="min-w-0 space-y-5 rounded-lg border border-border bg-card p-3 shadow-sm sm:space-y-6 sm:rounded-2xl sm:p-6">
                     <div className="flex items-center gap-2">
                       <MapPin size={18} className="text-gold" />
                       <h2 className="font-cinzel text-lg font-bold">Delivery Details</h2>
                     </div>
                     {renderAddressForm(shippingAddress, setShippingAddress, 'Shipping Details')}
 
-                    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3 transition-colors hover:border-gold/40">
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/20 px-3.5 py-3 transition-colors hover:border-gold/40 sm:items-center sm:px-4">
                       <input
                         type="checkbox"
                         checked={billingSameAsShipping}
@@ -1088,7 +1088,7 @@ const CheckoutPage = () => {
 
               {step === 1 && (
                 <motion.div key="payment" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}>
-                  <div className="min-w-0 bg-card rounded-2xl border border-border p-4 shadow-sm sm:p-6">
+                  <div className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm sm:rounded-2xl sm:p-6">
                     <div className="flex min-w-0 flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -1097,7 +1097,7 @@ const CheckoutPage = () => {
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">Choose a secure payment gateway to complete your BrajMart order.</p>
                       </div>
-                      <div className="rounded-xl border border-gold/25 bg-gold/5 px-4 py-3 text-right">
+                      <div className="w-full rounded-xl border border-gold/25 bg-gold/5 px-4 py-3 text-left sm:w-auto sm:text-right">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Payable Now</p>
                         <p className="text-xl font-bold text-saffron tabular-nums">{formatPrice(grandTotal)}</p>
                       </div>
@@ -1163,7 +1163,9 @@ const CheckoutPage = () => {
                                 }}
                                 className="sr-only"
                               />
-                              <Logo />
+                              <div className="shrink-0">
+                                <Logo />
+                              </div>
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className={`text-sm font-semibold ${m.brandColor}`}>{m.title}</span>
@@ -1186,7 +1188,7 @@ const CheckoutPage = () => {
                                   ))}
                                 </div>
                               </div>
-                              <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selected ? 'border-gold bg-gold/10' : 'border-border bg-background'}`}>
+                              <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-gold bg-gold/10' : 'border-border bg-background'}`}>
                                 {selected && <div className="w-3 h-3 rounded-full bg-gold" />}
                               </div>
                             </div>
@@ -1229,7 +1231,7 @@ const CheckoutPage = () => {
 
                     {paymentMethod === 'razorpay' && (
                       <div className="mt-5 overflow-hidden rounded-xl border border-[#cfe0ff] bg-white shadow-sm">
-                        <div className="border-b border-[#e6efff] bg-[#0b72e7] px-5 py-4 text-white">
+                        <div className="border-b border-[#e6efff] bg-[#0b72e7] px-4 py-4 text-white sm:px-5">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
                               <p className="text-xs font-bold uppercase tracking-wide text-white/75">Razorpay Secure Checkout</p>
@@ -1277,15 +1279,15 @@ const CheckoutPage = () => {
 
               {step === 2 && (
                 <motion.div key="confirmation" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-                  <div className="bg-card rounded-2xl border border-border p-8 text-center">
+                  <div className="rounded-lg border border-border bg-card p-4 text-center sm:rounded-2xl sm:p-8">
                     <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
                       <CheckCircle2 size={64} className="mx-auto text-tulsi mb-4" />
                     </motion.div>
                     <h2 className="font-cinzel text-2xl font-bold text-foreground mb-2">Order Placed Successfully</h2>
                     <p className="text-muted-foreground text-sm mb-2">Your order has been confirmed</p>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-pearl rounded-xl mb-4">
+                    <div className="mb-4 inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-xl bg-pearl px-3 py-2 sm:px-4">
                       <span className="text-xs text-muted-foreground">Order ID: </span>
-                      <span className="font-bold text-saffron font-mono text-lg">{placedOrderId}</span>
+                      <span className="break-all font-mono text-base font-bold text-saffron sm:text-lg">{placedOrderId}</span>
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(placedOrderId);
@@ -1314,7 +1316,7 @@ const CheckoutPage = () => {
           {/* Summary sidebar */}
           {step < 2 && (
             <div className="min-w-0 lg:col-span-1">
-              <div className="min-w-0 bg-card rounded-2xl border border-border p-4 shadow-sm sm:p-6 lg:sticky lg:top-24">
+              <div className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm sm:rounded-2xl sm:p-6 lg:sticky lg:top-24">
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <h3 className="font-cinzel text-lg font-bold">Order Summary</h3>
@@ -1352,8 +1354,8 @@ const CheckoutPage = () => {
                 )}
                 <div className="space-y-3 mb-5">
                   {items.map((item) => (
-                    <div key={item.product.id} className="flex gap-3">
-                      <img src={item.product.image} alt={item.product.name} className="w-12 h-12 rounded-lg object-cover border border-border" />
+                    <div key={item.product.id} className="flex min-w-0 gap-3">
+                      <img src={item.product.image} alt={item.product.name} className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-foreground line-clamp-1">{item.product.name}</p>
                         <div className="flex items-center justify-between gap-2 mt-1">
@@ -1386,7 +1388,7 @@ const CheckoutPage = () => {
                           </button>
                         </div>
                       </div>
-                      <div className="shrink-0 text-right">
+                      <div className="max-w-[5.5rem] shrink-0 text-right">
                         <div className="text-xs font-semibold tabular-nums">{formatPrice(item.product.price * item.quantity)}</div>
                         <div className="text-[0.7rem] text-muted-foreground tabular-nums">{formatPrice(item.product.price)} each</div>
                       </div>
@@ -1438,28 +1440,28 @@ const CheckoutPage = () => {
                     <span>Price Details</span>
                     <span>INR</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-start justify-between gap-4">
                     <span className="text-muted-foreground">Product price</span>
-                    <span>{formatPrice(validatedSubtotal)}</span>
+                    <span className="text-right">{formatPrice(validatedSubtotal)}</span>
                   </div>
                   {totalSavings() > 0 && (
-                    <div className="flex justify-between text-tulsi">
+                    <div className="flex items-start justify-between gap-4 text-tulsi">
                       <span>Savings</span>
-                      <span>-{formatPrice(totalSavings())}</span>
+                      <span className="text-right">-{formatPrice(totalSavings())}</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
+                  <div className="flex items-start justify-between gap-4">
                     <span className="text-muted-foreground">Packaging cost ({packagingRate}%)</span>
-                    <span>{formatPrice(validatedPackaging)}</span>
+                    <span className="text-right">{formatPrice(validatedPackaging)}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-start justify-between gap-4">
                     <span className="text-muted-foreground">Shipping charge</span>
-                    <span className={validatedShipping === 0 ? 'text-tulsi font-medium' : ''}>{validatedShipping === 0 ? 'FREE' : formatPrice(validatedShipping)}</span>
+                    <span className={`text-right ${validatedShipping === 0 ? 'text-tulsi font-medium' : ''}`}>{validatedShipping === 0 ? 'FREE' : formatPrice(validatedShipping)}</span>
                   </div>
                   {codCharge > 0 && (
-                    <div className="flex justify-between">
+                    <div className="flex items-start justify-between gap-4">
                       <span className="text-muted-foreground">COD Handle Fee</span>
-                      <span>{formatPrice(codCharge)}</span>
+                      <span className="text-right">{formatPrice(codCharge)}</span>
                     </div>
                   )}
                   {couponDiscount > 0 && (
@@ -1468,9 +1470,9 @@ const CheckoutPage = () => {
                       <span>-{formatPrice(couponDiscount)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between font-bold text-base border-t border-border pt-3">
+                  <div className="flex items-start justify-between gap-4 border-t border-border pt-3 text-base font-bold">
                     <span>Payable Total</span>
-                    <span className="text-saffron">{formatPrice(grandTotal)}</span>
+                    <span className="text-right text-saffron">{formatPrice(grandTotal)}</span>
                   </div>
                 </div>
 
@@ -1480,7 +1482,7 @@ const CheckoutPage = () => {
                   disabled={step === 0
                     ? checkingPincode || checkoutValidating || hasCheckoutValidationChanges || hasCheckoutUnavailableItems
                     : processing || checkoutValidating || !checkoutValidatedCleanly || (!wantsCodService && paymentOptions.length === 0)}
-                  className="mt-4 w-full rounded-xl bg-gold-gradient px-4 py-3 text-sm font-bold text-maroon-dark shimmer transition-transform active:scale-[0.97] disabled:opacity-60"
+                  className="mt-4 flex min-h-12 w-full items-center justify-center rounded-xl bg-gold-gradient px-3 py-3 text-center text-sm font-bold leading-tight text-maroon-dark shimmer transition-transform active:scale-[0.97] disabled:opacity-60 sm:px-4"
                 >
                   {step === 0
                     ? checkingPincode
@@ -1504,7 +1506,7 @@ const CheckoutPage = () => {
             </div>
           )}
         </div>
-      </div>
+      </main>
       <Footer />
     </div>
   );
