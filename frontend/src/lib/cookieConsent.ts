@@ -5,7 +5,8 @@ const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
 type ConsentRecord = {
   accepted: boolean;
   version: string;
-  acceptedAt: string;
+  acceptedAt?: string;
+  dismissedAt?: string;
 };
 
 const readCookie = (name: string) => {
@@ -34,14 +35,16 @@ export const hasCookieConsent = () => {
   return Boolean(stored?.accepted && stored.version === CONSENT_VERSION);
 };
 
-export const acceptCookieConsent = () => {
-  if (typeof window === 'undefined') return;
+export const hasSeenCookieNotice = () => {
+  const cookieValue = readCookie(CONSENT_KEY);
+  if (cookieValue === 'accepted' || cookieValue === 'dismissed') return true;
 
-  const record: ConsentRecord = {
-    accepted: true,
-    version: CONSENT_VERSION,
-    acceptedAt: new Date().toISOString(),
-  };
+  const stored = readStoredConsent();
+  return Boolean(stored?.version === CONSENT_VERSION && (stored.accepted || stored.dismissedAt));
+};
+
+const saveCookieNoticeChoice = (record: ConsentRecord, cookieValue: 'accepted' | 'dismissed') => {
+  if (typeof window === 'undefined') return;
 
   try {
     window.localStorage.setItem(CONSENT_KEY, JSON.stringify(record));
@@ -49,5 +52,25 @@ export const acceptCookieConsent = () => {
     // Consent still falls back to the browser cookie below.
   }
 
-  document.cookie = `${CONSENT_KEY}=accepted; path=/; max-age=${COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
+  document.cookie = `${CONSENT_KEY}=${cookieValue}; path=/; max-age=${COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
+};
+
+export const acceptCookieConsent = () => {
+  const record: ConsentRecord = {
+    accepted: true,
+    version: CONSENT_VERSION,
+    acceptedAt: new Date().toISOString(),
+  };
+
+  saveCookieNoticeChoice(record, 'accepted');
+};
+
+export const dismissCookieNotice = () => {
+  const record: ConsentRecord = {
+    accepted: false,
+    version: CONSENT_VERSION,
+    dismissedAt: new Date().toISOString(),
+  };
+
+  saveCookieNoticeChoice(record, 'dismissed');
 };

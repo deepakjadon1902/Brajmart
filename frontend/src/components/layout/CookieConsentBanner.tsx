@@ -1,13 +1,13 @@
 import { Check, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
-import { acceptCookieConsent, hasCookieConsent } from '@/lib/cookieConsent';
+import { acceptCookieConsent, dismissCookieNotice, hasSeenCookieNotice } from '@/lib/cookieConsent';
 
 type CookieConsentBannerProps = {
   onAccept?: () => void;
 };
 
 const CookieConsentBanner = ({ onAccept }: CookieConsentBannerProps) => {
-  const [visible, setVisible] = useState(() => !hasCookieConsent());
+  const [visible, setVisible] = useState(() => !hasSeenCookieNotice());
 
   if (!visible) return null;
 
@@ -18,12 +18,13 @@ const CookieConsentBanner = ({ onAccept }: CookieConsentBannerProps) => {
   };
 
   const handleClose = () => {
+    dismissCookieNotice();
     setVisible(false);
   };
 
   return (
     <section
-      className="fixed inset-x-3 top-[76px] z-[95] mx-auto max-w-3xl rounded-lg border border-gold/30 bg-card/95 p-3 text-card-foreground shadow-2xl shadow-black/15 backdrop-blur supports-[backdrop-filter]:bg-card/90 sm:top-[88px] sm:p-4"
+      className="fixed inset-x-3 bottom-[76px] z-[95] mx-auto max-w-3xl rounded-lg border border-gold/30 bg-card/95 p-3 text-card-foreground shadow-2xl shadow-black/15 backdrop-blur supports-[backdrop-filter]:bg-card/90 sm:bottom-5 sm:p-4"
       aria-label="Cookie and performance notice"
     >
       <div className="flex items-start gap-3">
