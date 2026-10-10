@@ -81,23 +81,6 @@ const normalizeMetaPixelParams = (params: MetaPixelParams): MetaPixelParams => {
   return normalized;
 };
 
-const isValidPurchaseEvent = (eventId: string, params: MetaPixelParams) => {
-  const orderId = params.order_id;
-  const orderIdString = typeof orderId === 'number' || typeof orderId === 'string' ? String(orderId) : '';
-  if (!/^\d+$/.test(orderIdString)) return false;
-  if (eventId !== `brajmart.Purchase.order.${orderIdString}`) return false;
-  if (params.currency !== DEFAULT_CURRENCY) return false;
-  if (toPositiveMetaValue(params.value) === undefined) return false;
-  if (!Array.isArray(params.content_ids) || params.content_ids.length === 0) return false;
-  if (!Array.isArray(params.contents) || params.contents.length === 0) return false;
-
-  return params.contents.every((item) => {
-    if (!item || !item.id) return false;
-    const quantity = Number(item.quantity);
-    return Number.isFinite(quantity) && quantity > 0;
-  });
-};
-
 export const createMetaEventId = (eventName: MetaPixelEvent) => {
   const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
@@ -181,9 +164,9 @@ export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixel
     ...normalizeMetaPixelParams(params),
   };
 
-  if (eventName === 'Purchase' && !isValidPurchaseEvent(eventId, normalizedParams)) {
+  if (eventName === 'Purchase') {
     if (window.console && window.console.warn) {
-      window.console.warn('Blocked invalid Meta Purchase event.', { eventID: eventId, url: window.location.href });
+      window.console.warn('Blocked browser Meta Purchase event. Purchase is sent only after server-verified Razorpay payment.', { eventID: eventId, url: window.location.href });
     }
     return '';
   }

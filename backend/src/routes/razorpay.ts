@@ -11,6 +11,7 @@ import { resolveCodHandleFee } from '../lib/cod';
 import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
 import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
+import { sendVerifiedMetaPurchaseForOrder } from './metaConversions';
 
 const router = Router();
 const razorpayCreateLimiter = rateLimit('razorpay-create-order', {
@@ -417,6 +418,12 @@ const updateOrderForPayment = async (params: {
     method: statusRow.method || 'Razorpay',
     customerEmail: orderRow.customer_email,
   }).catch(() => {});
+
+  if (params.status === 'paid') {
+    sendVerifiedMetaPurchaseForOrder(statusRow.order_id, transactionId, params.razorpayOrderId).catch((err) => {
+      console.error('Meta verified Purchase event failed:', err);
+    });
+  }
 
   return { orderId: statusRow.order_id, paymentId: transactionId, status: params.status };
 };

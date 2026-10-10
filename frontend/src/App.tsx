@@ -18,8 +18,21 @@ import WhatsAppButton from "./components/layout/WhatsAppButton";
 import RouteSEO from "./components/seo/RouteSEO";
 import MobileBottomNav from "./components/layout/MobileBottomNav";
 import { loadCartDrawer } from "./components/cart/lazyCartDrawer";
+import CookieConsentBanner from "./components/layout/CookieConsentBanner";
+import { hasCookieConsent } from "./lib/cookieConsent";
 
-const queryClient = new QueryClient();
+const getQueryDefaults = () => ({
+  queries: {
+    retry: 1,
+    refetchOnWindowFocus: false,
+    staleTime: hasCookieConsent() ? 5 * 60 * 1000 : 30 * 1000,
+    gcTime: hasCookieConsent() ? 30 * 60 * 1000 : 5 * 60 * 1000,
+  },
+});
+
+const queryClient = new QueryClient({
+  defaultOptions: getQueryDefaults(),
+});
 const DEFAULT_FAVICON_URL = "/favicon.ico";
 const runWhenIdle = (callback: () => void, timeout = 1200) => {
   if (typeof window === 'undefined') {
@@ -399,6 +412,7 @@ const App = () => {
         </Helmet>
         <Toaster />
         <Sonner />
+        <CookieConsentBanner onAccept={() => queryClient.setDefaultOptions(getQueryDefaults())} />
         <ScrollToTop />
         <RouteSEO />
           <Routes>

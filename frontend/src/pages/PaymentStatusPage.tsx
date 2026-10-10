@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, CreditCard, XCircle, Loader2 } from 'lucide-react';
 import { fetchPaymentStatus, reportRazorpayPaymentFailed, retryRazorpayOrder, trackOrder, verifyRazorpayPayment } from '@/lib/api';
-import { toPositiveMetaValue, trackMetaPixelEvent } from '@/lib/metaPixel';
+import { toPositiveMetaValue } from '@/lib/metaPixel';
 import { clearCheckoutDraft } from '@/lib/checkoutDraft';
 import { useCartStore } from '@/store/cartStore';
 import { formatPrice } from '@/utils/formatPrice';
@@ -197,29 +197,6 @@ const PaymentStatusPage = () => {
     })).filter((i) => i.item_id);
 
     if (items.length === 0) return;
-
-    const eventId = `brajmart.Purchase.order.${orderId}`;
-
-    trackMetaPixelEvent('Purchase', {
-      content_ids: items.map((i) => i.item_id),
-      content_type: 'product',
-      contents: items.map((i) => ({
-        id: i.item_id,
-        item_price: i.price,
-        quantity: i.quantity,
-      })),
-      num_items: items.reduce((sum, i) => sum + i.quantity, 0),
-      order_id: orderId,
-      payment_id: paymentId || undefined,
-      payment_type: method || undefined,
-      value: analyticsValue,
-    }, {
-      eventId,
-      userData: {
-        email: customerEmail || undefined,
-        phone: customerPhone || undefined,
-      },
-    });
 
     // Push GA4 ecommerce purchase event to GTM dataLayer.
     // Use payment token as the stable transaction identifier.

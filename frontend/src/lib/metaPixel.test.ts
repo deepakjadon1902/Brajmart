@@ -18,7 +18,6 @@ describe('metaPixel', () => {
   beforeEach(() => {
     window.fbq = vi.fn();
     delete window.__brajmartLoadMarketing;
-    delete window.__brajmartAllowMetaPurchaseEventId;
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ ok: true }),
@@ -65,8 +64,7 @@ describe('metaPixel', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('sends purchase only to the server with a confirmed order event ID and payload', () => {
-    (window as unknown as { __brajmartAllowMetaPurchaseEventId?: ReturnType<typeof vi.fn> }).__brajmartAllowMetaPurchaseEventId = vi.fn();
+  it('blocks purchase events even with an order payload because the backend sends verified purchases', () => {
     const eventId = trackMetaPixelEvent('Purchase', {
       content_ids: ['101'],
       contents: [{ id: '101', item_price: 199, quantity: 2 }],
@@ -77,12 +75,9 @@ describe('metaPixel', () => {
       eventId: 'brajmart.Purchase.order.1234',
     });
 
-    expect(eventId).toBe('brajmart.Purchase.order.1234');
+    expect(eventId).toBe('');
     expect(window.fbq).not.toHaveBeenCalled();
-    expect((window as unknown as { __brajmartAllowMetaPurchaseEventId?: ReturnType<typeof vi.fn> }).__brajmartAllowMetaPurchaseEventId).not.toHaveBeenCalled();
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/meta/conversions'), expect.objectContaining({
-      body: expect.stringContaining('"eventId":"brajmart.Purchase.order.1234"'),
-    }));
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('sends matching browser and server event IDs for deduplication', () => {

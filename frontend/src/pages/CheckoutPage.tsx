@@ -1451,7 +1451,7 @@ const CheckoutPage = () => {
                     </div>
                   )}
                   <div className="flex items-start justify-between gap-4">
-                    <span className="text-muted-foreground">Packaging cost ({packagingRate}%)</span>
+                    <span className="text-muted-foreground">Packaging cost</span>
                     <span className="text-right">{formatPrice(validatedPackaging)}</span>
                   </div>
                   <div className="flex items-start justify-between gap-4">

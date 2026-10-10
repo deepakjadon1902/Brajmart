@@ -162,38 +162,31 @@ const normalizeSourceUrl = (value: unknown, req: express.Request) => {
   }
 };
 
-router.post('/', async (req, res) => {
-  const token = cleanString(process.env.META_CONVERSIONS_API_TOKEN);
-  const pixelId = cleanString(process.env.META_PIXEL_ID || process.env.META_DATASET_ID) || DEFAULT_PIXEL_ID;
-  const apiVersion = cleanString(process.env.META_CONVERSIONS_API_VERSION) || DEFAULT_API_VERSION;
+const getMetaConfig = () => ({
+  token: cleanString(process.env.META_CONVERSIONS_API_TOKEN),
+  pixelId: cleanString(process.env.META_PIXEL_ID || process.env.META_DATASET_ID) || DEFAULT_PIXEL_ID,
+  apiVersion: cleanString(process.env.META_CONVERSIONS_API_VERSION) || DEFAULT_API_VERSION,
+});
 
+const sendMetaConversionApiEvent = async (input: {
+  eventName: string;
+  eventId: string;
+  customData: Record<string, unknown>;
+  userData?: Record<string, unknown>;
+  eventSourceUrl?: string;
+}) => {
+  const { token, pixelId, apiVersion } = getMetaConfig();
   if (!token || !pixelId) {
-    return res.json({ ok: false, skipped: true, reason: 'not_configured' });
+    return { ok: false, skipped: true, reason: 'not_configured' };
   }
 
-  const body = req.body || {};
-  const eventName = cleanString(body.eventName);
-  const eventId = cleanString(body.eventId);
-  if (!ALLOWED_EVENTS.has(eventName) || !eventId) {
-    return res.status(400).json({ message: 'Invalid Meta event payload.' });
-  }
-  const customData = normalizeCustomData(body.customData);
-  if (eventName === 'Purchase' && !isValidPurchasePayload(eventId, customData)) {
-    return res.status(400).json({ message: 'Invalid Purchase event payload.' });
-  }
-  if (eventName === 'Purchase' && !(await hasPaidOrderForPurchase(customData))) {
-    return res.status(409).json({ message: 'Purchase event does not match a paid order.' });
-  }
-
-  const userData = body.userData && typeof body.userData === 'object' ? body.userData as Record<string, unknown> : {};
+  const userData = input.userData || {};
   const emailHash = hashEmail(userData.email);
   const phoneHash = hashPhone(userData.phone);
-  const clientUserAgent = cleanString(userData.clientUserAgent) || cleanString(req.headers['user-agent']);
-  const clientIp = getClientIp(req);
   const metaUserData: Record<string, unknown> = {};
 
-  if (clientIp) metaUserData.client_ip_address = clientIp;
-  if (clientUserAgent) metaUserData.client_user_agent = clientUserAgent;
+  if (cleanString(userData.clientIp)) metaUserData.client_ip_address = cleanString(userData.clientIp);
+  if (cleanString(userData.clientUserAgent)) metaUserData.client_user_agent = cleanString(userData.clientUserAgent);
   if (emailHash) metaUserData.em = [emailHash];
   if (phoneHash) metaUserData.ph = [phoneHash];
   if (cleanString(userData.fbp)) metaUserData.fbp = cleanString(userData.fbp);
@@ -201,33 +194,136 @@ router.post('/', async (req, res) => {
 
   const payload: Record<string, unknown> = {
     data: [{
-      event_name: EVENT_NAME_MAP[eventName] || eventName,
+      event_name: EVENT_NAME_MAP[input.eventName] || input.eventName,
       event_time: Math.floor(Date.now() / 1000),
-      event_id: eventId,
-      event_source_url: normalizeSourceUrl(body.eventSourceUrl, req),
+      event_id: input.eventId,
+      event_source_url: input.eventSourceUrl || DEFAULT_SITE_URL,
       action_source: 'website',
       user_data: metaUserData,
-      custom_data: customData,
+      custom_data: input.customData,
     }],
   };
 
   const testEventCode = cleanString(process.env.META_TEST_EVENT_CODE);
   if (testEventCode) payload.test_event_code = testEventCode;
 
+  const endpoint = new URL(`https://graph.facebook.com/${apiVersion}/${encodeURIComponent(pixelId)}/events`);
+  endpoint.searchParams.set('access_token', token);
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(async () => ({ message: await response.text().catch(() => '') }));
+  if (!response.ok) {
+    console.error('Meta Conversions API error:', data);
+    return { ok: false, status: response.status, data };
+  }
+  return { ok: true, eventId: input.eventId, response: data };
+};
+
+const parseObject = (value: unknown) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  if (typeof value !== 'string') return {};
   try {
-    const endpoint = new URL(`https://graph.facebook.com/${apiVersion}/${encodeURIComponent(pixelId)}/events`);
-    endpoint.searchParams.set('access_token', token);
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+};
+
+const getOrderPhone = (order: any) => {
+  const billing = parseObject(order.billing_address);
+  const shipping = parseObject(order.shipping_address);
+  return cleanString(billing?.mobile || billing?.phone || shipping?.mobile || shipping?.phone);
+};
+
+export const sendVerifiedMetaPurchaseForOrder = async (orderId: number | string, paymentId?: string, statusToken?: string) => {
+  if (!isDbConnected()) return { ok: false, skipped: true, reason: 'db_unavailable' };
+  const orderIdString = cleanString(orderId);
+  if (!/^\d+$/.test(orderIdString)) return { ok: false, skipped: true, reason: 'invalid_order' };
+
+  const orderRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [orderIdString]);
+  const order = orderRows[0];
+  if (!order) return { ok: false, skipped: true, reason: 'order_not_found' };
+
+  const total = Number(order.total || 0);
+  const items = parseOrderItems(order.items).map((item) => {
+    const id = orderItemId(item);
+    const quantity = Number(item.quantity || 1);
+    const price = Number(item.price || item.item_price || 0);
+    return {
+      id,
+      quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+      item_price: Number.isFinite(price) && price > 0 ? Math.round((price + Number.EPSILON) * 100) / 100 : undefined,
+    };
+  }).filter((item) => item.id);
+
+  const customData = normalizeCustomData({
+    currency: 'INR',
+    value: Number.isFinite(total) ? Math.round((total + Number.EPSILON) * 100) / 100 : 0,
+    order_id: orderIdString,
+    content_ids: items.map((item) => item.id),
+    content_type: 'product',
+    contents: items,
+    num_items: items.reduce((sum, item) => sum + item.quantity, 0),
+    payment_id: paymentId || undefined,
+    payment_type: 'Razorpay',
+    payment_method: 'Razorpay',
+  });
+  const eventId = `brajmart.Purchase.order.${orderIdString}`;
+  if (!isValidPurchasePayload(eventId, customData)) {
+    return { ok: false, skipped: true, reason: 'invalid_purchase_payload' };
+  }
+  if (!(await hasPaidOrderForPurchase(customData))) {
+    return { ok: false, skipped: true, reason: 'not_paid' };
+  }
+
+  return sendMetaConversionApiEvent({
+    eventName: 'Purchase',
+    eventId,
+    eventSourceUrl: `${cleanString(process.env.FRONTEND_URL || process.env.SITE_URL) || DEFAULT_SITE_URL}/payment-status/${encodeURIComponent(cleanString(statusToken || orderIdString))}`,
+    userData: {
+      email: order.customer_email,
+      phone: getOrderPhone(order),
+    },
+    customData,
+  });
+};
+
+router.post('/', async (req, res) => {
+  const body = req.body || {};
+  const eventName = cleanString(body.eventName);
+  const eventId = cleanString(body.eventId);
+  if (!ALLOWED_EVENTS.has(eventName) || !eventId) {
+    return res.status(400).json({ message: 'Invalid Meta event payload.' });
+  }
+  const customData = normalizeCustomData(body.customData);
+  if (eventName === 'Purchase') {
+    return res.status(403).json({ message: 'Purchase events are sent only after server-verified Razorpay payment.' });
+  }
+
+  const userData = body.userData && typeof body.userData === 'object' ? body.userData as Record<string, unknown> : {};
+  const clientUserAgent = cleanString(userData.clientUserAgent) || cleanString(req.headers['user-agent']);
+  const clientIp = getClientIp(req);
+
+  try {
+    const data = await sendMetaConversionApiEvent({
+      eventName,
+      eventId,
+      eventSourceUrl: normalizeSourceUrl(body.eventSourceUrl, req),
+      userData: {
+        ...userData,
+        clientIp,
+        clientUserAgent,
+      },
+      customData,
     });
-    const data = await response.json().catch(async () => ({ message: await response.text().catch(() => '') }));
-    if (!response.ok) {
-      console.error('Meta Conversions API error:', data);
+    if (!data.ok && !data.skipped) {
       return res.status(502).json({ ok: false, message: 'Meta Conversions API request failed.' });
     }
-    return res.json({ ok: true, eventId, response: data });
+    return res.json(data);
   } catch (err) {
     console.error('Meta Conversions API request error:', err);
     return res.status(502).json({ ok: false, message: 'Meta Conversions API request failed.' });
