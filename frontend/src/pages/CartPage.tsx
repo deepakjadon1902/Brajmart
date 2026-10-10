@@ -342,7 +342,7 @@ const CartPage = () => {
                   {serverSavings > 0 && (
                     <div className="flex justify-between gap-4 text-tulsi"><span>Savings</span><span className="font-semibold">-{formatPrice(serverSavings)}</span></div>
                   )}
-                  <div className="flex justify-between gap-4"><span className="text-muted-foreground">Packaging cost ({packagingRate}%)</span><span className="font-semibold">{formatPrice(serverPackaging)}</span></div>
+                  <div className="flex justify-between gap-4"><span className="text-muted-foreground">Packaging cost</span><span className="font-semibold">{formatPrice(serverPackaging)}</span></div>
                   <div className="flex justify-between gap-4"><span className="text-muted-foreground">Shipping charge</span><span className="font-semibold">{serverShipping === 0 ? <span className="text-tulsi">FREE</span> : formatPrice(serverShipping)}</span></div>
                   <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">COD fee</span><span className="max-w-[52%] text-right font-semibold">Shown after payment choice</span></div>
                   {serverShipping > 0 && <p className="rounded-md bg-brand-raised px-3 py-2 text-xs text-muted-foreground">Free shipping applies on orders above {formatPrice(freeShippingThreshold)}.</p>}
