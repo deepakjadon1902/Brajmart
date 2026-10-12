@@ -64,4 +64,4 @@ Environment variables:
 - `POST /api/upload` — Upload image (auth, max 1MB)
 
 ### Meta Test
-Test Meta Pixel
+Test Meta Pixel final
