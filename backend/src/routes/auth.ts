@@ -125,6 +125,7 @@ const adminLoginLimiter = rateLimit('admin-login', { windowMs: 15 * 60 * 1000, m
 router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { name, email, password } = req.body;
+    const mobile = String(req.body?.mobile || req.body?.phone || '').replace(/\D/g, '').slice(0, 15);
     if (!name || !email || !password) return res.status(400).json({ message: 'Missing fields' });
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
@@ -135,7 +136,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     const verification = createOtp();
     const result: any = await dbExecute(
       'INSERT INTO users (name, email, password, phone, role, status, google_id, avatar, is_verified, verification_token, verification_token_expires, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, email, passwordHash, '', 'user', 'active', null, '', 0, verification.otp, verification.expires, JSON.stringify([])]
+      [name, email, passwordHash, mobile, 'user', 'active', null, '', 0, verification.otp, verification.expires, JSON.stringify([])]
     );
 
     const userId = String(result.insertId);
@@ -196,7 +197,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(403).json({ message: 'Please verify your email. A new verification code has been sent.', code: 'EMAIL_NOT_VERIFIED', email: row.email });
     }
 
-    res.json({ token: signToken({ id: String(row.id), email: row.email, role: row.role }), user: { id: String(row.id), name: row.name, email: row.email, role: row.role } });
+    res.json({ token: signToken({ id: String(row.id), email: row.email, role: row.role }), user: mapUserRow(row) });
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }
@@ -457,7 +458,7 @@ router.post('/verify-otp', otpLimiter, async (req, res) => {
     const userRow = refreshed[0];
     if (!userRow) return res.json({ message: 'Email verified successfully' });
     const token = signToken({ id: String(userRow.id), email: userRow.email, role: userRow.role || 'user' });
-    res.json({ message: 'Email verified successfully', token, user: { id: String(userRow.id), name: userRow.name, email: userRow.email, role: userRow.role || 'user' } });
+    res.json({ message: 'Email verified successfully', token, user: mapUserRow(userRow) });
   } catch (err: any) {
     res.status(500).json({ message: err.message || 'Verification failed' });
   }

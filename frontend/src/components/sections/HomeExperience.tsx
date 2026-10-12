@@ -25,7 +25,7 @@ export const WhyBrajMart = () => (
         {[
           { icon: ShieldCheck, title: 'Authentic Selection', text: "Products are curated around BrajMart's devotional catalog and real product data." },
           { icon: Truck, title: 'Delivery Clarity', text: 'Shipping fees, free-shipping threshold and delivery checks use configured settings.' },
-          { icon: MessageCircle, title: 'Human Support', text: 'WhatsApp, email, order tracking and customer-service routes stay close at hand.' },
+          { icon: MessageCircle, title: '24/7 Support', text: 'WhatsApp, email, order tracking and customer-service routes stay close at hand.' },
         ].map((item) => {
           const Icon = item.icon;
           return (

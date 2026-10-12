@@ -51,13 +51,13 @@ const CollectionSection = ({
         <div className="flex justify-end -mt-3 mb-2 px-3 sm:px-0">
           <Link
             to={viewAllLink}
-            className="inline-flex items-center gap-2 text-saffron font-semibold text-sm hover:underline"
+            className="inline-flex items-center gap-2 text-base font-bold text-saffron hover:underline sm:text-[17px]"
           >
             <span>View More</span>
           </Link>
         </div>
       )}
-      <ProductCarousel products={visibleProducts} priority={priority} />
+      <ProductCarousel products={visibleProducts} priority={priority} viewAllLink={viewAllLink} />
     </div>
   </section>
   );

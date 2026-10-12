@@ -114,7 +114,7 @@ export const sendTestEmail = (to: string) =>
   getJson<Record<string, any>>('/settings/test-email', { method: 'POST', body: { to } });
 
 // Auth
-export const registerUser = (payload: { name: string; email: string; password: string }) =>
+export const registerUser = (payload: { name: string; email: string; password: string; mobile?: string }) =>
   getJson('/auth/register', { method: 'POST', body: payload });
 export const loginUser = (payload: { email: string; password: string }) =>
   getJson('/auth/login', { method: 'POST', body: payload });

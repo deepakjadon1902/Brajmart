@@ -135,13 +135,13 @@ const CategoryNavbar = () => {
             {categories.map((cat) => (
               <div
                 key={cat.id}
-                className={`min-w-0 snap-start transition-[flex-basis,width] duration-300 md:flex md:flex-1 md:shrink-0 md:justify-center ${
+                className={`min-w-max snap-start transition-[flex-basis,width] duration-300 md:flex md:flex-none md:shrink-0 md:justify-center ${
                   isMobileCompact ? 'w-auto shrink-0' : ''
                 }`}
               >
                 <RouterLink
                   to={`/category/${categoryToSlug(cat.name)}`}
-                  className={`inline-flex min-w-0 items-center gap-1.5 rounded-full border border-amber-100 bg-white text-center text-[12px] font-semibold leading-tight text-foreground shadow-[0_1px_4px_rgba(88,58,36,0.06)] transition-all duration-300 hover:bg-brand-soft hover:text-saffron md:h-11 md:w-auto md:justify-start md:gap-2 md:border-0 md:bg-transparent md:px-3.5 md:text-[15px] md:shadow-none ${
+                  className={`inline-flex min-w-max items-center gap-1.5 rounded-full border border-amber-100 bg-white text-center text-[12px] font-semibold leading-tight text-foreground shadow-[0_1px_4px_rgba(88,58,36,0.06)] transition-all duration-300 hover:bg-brand-soft hover:text-saffron md:h-11 md:w-auto md:justify-start md:gap-2 md:border-0 md:bg-transparent md:px-3.5 md:text-[15px] md:shadow-none ${
                     isMobileCompact
                       ? 'h-8 w-auto justify-center px-2.5'
                       : 'h-10 w-full justify-start px-2.5'
@@ -149,12 +149,12 @@ const CategoryNavbar = () => {
                   onClick={closeMenus}
                 >
                   <CategoryIcon icon={cat.icon} name={cat.name} />
-                  <span className="min-w-0 truncate !text-[12px] !leading-tight md:!text-[15px]">{displayCategoryName(cat.name)}</span>
+                  <span className="whitespace-nowrap !text-[12px] !leading-tight md:!text-[15px]">{displayCategoryName(cat.name)}</span>
                 </RouterLink>
               </div>
             ))}
 
-            <div className={`min-w-0 snap-start transition-[flex-basis,width] duration-300 md:col-auto md:flex md:flex-1 md:shrink-0 md:justify-center ${
+            <div className={`min-w-max snap-start transition-[flex-basis,width] duration-300 md:col-auto md:flex md:flex-none md:shrink-0 md:justify-center ${
               isMobileCompact ? 'w-auto shrink-0' : 'col-span-2'
             }`}>
               <button

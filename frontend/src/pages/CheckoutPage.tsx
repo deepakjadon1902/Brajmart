@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Check, Minus, Plus, Trash2, Truck, Tag, X } from 'lucide-react';
+import { ArrowLeft, MapPin, CreditCard, CheckCircle2, ShieldCheck, Check, Minus, Plus, Trash2, Truck, Tag, X } from 'lucide-react';
 import { SiRazorpay } from 'react-icons/si';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '@/store/cartStore';
@@ -24,6 +24,15 @@ const CHECKOUT_IDEMPOTENCY_STORAGE_KEY = 'brajmart-checkout-idempotency';
 const INITIATE_CHECKOUT_TRACKING_STORAGE_KEY = 'brajmart-initiate-checkout-tracked';
 type ServiceabilityState = { pincode: string; serviceable: boolean; codAvailable: boolean; manualReview?: boolean; message?: string };
 type DeliveryCheckResponse = Partial<Omit<ServiceabilityState, 'pincode'>>;
+type PincodeLookupResponse = Array<{
+  Status?: string;
+  PostOffice?: Array<{
+    District?: string;
+    State?: string;
+    Block?: string;
+    Name?: string;
+  }>;
+}>;
 type CreatedOrderResponse = { orderId?: string | number; _id?: string | number; id?: string | number };
 type AddressValidationResult = { valid: true } | { valid: false; message: string };
 type BundleSnapshot = {
@@ -60,6 +69,9 @@ const isValidPincode = (value?: string) => {
   const digits = String(value || '').replace(/\D/g, '');
   return /^[1-9]\d{5}$/.test(digits) && !isRepeatedCharacters(digits) && digits !== '123456';
 };
+
+const normalizeStateName = (value: string) =>
+  cleanText(value).toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
 
 declare global {
   interface Window {
@@ -141,6 +153,11 @@ const INDIA_STATES = [
   'Puducherry',
 ] as const;
 
+const matchIndianState = (value?: string) => {
+  const normalized = normalizeStateName(value || '');
+  return INDIA_STATES.find((state) => normalizeStateName(state) === normalized) || '';
+};
+
 const RazorpayLogo = () => (
   <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#0b72e7]/25 bg-[#0b72e7]/10 text-[#0b72e7]">
     <SiRazorpay size={24} />
@@ -174,7 +191,6 @@ const CheckoutPage = () => {
 
   const [step, setStep] = useState(() => initialCheckoutDraft?.step && initialCheckoutDraft.step > 0 ? initialCheckoutDraft.step : 0);
   const [paymentMethod, setPaymentMethod] = useState(initialCheckoutDraft?.paymentMethod || 'razorpay');
-  const [placedOrderId, setPlacedOrderId] = useState('');
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(initialCheckoutDraft?.billingSameAsShipping ?? true);
   const [processing, setProcessing] = useState(false);
   const [customerEmail, setCustomerEmail] = useState(initialCheckoutDraft?.customerEmail || user?.email || '');
@@ -499,11 +515,64 @@ const CheckoutPage = () => {
   }, [effectivePincode, serviceability?.pincode]);
 
   useEffect(() => {
-    if (!user?.email) return;
-    setCustomerEmail(user.email);
-    setBillingAddress((addr) => ({ ...addr, email: addr.email || user.email || '' }));
-    setShippingAddress((addr) => ({ ...addr, email: addr.email || user.email || '' }));
-  }, [user?.email]);
+    const pincode = String(effectivePincode || '').replace(/\D/g, '');
+    if (!/^[1-9]\d{5}$/.test(pincode)) return;
+
+    let active = true;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`, {
+          signal: controller.signal,
+        });
+        const data = await response.json() as PincodeLookupResponse;
+        const postOffice = Array.isArray(data?.[0]?.PostOffice) ? data[0].PostOffice?.[0] : null;
+        const city = cleanText(postOffice?.District || postOffice?.Block || postOffice?.Name);
+        const state = matchIndianState(postOffice?.State);
+        if (!active || !city || !state) return;
+
+        setShippingAddress((addr) => {
+          if (String(addr.pincode || '').replace(/\D/g, '') !== pincode) return addr;
+          if (cleanText(addr.city) === city && cleanText(addr.state) === state) return addr;
+          return { ...addr, city, state };
+        });
+      } catch {
+        // Pincode lookup is a convenience; manual city/state entry still works.
+      }
+    }, 350);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [effectivePincode]);
+
+  useEffect(() => {
+    if (!user) return;
+    const profileAddress = getDefaultAddress(user);
+    setCustomerEmail((current) => current || profileAddress.email || '');
+    setShippingAddress((addr) => ({
+      ...addr,
+      fullName: addr.fullName || profileAddress.fullName,
+      mobile: addr.mobile || profileAddress.mobile,
+      street: addr.street || profileAddress.street,
+      city: addr.city || profileAddress.city,
+      state: addr.state || profileAddress.state,
+      pincode: addr.pincode || profileAddress.pincode,
+      email: addr.email || profileAddress.email,
+    }));
+    setBillingAddress((addr) => ({
+      ...addr,
+      fullName: addr.fullName || profileAddress.fullName,
+      mobile: addr.mobile || profileAddress.mobile,
+      street: addr.street || profileAddress.street,
+      city: addr.city || profileAddress.city,
+      state: addr.state || profileAddress.state,
+      pincode: addr.pincode || profileAddress.pincode,
+      email: addr.email || profileAddress.email,
+    }));
+  }, [user]);
 
   useEffect(() => {
     if (billingSameAsShipping) setBillingAddress({ ...shippingAddress });
@@ -865,12 +934,27 @@ const CheckoutPage = () => {
           couponCode: appliedCoupon?.code || undefined,
           statusHistory: [{ status: 'confirmed', date: new Date().toISOString(), note: 'Order confirmed with Cash on Delivery' }],
         }) as CreatedOrderResponse;
-        setPlacedOrderId(String(order?.orderId || order?._id || order?.id || ''));
+        const confirmedOrderId = String(order?.orderId || order?._id || order?.id || '');
+        try {
+          sessionStorage.setItem('brajmart-last-success-order', JSON.stringify({
+            orderId: confirmedOrderId,
+            total: grandTotal,
+            paymentMethod: 'COD',
+            estimatedDelivery: new Date(Date.now() + 5 * 86400000).toISOString(),
+            items: items.map((item) => ({
+              name: item.product.name,
+              quantity: item.quantity,
+              image: item.product.image,
+            })),
+          }));
+        } catch {
+          // The thank-you page can still load the order by ID.
+        }
         sessionStorage.removeItem('brajmart-last-bundle');
         clearCheckoutDraft(user?.id);
         clearCart();
-        setStep(2);
         toast.success('COD order confirmed successfully');
+        navigate(`/thank-you?orderId=${encodeURIComponent(confirmedOrderId)}`, { replace: true });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : '';
         toast.error(message || 'Unable to confirm COD order. Please try again.');
@@ -1220,39 +1304,6 @@ const CheckoutPage = () => {
                 </motion.div>
               )}
 
-              {step === 2 && (
-                <motion.div key="confirmation" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-                  <div className="rounded-lg border border-border bg-card p-4 text-center sm:rounded-2xl sm:p-8">
-                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
-                      <CheckCircle2 size={64} className="mx-auto text-tulsi mb-4" />
-                    </motion.div>
-                    <h2 className="font-cinzel text-2xl font-bold text-foreground mb-2">Order Placed Successfully</h2>
-                    <p className="text-muted-foreground text-sm mb-2">Your order has been confirmed</p>
-                    <div className="mb-4 inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-xl bg-pearl px-3 py-2 sm:px-4">
-                      <span className="text-xs text-muted-foreground">Order ID: </span>
-                      <span className="break-all font-mono text-base font-bold text-saffron sm:text-lg">{placedOrderId}</span>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(placedOrderId);
-                          toast.success('Order ID copied!');
-                        }}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <Copy size={14} />
-                      </button>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-6">Estimated delivery in 3-7 business days</p>
-                    <div className="flex gap-3 justify-center flex-wrap">
-                      <Link to="/track-orders" className="px-6 py-3 rounded-xl border border-border text-foreground font-medium text-sm hover:bg-muted transition-colors">
-                        Track Order
-                      </Link>
-                      <Link to="/" className="px-6 py-3 rounded-xl bg-gold-gradient text-maroon-dark font-bold text-sm shimmer">
-                        Continue Shopping
-                      </Link>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
             </AnimatePresence>
           </div>
 
@@ -1438,7 +1489,7 @@ const CheckoutPage = () => {
                         ? 'Validating cart...'
                         : hasCheckoutValidationChanges || hasCheckoutUnavailableItems
                           ? 'Apply cart updates first'
-                          : `Deliver Here - ${formatPrice(grandTotal)}`
+                          : `Continue to Payment - ${formatPrice(grandTotal)}`
                     : processing
                       ? wantsCodService ? 'Confirming COD Order...' : 'Processing Payment...'
                       : checkoutValidating

@@ -124,7 +124,7 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
 
   return (
     <div
-      className={`product-card group relative flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-gold/50 hover:shadow-md content-visibility-auto ${isCompact ? 'min-h-[312px] sm:min-h-[335px]' : 'min-h-[375px]'}`}
+      className={`product-card group relative flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-gold/50 hover:shadow-md content-visibility-auto ${isCompact ? 'min-h-[292px] sm:min-h-[315px]' : 'min-h-[355px]'}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -196,30 +196,22 @@ const ProductCard = ({ product, index = 0, variant = 'compact', priority = false
           </h3>
         </Link>
 
-        <div className="min-h-[18px]">
+        <div className="flex min-h-[18px] flex-wrap items-center gap-x-2 gap-y-1">
           {hasReviewRating(product) ? (
             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
               <Star size={12} className="fill-[#d69a00] text-[#d69a00]" aria-hidden="true" />
               {ratingValue.toFixed(1).replace(/\.0$/, '')} ({reviewCount})
             </span>
-          ) : codEligible ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-tulsi">
-              <Truck size={12} aria-hidden="true" />
-              COD available
-            </span>
           ) : (
             <span className="text-[11px] text-muted-foreground">No reviews yet</span>
           )}
-        </div>
-
-        {hasReviewRating(product) && codEligible && (
-          <div className="min-h-[18px]">
+          {codEligible && (
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-tulsi">
               <Truck size={12} aria-hidden="true" />
               COD available
             </span>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="mt-auto flex items-baseline gap-1.5 leading-tight">
           <div className="price-current font-sans text-[15px] font-bold text-[#212121] sm:text-[16px]">{formatPrice(product.price)}</div>

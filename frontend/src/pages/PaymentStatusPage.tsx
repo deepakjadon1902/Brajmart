@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { CheckCircle2, CreditCard, XCircle, Loader2 } from 'lucide-react';
+import { CreditCard, XCircle, Loader2 } from 'lucide-react';
 import { fetchPaymentStatus, reportRazorpayPaymentFailed, retryRazorpayOrder, trackOrder, verifyRazorpayPayment } from '@/lib/api';
 import { toPositiveMetaValue } from '@/lib/metaPixel';
 import { clearCheckoutDraft } from '@/lib/checkoutDraft';
@@ -9,6 +9,7 @@ import { formatPrice } from '@/utils/formatPrice';
 import { toast } from 'sonner';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+import OrderSuccessCard from '@/components/orders/OrderSuccessCard';
 
 type PaymentStatusResponse = {
   status?: 'paid' | 'pending' | 'failed' | null;
@@ -29,10 +30,13 @@ type OrderItem = {
   name?: string;
   price?: number | string;
   quantity?: number | string;
+  image?: string;
 };
 
 type TrackedOrder = {
   items?: OrderItem[];
+  trackingId?: string | null;
+  estimatedDelivery?: string | null;
 };
 
 const purchaseTrackedKey = (orderId: number | string) => `brajmart-purchase-tracked:${orderId}`;
@@ -105,6 +109,8 @@ const PaymentStatusPage = () => {
   const [customerEmail, setCustomerEmail] = useState<string | null>(null);
   const [customerPhone, setCustomerPhone] = useState<string | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[] | null>(null);
+  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [estimatedDelivery, setEstimatedDelivery] = useState<string | null>(null);
   const purchasePushedRef = useRef<string>('');
   const clearCart = useCartStore((state) => state.clearCart);
 
@@ -161,6 +167,8 @@ const PaymentStatusPage = () => {
         const order = await trackOrder(orderId) as TrackedOrder;
         if (!active) return;
         setOrderItems(Array.isArray(order?.items) ? order.items : []);
+        setTrackingId(order?.trackingId || null);
+        setEstimatedDelivery(order?.estimatedDelivery || null);
       } catch {
         if (active) setOrderItems([]);
       }
@@ -310,6 +318,27 @@ const PaymentStatusPage = () => {
     }
   };
 
+  if (!loading && status === 'paid') {
+    return (
+      <div className="min-h-screen overflow-x-hidden bg-background pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
+        <Navbar />
+        <section className="px-2.5 py-5 sm:px-4 sm:py-10 lg:py-12">
+          <OrderSuccessCard
+            orderId={orderId}
+            amount={amount}
+            method={method || 'Razorpay'}
+            paymentId={paymentId}
+            trackingId={trackingId}
+            estimatedDelivery={estimatedDelivery}
+            items={orderItems}
+            secureLabel="Payment verified and order confirmed"
+          />
+        </section>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-background pb-20 md:pb-0">
       <Navbar />
@@ -321,12 +350,6 @@ const PaymentStatusPage = () => {
                 <Loader2 size={40} className="mx-auto text-saffron animate-spin" />
                 <p className="text-muted-foreground text-sm">Checking payment status...</p>
               </div>
-            ) : status === 'paid' ? (
-              <>
-                <CheckCircle2 size={56} className="mx-auto text-tulsi mb-4" />
-                <h1 className="mb-2 font-cinzel text-[1.65rem] font-bold leading-tight sm:text-2xl">Payment Successful</h1>
-                <p className="text-muted-foreground text-sm">Your payment has been confirmed.</p>
-              </>
             ) : status === 'pending' ? (
               <>
                 <Loader2 size={56} className="mx-auto text-saffron animate-spin mb-4" />

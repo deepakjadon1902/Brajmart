@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Product } from '@/types/product';
 import ProductCard from './ProductCard';
@@ -6,9 +7,10 @@ import ProductCard from './ProductCard';
 interface ProductCarouselProps {
   products: Product[];
   priority?: boolean;
+  viewAllLink?: string;
 }
 
-const ProductCarousel = ({ products, priority = false }: ProductCarouselProps) => {
+const ProductCarousel = ({ products, priority = false, viewAllLink }: ProductCarouselProps) => {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   const scrollByPage = useCallback((direction: -1 | 1) => {
@@ -46,13 +48,24 @@ const ProductCarousel = ({ products, priority = false }: ProductCarouselProps) =
       >
         <ChevronLeft size={18} className="text-maroon" />
       </button>
-      <button
-        onClick={scrollNext}
-        className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 w-10 h-10 rounded-full glass border border-gold/30 shadow-lg items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity hover:bg-gold/10 active:scale-95 z-10"
-        aria-label="Next"
-      >
-        <ChevronRight size={18} className="text-maroon" />
-      </button>
+      {viewAllLink ? (
+        <Link
+          to={viewAllLink}
+          className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 w-10 h-10 rounded-full glass border border-gold/30 shadow-lg items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity hover:bg-gold/10 active:scale-95 z-10"
+          aria-label="View all products in this collection"
+        >
+          <ChevronRight size={18} className="text-maroon" />
+        </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={scrollNext}
+          className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 w-10 h-10 rounded-full glass border border-gold/30 shadow-lg items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition-opacity hover:bg-gold/10 active:scale-95 z-10"
+          aria-label="Next"
+        >
+          <ChevronRight size={18} className="text-maroon" />
+        </button>
+      )}
     </div>
   );
 };

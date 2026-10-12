@@ -63,12 +63,7 @@ export const useAuthStore = create<AuthStore>()(
         try {
           const res: any = await loginUser({ email, password: _password });
           setAuthToken(res.token);
-          const user: User = {
-            id: res.user.id,
-            fullName: res.user.name,
-            email: res.user.email,
-            authProvider: 'email',
-          };
+          const user: User = mapUserFromApi(res.user, { authProvider: 'email' });
           set({ user, isAuthenticated: true, token: res.token });
           return { ok: true };
         } catch (err: any) {
@@ -77,7 +72,7 @@ export const useAuthStore = create<AuthStore>()(
       },
       register: async (data) => {
         try {
-          const res: any = await registerUser({ name: data.fullName, email: data.email, password: data.password });
+          const res: any = await registerUser({ name: data.fullName, email: data.email, password: data.password, mobile: data.mobile });
           return { ok: true, message: res?.message || 'Verification code sent' };
         } catch (err: any) {
           return { ok: false, message: err?.message || 'Registration failed' };
@@ -133,12 +128,7 @@ export const useAuthStore = create<AuthStore>()(
           const res: any = await verifyPasswordResetOtp(payload);
           if (res?.token && res?.user) {
             setAuthToken(res.token);
-            const user: User = {
-              id: res.user.id,
-              fullName: res.user.name,
-              email: res.user.email,
-              authProvider: 'email',
-            };
+            const user: User = mapUserFromApi(res.user, { authProvider: 'email' });
             set({ user, isAuthenticated: true, token: res.token });
           }
           return { ok: true, message: res?.message || 'Verified' };

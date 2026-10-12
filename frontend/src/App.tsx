@@ -146,6 +146,7 @@ const BrajDarshanPage = preloadableRoute(() => import("./pages/BrajDarshanPage")
 const NotFound = preloadableRoute(() => import("./pages/NotFound"));
 const UserOrderTracking = lazy(() => import("./pages/UserOrderTracking"));
 const PaymentStatusPage = lazy(() => import("./pages/PaymentStatusPage"));
+const ThankYouPage = lazy(() => import("./pages/ThankYouPage"));
 const ProfileOrdersPage = lazy(() => import("./pages/ProfileOrdersPage"));
 const ProfileAddressesPage = lazy(() => import("./pages/ProfileAddressesPage"));
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
@@ -451,6 +452,7 @@ const App = () => {
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/payment-method" element={<PaymentMethodPage />} />
           <Route path="/payment-status/:token" element={suspenseRoute(<PaymentStatusPage />)} />
+          <Route path="/thank-you" element={suspenseRoute(<ThankYouPage />)} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/braj-darshan/:slug" element={<BrajDarshanPage />} />
           <Route path="/product-category/:slug" element={<LegacyCategoryRedirect />} />
