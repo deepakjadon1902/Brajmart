@@ -84,12 +84,30 @@
 
             var rawSetAttribute = Element.prototype.setAttribute;
             Element.prototype.setAttribute = function (name, value) {
-              if (this && this.tagName === 'IMG' && String(name).toLowerCase() === 'src' && isBlockedMetaPixelUrl(value)) {
-                if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel image request.', value);
+              if (this && String(name).toLowerCase() === 'src' && isBlockedMetaPixelUrl(value)) {
+                if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel resource request.', value);
                 return;
               }
               return rawSetAttribute.apply(this, arguments);
             };
+
+            [HTMLScriptElement, HTMLIFrameElement].forEach(function (Ctor) {
+              if (!Ctor || !Ctor.prototype) return;
+              var descriptor = Object.getOwnPropertyDescriptor(Ctor.prototype, 'src');
+              if (!descriptor || !descriptor.set || !descriptor.get) return;
+              Object.defineProperty(Ctor.prototype, 'src', {
+                configurable: true,
+                enumerable: descriptor.enumerable,
+                get: descriptor.get,
+                set: function (value) {
+                  if (isBlockedMetaPixelUrl(value)) {
+                    if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel resource request.', value);
+                    return;
+                  }
+                  return descriptor.set.call(this, value);
+                },
+              });
+            });
           };
           installMetaPixelNetworkGuard();
 

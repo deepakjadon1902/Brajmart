@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import express from 'express';
-import { dbQuery, isDbConnected } from '../lib/db';
+import { dbExecute, dbQuery, isDbConnected } from '../lib/db';
 
 const router = express.Router();
 
@@ -26,6 +26,28 @@ const EVENT_NAME_MAP: Record<string, string> = {
 };
 
 const cleanString = (value: unknown) => String(value ?? '').trim();
+let metaEventSchemaReady: Promise<void> | null = null;
+
+const ensureMetaEventSchema = () => {
+  metaEventSchemaReady ||= dbExecute(`
+    CREATE TABLE IF NOT EXISTS meta_conversion_events (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      event_id VARCHAR(190) NOT NULL,
+      event_name VARCHAR(80) NOT NULL,
+      order_id BIGINT UNSIGNED NULL,
+      status ENUM('pending','sent','failed','skipped') NOT NULL DEFAULT 'pending',
+      attempts INT NOT NULL DEFAULT 0,
+      last_error TEXT NULL,
+      response JSON NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_meta_conversion_event_id (event_id),
+      KEY idx_meta_conversion_order_event (order_id, event_name),
+      KEY idx_meta_conversion_status_updated (status, updated_at)
+    )
+  `).then(() => undefined);
+  return metaEventSchemaReady;
+};
 
 const sha256 = (value: string) =>
   crypto.createHash('sha256').update(value).digest('hex');
@@ -174,6 +196,7 @@ const sendMetaConversionApiEvent = async (input: {
   customData: Record<string, unknown>;
   userData?: Record<string, unknown>;
   eventSourceUrl?: string;
+  eventTime?: number;
 }) => {
   const { token, pixelId, apiVersion } = getMetaConfig();
   if (!token || !pixelId) {
@@ -195,7 +218,7 @@ const sendMetaConversionApiEvent = async (input: {
   const payload: Record<string, unknown> = {
     data: [{
       event_name: EVENT_NAME_MAP[input.eventName] || input.eventName,
-      event_time: Math.floor(Date.now() / 1000),
+      event_time: input.eventTime || Math.floor(Date.now() / 1000),
       event_id: input.eventId,
       event_source_url: input.eventSourceUrl || DEFAULT_SITE_URL,
       action_source: 'website',
@@ -220,6 +243,49 @@ const sendMetaConversionApiEvent = async (input: {
     return { ok: false, status: response.status, data };
   }
   return { ok: true, eventId: input.eventId, response: data };
+};
+
+const toMetaEventTime = (value: unknown) => {
+  const date = value instanceof Date ? value : new Date(String(value || ''));
+  const time = Math.floor(date.getTime() / 1000);
+  if (!Number.isFinite(time) || time <= 0) return undefined;
+  const now = Math.floor(Date.now() / 1000);
+  // Meta CAPI accepts reasonably recent website events. Clamp future clock skew
+  // and avoid sending very old reconciliations as brand-new purchases.
+  if (time > now + 300) return now;
+  if (time < now - 7 * 24 * 60 * 60) return undefined;
+  return time;
+};
+
+const reserveMetaConversionEvent = async (eventId: string, eventName: string, orderId?: string) => {
+  await ensureMetaEventSchema();
+  const inserted: any = await dbExecute(
+    `INSERT IGNORE INTO meta_conversion_events (event_id, event_name, order_id, status, attempts)
+     VALUES (?, ?, ?, 'pending', 1)`,
+    [eventId, eventName, orderId || null]
+  );
+  if (Number(inserted?.affectedRows || 0) > 0) return { reserved: true };
+
+  const rows = await dbQuery<any>('SELECT status FROM meta_conversion_events WHERE event_id = ? LIMIT 1', [eventId]);
+  const status = cleanString(rows[0]?.status);
+  if (status === 'failed') {
+    await dbExecute(
+      "UPDATE meta_conversion_events SET status = 'pending', attempts = attempts + 1, last_error = NULL, updated_at = NOW() WHERE event_id = ?",
+      [eventId]
+    );
+    return { reserved: true };
+  }
+  return { reserved: false, status: status || 'duplicate' };
+};
+
+const markMetaConversionEvent = async (eventId: string, status: 'sent' | 'failed' | 'skipped', details?: unknown) => {
+  await ensureMetaEventSchema();
+  const lastError = status === 'failed' || status === 'skipped' ? cleanString((details as any)?.reason || (details as any)?.message || details) : null;
+  const response = details === undefined ? null : JSON.stringify(details).slice(0, 64000);
+  await dbExecute(
+    'UPDATE meta_conversion_events SET status = ?, last_error = ?, response = ?, updated_at = NOW() WHERE event_id = ?',
+    [status, lastError, response, eventId]
+  );
 };
 
 const parseObject = (value: unknown) => {
@@ -280,9 +346,36 @@ export const sendVerifiedMetaPurchaseForOrder = async (orderId: number | string,
     return { ok: false, skipped: true, reason: 'not_paid' };
   }
 
-  return sendMetaConversionApiEvent({
+  const paidRows = await dbQuery<any>(
+    `SELECT created_at, updated_at
+       FROM payments
+      WHERE order_id = ? AND status = 'paid'
+      ORDER BY updated_at ASC, created_at ASC
+      LIMIT 1`,
+    [orderIdString]
+  );
+  const paidStatusRows = paidRows.length ? paidRows : await dbQuery<any>(
+    `SELECT created_at, updated_at
+       FROM payment_status
+      WHERE order_id = ? AND status = 'paid'
+      ORDER BY updated_at ASC, created_at ASC
+      LIMIT 1`,
+    [orderIdString]
+  );
+  const eventTime = toMetaEventTime(paidStatusRows[0]?.created_at || paidStatusRows[0]?.updated_at || order.created_at);
+  if (!eventTime) {
+    return { ok: false, skipped: true, reason: 'purchase_too_old_for_meta_capi' };
+  }
+
+  const reservation = await reserveMetaConversionEvent(eventId, 'Purchase', orderIdString);
+  if (!reservation.reserved) {
+    return { ok: true, skipped: true, reason: 'duplicate_purchase_event', status: reservation.status, eventId };
+  }
+
+  const result = await sendMetaConversionApiEvent({
     eventName: 'Purchase',
     eventId,
+    eventTime,
     eventSourceUrl: `${cleanString(process.env.FRONTEND_URL || process.env.SITE_URL) || DEFAULT_SITE_URL}/payment-status/${encodeURIComponent(cleanString(statusToken || orderIdString))}`,
     userData: {
       email: order.customer_email,
@@ -290,6 +383,8 @@ export const sendVerifiedMetaPurchaseForOrder = async (orderId: number | string,
     },
     customData,
   });
+  await markMetaConversionEvent(eventId, result.ok ? 'sent' : 'failed', result);
+  return result;
 };
 
 router.post('/', async (req, res) => {
