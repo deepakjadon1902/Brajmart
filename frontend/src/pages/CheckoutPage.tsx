@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Smartphone, Check, Minus, Plus, Trash2, Landmark, WalletCards, Truck, Tag, X } from 'lucide-react';
+import { ArrowLeft, MapPin, CreditCard, CheckCircle2, Copy, ShieldCheck, Check, Minus, Plus, Trash2, Truck, Tag, X } from 'lucide-react';
 import { SiRazorpay } from 'react-icons/si';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCartStore } from '@/store/cartStore';
@@ -17,7 +17,7 @@ import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPa
 import { trackMetaPixelEvent } from '@/lib/metaPixel';
 import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft';
 
-const steps = ['Delivery Details', 'Payment', 'Confirmation'];
+const steps = ['Address', 'Payment', 'Done'];
 const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
 const DEFAULT_SHIPPING_FEE = 49;
 const CHECKOUT_IDEMPOTENCY_STORAGE_KEY = 'brajmart-checkout-idempotency';
@@ -886,23 +886,23 @@ const CheckoutPage = () => {
   };
 
   const addressFields = [
-    { key: 'fullName', label: 'Full Name', type: 'text', full: false, required: true },
-    { key: 'street', label: 'Address Line 1', type: 'text', full: true, multiline: true, required: true, placeholder: 'House/Flat no, Building, Area' },
-    { key: 'addressLine2', label: 'Address Line 2', type: 'text', full: true, required: false, placeholder: 'Landmark, nearby temple, floor, or company (optional)' },
+    { key: 'fullName', label: 'Full name', type: 'text', full: false, required: true },
+    { key: 'mobile', label: 'Mobile number', type: 'tel', full: false, required: true },
+    { key: 'pincode', label: 'Pincode', type: 'text', full: false, required: true },
     { key: 'city', label: 'City', type: 'text', full: false, required: true },
     { key: 'state', label: 'State', type: 'text', full: false, required: true },
-    { key: 'pincode', label: 'Pincode', type: 'text', full: false, required: true },
-    { key: 'mobile', label: 'Mobile Number', type: 'tel', full: false, required: true },
-    { key: 'email', label: 'Email Address', type: 'email', full: false, required: true },
+    { key: 'email', label: 'Email address', type: 'email', full: false, required: true },
+    { key: 'street', label: 'House / flat / area', type: 'text', full: true, multiline: true, required: true, placeholder: 'House or flat number, building, road, area' },
+    { key: 'addressLine2', label: 'Landmark', type: 'text', full: true, required: false, placeholder: 'Nearby landmark (optional)' },
   ];
 
   const paymentOptions = [
     {
       value: 'razorpay',
       title: 'Razorpay',
-      subtitle: 'Official Razorpay Checkout for UPI, cards, netbanking, wallets, and EMI',
+      subtitle: 'UPI, cards, netbanking, wallets, and EMI',
       logo: RazorpayLogo,
-      pills: ['Primary', 'UPI', 'Cards', 'NetBanking', 'Wallets'],
+      pills: ['UPI', 'Cards', 'NetBanking'],
       badge: 'Primary',
       brandColor: 'text-[#0b72e7]',
       disabled: false,
@@ -911,10 +911,10 @@ const CheckoutPage = () => {
       value: 'cod',
       title: 'Cash on Delivery',
       subtitle: canUseCodService
-        ? `Pay the full order total at delivery. COD Handle Fee ${formatPrice(validatedCodFee)} applies.`
+        ? `Pay at delivery. COD fee ${formatPrice(validatedCodFee)} applies.`
         : codUnavailableReason,
       logo: CodLogo,
-      pills: ['Pay at delivery', 'Cash collection', 'COD fee'],
+      pills: ['Pay at delivery', 'COD fee'],
       badge: canUseCodService ? 'Available' : 'Unavailable',
       brandColor: canUseCodService ? 'text-tulsi' : 'text-muted-foreground',
       disabled: !canUseCodService,
@@ -928,8 +928,8 @@ const CheckoutPage = () => {
     disabled = false
   ) => (
     <div className="min-w-0">
-      <h3 className="text-sm font-semibold text-foreground mb-3">{label}</h3>
-      <div className="grid gap-3 md:grid-cols-2 md:gap-4">
+      <h3 className="mb-3 text-sm font-semibold text-foreground">{label}</h3>
+      <div className="grid gap-3 md:grid-cols-2">
         {addressFields.map((f) => {
           const fieldId = `${label.replace(/\s+/g, '-').toLowerCase()}-${f.key}`;
           return (
@@ -941,12 +941,12 @@ const CheckoutPage = () => {
             {f.multiline ? (
               <textarea
                 id={fieldId}
-                rows={3}
+                rows={2}
                 value={String(addr[f.key as keyof Address] || '')}
                 onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
                 placeholder={f.placeholder}
                 disabled={disabled}
-                className="min-h-11 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:opacity-70 sm:px-4"
+                className="min-h-11 w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:opacity-70 sm:px-4"
               />
             ) : f.key === 'state' ? (
               <select
@@ -954,7 +954,7 @@ const CheckoutPage = () => {
                 value={String(addr.state || '')}
                 onChange={(e) => setAddr((a) => ({ ...a, state: e.target.value }))}
                 disabled={disabled}
-                className="min-h-11 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:opacity-70 sm:px-4"
+                className="min-h-11 w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:opacity-70 sm:px-4"
               >
                 <option value="" disabled>Select state</option>
                 {INDIA_STATES.map((s) => (
@@ -969,7 +969,7 @@ const CheckoutPage = () => {
                 onChange={(e) => setAddr((a) => ({ ...a, [f.key]: e.target.value }))}
                 placeholder={f.placeholder}
                 disabled={disabled}
-                className="min-h-11 w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:opacity-70 sm:px-4"
+                className="min-h-11 w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-gold disabled:cursor-not-allowed disabled:opacity-70 sm:px-4"
               />
             )}
           </div>
@@ -983,23 +983,21 @@ const CheckoutPage = () => {
     <div className="min-h-screen overflow-x-hidden bg-background">
       <AnnouncementBar />
       <Navbar />
-      <main className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-4 sm:py-8">
+      <main className="mx-auto w-full max-w-5xl px-3 py-4 sm:px-4 sm:py-8">
         <div className="mb-5 flex items-center gap-3 sm:mb-6">
           <button onClick={() => (step > 0 ? setStep(step - 1) : navigate('/cart'))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Go back">
             <ArrowLeft size={20} />
           </button>
-          <h1 className="font-cinzel text-[1.65rem] font-bold leading-tight text-foreground sm:text-2xl">Checkout</h1>
+          <h1 className="font-cinzel text-[1.65rem] font-bold leading-tight text-foreground sm:text-2xl">Place Order</h1>
         </div>
 
-        {/* Stepper */}
-        <div className="mb-6 flex items-center justify-center gap-1.5 sm:mb-8 sm:gap-2">
+        <div className="mb-5 grid grid-cols-3 overflow-hidden rounded-lg border border-border bg-card shadow-sm sm:mb-7">
           {steps.map((s, i) => (
-            <div key={s} className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${i <= step ? 'bg-gold-gradient text-maroon-dark' : 'bg-muted text-muted-foreground'}`}>
+            <div key={s} className={`flex min-w-0 items-center justify-center gap-2 border-r border-border px-2 py-3 last:border-r-0 ${i <= step ? 'bg-gold/10 text-foreground' : 'text-muted-foreground'}`}>
+              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${i <= step ? 'bg-gold-gradient text-maroon-dark' : 'bg-muted text-muted-foreground'}`}>
                 {i < step ? <Check size={14} /> : i + 1}
               </div>
-              <span className={`text-sm hidden sm:block ${i <= step ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>{s}</span>
-              {i < steps.length - 1 && <span className="mx-1 h-px w-8 bg-border sm:w-10" />}
+              <span className="truncate text-sm font-semibold">{s}</span>
             </div>
           ))}
         </div>
@@ -1041,13 +1039,16 @@ const CheckoutPage = () => {
               {step === 0 && (
                 <motion.div key="delivery" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}>
                   <div className="min-w-0 space-y-5 rounded-lg border border-border bg-card p-3 shadow-sm sm:space-y-6 sm:rounded-2xl sm:p-6">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 border-b border-border pb-3">
                       <MapPin size={18} className="text-gold" />
-                      <h2 className="font-cinzel text-lg font-bold">Delivery Details</h2>
+                      <div>
+                        <h2 className="font-cinzel text-lg font-bold">Delivery Address</h2>
+                        <p className="text-xs text-muted-foreground">Enter where we should send this order.</p>
+                      </div>
                     </div>
-                    {renderAddressForm(shippingAddress, setShippingAddress, 'Shipping Details')}
+                    {renderAddressForm(shippingAddress, setShippingAddress, 'Contact and address')}
 
-                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/20 px-3.5 py-3 transition-colors hover:border-gold/40 sm:items-center sm:px-4">
+                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/20 px-3.5 py-3 transition-colors hover:border-gold/40 sm:items-center sm:px-4">
                       <input
                         type="checkbox"
                         checked={billingSameAsShipping}
@@ -1057,15 +1058,15 @@ const CheckoutPage = () => {
                         }}
                         className="h-4 w-4 rounded accent-saffron"
                       />
-                      <span className="text-sm font-medium text-foreground">Billing details same as shipping details</span>
+                      <span className="text-sm font-medium text-foreground">Use this address for billing also</span>
                     </label>
 
-                    {!billingSameAsShipping && renderAddressForm(billingAddress, setBillingAddress, 'Billing Details')}
+                    {!billingSameAsShipping && renderAddressForm(billingAddress, setBillingAddress, 'Billing address')}
 
-                    <div className="rounded-xl border border-border bg-muted/30 p-3">
+                    <div className="rounded-lg border border-border bg-muted/30 p-3">
                       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                         <Truck size={16} className="text-gold" />
-                        Delivery partner check
+                        Delivery check
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {serviceability?.pincode === String(effectiveShipping.pincode || '').trim()
@@ -1089,42 +1090,48 @@ const CheckoutPage = () => {
               {step === 1 && (
                 <motion.div key="payment" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}>
                   <div className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm sm:rounded-2xl sm:p-6">
-                    <div className="flex min-w-0 flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 flex-col gap-4 border-b border-border pb-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <CreditCard size={18} className="text-gold" />
-                          <h2 className="font-cinzel text-lg font-bold">Payment Method</h2>
+                          <h2 className="font-cinzel text-lg font-bold">Payment</h2>
                         </div>
-                        <p className="mt-1 text-sm text-muted-foreground">Choose a secure payment gateway to complete your BrajMart order.</p>
+                        <p className="mt-1 text-sm text-muted-foreground">Choose how you want to pay.</p>
                       </div>
-                      <div className="w-full rounded-xl border border-gold/25 bg-gold/5 px-4 py-3 text-left sm:w-auto sm:text-right">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Payable Now</p>
+                      <div className="w-full rounded-lg border border-gold/25 bg-gold/5 px-4 py-3 text-left sm:w-auto sm:text-right">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Payable</p>
                         <p className="text-xl font-bold text-saffron tabular-nums">{formatPrice(grandTotal)}</p>
                       </div>
                     </div>
 
-                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                      {[
-                        { icon: ShieldCheck, title: 'Secure gateway', text: 'Encrypted checkout' },
-                        { icon: CheckCircle2, title: 'Verified order', text: 'Email confirmation' },
-                        { icon: Truck, title: serviceability?.manualReview ? 'Partner review' : 'Partner checked', text: serviceability?.manualReview ? 'Dispatch confirmed by team' : partnerCodAvailable ? 'Partner COD serviceable' : 'Delivery verified' },
-                      ].map((item) => (
-                        <div key={item.title} className="flex items-center gap-3 rounded-xl border border-border bg-pearl/60 px-3 py-2.5">
-                          <item.icon size={16} className="shrink-0 text-tulsi" />
-                          <div className="min-w-0">
-                            <p className="text-xs font-semibold text-foreground">{item.title}</p>
-                            <p className="text-[11px] text-muted-foreground">{item.text}</p>
+                    <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                            <MapPin size={15} className="text-gold" />
+                            Deliver to {cleanText(shippingAddress.fullName) || 'customer'}
                           </div>
+                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                            {[shippingAddress.street, shippingAddress.addressLine2, shippingAddress.city, shippingAddress.state, shippingAddress.pincode].filter(Boolean).join(', ')}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">{shippingAddress.mobile}</p>
                         </div>
-                      ))}
+                        <button
+                          type="button"
+                          onClick={() => setStep(0)}
+                          className="shrink-0 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
+                        >
+                          Change
+                        </button>
+                      </div>
                     </div>
 
                     {paymentOptions.length === 0 ? (
-                      <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                      <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
                         No payment methods are currently available. Please contact support.
                       </div>
                     ) : (
-                      <div className="mt-5 space-y-3">
+                      <div className="mt-4 space-y-3">
                         {paymentOptions.map((m) => {
                           const Logo = m.logo;
                           const selected = paymentMethod === m.value;
@@ -1148,7 +1155,7 @@ const CheckoutPage = () => {
                                   setWantsCodService(m.value === 'cod');
                                 }
                               }}
-                              className={`group flex min-w-0 items-center gap-3 rounded-xl border p-3 transition-all sm:gap-4 sm:p-4 ${m.disabled ? 'cursor-not-allowed border-border bg-muted/30 opacity-70' : selected ? 'cursor-pointer border-gold bg-gold/5 shadow-[0_0_0_1px_rgba(218,165,32,0.2)]' : 'cursor-pointer border-border bg-background hover:border-gold/50 hover:bg-pearl/50'}`}
+                              className={`group flex min-w-0 items-center gap-3 rounded-lg border p-3 transition-all sm:gap-4 ${m.disabled ? 'cursor-not-allowed border-border bg-muted/30 opacity-70' : selected ? 'cursor-pointer border-gold bg-gold/5 shadow-[0_0_0_1px_rgba(218,165,32,0.2)]' : 'cursor-pointer border-border bg-background hover:border-gold/50 hover:bg-pearl/50'}`}
                             >
                               <input
                                 type="radio"
@@ -1169,7 +1176,7 @@ const CheckoutPage = () => {
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className={`text-sm font-semibold ${m.brandColor}`}>{m.title}</span>
-                                  <span className={`text-[11px] px-2 py-0.5 rounded-full border bg-background ${selected ? 'border-gold text-gold' : 'border-border text-muted-foreground'}`}>
+                                  <span className={`rounded-full border bg-background px-2 py-0.5 text-[11px] ${selected ? 'border-gold text-gold' : 'border-border text-muted-foreground'}`}>
                                     {m.badge}
                                   </span>
                                   {selected && (
@@ -1179,8 +1186,8 @@ const CheckoutPage = () => {
                                     </span>
                                   )}
                                 </div>
-                                <span className="block text-xs text-muted-foreground mt-0.5">{m.subtitle}</span>
-                                <div className="flex flex-wrap gap-2 mt-2">
+                                <span className="mt-0.5 block text-xs text-muted-foreground">{m.subtitle}</span>
+                                <div className="mt-2 flex flex-wrap gap-2">
                                   {m.pills.map((p) => (
                                     <span key={p} className="text-[11px] px-2 py-0.5 rounded-full border border-border bg-background text-muted-foreground">
                                       {p}
@@ -1197,71 +1204,7 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {!hasPrasadamItems && codEligibleItems && (
-                      <div className={`mt-5 rounded-xl border p-4 transition-colors ${canUseCodService ? 'border-tulsi/30 bg-tulsi/5' : 'border-border bg-muted/30'}`}>
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex items-start gap-3">
-                            <div className={`mt-0.5 h-10 w-10 rounded-xl flex items-center justify-center border ${canUseCodService ? 'border-tulsi/30 bg-tulsi/10 text-tulsi' : 'border-border bg-background text-muted-foreground'}`}>
-                              <Truck size={17} />
-                            </div>
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-sm font-semibold text-foreground">Delivery partner COD</p>
-                                <span className={`text-[11px] px-2 py-0.5 rounded-full border ${canUseCodService ? 'border-tulsi/30 text-tulsi' : 'border-border text-muted-foreground'}`}>
-                                {canUseCodService ? 'Available' : checkingPincode ? 'Checking' : 'Not available'}
-                                </span>
-                              </div>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {hasPrasadamItems
-                                  ? 'COD is not available for Prasadam products. Please continue with online payment.'
-                                  : !codEligibleItems
-                                    ? 'COD is enabled only for selected products and categories in this order.'
-                                  : canUseCodService
-                                    ? `Select COD to confirm this order without online payment. COD Handle Fee ${formatPrice(codFee)} will be collected with the order total.`
-                                    : 'Enter a delivery partner COD serviceable pincode in delivery details to enable this service.'}
-                              </p>
-                            </div>
-                          </div>
-                          <span className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold ${wantsCodService ? 'bg-tulsi text-white' : 'border border-border bg-background text-muted-foreground'}`}>
-                            {wantsCodService ? 'COD selected' : 'Select COD above'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {paymentMethod === 'razorpay' && (
-                      <div className="mt-5 overflow-hidden rounded-xl border border-[#cfe0ff] bg-white shadow-sm">
-                        <div className="border-b border-[#e6efff] bg-[#0b72e7] px-4 py-4 text-white sm:px-5">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <p className="text-xs font-bold uppercase tracking-wide text-white/75">Razorpay Secure Checkout</p>
-                              <h3 className="mt-1 text-base font-semibold">Official Razorpay payment window</h3>
-                              <p className="mt-1 text-xs text-white/80">Your payable amount and BrajMart order reference are sent to Razorpay securely.</p>
-                            </div>
-                            <div className="rounded-lg bg-white px-3 py-1.5 text-sm font-black tracking-tight text-[#0b72e7]">
-                              Razorpay
-                            </div>
-                          </div>
-                        </div>
-                        <div className="grid min-w-0 gap-3 p-4 sm:grid-cols-3 sm:p-5">
-                          {[
-                            { icon: Smartphone, title: 'UPI', text: 'GPay, PhonePe, Paytm, BHIM' },
-                            { icon: WalletCards, title: 'Cards & EMI', text: 'Visa, Mastercard, RuPay, Amex' },
-                            { icon: Landmark, title: 'NetBanking', text: 'Major Indian banks supported' },
-                          ].map((item) => (
-                            <div key={item.title} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                              <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-                                <item.icon size={16} className="text-[#0b72e7]" />
-                                {item.title}
-                              </div>
-                              <p className="mt-1 text-xs text-slate-600">{item.text}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mt-5 rounded-xl border border-gold/25 bg-gold/5 p-4 text-sm">
+                    <div className="mt-4 rounded-lg border border-gold/25 bg-gold/5 p-3 text-sm">
                       <div className="flex items-center gap-2 font-medium text-foreground">
                         <ShieldCheck size={16} className="text-gold" />
                         Protected payment
@@ -1358,35 +1301,39 @@ const CheckoutPage = () => {
                       <img src={item.product.image} alt={item.product.name} className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-foreground line-clamp-1">{item.product.name}</p>
-                        <div className="flex items-center justify-between gap-2 mt-1">
-                          <div className="inline-flex items-center border border-border rounded-lg overflow-hidden bg-background">
+                        {step === 0 ? (
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <div className="inline-flex items-center overflow-hidden rounded-lg border border-border bg-background">
+                              <button
+                                type="button"
+                                onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                                className="px-2.5 py-1.5 transition-colors hover:bg-muted"
+                                aria-label={`Decrease quantity of ${item.product.name}`}
+                              >
+                                <Minus size={14} />
+                              </button>
+                              <span className="px-3 text-xs font-semibold tabular-nums">{item.quantity}</span>
+                              <button
+                                type="button"
+                                onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                                className="px-2.5 py-1.5 transition-colors hover:bg-muted"
+                                aria-label={`Increase quantity of ${item.product.name}`}
+                              >
+                                <Plus size={14} />
+                              </button>
+                            </div>
                             <button
                               type="button"
-                              onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                              className="px-2.5 py-1.5 hover:bg-muted transition-colors"
-                              aria-label={`Decrease quantity of ${item.product.name}`}
+                              onClick={() => removeItem(item.product.id)}
+                              className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                              aria-label={`Remove ${item.product.name} from order`}
                             >
-                              <Minus size={14} />
-                            </button>
-                            <span className="px-3 text-xs font-semibold tabular-nums">{item.quantity}</span>
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                              className="px-2.5 py-1.5 hover:bg-muted transition-colors"
-                              aria-label={`Increase quantity of ${item.product.name}`}
-                            >
-                              <Plus size={14} />
+                              <Trash2 size={16} />
                             </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => removeItem(item.product.id)}
-                            className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                            aria-label={`Remove ${item.product.name} from order`}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                        ) : (
+                          <p className="mt-1 text-xs text-muted-foreground">Qty {item.quantity}</p>
+                        )}
                       </div>
                       <div className="max-w-[5.5rem] shrink-0 text-right">
                         <div className="text-xs font-semibold tabular-nums">{formatPrice(item.product.price * item.quantity)}</div>
@@ -1486,12 +1433,12 @@ const CheckoutPage = () => {
                 >
                   {step === 0
                     ? checkingPincode
-                      ? 'Checking Delivery...'
+                      ? 'Checking delivery...'
                       : checkoutValidating
                         ? 'Validating cart...'
                         : hasCheckoutValidationChanges || hasCheckoutUnavailableItems
                           ? 'Apply cart updates first'
-                          : 'Continue to Payment'
+                          : `Deliver Here - ${formatPrice(grandTotal)}`
                     : processing
                       ? wantsCodService ? 'Confirming COD Order...' : 'Processing Payment...'
                       : checkoutValidating
@@ -1499,8 +1446,8 @@ const CheckoutPage = () => {
                         : !checkoutValidatedCleanly
                           ? 'Validate cart before payment'
                       : wantsCodService
-                        ? `Confirm COD Order - ${formatPrice(grandTotal)}`
-                        : `Pay with Razorpay - ${formatPrice(grandTotal)}`}
+                        ? `Place COD Order - ${formatPrice(grandTotal)}`
+                        : `Pay Now - ${formatPrice(grandTotal)}`}
                 </button>
               </div>
             </div>

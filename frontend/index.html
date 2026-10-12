@@ -117,6 +117,12 @@
                 if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel trackSingle.', pixelId);
                 return;
               }
+              if ((command === 'trackSingle' || command === 'trackSingleCustom') && args[2] === 'Purchase') {
+                if (window.console && window.console.warn) {
+                  window.console.warn('Blocked browser Meta Purchase event. Purchase is sent only by verified Conversions API.', { url: window.location.href });
+                }
+                return;
+              }
               if (args[0] === 'track' && args[1] === 'Purchase') {
                 if (window.console && window.console.warn) {
                   window.console.warn('Blocked browser Meta Purchase event. Purchase is sent only by verified Conversions API.', { url: window.location.href });

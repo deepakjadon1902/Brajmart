@@ -198,14 +198,14 @@ const PaymentStatusPage = () => {
 
     if (items.length === 0) return;
 
-    // Push GA4 ecommerce purchase event to GTM dataLayer.
-    // Use payment token as the stable transaction identifier.
+    // Keep this event internal so GTM Meta tags cannot count old success-page visits as fresh purchases.
+    // Verified Meta Purchase events are sent only from the backend after gateway confirmation.
     const dl = window.dataLayer;
     if (Array.isArray(dl)) {
       // GA4 recommended: clear previous ecommerce object to avoid bleed between events.
       dl.push({ ecommerce: null });
       dl.push({
-        event: 'purchase',
+        event: 'brajmart_order_paid',
         ecommerce: {
           transaction_id: String(orderId || token),
           transaction_token: token,
