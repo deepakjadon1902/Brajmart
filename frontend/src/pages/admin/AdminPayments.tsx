@@ -53,9 +53,8 @@ const AdminPayments = () => {
   const [page, setPage] = useState(1);
   const [collectingOrderId, setCollectingOrderId] = useState<string>('');
 
-  const load = async (reconcile = false) => {
+  const load = async () => {
       try {
-        if (reconcile) await reconcilePayments();
         const data: unknown = await fetchPayments();
         setPayments(normalizePayments(data));
         const orderData: unknown = await fetchOrders();
@@ -66,7 +65,10 @@ const AdminPayments = () => {
     };
 
   useEffect(() => {
-    load(true);
+    load();
+    reconcilePayments()
+      .then(() => load())
+      .catch(() => undefined);
     const t = setInterval(() => load(), 5_000);
     return () => clearInterval(t);
   }, []);

@@ -401,9 +401,24 @@ export const reconcileRecentRazorpayPayments = async (limit = 50) => {
   return reconciled;
 };
 
+let backgroundReconcilePromise: Promise<number> | null = null;
+let lastBackgroundReconcileAt = 0;
+
+export const triggerRecentRazorpayReconciliation = (limit = 50) => {
+  const now = Date.now();
+  if (backgroundReconcilePromise || now - lastBackgroundReconcileAt < 15_000) return;
+  lastBackgroundReconcileAt = now;
+  backgroundReconcilePromise = reconcileRecentRazorpayPayments(limit)
+    .catch(() => 0)
+    .finally(() => {
+      backgroundReconcilePromise = null;
+    });
+};
+
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    triggerRecentRazorpayReconciliation(50);
     res.json(await getAdminPaymentRows());
   } catch (err: any) {
     res.status(500).json({ message: err.message });
