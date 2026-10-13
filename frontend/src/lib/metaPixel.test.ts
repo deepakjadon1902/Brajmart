@@ -111,7 +111,33 @@ describe('metaPixel', () => {
     }));
   });
 
-  it('sends a direct browser AddToCart pixel fallback with product data', () => {
+  it('does not send a direct browser fallback when fbq is available', () => {
+    const imageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+    let fallbackSrc = '';
+    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+      configurable: true,
+      get() {
+        return imageSrc?.get?.call(this) || fallbackSrc;
+      },
+      set(value) {
+        fallbackSrc = String(value);
+        imageSrc?.set?.call(this, value);
+      },
+    });
+
+    try {
+      trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product(99)));
+
+      expect(fallbackSrc).toBe('');
+    } finally {
+      if (imageSrc) {
+        Object.defineProperty(HTMLImageElement.prototype, 'src', imageSrc);
+      }
+    }
+  });
+
+  it('sends a direct browser AddToCart pixel fallback with product data when fbq is unavailable', () => {
+    window.fbq = undefined;
     const imageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
     let fallbackSrc = '';
     Object.defineProperty(HTMLImageElement.prototype, 'src', {
@@ -146,7 +172,8 @@ describe('metaPixel', () => {
     }
   });
 
-  it('sends direct browser pixel fallbacks for checkout and payment info only', () => {
+  it('sends direct browser pixel fallbacks for checkout and payment info only when fbq is unavailable', () => {
+    window.fbq = undefined;
     const imageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
     const fallbackSrcs: string[] = [];
     Object.defineProperty(HTMLImageElement.prototype, 'src', {

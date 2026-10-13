@@ -20,10 +20,12 @@
           var isBlockedMetaPixelUrl = function (value) {
             try {
               var url = new URL(String(value || ''), window.location.href);
-              if (url.hostname !== 'www.facebook.com' || url.pathname !== '/tr') return false;
+              var path = String(url.pathname || '').replace(/\/+$/, '');
+              if (url.hostname !== 'www.facebook.com' || path !== '/tr') return false;
               var pixelId = url.searchParams.get('id') || '';
+              var eventName = String(url.searchParams.get('ev') || '').toLowerCase();
               if (pixelId && pixelId !== BRAJMART_META_PIXEL_ID) return true;
-              return pixelId === BRAJMART_META_PIXEL_ID && url.searchParams.get('ev') === 'Purchase';
+              return pixelId === BRAJMART_META_PIXEL_ID && eventName === 'purchase';
             } catch (error) {
               return false;
             }
@@ -135,13 +137,13 @@
                 if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel trackSingle.', pixelId);
                 return;
               }
-              if ((command === 'trackSingle' || command === 'trackSingleCustom') && args[2] === 'Purchase') {
+              if ((command === 'trackSingle' || command === 'trackSingleCustom') && String(args[2] || '').toLowerCase() === 'purchase') {
                 if (window.console && window.console.warn) {
                   window.console.warn('Blocked browser Meta Purchase event. Purchase is sent only by verified Conversions API.', { url: window.location.href });
                 }
                 return;
               }
-              if (args[0] === 'track' && args[1] === 'Purchase') {
+              if (args[0] === 'track' && String(args[1] || '').toLowerCase() === 'purchase') {
                 if (window.console && window.console.warn) {
                   window.console.warn('Blocked browser Meta Purchase event. Purchase is sent only by verified Conversions API.', { url: window.location.href });
                 }

@@ -539,7 +539,32 @@ export const runDataMigrations = async () => {
   await ensurePhase5cReviewsSchema();
   await ensureOpenModeratedReviewsSchema();
   await ensureCommerceIntelligenceSchema();
+  await migratePendingOnlineProcessingOrders();
   await migrateDeityShringarIntoIdolsSubcategory();
+};
+
+const migratePendingOnlineProcessingOrders = async () => {
+  const MIGRATION_KEY = '2026-10-13_pending_online_processing_to_pending_payment';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  await dbExecute(`
+    UPDATE orders o
+       SET o.status = 'pending_payment'
+     WHERE o.status = 'processing'
+       AND LOWER(COALESCE(o.payment_method, '')) NOT IN ('cod', 'cash on delivery')
+       AND NOT EXISTS (
+         SELECT 1 FROM payments p
+          WHERE p.order_id = o.id
+            AND p.status = 'paid'
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM payment_status ps
+          WHERE ps.order_id = o.id
+            AND ps.status = 'paid'
+       )
+  `);
+
+  await setMigrationDone(MIGRATION_KEY);
 };
 
 // Converts the "Deity Shringar Collection" category into a subcategory under "Idols & Shringar",

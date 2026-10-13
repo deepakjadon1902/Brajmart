@@ -175,11 +175,14 @@ export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixel
     window.__brajmartLoadMarketing?.();
   }
 
-  if (eventName !== 'Purchase' && typeof window.fbq === 'function') {
+  const hasFbq = eventName !== 'Purchase' && typeof window.fbq === 'function';
+  if (hasFbq) {
     window.fbq('track', eventName, normalizedParams, { eventID: eventId });
   }
 
-  sendBrowserMetaPixelFallback(eventName, eventId, normalizedParams);
+  if (!hasFbq) {
+    sendBrowserMetaPixelFallback(eventName, eventId, normalizedParams);
+  }
   sendMetaConversionEvent(eventName, eventId, normalizedParams, options);
   return eventId;
 };

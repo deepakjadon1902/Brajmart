@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { Product } from '@/types/product';
 import { fetchMyOrders } from '@/lib/api';
 
-export type OrderStatus = 'confirmed' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
+export type OrderStatus = 'pending_payment' | 'confirmed' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
 
 export interface OrderItem {
   product: Product;

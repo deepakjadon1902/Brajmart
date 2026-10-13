@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CreditCard, XCircle, Loader2 } from 'lucide-react';
 import { fetchPaymentStatus, reportRazorpayPaymentFailed, retryRazorpayOrder, trackOrder, verifyRazorpayPayment } from '@/lib/api';
-import { toPositiveMetaValue } from '@/lib/metaPixel';
 import { clearCheckoutDraft } from '@/lib/checkoutDraft';
 import { useCartStore } from '@/store/cartStore';
 import { formatPrice } from '@/utils/formatPrice';
@@ -39,27 +38,8 @@ type TrackedOrder = {
   estimatedDelivery?: string | null;
 };
 
-const purchaseTrackedKey = (orderId: number | string) => `brajmart-purchase-tracked:${orderId}`;
-
-const hasTrackedPurchase = (orderId: number | string) => {
-  try {
-    return localStorage.getItem(purchaseTrackedKey(orderId)) === '1';
-  } catch {
-    return false;
-  }
-};
-
-const markPurchaseTracked = (orderId: number | string) => {
-  try {
-    localStorage.setItem(purchaseTrackedKey(orderId), '1');
-  } catch {
-    // Analytics should never block the success page.
-  }
-};
-
 declare global {
   interface Window {
-    dataLayer?: Array<Record<string, unknown>>;
     Razorpay?: new (options: Record<string, unknown>) => {
       open: () => void;
       close?: () => void;
@@ -111,8 +91,8 @@ const PaymentStatusPage = () => {
   const [orderItems, setOrderItems] = useState<OrderItem[] | null>(null);
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [estimatedDelivery, setEstimatedDelivery] = useState<string | null>(null);
-  const purchasePushedRef = useRef<string>('');
   const clearCart = useCartStore((state) => state.clearCart);
+  const isRazorpayPayment = String(method || '').toLowerCase() === 'razorpay';
 
   useEffect(() => {
     let active = true;
@@ -140,7 +120,7 @@ const PaymentStatusPage = () => {
   }, [token]);
 
   useEffect(() => {
-    if (!token || status !== 'pending') return;
+    if (!token || (status !== 'pending' && !(status === 'failed' && isRazorpayPayment))) return;
     const interval = setInterval(async () => {
       try {
         const data = await fetchPaymentStatus(token) as PaymentStatusResponse;
@@ -157,7 +137,7 @@ const PaymentStatusPage = () => {
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [token, status]);
+  }, [token, status, isRazorpayPayment]);
 
   useEffect(() => {
     let active = true;
@@ -188,48 +168,6 @@ const PaymentStatusPage = () => {
       }
     }
   }, [status, clearCart]);
-
-  useEffect(() => {
-    if (!token || status !== 'paid' || !orderId) return;
-    const purchaseKey = String(orderId);
-    if (purchasePushedRef.current === purchaseKey || hasTrackedPurchase(purchaseKey)) return;
-    if (orderItems === null) return;
-    const analyticsValue = toPositiveMetaValue(amount);
-    if (analyticsValue === undefined) return;
-
-    const items = (Array.isArray(orderItems) ? orderItems : []).map((i) => ({
-      item_id: String(i.productId || i.id || i._id || i.slug || i.name || ''),
-      item_name: String(i.name || ''),
-      price: Number(i.price || 0),
-      quantity: Number(i.quantity || 1),
-    })).filter((i) => i.item_id);
-
-    if (items.length === 0) return;
-
-    // Keep this event internal so GTM Meta tags cannot count old success-page visits as fresh purchases.
-    // Verified Meta Purchase events are sent only from the backend after gateway confirmation.
-    const dl = window.dataLayer;
-    if (Array.isArray(dl)) {
-      // GA4 recommended: clear previous ecommerce object to avoid bleed between events.
-      dl.push({ ecommerce: null });
-      dl.push({
-        event: 'brajmart_order_paid',
-        ecommerce: {
-          transaction_id: String(orderId || token),
-          transaction_token: token,
-          payment_id: paymentId || undefined,
-          affiliation: 'BrajMart',
-          value: analyticsValue,
-          currency: 'INR',
-          payment_type: method || undefined,
-          order_id: orderId || undefined,
-          items,
-        },
-      });
-    }
-    purchasePushedRef.current = purchaseKey;
-    markPurchaseTracked(purchaseKey);
-  }, [token, status, amount, method, paymentId, customerEmail, customerPhone, orderId, orderItems]);
 
   const handleRetryPayment = async () => {
     if (!token || retrying || status === 'paid') return;
@@ -360,7 +298,11 @@ const PaymentStatusPage = () => {
               <>
                 <XCircle size={56} className="mx-auto text-red-500 mb-4" />
                 <h1 className="mb-2 font-cinzel text-[1.65rem] font-bold leading-tight sm:text-2xl">Payment Failed</h1>
-                <p className="text-muted-foreground text-sm">We could not verify the payment. Please try again.</p>
+                <p className="text-muted-foreground text-sm">
+                  {isRazorpayPayment
+                    ? 'If money was debited, please wait. We are checking Razorpay before you pay again.'
+                    : 'We could not verify the payment. Please try again.'}
+                </p>
               </>
             )}
 

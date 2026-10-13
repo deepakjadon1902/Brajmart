@@ -6,6 +6,7 @@ import { getEtaConfig, getEtaText } from '../lib/eta';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
 import { finalPaymentWhereSql } from '../lib/orderVisibility';
 import { markCouponUsed } from '../lib/orderPricing';
+import { sendVerifiedMetaPurchaseForOrder } from './metaConversions';
 
 const router = Router();
 
@@ -235,7 +236,7 @@ const applyRazorpayStatus = async (params: {
   if (orderId) {
     orderData = await getPaymentOrderDetails(orderId);
     if (orderData?.orderRow) {
-      const orderStatus = params.status === 'paid' ? 'confirmed' : String(orderData.orderRow.status || 'processing');
+      const orderStatus = params.status === 'paid' ? 'confirmed' : 'cancelled';
       const history = parseJson<Array<{ status: string; date: string; note?: string }>>(orderData.orderRow.status_history, []);
       if (!history.some((entry) => String(entry.note || '') === params.note)) {
         history.push({ status: orderStatus, date: new Date().toISOString(), note: params.note });
@@ -296,6 +297,15 @@ const applyRazorpayStatus = async (params: {
       method: current.method || paymentRow?.method || 'Razorpay',
       customerEmail,
     }).catch(() => {});
+
+    if (params.status === 'paid' && orderId) {
+      if (orderData?.orderRow?.coupon_code) {
+        markCouponUsed(orderData.orderRow.coupon_code).catch(() => {});
+      }
+      sendVerifiedMetaPurchaseForOrder(orderId, transactionId, params.token).catch((err) => {
+        console.error('Meta verified Purchase event failed:', err);
+      });
+    }
   } catch {
     // ignore email failures during reconciliation
   }
@@ -304,7 +314,7 @@ const applyRazorpayStatus = async (params: {
   return refreshed[0] || current;
 };
 
-const reconcileRazorpayToken = async (token: string) => {
+export const reconcileRazorpayToken = async (token: string) => {
   if (!token || !isDbConnected()) return null;
   const rows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
   const current = rows[0];
@@ -363,6 +373,34 @@ const reconcileRazorpayToken = async (token: string) => {
   return current;
 };
 
+export const reconcileRecentRazorpayPayments = async (limit = 50) => {
+  if (!isDbConnected()) return 0;
+  let reconciled = 0;
+  const safeLimit = Math.max(1, Math.min(100, Math.round(Number(limit) || 50)));
+  const razorpayRows = await dbQuery<any>(
+    `SELECT token, status
+       FROM payment_status
+      WHERE status IN ('pending', 'failed')
+        AND method = 'Razorpay'
+      ORDER BY updated_at DESC
+      LIMIT ${safeLimit}`
+  );
+  for (const row of razorpayRows) {
+    const token = String(row?.token || '').trim();
+    if (!token) continue;
+    try {
+      const beforeRows = await dbQuery<any>('SELECT status FROM payment_status WHERE token = ? LIMIT 1', [token]);
+      const before = String(beforeRows?.[0]?.status || '');
+      const after = await reconcileRazorpayToken(token);
+      const afterStatus = String(after?.status || '');
+      if (before !== afterStatus) reconciled += 1;
+    } catch {
+      // Keep admin pages responsive even if one gateway lookup fails.
+    }
+  }
+  return reconciled;
+};
+
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
@@ -375,24 +413,7 @@ router.get('/', auth, adminOnly, async (_req, res) => {
 router.post('/reconcile', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    let reconciled = 0;
-    const razorpayRows = await dbQuery<any>(
-      "SELECT token, status FROM payment_status WHERE status IN ('pending', 'failed') AND method = 'Razorpay' ORDER BY updated_at DESC LIMIT 50"
-    );
-    for (const row of razorpayRows) {
-      const token = String(row?.token || '').trim();
-      if (!token) continue;
-      try {
-        const beforeRows = await dbQuery<any>('SELECT status FROM payment_status WHERE token = ? LIMIT 1', [token]);
-        const before = String(beforeRows?.[0]?.status || '');
-        const after = await reconcileRazorpayToken(token);
-        const afterStatus = String(after?.status || '');
-        if (before !== afterStatus) reconciled += 1;
-      } catch {
-        // ignore
-      }
-    }
-
+    const reconciled = await reconcileRecentRazorpayPayments();
     return res.json({ ok: true, reconciled });
   } catch (err: any) {
     return res.status(500).json({ message: err?.message || 'Failed to reconcile payments' });

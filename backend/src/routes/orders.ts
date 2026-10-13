@@ -12,6 +12,7 @@ import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
 import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
 import { insertAdminAuditLog } from '../lib/adminAudit';
+import { reconcileRecentRazorpayPayments } from './payments';
 
 const router = Router();
 const codOrderLimiter = rateLimit('cod-order-create', {
@@ -119,6 +120,7 @@ router.get('/my', auth, async (req: AuthRequest, res) => {
 router.get('/', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    await reconcileRecentRazorpayPayments(25).catch(() => {});
     const search = getSearchTerm(req.query.search);
     const params: any[] = [];
     const searchSql = search
@@ -151,6 +153,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
 router.get('/admin/pending-payments', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    await reconcileRecentRazorpayPayments(50).catch(() => {});
     const search = getSearchTerm(req.query.search);
     const params: any[] = [];
     const searchSql = search

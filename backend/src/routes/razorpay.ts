@@ -332,7 +332,7 @@ const updateOrderForPayment = async (params: {
   let orderRow = orderRows[0];
   if (!orderRow) return null;
 
-  const orderStatus = params.status === 'paid' ? 'confirmed' : String(orderRow.status || 'processing');
+  const orderStatus = params.status === 'paid' ? 'confirmed' : 'cancelled';
   const history = parseJson<Array<{ status: string; date: string; note?: string }>>(orderRow.status_history, []);
   const alreadyHasTerminalNote = history.some((entry) => String(entry.note || '') === params.note);
   if (!alreadyHasTerminalNote) {
@@ -563,8 +563,8 @@ router.post('/create-order', razorpayCreateLimiter, optionalAuth, async (req: Au
       couponDetails,
       total: totals.total,
       paymentMethod: 'Razorpay',
-      status: 'processing',
-      statusHistory: [{ status: 'processing', date: new Date().toISOString(), note: 'Payment initiated via Razorpay' }],
+      status: 'pending_payment',
+      statusHistory: [{ status: 'pending_payment', date: new Date().toISOString(), note: 'Razorpay payment initiated, waiting for payment confirmation' }],
       customerEmail,
       shippingAddress: contact.shippingAddress,
       billingAddress: contact.billingAddress,
