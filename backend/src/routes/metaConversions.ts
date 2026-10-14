@@ -156,45 +156,98 @@ const orderItemId = (item: Record<string, unknown>) => {
   return cleanString(product.productId || product.id || product._id || item.productId || item.id || item._id || product.slug || item.slug || product.name || item.name);
 };
 
-const hasPaidOrderForPurchase = async (customData: Record<string, unknown>) => {
-  if (!isDbConnected()) return false;
+const isRazorpayMethod = (value: unknown) => cleanString(value).toLowerCase() === 'razorpay';
+const isRazorpayIdentifier = (value: unknown) => /^(order|pay)_[A-Za-z0-9]+$/.test(cleanString(value));
+
+type RazorpayPurchaseVerification =
+  | { ok: true; verifiedAt?: unknown }
+  | { ok: false; reason: string };
+
+const getVerifiedRazorpayPurchase = async (
+  customData: Record<string, unknown>,
+  paymentId?: string,
+  statusToken?: string
+): Promise<RazorpayPurchaseVerification> => {
+  if (!isDbConnected()) return { ok: false, reason: 'db_unavailable' };
 
   const orderId = cleanString(customData.order_id);
   const purchaseValue = Number(customData.value);
   const purchaseContents = Array.isArray(customData.contents) ? customData.contents : [];
-  if (!orderId || !Number.isFinite(purchaseValue) || purchaseValue <= 0 || purchaseContents.length === 0) return false;
+  if (!orderId || !Number.isFinite(purchaseValue) || purchaseValue <= 0 || purchaseContents.length === 0) {
+    return { ok: false, reason: 'invalid_purchase_payload' };
+  }
 
   const orderRows = await dbQuery<any>('SELECT id, total, items FROM orders WHERE id = ? LIMIT 1', [orderId]);
   const order = orderRows[0];
-  if (!order) return false;
+  if (!order) return { ok: false, reason: 'order_not_found' };
 
   const orderTotal = Number(order.total || 0);
-  if (!Number.isFinite(orderTotal) || Math.abs(orderTotal - purchaseValue) > 1) return false;
+  if (!Number.isFinite(orderTotal) || Math.abs(orderTotal - purchaseValue) > 1) {
+    return { ok: false, reason: 'purchase_total_mismatch' };
+  }
+
+  const cleanPaymentId = cleanString(paymentId);
+  const cleanStatusToken = cleanString(statusToken);
+  const requestedIds = [cleanPaymentId, cleanStatusToken].filter(Boolean);
+  if (requestedIds.some((id) => !isRazorpayIdentifier(id))) {
+    return { ok: false, reason: 'not_razorpay_verified' };
+  }
 
   const paidRows = await dbQuery<any>(
-    `SELECT 1 AS paid
-       FROM payments
-      WHERE order_id = ? AND status = 'paid'
-      LIMIT 1`,
+    `SELECT
+        ps.token,
+        ps.payment_id,
+        ps.created_at AS status_created_at,
+        ps.updated_at AS status_updated_at,
+        p.transaction_id,
+        p.created_at AS payment_created_at,
+        p.updated_at AS payment_updated_at
+       FROM payment_status ps
+       LEFT JOIN payments p
+         ON p.order_id = ps.order_id
+        AND p.status = 'paid'
+        AND LOWER(COALESCE(p.method, '')) = 'razorpay'
+      WHERE ps.order_id = ?
+        AND ps.status = 'paid'
+        AND LOWER(COALESCE(ps.method, '')) = 'razorpay'
+        AND (
+          LEFT(ps.token, 6) = 'order_'
+          OR LEFT(ps.token, 4) = 'pay_'
+          OR LEFT(COALESCE(ps.payment_id, ''), 6) = 'order_'
+          OR LEFT(COALESCE(ps.payment_id, ''), 4) = 'pay_'
+          OR LEFT(COALESCE(p.transaction_id, ''), 6) = 'order_'
+          OR LEFT(COALESCE(p.transaction_id, ''), 4) = 'pay_'
+        )
+      ORDER BY COALESCE(p.updated_at, ps.updated_at) ASC,
+               COALESCE(p.created_at, ps.created_at) ASC
+      LIMIT 20`,
     [orderId]
   );
-  const paidStatusRows = paidRows.length ? paidRows : await dbQuery<any>(
-    `SELECT 1 AS paid
-       FROM payment_status
-      WHERE order_id = ? AND status = 'paid'
-      LIMIT 1`,
-    [orderId]
-  );
-  if (!paidStatusRows.length) return false;
+  const paidRow = paidRows.find((row) => {
+    const rowIds = [
+      cleanString(row.token),
+      cleanString(row.payment_id),
+      cleanString(row.transaction_id),
+    ].filter(Boolean);
+    if (!rowIds.some(isRazorpayIdentifier)) return false;
+    return requestedIds.every((id) => rowIds.includes(id));
+  });
+  if (!paidRow) return { ok: false, reason: 'not_razorpay_verified' };
 
   const orderIds = new Set(parseOrderItems(order.items).map(orderItemId).filter(Boolean));
-  if (!orderIds.size) return false;
+  if (!orderIds.size) return { ok: false, reason: 'order_items_missing' };
 
-  return purchaseContents.every((item) => {
+  const contentsMatch = purchaseContents.every((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
     const id = cleanString((item as Record<string, unknown>).id);
     return id && orderIds.has(id);
   });
+  if (!contentsMatch) return { ok: false, reason: 'purchase_contents_mismatch' };
+
+  return {
+    ok: true,
+    verifiedAt: paidRow.payment_updated_at || paidRow.status_updated_at || paidRow.payment_created_at || paidRow.status_created_at,
+  };
 };
 
 const normalizeSourceUrl = (value: unknown, req: express.Request) => {
@@ -427,8 +480,14 @@ export const sendVerifiedMetaPurchaseForOrder = async (
   if (!order) return { ok: false, skipped: true, reason: 'order_not_found' };
 
   const total = Number(order.total || 0);
-  const paymentMethod = cleanString(options.paymentMethod || order.payment_method || 'Razorpay') || 'Razorpay';
-  const paymentType = cleanString(options.paymentType || paymentMethod) || paymentMethod;
+  const orderPaymentMethod = cleanString(order.payment_method);
+  const requestedPaymentMethod = cleanString(options.paymentMethod);
+  if ((orderPaymentMethod && !isRazorpayMethod(orderPaymentMethod)) || (requestedPaymentMethod && !isRazorpayMethod(requestedPaymentMethod))) {
+    return { ok: false, skipped: true, reason: 'not_razorpay_verified' };
+  }
+
+  const paymentMethod = 'Razorpay';
+  const paymentType = 'Razorpay';
   const items = parseOrderItems(order.items).map((item) => {
     const id = orderItemId(item);
     const quantity = Number(item.quantity || 1);
@@ -456,27 +515,13 @@ export const sendVerifiedMetaPurchaseForOrder = async (
   if (!isValidPurchasePayload(eventId, customData)) {
     return { ok: false, skipped: true, reason: 'invalid_purchase_payload' };
   }
-  if (!(await hasPaidOrderForPurchase(customData))) {
-    return { ok: false, skipped: true, reason: 'not_paid' };
+
+  const verification = await getVerifiedRazorpayPurchase(customData, paymentId, statusToken);
+  if (!verification.ok) {
+    return { ok: false, skipped: true, reason: verification.reason };
   }
 
-  const paidRows = await dbQuery<any>(
-    `SELECT created_at, updated_at
-       FROM payments
-      WHERE order_id = ? AND status = 'paid'
-      ORDER BY updated_at ASC, created_at ASC
-      LIMIT 1`,
-    [orderIdString]
-  );
-  const paidStatusRows = paidRows.length ? paidRows : await dbQuery<any>(
-    `SELECT created_at, updated_at
-       FROM payment_status
-      WHERE order_id = ? AND status = 'paid'
-      ORDER BY updated_at ASC, created_at ASC
-      LIMIT 1`,
-    [orderIdString]
-  );
-  const eventTime = toMetaEventTime(paidStatusRows[0]?.created_at || paidStatusRows[0]?.updated_at || order.created_at);
+  const eventTime = toMetaEventTime(verification.verifiedAt || order.created_at);
   if (!eventTime) {
     return { ok: false, skipped: true, reason: 'purchase_too_old_for_meta_capi' };
   }

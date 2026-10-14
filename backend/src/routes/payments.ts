@@ -520,12 +520,6 @@ router.post('/admin/confirm-pending/:orderId', auth, adminOnly, async (req, res)
       method,
       customerEmail: orderRow.customer_email,
     }).catch(() => {});
-    sendVerifiedMetaPurchaseForOrder(orderId, transactionId, transactionId, {
-      paymentMethod: method,
-      paymentType: method,
-    }).catch((err) => {
-      console.error('Meta verified Purchase event failed:', err);
-    });
 
     return res.json({ ok: true, orderId, status: 'paid', paymentId: transactionId });
   } catch (err: any) {
@@ -595,12 +589,6 @@ router.post('/admin/cod-paid/:orderId', auth, adminOnly, async (req, res) => {
       method,
       customerEmail: orderRow.customer_email,
     }).catch(() => {});
-    sendVerifiedMetaPurchaseForOrder(orderId, transactionId, transactionId, {
-      paymentMethod: method,
-      paymentType: method,
-    }).catch((err) => {
-      console.error('Meta verified Purchase event failed:', err);
-    });
 
     return res.json({ ok: true, orderId, status: 'paid', paymentId: transactionId, payment: refreshedRows[0] ? mapPaymentRow(refreshedRows[0]) : undefined });
   } catch (err: any) {
