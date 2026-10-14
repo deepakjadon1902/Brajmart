@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import OrderSuccessCard from '@/components/orders/OrderSuccessCard';
+import { getMetaAttributionContext } from '@/lib/metaPixel';
 
 type PaymentStatusResponse = {
   status?: 'paid' | 'pending' | 'failed' | null;
@@ -178,7 +179,8 @@ const PaymentStatusPage = () => {
         throw new Error('Unable to load Razorpay checkout. Please disable browser shields/ad blockers and try again.');
       }
 
-      const result = await retryRazorpayOrder(token);
+      const metaContext = getMetaAttributionContext(customerEmail || undefined);
+      const result = await retryRazorpayOrder(token, metaContext);
       const checkout = new window.Razorpay({
         key: result.keyId,
         amount: result.amount,
@@ -209,6 +211,7 @@ const PaymentStatusPage = () => {
               razorpay_order_id: payment.razorpay_order_id || result.orderId,
               razorpay_payment_id: payment.razorpay_payment_id || '',
               razorpay_signature: payment.razorpay_signature || '',
+              metaContext,
             });
             navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`, { replace: true });
           } catch (err: unknown) {

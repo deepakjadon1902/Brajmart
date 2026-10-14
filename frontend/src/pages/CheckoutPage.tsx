@@ -14,7 +14,7 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
-import { trackMetaPixelEvent } from '@/lib/metaPixel';
+import { getMetaAttributionContext, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft';
 
 const steps = ['Address', 'Payment', 'Done'];
@@ -674,6 +674,9 @@ const CheckoutPage = () => {
     }
   };
 
+  const checkoutMetaContext = () =>
+    getMetaAttributionContext(isAuthenticated && user?.id ? `user:${user.id}` : effectiveEmail);
+
   const verifyDeliveryPincode = async () => {
     const pincode = String(effectiveShipping.pincode || '').trim();
     if (!isValidPincode(pincode)) {
@@ -793,6 +796,7 @@ const CheckoutPage = () => {
             selectedAttributes: item.product.selectedAttributes || {},
           })),
         }),
+        metaContext: checkoutMetaContext(),
         order: orderPayload,
         customer: { name: cleanBillingAddress.fullName, email: effectiveEmail, phone: cleanBillingAddress.mobile },
       });
@@ -826,6 +830,7 @@ const CheckoutPage = () => {
               razorpay_order_id: payment.razorpay_order_id || result.orderId,
               razorpay_payment_id: payment.razorpay_payment_id || '',
               razorpay_signature: payment.razorpay_signature || '',
+              metaContext: checkoutMetaContext(),
             });
             navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`);
           } catch (err: unknown) {
@@ -932,6 +937,7 @@ const CheckoutPage = () => {
           codPincode: effectivePincode,
           codMessage: serviceability?.message || `COD available for ${effectivePincode}`,
           couponCode: appliedCoupon?.code || undefined,
+          metaContext: checkoutMetaContext(),
           statusHistory: [{ status: 'confirmed', date: new Date().toISOString(), note: 'Order confirmed with Cash on Delivery' }],
         }) as CreatedOrderResponse;
         const confirmedOrderId = String(order?.orderId || order?._id || order?.id || '');

@@ -29,23 +29,40 @@ const cleanString = (value: unknown) => String(value ?? '').trim();
 let metaEventSchemaReady: Promise<void> | null = null;
 
 const ensureMetaEventSchema = () => {
-  metaEventSchemaReady ||= dbExecute(`
-    CREATE TABLE IF NOT EXISTS meta_conversion_events (
-      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      event_id VARCHAR(190) NOT NULL,
-      event_name VARCHAR(80) NOT NULL,
-      order_id BIGINT UNSIGNED NULL,
-      status ENUM('pending','sent','failed','skipped') NOT NULL DEFAULT 'pending',
-      attempts INT NOT NULL DEFAULT 0,
-      last_error TEXT NULL,
-      response JSON NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY uniq_meta_conversion_event_id (event_id),
-      KEY idx_meta_conversion_order_event (order_id, event_name),
-      KEY idx_meta_conversion_status_updated (status, updated_at)
-    )
-  `).then(() => undefined);
+  metaEventSchemaReady ||= (async () => {
+    await dbExecute(`
+      CREATE TABLE IF NOT EXISTS meta_conversion_events (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        event_id VARCHAR(190) NOT NULL,
+        event_name VARCHAR(80) NOT NULL,
+        order_id BIGINT UNSIGNED NULL,
+        status ENUM('pending','sent','failed','skipped') NOT NULL DEFAULT 'pending',
+        attempts INT NOT NULL DEFAULT 0,
+        last_error TEXT NULL,
+        response JSON NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_meta_conversion_event_id (event_id),
+        KEY idx_meta_conversion_order_event (order_id, event_name),
+        KEY idx_meta_conversion_status_updated (status, updated_at)
+      )
+    `);
+
+    await dbExecute(`
+      CREATE TABLE IF NOT EXISTS meta_order_contexts (
+        order_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+        client_ip VARCHAR(64) NULL,
+        client_user_agent TEXT NULL,
+        fbp VARCHAR(255) NULL,
+        fbc VARCHAR(255) NULL,
+        event_source_url TEXT NULL,
+        external_id VARCHAR(255) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_meta_order_contexts_updated (updated_at)
+      )
+    `);
+  })();
   return metaEventSchemaReady;
 };
 
@@ -59,9 +76,17 @@ const hashEmail = (value: unknown) => {
 };
 
 const hashPhone = (value: unknown) => {
-  const digits = cleanString(value).replace(/\D/g, '');
+  let digits = cleanString(value).replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+  if (digits.length === 10 && /^[6-9]/.test(digits)) digits = `91${digits}`;
   if (digits.length < 7) return '';
   return sha256(digits);
+};
+
+const hashExternalId = (value: unknown) => {
+  const externalId = cleanString(value).toLowerCase();
+  if (!externalId) return '';
+  return sha256(externalId);
 };
 
 const getClientIp = (req: express.Request) => {
@@ -184,6 +209,31 @@ const normalizeSourceUrl = (value: unknown, req: express.Request) => {
   }
 };
 
+const readRequestCookie = (req: express.Request, name: string) => {
+  const cookieHeader = cleanString(req.headers.cookie);
+  if (!cookieHeader) return '';
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${escapedName}=([^;]*)`));
+  if (!match) return '';
+  try {
+    return decodeURIComponent(match[1] || '');
+  } catch {
+    return match[1] || '';
+  }
+};
+
+const normalizeMetaContext = (value: unknown, req?: express.Request) => {
+  const raw = parseObject(value);
+  return {
+    clientIp: cleanString(raw.clientIp) || (req ? getClientIp(req) : ''),
+    clientUserAgent: cleanString(raw.clientUserAgent) || (req ? cleanString(req.headers['user-agent']) : ''),
+    fbp: cleanString(raw.fbp) || (req ? readRequestCookie(req, '_fbp') : ''),
+    fbc: cleanString(raw.fbc) || (req ? readRequestCookie(req, '_fbc') : ''),
+    eventSourceUrl: req ? normalizeSourceUrl(raw.eventSourceUrl, req) : cleanString(raw.eventSourceUrl),
+    externalId: cleanString(raw.externalId),
+  };
+};
+
 const getMetaConfig = () => ({
   token: cleanString(process.env.META_CONVERSIONS_API_TOKEN),
   pixelId: cleanString(process.env.META_PIXEL_ID || process.env.META_DATASET_ID) || DEFAULT_PIXEL_ID,
@@ -206,12 +256,14 @@ const sendMetaConversionApiEvent = async (input: {
   const userData = input.userData || {};
   const emailHash = hashEmail(userData.email);
   const phoneHash = hashPhone(userData.phone);
+  const externalIdHash = hashExternalId(userData.externalId || userData.email);
   const metaUserData: Record<string, unknown> = {};
 
   if (cleanString(userData.clientIp)) metaUserData.client_ip_address = cleanString(userData.clientIp);
   if (cleanString(userData.clientUserAgent)) metaUserData.client_user_agent = cleanString(userData.clientUserAgent);
   if (emailHash) metaUserData.em = [emailHash];
   if (phoneHash) metaUserData.ph = [phoneHash];
+  if (externalIdHash) metaUserData.external_id = externalIdHash;
   if (cleanString(userData.fbp)) metaUserData.fbp = cleanString(userData.fbp);
   if (cleanString(userData.fbc)) metaUserData.fbc = cleanString(userData.fbc);
 
@@ -305,7 +357,67 @@ const getOrderPhone = (order: any) => {
   return cleanString(billing?.mobile || billing?.phone || shipping?.mobile || shipping?.phone);
 };
 
-export const sendVerifiedMetaPurchaseForOrder = async (orderId: number | string, paymentId?: string, statusToken?: string) => {
+export const captureMetaOrderContext = async (orderId: number | string, value: unknown, req?: express.Request) => {
+  if (!isDbConnected()) return;
+  const orderIdString = cleanString(orderId);
+  if (!/^\d+$/.test(orderIdString)) return;
+
+  const context = normalizeMetaContext(value, req);
+  if (!context.clientIp && !context.clientUserAgent && !context.fbp && !context.fbc && !context.eventSourceUrl && !context.externalId) return;
+
+  await ensureMetaEventSchema();
+  await dbExecute(
+    `INSERT INTO meta_order_contexts
+      (order_id, client_ip, client_user_agent, fbp, fbc, event_source_url, external_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+      client_ip = COALESCE(NULLIF(VALUES(client_ip), ''), client_ip),
+      client_user_agent = COALESCE(NULLIF(VALUES(client_user_agent), ''), client_user_agent),
+      fbp = COALESCE(NULLIF(VALUES(fbp), ''), fbp),
+      fbc = COALESCE(NULLIF(VALUES(fbc), ''), fbc),
+      event_source_url = COALESCE(NULLIF(VALUES(event_source_url), ''), event_source_url),
+      external_id = COALESCE(NULLIF(VALUES(external_id), ''), external_id),
+      updated_at = NOW()`,
+    [
+      orderIdString,
+      context.clientIp || null,
+      context.clientUserAgent || null,
+      context.fbp || null,
+      context.fbc || null,
+      context.eventSourceUrl || null,
+      context.externalId || null,
+    ]
+  );
+};
+
+const getMetaOrderContext = async (orderId: string) => {
+  await ensureMetaEventSchema();
+  const rows = await dbQuery<any>('SELECT * FROM meta_order_contexts WHERE order_id = ? LIMIT 1', [orderId]);
+  const row = rows[0];
+  if (!row) return {};
+  return {
+    clientIp: cleanString(row.client_ip),
+    clientUserAgent: cleanString(row.client_user_agent),
+    fbp: cleanString(row.fbp),
+    fbc: cleanString(row.fbc),
+    eventSourceUrl: cleanString(row.event_source_url),
+    externalId: cleanString(row.external_id),
+  };
+};
+
+type VerifiedMetaPurchaseOptions = {
+  paymentMethod?: string;
+  paymentType?: string;
+  eventSourceUrl?: string;
+  userData?: Record<string, unknown>;
+};
+
+export const sendVerifiedMetaPurchaseForOrder = async (
+  orderId: number | string,
+  paymentId?: string,
+  statusToken?: string,
+  options: VerifiedMetaPurchaseOptions = {}
+) => {
   if (!isDbConnected()) return { ok: false, skipped: true, reason: 'db_unavailable' };
   const orderIdString = cleanString(orderId);
   if (!/^\d+$/.test(orderIdString)) return { ok: false, skipped: true, reason: 'invalid_order' };
@@ -315,6 +427,8 @@ export const sendVerifiedMetaPurchaseForOrder = async (orderId: number | string,
   if (!order) return { ok: false, skipped: true, reason: 'order_not_found' };
 
   const total = Number(order.total || 0);
+  const paymentMethod = cleanString(options.paymentMethod || order.payment_method || 'Razorpay') || 'Razorpay';
+  const paymentType = cleanString(options.paymentType || paymentMethod) || paymentMethod;
   const items = parseOrderItems(order.items).map((item) => {
     const id = orderItemId(item);
     const quantity = Number(item.quantity || 1);
@@ -335,8 +449,8 @@ export const sendVerifiedMetaPurchaseForOrder = async (orderId: number | string,
     contents: items,
     num_items: items.reduce((sum, item) => sum + item.quantity, 0),
     payment_id: paymentId || undefined,
-    payment_type: 'Razorpay',
-    payment_method: 'Razorpay',
+    payment_type: paymentType,
+    payment_method: paymentMethod,
   });
   const eventId = `brajmart.Purchase.order.${orderIdString}`;
   if (!isValidPurchasePayload(eventId, customData)) {
@@ -372,12 +486,17 @@ export const sendVerifiedMetaPurchaseForOrder = async (orderId: number | string,
     return { ok: true, skipped: true, reason: 'duplicate_purchase_event', status: reservation.status, eventId };
   }
 
+  const storedContext = await getMetaOrderContext(orderIdString);
+  const fallbackSourceUrl = `${cleanString(process.env.FRONTEND_URL || process.env.SITE_URL) || DEFAULT_SITE_URL}/payment-status/${encodeURIComponent(cleanString(statusToken || orderIdString))}`;
+  const storedSourceUrl = cleanString((storedContext as any).eventSourceUrl);
   const result = await sendMetaConversionApiEvent({
     eventName: 'Purchase',
     eventId,
     eventTime,
-    eventSourceUrl: `${cleanString(process.env.FRONTEND_URL || process.env.SITE_URL) || DEFAULT_SITE_URL}/payment-status/${encodeURIComponent(cleanString(statusToken || orderIdString))}`,
+    eventSourceUrl: cleanString(options.eventSourceUrl) || storedSourceUrl || fallbackSourceUrl,
     userData: {
+      ...storedContext,
+      ...(options.userData || {}),
       email: order.customer_email,
       phone: getOrderPhone(order),
     },

@@ -39,6 +39,14 @@ type MetaPixelOptions = {
   userData?: MetaPixelUserData;
 };
 
+export type MetaAttributionContext = {
+  clientUserAgent?: string;
+  eventSourceUrl?: string;
+  externalId?: string;
+  fbc?: string;
+  fbp?: string;
+};
+
 declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
@@ -86,6 +94,17 @@ export const createMetaEventId = (eventName: MetaPixelEvent) => {
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `brajmart.${eventName}.${random}`;
+};
+
+export const getMetaAttributionContext = (externalId?: string): MetaAttributionContext => {
+  if (typeof window === 'undefined') return {};
+  return {
+    clientUserAgent: window.navigator?.userAgent || undefined,
+    eventSourceUrl: window.location.href,
+    externalId: externalId || undefined,
+    fbp: readCookie('_fbp') || undefined,
+    fbc: readCookie('_fbc') || undefined,
+  };
 };
 
 const sendMetaConversionEvent = (eventName: MetaPixelEvent, eventId: string, params: MetaPixelParams, options: MetaPixelOptions) => {

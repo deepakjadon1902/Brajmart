@@ -142,6 +142,7 @@ export const verifyPasswordResetOtp = (payload: { email: string; otp: string }) 
 export const createRazorpayOrder = (payload: {
   amount: number;
   idempotencyKey?: string;
+  metaContext?: Record<string, unknown>;
   order: Record<string, unknown>;
   customer: { name: string; email: string; phone?: string };
 }) =>
@@ -156,7 +157,7 @@ export const createRazorpayOrder = (payload: {
     prefill: { name: string; email: string; contact?: string };
   }>('/razorpay/create-order', { method: 'POST', body: payload });
 
-export const retryRazorpayOrder = (token: string) =>
+export const retryRazorpayOrder = (token: string, metaContext?: Record<string, unknown>) =>
   getJson<{
     keyId: string;
     orderId: string;
@@ -166,12 +167,13 @@ export const retryRazorpayOrder = (token: string) =>
     name: string;
     description: string;
     prefill: { name: string; email: string; contact?: string };
-  }>('/razorpay/retry-order', { method: 'POST', body: { token } });
+  }>('/razorpay/retry-order', { method: 'POST', body: { token, metaContext } });
 
 export const verifyRazorpayPayment = (payload: {
   razorpay_order_id: string;
   razorpay_payment_id: string;
   razorpay_signature: string;
+  metaContext?: Record<string, unknown>;
 }) =>
   getJson<{ ok: boolean; orderId: number; paymentId: string; status: string }>('/razorpay/verify', {
     method: 'POST',
