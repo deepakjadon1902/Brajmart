@@ -56,9 +56,50 @@ describe('actual HTML Meta Pixel guards', () => {
     await dom.window.fetch(purchaseUrl);
     expect(rawFetch).not.toHaveBeenCalled();
   });
+  it('blocks Purchase fetch requests supplied as URL objects', async () => {
+    await dom.window.fetch(new dom.window.URL(purchaseUrl));
+    expect(rawFetch).not.toHaveBeenCalled();
+  });
+  it('blocks Purchase fetch requests supplied as Request objects', async () => {
+    await dom.window.fetch(new Request(purchaseUrl));
+    expect(rawFetch).not.toHaveBeenCalled();
+  });
+  it('preserves legitimate events when the asynchronously loaded SDK installs callMethod', () => {
+    const dispatch = vi.fn();
+    dom.window.fbq.callMethod = dispatch;
+    dom.window.fbq('track', 'AddToCart', { value: 199.99 });
+    expect(dispatch).toHaveBeenCalledWith('track', 'AddToCart', { value: 199.99 });
+  });
+  it('the fbq.push alias also rejects Purchase', () => {
+    dom.window.fbq.push = dom.window.fbq.push || rawFbq;
+    dom.window.fbq.push('track', 'Purchase', { value: 199.99 });
+    expect(rawFbq).not.toHaveBeenCalled();
+  });
   it('blocks direct Purchase beacon requests', () => {
     dom.window.navigator.sendBeacon(purchaseUrl, '');
     expect(rawBeacon).not.toHaveBeenCalled();
+  });
+  it('blocks Purchase POST fetch data when the event is in the body', async () => {
+    await dom.window.fetch('https://www.facebook.com/tr/', { method: 'POST', body: new dom.window.URLSearchParams({ id: pixelId, ev: 'Purchase' }) });
+    expect(rawFetch).not.toHaveBeenCalled();
+  });
+  it('blocks Purchase beacon data when the event is in the body', () => {
+    dom.window.navigator.sendBeacon('https://www.facebook.com/tr/', `id=${pixelId}&ev=Purchase`);
+    expect(rawBeacon).not.toHaveBeenCalled();
+  });
+  it('blocks Purchase Request bodies without modifying other API requests', async () => {
+    await dom.window.fetch(new Request('https://www.facebook.com/tr/', { method: 'POST', body: `id=${pixelId}&ev=Purchase` }));
+    expect(rawFetch).not.toHaveBeenCalled();
+    await dom.window.fetch('/api/meta/conversions', { method: 'POST', body: '{"eventName":"AddToCart"}' });
+    expect(rawFetch).toHaveBeenCalledOnce();
+  });
+  it('allows legitimate PageView POST data', async () => {
+    await dom.window.fetch('https://www.facebook.com/tr/', { method: 'POST', body: `id=${pixelId}&ev=PageView` });
+    expect(rawFetch).toHaveBeenCalledOnce();
+  });
+  it('blocks attempts to re-enable automatic Pixel configuration', () => {
+    dom.window.fbq('set', 'autoConfig', true, pixelId);
+    expect(rawFbq).not.toHaveBeenCalled();
   });
   it('blocks direct Purchase image source and setAttribute requests', () => {
     const image = dom.window.document.createElement('img');

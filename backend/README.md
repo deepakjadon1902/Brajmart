@@ -65,6 +65,11 @@ Environment variables:
 
 ### Verified Meta Purchases
 
+See the [Meta Ads audit](docs/meta-ads-audit.md) for test results and the active
+homepage Purchase rule and additional Facebook tags found in public Meta/GTM
+configuration. Those account settings require cleanup as well as deploying the
+local tracking fixes.
+
 Meta `Purchase` is sent only by the backend after a live-mode Razorpay API check.
 The payment must be captured, unrefunded, linked to the stored Razorpay order,
 and match the stored order total exactly in paise with currency `INR`. Both
@@ -81,6 +86,9 @@ COD and legacy manual payments do not send Meta `Purchase`.
 The public `/api/meta/conversions` endpoint rejects `Purchase`. Browser tracking
 also blocks Purchase through the app helper, `fbq`, `_fbq`, and the supported
 Pixel request guards. Purchase value and contents come from the stored order.
+The guards cover `fbq.push`, URL/Request fetch arguments, encoded POST bodies,
+beacons and XMLHttpRequest while preserving asynchronous SDK dispatch. CAPI
+requests are marked sent only when Meta reports that the event was accepted.
 The backend uses the gateway payment timestamp and skips events over seven
 days old rather than presenting historical payments as new purchases.
 

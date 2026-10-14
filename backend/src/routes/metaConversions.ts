@@ -359,11 +359,12 @@ const sendMetaConversionApiEvent = async (input: {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10_000),
   });
   const data = await response.json().catch(async () => ({ message: await response.text().catch(() => '') }));
-  if (!response.ok) {
+  if (!response.ok || data?.error || data?.events_received !== 1) {
     console.error('Meta Conversions API error:', data);
-    return { ok: false, status: response.status, data };
+    return { ok: false, reason: 'meta_event_not_accepted', status: response.status, data };
   }
   return { ok: true, eventId: input.eventId, response: data };
 };

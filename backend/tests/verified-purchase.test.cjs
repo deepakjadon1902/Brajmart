@@ -16,7 +16,7 @@ db.dbQuery = async (sql) => {
   if (sql.includes('FROM payment_status ps')) return state.paidRows;
   if (sql.includes('FROM payment_status')) return state.statusRow ? [state.statusRow] : [];
   if (sql.includes('FROM payments')) return [];
-  if (sql.includes('FROM meta_order_contexts')) return [];
+  if (sql.includes('FROM meta_order_contexts')) return state.context ? [state.context] : [];
   if (sql.includes('FROM meta_conversion_events')) return state.eventStatus ? [{ status: state.eventStatus }] : [];
   throw new Error(`Unexpected test query: ${sql}`);
 };
@@ -71,7 +71,12 @@ beforeEach(() => {
     if (target.hostname === 'graph.facebook.com') {
       state.metaCalls.push(JSON.parse(options.body));
       if (state.metaError) throw new Error('Simulated Meta network failure');
-      return { ok: !state.metaHttpError, status: state.metaHttpError ? 500 : 200, json: async () => ({ events_received: 1 }) };
+      state.metaTargets ||= [];
+      state.metaTargets.push({ url: target, options });
+      return { ok: !state.metaHttpError, status: state.metaHttpError ? 500 : 200, json: async () => {
+        if (state.metaInvalidJson) throw new SyntaxError('Invalid Meta response');
+        return state.metaResponse || { events_received: 1 };
+      }, text: async () => 'Invalid Meta response' };
     }
     assert.equal(target.hostname, 'api.razorpay.com');
     state.gatewayCalls.push(target.pathname + target.search);
@@ -317,4 +322,74 @@ test('admin status editing cannot set a payment to paid', async () => {
   const response = await route(payments.default, '/:id', { status: 'paid' }, { params: { id: '42' } }, 'put');
   assert.equal(response.statusCode, 400);
   assert.equal(state.writes.length, 0);
+});
+
+for (const response of [{ events_received: 0 }, { error: { message: 'Invalid event' } }, {}]) {
+  test(`Meta HTTP 200 without event acceptance is not recorded as sent: ${JSON.stringify(response)}`, async () => {
+    state.metaResponse = response;
+    const result = await sendPurchase();
+    assert.equal(result.ok, false);
+    assert.equal(state.eventStatus, 'failed');
+  });
+}
+test('malformed Meta success response is not recorded as sent', async () => {
+  state.metaInvalidJson = true;
+  const result = await sendPurchase();
+  assert.equal(result.ok, false);
+  assert.equal(state.eventStatus, 'failed');
+});
+test('customer identifiers are normalized and hashed while browser IDs remain unchanged', async () => {
+  state.order.customer_email = '  TEST@Example.Com  ';
+  state.order.billing_address = JSON.stringify({ mobile: '98765 43210' });
+  state.context = { client_ip: '203.0.113.10', client_user_agent: 'Isolated QA Browser', fbp: 'fb.1.1700000000000.123456789', fbc: 'fb.1.1700000000000.test-click', event_source_url: 'https://www.brajmart.com/checkout', external_id: 'Customer-42' };
+  await sendPurchase();
+  const event = state.metaCalls[0].data[0];
+  const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
+  assert.deepEqual(event.user_data.em, [hash('test@example.com')]);
+  assert.deepEqual(event.user_data.ph, [hash('919876543210')]);
+  assert.equal(event.user_data.fbp, state.context.fbp);
+  assert.equal(event.user_data.fbc, state.context.fbc);
+  assert.equal(event.user_data.client_ip_address, '203.0.113.10');
+  assert.equal(event.user_data.client_user_agent, 'Isolated QA Browser');
+  assert.equal(event.event_source_url, 'https://www.brajmart.com/checkout');
+  assert.equal(event.action_source, 'website');
+  assert.ok(!JSON.stringify(event).includes('TEST@Example.Com'));
+  assert.ok(!JSON.stringify(event).includes('98765 43210'));
+});
+test('Meta endpoint uses the configured dataset and API version', async () => {
+  process.env.META_PIXEL_ID = '1234567890123456';
+  process.env.META_CONVERSIONS_API_VERSION = 'v21.0';
+  await sendPurchase();
+  assert.equal(state.metaTargets[0].url.pathname, '/v21.0/1234567890123456/events');
+  assert.equal(state.metaTargets[0].options.method, 'POST');
+  assert.equal(state.metaTargets[0].options.headers['Content-Type'], 'application/json');
+  delete process.env.META_PIXEL_ID;
+  delete process.env.META_CONVERSIONS_API_VERSION;
+});
+test('test event code is included only when explicitly configured', async () => {
+  process.env.META_TEST_EVENT_CODE = 'ISOLATED_TEST_ONLY';
+  await sendPurchase();
+  assert.equal(state.metaCalls[0].test_event_code, 'ISOLATED_TEST_ONLY');
+});
+test('a production payload has no test event code', async () => {
+  await sendPurchase();
+  assert.equal(Object.hasOwn(state.metaCalls[0], 'test_event_code'), false);
+});
+test('a sent Purchase is never resent on refresh or repeated callbacks', async () => {
+  state.eventStatus = 'sent';
+  const result = await sendPurchase();
+  assert.equal(result.reason, 'duplicate_purchase_event');
+  assert.equal(state.metaCalls.length, 0);
+});
+test('a pending Purchase is never claimed by another sender', async () => {
+  state.eventStatus = 'pending';
+  await sendPurchase();
+  assert.equal(state.metaCalls.length, 0);
+});
+test('no Meta credentials means no outgoing event and no sent status', async () => {
+  delete process.env.META_CONVERSIONS_API_TOKEN;
+  const result = await sendPurchase();
+  assert.equal(result.ok, false);
+  assert.equal(state.metaCalls.length, 0);
+  assert.notEqual(state.eventStatus, 'sent');
 });

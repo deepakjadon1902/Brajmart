@@ -17,18 +17,26 @@
           if (loaded) return;
           loaded = true;
           var BRAJMART_META_PIXEL_ID = '1824114108557446';
-          var isBlockedMetaPixelUrl = function (value) {
+          var getMetaPixelUrl = function (value) {
             try {
               var url = new URL(String(value || ''), window.location.href);
               var path = String(url.pathname || '').replace(/\/+$/, '');
-              if (url.hostname !== 'www.facebook.com' || path !== '/tr') return false;
-              var pixelId = url.searchParams.get('id') || '';
-              var eventName = String(url.searchParams.get('ev') || '').toLowerCase();
-              if (pixelId && pixelId !== BRAJMART_META_PIXEL_ID) return true;
-              return pixelId === BRAJMART_META_PIXEL_ID && eventName === 'purchase';
+              return (url.hostname === 'www.facebook.com' || url.hostname === 'facebook.com') && path === '/tr' ? url : null;
             } catch (error) {
-              return false;
+              return null;
             }
+          };
+          var isBlockedMetaPixelUrl = function (value, data) {
+            var url = getMetaPixelUrl(value);
+            if (!url) return false;
+            var bodyParams = typeof data === 'string' ? new URLSearchParams(data)
+              : data && typeof data.get === 'function' ? data : null;
+            var sources = bodyParams ? [url.searchParams, bodyParams] : [url.searchParams];
+            return sources.some(function (params) {
+              var pixelId = String(params.get('id') || '');
+              var eventName = String(params.get('ev') || '').trim().toLowerCase();
+              return (pixelId && pixelId !== BRAJMART_META_PIXEL_ID) || eventName === 'purchase';
+            });
           };
           var installMetaPixelNetworkGuard = function () {
             if (window.__brajmartMetaPixelNetworkGuardInstalled) return;
@@ -37,7 +45,7 @@
             if (typeof navigator.sendBeacon === 'function') {
               var rawSendBeacon = navigator.sendBeacon.bind(navigator);
               navigator.sendBeacon = function (url, data) {
-                if (isBlockedMetaPixelUrl(url)) {
+                if (isBlockedMetaPixelUrl(url, data)) {
                   if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel request.', url);
                   return true;
                 }
@@ -48,10 +56,16 @@
             if (typeof window.fetch === 'function') {
               var rawFetch = window.fetch.bind(window);
               window.fetch = function (input, init) {
-                var url = typeof input === 'string' ? input : input && input.url;
-                if (isBlockedMetaPixelUrl(url)) {
+                var url = typeof input === 'string' ? input : input && (input.url || input.href);
+                if (isBlockedMetaPixelUrl(url, init && init.body)) {
                   if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel request.', url);
                   return Promise.resolve(new Response(null, { status: 204 }));
+                }
+                if (getMetaPixelUrl(url) && input && typeof input.clone === 'function' && input.body) {
+                  return input.clone().text().then(function (body) {
+                    if (isBlockedMetaPixelUrl(url, body)) return new Response(null, { status: 204 });
+                    return rawFetch(input, init);
+                  });
                 }
                 return rawFetch(input, init);
               };
@@ -59,12 +73,21 @@
 
             if (window.XMLHttpRequest && window.XMLHttpRequest.prototype) {
               var rawOpen = window.XMLHttpRequest.prototype.open;
+              var rawSend = window.XMLHttpRequest.prototype.send;
               window.XMLHttpRequest.prototype.open = function (method, url) {
+                this.__brajmartMetaPixelUrl = url;
                 if (isBlockedMetaPixelUrl(url)) {
                   if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel request.', url);
                   return rawOpen.apply(this, [method, 'about:blank']);
                 }
                 return rawOpen.apply(this, arguments);
+              };
+              window.XMLHttpRequest.prototype.send = function (body) {
+                if (isBlockedMetaPixelUrl(this.__brajmartMetaPixelUrl, body)) {
+                  this.abort();
+                  return;
+                }
+                return rawSend.apply(this, arguments);
               };
             }
 
@@ -129,6 +152,7 @@
               var args = Array.prototype.slice.call(arguments);
               var command = args[0];
               var pixelId = args[1];
+              if (command === 'set' && args[1] === 'autoConfig' && args[2] !== false) return;
               if (command === 'init' && String(pixelId || '') !== BRAJMART_META_PIXEL_ID) {
                 if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel init.', pixelId);
                 return;
@@ -149,9 +173,13 @@
                 }
                 return;
               }
+              if (typeof guardedFbq.callMethod === 'function') {
+                return guardedFbq.callMethod.apply(guardedFbq, arguments);
+              }
               return rawFbq.apply(this, arguments);
             };
             for (var key in rawFbq) guardedFbq[key] = rawFbq[key];
+            guardedFbq.push = guardedFbq;
             window.fbq = guardedFbq;
             window._fbq = guardedFbq;
           })();
