@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import express from 'express';
 import { dbExecute, dbQuery, isDbConnected } from '../lib/db';
+import { verifyCapturedRazorpayPayment } from '../lib/razorpayVerification';
 
 const router = express.Router();
 
@@ -182,7 +183,7 @@ const getVerifiedRazorpayPurchase = async (
   if (!order) return { ok: false, reason: 'order_not_found' };
 
   const orderTotal = Number(order.total || 0);
-  if (!Number.isFinite(orderTotal) || Math.abs(orderTotal - purchaseValue) > 1) {
+  if (!Number.isFinite(orderTotal) || Math.round(orderTotal * 100) !== Math.round(purchaseValue * 100)) {
     return { ok: false, reason: 'purchase_total_mismatch' };
   }
 
@@ -197,14 +198,17 @@ const getVerifiedRazorpayPurchase = async (
     `SELECT
         ps.token,
         ps.payment_id,
+        ps.amount,
         ps.created_at AS status_created_at,
         ps.updated_at AS status_updated_at,
         p.transaction_id,
+        p.amount AS payment_amount,
         p.created_at AS payment_created_at,
         p.updated_at AS payment_updated_at
        FROM payment_status ps
-       LEFT JOIN payments p
+       INNER JOIN payments p
          ON p.order_id = ps.order_id
+        AND p.transaction_id = ps.payment_id
         AND p.status = 'paid'
         AND LOWER(COALESCE(p.method, '')) = 'razorpay'
       WHERE ps.order_id = ?
@@ -224,6 +228,11 @@ const getVerifiedRazorpayPurchase = async (
     [orderId]
   );
   const paidRow = paidRows.find((row) => {
+    if (!/^order_[A-Za-z0-9]+$/.test(cleanString(row.token))) return false;
+    if (!/^pay_[A-Za-z0-9]+$/.test(cleanString(row.payment_id))) return false;
+    if (cleanString(row.transaction_id) !== cleanString(row.payment_id)) return false;
+    if (Math.round(Number(row.amount) * 100) !== Math.round(orderTotal * 100)
+      || Math.round(Number(row.payment_amount) * 100) !== Math.round(orderTotal * 100)) return false;
     const rowIds = [
       cleanString(row.token),
       cleanString(row.payment_id),
@@ -244,10 +253,19 @@ const getVerifiedRazorpayPurchase = async (
   });
   if (!contentsMatch) return { ok: false, reason: 'purchase_contents_mismatch' };
 
-  return {
-    ok: true,
-    verifiedAt: paidRow.payment_updated_at || paidRow.status_updated_at || paidRow.payment_created_at || paidRow.status_created_at,
-  };
+  try {
+    const payment = await verifyCapturedRazorpayPayment({
+      orderId: cleanString(paidRow.token),
+      paymentId: cleanString(paidRow.payment_id),
+      amount: orderTotal,
+      liveOnly: true,
+    });
+    const createdAt = Number(payment.created_at);
+    if (!Number.isSafeInteger(createdAt) || createdAt <= 0) return { ok: false, reason: 'invalid_payment_time' };
+    return { ok: true, verifiedAt: new Date(createdAt * 1000) };
+  } catch {
+    return { ok: false, reason: 'razorpay_verification_failed' };
+  }
 };
 
 const normalizeSourceUrl = (value: unknown, req: express.Request) => {
@@ -374,11 +392,11 @@ const reserveMetaConversionEvent = async (eventId: string, eventName: string, or
   const rows = await dbQuery<any>('SELECT status FROM meta_conversion_events WHERE event_id = ? LIMIT 1', [eventId]);
   const status = cleanString(rows[0]?.status);
   if (status === 'failed') {
-    await dbExecute(
-      "UPDATE meta_conversion_events SET status = 'pending', attempts = attempts + 1, last_error = NULL, updated_at = NOW() WHERE event_id = ?",
+    const claimed: any = await dbExecute(
+      "UPDATE meta_conversion_events SET status = 'pending', attempts = attempts + 1, last_error = NULL, updated_at = NOW() WHERE event_id = ? AND status = 'failed'",
       [eventId]
     );
-    return { reserved: true };
+    return { reserved: Number(claimed?.affectedRows || 0) > 0, status: 'pending' };
   }
   return { reserved: false, status: status || 'duplicate' };
 };
@@ -531,24 +549,29 @@ export const sendVerifiedMetaPurchaseForOrder = async (
     return { ok: true, skipped: true, reason: 'duplicate_purchase_event', status: reservation.status, eventId };
   }
 
-  const storedContext = await getMetaOrderContext(orderIdString);
-  const fallbackSourceUrl = `${cleanString(process.env.FRONTEND_URL || process.env.SITE_URL) || DEFAULT_SITE_URL}/payment-status/${encodeURIComponent(cleanString(statusToken || orderIdString))}`;
-  const storedSourceUrl = cleanString((storedContext as any).eventSourceUrl);
-  const result = await sendMetaConversionApiEvent({
-    eventName: 'Purchase',
-    eventId,
-    eventTime,
-    eventSourceUrl: cleanString(options.eventSourceUrl) || storedSourceUrl || fallbackSourceUrl,
-    userData: {
-      ...storedContext,
-      ...(options.userData || {}),
-      email: order.customer_email,
-      phone: getOrderPhone(order),
-    },
-    customData,
-  });
-  await markMetaConversionEvent(eventId, result.ok ? 'sent' : 'failed', result);
-  return result;
+  try {
+    const storedContext = await getMetaOrderContext(orderIdString);
+    const fallbackSourceUrl = `${cleanString(process.env.FRONTEND_URL || process.env.SITE_URL) || DEFAULT_SITE_URL}/payment-status/${encodeURIComponent(cleanString(statusToken || orderIdString))}`;
+    const storedSourceUrl = cleanString((storedContext as any).eventSourceUrl);
+    const result = await sendMetaConversionApiEvent({
+      eventName: 'Purchase',
+      eventId,
+      eventTime,
+      eventSourceUrl: cleanString(options.eventSourceUrl) || storedSourceUrl || fallbackSourceUrl,
+      userData: {
+        ...storedContext,
+        ...(options.userData || {}),
+        email: order.customer_email,
+        phone: getOrderPhone(order),
+      },
+      customData,
+    });
+    await markMetaConversionEvent(eventId, result.ok ? 'sent' : 'failed', result);
+    return result;
+  } catch (err) {
+    await markMetaConversionEvent(eventId, 'failed', { reason: 'meta_purchase_send_failed' });
+    throw err;
+  }
 };
 
 router.post('/', async (req, res) => {

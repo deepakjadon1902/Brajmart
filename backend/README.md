@@ -63,5 +63,54 @@ Environment variables:
 ### Upload
 - `POST /api/upload` — Upload image (auth, max 1MB)
 
-### Meta Test
-Test Meta Pixel final
+### Verified Meta Purchases
+
+Meta `Purchase` is sent only by the backend after a live-mode Razorpay API check.
+The payment must be captured, unrefunded, linked to the stored Razorpay order,
+and match the stored order total exactly in paise with currency `INR`. Both
+payment records must agree on the paid payment ID and amount. A database
+`paid` flag or a Razorpay-looking identifier alone is insufficient.
+
+Checkout confirmation verifies the signature using the stored gateway order ID.
+Webhooks verify a full SHA-256 signature against the exact raw request body.
+Every gateway path that marks an order paid checks Razorpay before writing.
+Reconciliation never matches payments by amount, time or customer notes alone.
+Admin manual confirmation cannot convert a Razorpay checkout into a paid order.
+COD and legacy manual payments do not send Meta `Purchase`.
+
+The public `/api/meta/conversions` endpoint rejects `Purchase`. Browser tracking
+also blocks Purchase through the app helper, `fbq`, `_fbq`, and the supported
+Pixel request guards. Purchase value and contents come from the stored order.
+The backend uses the gateway payment timestamp and skips events over seven
+days old rather than presenting historical payments as new purchases.
+
+Each purchase uses `brajmart.Purchase.order.<orderId>` as its event ID. A unique
+database reservation prevents simultaneous initial sends. Failed retries are
+claimed atomically and reuse the same event ID. Network failures are recorded
+as failed so a later explicit send can retry. There is no automatic retry queue;
+an interruption or skipped gateway verification can require operational retry.
+
+Run the isolated backend regression suite from `backend`:
+
+```sh
+npm test
+```
+
+Run the frontend tracking and HTML Pixel guard tests from `frontend`:
+
+```sh
+npm test
+```
+
+Tests use mocked database and external API responses. They do not create real
+orders, charge payments or send events to a Meta dataset. Production deployment,
+historical data, live Events Manager settings, GTM tags and other integrations
+must be inspected separately to confirm the deployed dataset has no other
+Purchase sources. Purchases already sent cannot be undone by these guards,
+including payments subsequently refunded.
+
+Official references:
+- [Razorpay server integration and signature verification](https://razorpay.com/docs/payments/server-integration/nodejs/integration-steps/)
+- [Razorpay payment entity and fetch API](https://razorpay.com/docs/api/payments/fetch-with-id/)
+- [Razorpay webhook validation](https://razorpay.com/docs/webhooks/validate-test/)
+- [Meta's official ServerEvent implementation](https://github.com/facebook/facebook-nodejs-business-sdk/blob/main/src/objects/serverside/server-event.js)

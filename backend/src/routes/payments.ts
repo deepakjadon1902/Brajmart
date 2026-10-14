@@ -7,6 +7,7 @@ import { parseJson, toIsoString } from '../lib/dbHelpers';
 import { finalPaymentWhereSql } from '../lib/orderVisibility';
 import { markCouponUsed } from '../lib/orderPricing';
 import { sendVerifiedMetaPurchaseForOrder } from './metaConversions';
+import { isCapturedRazorpayPayment, verifyCapturedRazorpayPayment } from '../lib/razorpayVerification';
 
 const router = Router();
 
@@ -192,6 +193,18 @@ const applyRazorpayStatus = async (params: {
   const rows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [params.token]);
   const current = rows[0];
   if (!current) return null;
+  if (params.status === 'paid') {
+    const orderData = await getPaymentOrderDetails(current.order_id);
+    if (String(current.method || '').toLowerCase() !== 'razorpay'
+      || String(orderData?.orderRow?.payment_method || '').toLowerCase() !== 'razorpay') {
+      throw new Error('Payment must belong to a Razorpay checkout');
+    }
+    const total = Number(orderData?.orderRow?.total);
+    if (!Number.isFinite(total) || Math.round(total * 100) !== Math.round(Number(current.amount) * 100)) {
+      throw new Error('Razorpay payment amount does not match the stored order total');
+    }
+    await verifyCapturedRazorpayPayment({ orderId: params.token, paymentId: params.paymentId || '', amount: total });
+  }
   if (String(current.status) === 'paid' && params.status === 'failed') return current;
   if (String(current.status) === params.status) return current;
 
@@ -324,32 +337,10 @@ export const reconcileRazorpayToken = async (token: string) => {
   let failedPayment: any = null;
 
   if (token.startsWith('order_')) {
-    const order = await fetchRazorpayJson(`/orders/${encodeURIComponent(token)}`);
     const orderPayments = await fetchRazorpayJson(`/orders/${encodeURIComponent(token)}/payments`);
     const items = Array.isArray(orderPayments?.items) ? orderPayments.items : [];
-    capturedPayment = items.find((p: any) => String(p?.status || '').toLowerCase() === 'captured') || null;
+    capturedPayment = items.find((p: any) => isCapturedRazorpayPayment(p, { orderId: token, paymentId: String(p?.id || ''), amount: Number(current.amount) })) || null;
     failedPayment = items.find((p: any) => String(p?.status || '').toLowerCase() === 'failed') || null;
-    if (!capturedPayment && (String(order?.status || '').toLowerCase() === 'paid' || Number(order?.amount_paid || 0) >= Number(order?.amount || 1))) {
-      capturedPayment = items[0] || { id: token };
-    }
-  } else if (token.startsWith('pay_')) {
-    const payment = await fetchRazorpayJson(`/payments/${encodeURIComponent(token)}`);
-    if (String(payment?.status || '').toLowerCase() === 'captured') capturedPayment = payment;
-    if (String(payment?.status || '').toLowerCase() === 'failed') failedPayment = payment;
-  }
-
-  if (!capturedPayment && Number(current.amount || 0) > 0) {
-    const currentRows = await dbQuery<any>('SELECT created_at FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1', [current.order_id]);
-    const createdAtMs = currentRows[0]?.created_at ? new Date(currentRows[0].created_at).getTime() : Date.now();
-    const from = Math.floor((createdAtMs - 60 * 60 * 1000) / 1000);
-    const to = Math.floor((Date.now() + 5 * 60 * 1000) / 1000);
-    const payments = await fetchRazorpayJson(`/payments?count=100&from=${from}&to=${to}`);
-    const matches = (Array.isArray(payments?.items) ? payments.items : []).filter((p: any) =>
-      String(p?.status || '').toLowerCase() === 'captured'
-      && !p?.order_id
-      && Math.round(Number(current.amount) * 100) === Number(p?.amount)
-    );
-    if (matches.length === 1) capturedPayment = matches[0];
   }
 
   if (capturedPayment) {
@@ -453,6 +444,10 @@ router.post('/admin/confirm-pending/:orderId', auth, adminOnly, async (req, res)
       [orderId]
     );
     const statusRow = statusRows[0];
+    if (String(orderRow.payment_method || '').toLowerCase() === 'razorpay'
+      || String(statusRow?.method || '').toLowerCase() === 'razorpay') {
+      return res.status(400).json({ message: 'Razorpay orders can only be confirmed by verified gateway payment.' });
+    }
     if (statusRow && String(statusRow.status || '') === 'paid') {
       return res.json({ ok: true, orderId, status: 'paid', alreadyConfirmed: true });
     }

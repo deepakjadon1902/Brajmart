@@ -12,6 +12,7 @@ import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
 import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
 import { captureMetaOrderContext, sendVerifiedMetaPurchaseForOrder } from './metaConversions';
+import { isCapturedRazorpayPayment, verifyCapturedRazorpayPayment } from '../lib/razorpayVerification';
 
 const router = Router();
 const razorpayCreateLimiter = rateLimit('razorpay-create-order', {
@@ -38,6 +39,7 @@ const hmacSha256 = (value: string, secret: string) =>
   crypto.createHmac('sha256', secret).update(value).digest('hex');
 
 const timingSafeEqual = (a: string, b: string) => {
+  if (!/^[a-fA-F0-9]{64}$/.test(a) || !/^[a-fA-F0-9]{64}$/.test(b)) return false;
   const left = Buffer.from(a || '', 'hex');
   const right = Buffer.from(b || '', 'hex');
   return left.length === right.length && crypto.timingSafeEqual(left, right);
@@ -222,18 +224,18 @@ const fetchRazorpayOrderPayments = async (razorpayOrderId: string) => {
 };
 
 const findCapturedRazorpayPayment = async (razorpayOrderId: string, razorpayPaymentId?: string) => {
+  const rows = await dbQuery<any>('SELECT amount FROM payment_status WHERE token = ? LIMIT 1', [razorpayOrderId]);
+  if (!rows[0]) return null;
+  const amount = Number(rows[0].amount);
   if (razorpayPaymentId) {
     const payment = await fetchRazorpayPayment(razorpayPaymentId);
-    if (
-      String(payment?.status || '').toLowerCase() === 'captured'
-      && String(payment?.order_id || '') === razorpayOrderId
-    ) {
+    if (isCapturedRazorpayPayment(payment, { orderId: razorpayOrderId, paymentId: razorpayPaymentId, amount })) {
       return payment;
     }
   }
 
   const payments = await fetchRazorpayOrderPayments(razorpayOrderId);
-  return payments.find((payment: any) => String(payment?.status || '').toLowerCase() === 'captured') || null;
+  return payments.find((payment: any) => isCapturedRazorpayPayment(payment, { orderId: razorpayOrderId, paymentId: String(payment?.id || ''), amount })) || null;
 };
 
 const assertRazorpayPaymentCaptured = async (razorpayOrderId: string, razorpayPaymentId: string) => {
@@ -241,20 +243,7 @@ const assertRazorpayPaymentCaptured = async (razorpayOrderId: string, razorpayPa
   const statusRow = statusRows[0];
   if (!statusRow) throw new Error('Payment not found');
 
-  const payment = await fetchRazorpayPayment(razorpayPaymentId);
-  const paymentStatus = String(payment?.status || '').toLowerCase();
-  if (paymentStatus !== 'captured') {
-    throw new Error('Razorpay payment is not captured yet');
-  }
-  if (String(payment?.order_id || '') !== razorpayOrderId) {
-    throw new Error('Razorpay payment does not belong to this order');
-  }
-  const expectedAmount = Math.round(Number(statusRow.amount || 0) * 100);
-  if (expectedAmount <= 0 || Number(payment?.amount) !== expectedAmount) {
-    throw new Error('Razorpay payment amount does not match this order');
-  }
-
-  return payment;
+  return verifyCapturedRazorpayPayment({ orderId: razorpayOrderId, paymentId: razorpayPaymentId, amount: Number(statusRow.amount) });
 };
 
 const getOrderDetails = async (orderRow: any) => ({
@@ -303,6 +292,18 @@ const updateOrderForPayment = async (params: {
   const statusRows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [params.razorpayOrderId]);
   const statusRow = statusRows[0];
   if (!statusRow) return null;
+  if (params.status === 'paid') {
+    const orderRows = await dbQuery<any>('SELECT total, payment_method FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
+    if (String(statusRow.method || '').toLowerCase() !== 'razorpay'
+      || String(orderRows[0]?.payment_method || '').toLowerCase() !== 'razorpay') {
+      throw new Error('Payment must belong to a Razorpay checkout');
+    }
+    const total = Number(orderRows[0]?.total);
+    if (!Number.isFinite(total) || Math.round(total * 100) !== Math.round(Number(statusRow.amount) * 100)) {
+      throw new Error('Razorpay payment amount does not match the stored order total');
+    }
+    await verifyCapturedRazorpayPayment({ orderId: params.razorpayOrderId, paymentId: params.razorpayPaymentId || '', amount: total });
+  }
   if (String(statusRow.status || '') === 'paid' && params.status === 'failed') {
     return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
   }
@@ -436,41 +437,6 @@ const updateOrderForPayment = async (params: {
 const resolveRazorpayStatusToken = async (payment: any, order: any) => {
   const razorpayOrderId = String(payment?.order_id || order?.id || '').trim();
   if (razorpayOrderId) return razorpayOrderId;
-
-  const notes = payment?.notes || {};
-  const noteOrderId = String(notes?.brajmart_order_id || notes?.order_id || notes?.orderId || '').trim();
-  if (/^\d+$/.test(noteOrderId)) {
-    const rows = await dbQuery<any>(
-      "SELECT token FROM payment_status WHERE order_id = ? AND method = 'Razorpay' ORDER BY updated_at DESC LIMIT 1",
-      [Number(noteOrderId)]
-    );
-    if (rows[0]?.token) return String(rows[0].token);
-  }
-
-  const paymentId = String(payment?.id || '').trim();
-  if (paymentId) {
-    const rows = await dbQuery<any>('SELECT token FROM payment_status WHERE payment_id = ? LIMIT 1', [paymentId]);
-    if (rows[0]?.token) return String(rows[0].token);
-  }
-
-  const amountPaise = Number(payment?.amount);
-  const createdAt = Number(payment?.created_at || 0);
-  if (Number.isFinite(amountPaise) && amountPaise > 0 && Number.isFinite(createdAt) && createdAt > 0) {
-    const rows = await dbQuery<any>(
-      `SELECT ps.token
-       FROM payment_status ps
-       JOIN payments p ON p.order_id = ps.order_id
-       WHERE ps.status = 'pending'
-         AND ps.method = 'Razorpay'
-         AND ROUND(p.amount * 100) = ?
-         AND p.created_at BETWEEN DATE_SUB(FROM_UNIXTIME(?), INTERVAL 45 MINUTE)
-                              AND DATE_ADD(FROM_UNIXTIME(?), INTERVAL 15 MINUTE)
-       ORDER BY p.created_at DESC, p.id DESC
-       LIMIT 2`,
-      [amountPaise, createdAt, createdAt]
-    );
-    if (rows.length === 1 && rows[0]?.token) return String(rows[0].token);
-  }
 
   return '';
 };
@@ -742,7 +708,10 @@ router.post('/verify', razorpayReportLimiter, async (req, res) => {
       return res.status(400).json({ message: 'Missing Razorpay payment details' });
     }
 
-    const expected = hmacSha256(`${razorpay_order_id}|${razorpay_payment_id}`, keySecret);
+    const statusRows = await dbQuery<any>('SELECT token FROM payment_status WHERE token = ? LIMIT 1', [String(razorpay_order_id)]);
+    const storedOrderId = String(statusRows[0]?.token || '');
+    if (!storedOrderId || storedOrderId !== String(razorpay_order_id)) return res.status(404).json({ message: 'Payment not found' });
+    const expected = hmacSha256(`${storedOrderId}|${razorpay_payment_id}`, keySecret);
     if (!timingSafeEqual(expected, String(razorpay_signature))) {
       return res.status(400).json({ message: 'Invalid Razorpay signature' });
     }
@@ -828,7 +797,8 @@ router.post('/webhook', async (req: any, res) => {
     if (!webhookSecret) return res.status(500).json({ message: 'Razorpay webhook secret is not configured' });
 
     const signature = String(req.headers['x-razorpay-signature'] || '');
-    const rawBody = typeof req.rawBody === 'string' ? req.rawBody : JSON.stringify(req.body || {});
+    if (typeof req.rawBody !== 'string') return res.status(400).json({ message: 'Missing raw webhook body' });
+    const rawBody = req.rawBody;
     const expected = hmacSha256(rawBody, webhookSecret);
     if (!signature || !timingSafeEqual(expected, signature)) {
       return res.status(400).json({ message: 'Invalid webhook signature' });

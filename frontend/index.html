@@ -143,7 +143,7 @@
                 }
                 return;
               }
-              if (args[0] === 'track' && String(args[1] || '').toLowerCase() === 'purchase') {
+              if ((command === 'track' || command === 'trackCustom') && String(args[1] || '').toLowerCase() === 'purchase') {
                 if (window.console && window.console.warn) {
                   window.console.warn('Blocked browser Meta Purchase event. Purchase is sent only by verified Conversions API.', { url: window.location.href });
                 }

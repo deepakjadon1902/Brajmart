@@ -24,7 +24,7 @@ type MetaPixelParams = {
   }>;
   currency?: string;
   num_items?: number;
-  value?: number;
+  value?: number | string;
   [key: string]: unknown;
 };
 
@@ -194,7 +194,7 @@ export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixel
     window.__brajmartLoadMarketing?.();
   }
 
-  const hasFbq = eventName !== 'Purchase' && typeof window.fbq === 'function';
+  const hasFbq = typeof window.fbq === 'function';
   if (hasFbq) {
     window.fbq('track', eventName, normalizedParams, { eventID: eventId });
   }
