@@ -38,6 +38,87 @@ Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 - `POST /api/orders` — Create order (auth)
 - `PUT /api/orders/:id/status` — Update status (admin)
 
+### Invoice PDF downloads
+
+Admin order invoices use the supplied A4 invoice design, including the original
+logo, legal company name, GSTIN, billing/shipping blocks and product/SKU table.
+`GET /api/orders/:id/invoice` returns an actual PDF. Add `?download=1` for an
+attachment. Invoice numbers are the order ID followed by its order date in
+`ddmmyyyy` format, using India time.
+
+**Download All Invoices (ZIP)** on the Orders page downloads a separate PDF for
+every verified paid/COD order across all pages, regardless of active table
+filters. `GET /api/orders/admin/invoices.zip` streams the archive in database
+batches. Both endpoints require admin authentication and use private/no-store
+responses. Cancelling a download stops archive generation.
+
+Prices, quantities, variants, charges, discounts and totals come from stored
+order snapshots, never current catalog prices. Payment IDs come only from paid
+payment records. Missing historical SKUs or payment IDs display as `-`; legacy
+orders without a split charge breakdown show combined shipping/packaging.
+The stored total remains authoritative and any difference is explicitly shown
+as an order adjustment. No new tax rate is inferred from packaging charges.
+
+Deploy `backend/assets/invoice` alongside `backend/dist`. Generate synthetic
+layout previews with `node -r ts-node/register/transpile-only scripts/previewInvoices.cjs`.
+
+### Shipping Labels Dashboard
+
+The admin Orders page can create or reopen a label in
+`https://labels.brajmart.com`, open its real print page, and synchronize the
+courier-confirmed status back to BrajMart. The integration is server-to-server;
+labels credentials are never sent to the browser.
+
+Printing uses a 90-second, single-use handoff created by the labels backend.
+Opening it establishes the labels session and redirects directly to the print
+page for that order, so the admin is not asked to enter labels credentials.
+Deploy the matching ShippingLabelsDashboard backend change before deploying
+this BrajMart change.
+
+Required backend environment variables:
+
+```env
+SHIPPING_LABELS_APP_URL=https://labels.brajmart.com
+SHIPPING_LABELS_API_URL=https://labels.brajmart.com/api/v1
+SHIPPING_LABELS_USERNAME=your_labels_app_username
+SHIPPING_LABELS_PASSWORD=your_labels_app_password
+SHIPPING_LABELS_SYNC_INTERVAL_MS=600000
+SHIPPING_LABELS_SYNC_BATCH_SIZE=25
+```
+
+The label application requires an existing courier AWB/tracking number; it does
+not purchase courier postage or generate an AWB. In Orders, first save the
+shipping service and AWB, then use the printer button or **Sync Label Status**. Sync
+automatically finds or creates the label mapping without opening a print tab.
+BrajMart sends receiver
+name, both address lines, city, state, six-digit pincode, mobile, courier, AWB,
+order reference, prepaid/COD handling note, and item count.
+
+Only an authenticated BrajMart admin can create or synchronize labels. The
+backend accepts only orders already visible under BrajMart's verified-order
+rule: COD orders or online orders with stored paid evidence. Cancelled,
+delivered, and RTO orders cannot create printable labels. Tracking sync can
+register delivered or RTO shipments without changing their terminal order
+status. A database creation claim, the remote order reference, and matching
+unassigned courier/AWB labels make repeated or concurrent print and sync clicks
+idempotent. Missing remote labels are recovered on either action.
+
+The background sync asks ShippingLabelsDashboard to refresh the courier before
+reading it. If that lookup is skipped or fails, BrajMart keeps the existing
+order status. It accepts delivery progress only when the label contains a
+successful-sync timestamp and a raw courier status; the editable label status
+alone is not trusted. It advances orders monotonically to `shipped`,
+`out_for_delivery`, `delivered`, or `rto`, records the courier response in the
+order history, and never trusts a status supplied by the browser. Delivered and
+cancelled orders cannot be overwritten. The detail modal also has a manual
+**Sync Label Status** control.
+
+Admin endpoints:
+
+- `POST /api/shipping-labels/orders/:orderId/label` - create/reuse a label and return its print URL
+- `POST /api/shipping-labels/orders/:orderId/sync` - find/create the label mapping, refresh its courier, and apply verified progress
+- `POST /api/shipping-labels/sync` - run one throttled batch sync
+
 ### DTDC Tracking
 - `GET /api/orders/dtdc/track/:lookup` - Live DTDC tracking for dispatched DTDC orders (public)
 - `GET /api/orders/admin/dtdc/track/:lookup` - Live DTDC tracking lookup (admin)

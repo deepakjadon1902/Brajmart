@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const db_1 = require("../lib/db");
 const email_1 = require("../lib/email");
+const orderInvoice_1 = require("../lib/orderInvoice");
+const orderInvoiceExport_1 = require("../lib/orderInvoiceExport");
 const eta_1 = require("../lib/eta");
 const auth_1 = require("../middleware/auth");
 const dbHelpers_1 = require("../lib/dbHelpers");
@@ -14,6 +16,8 @@ const checkoutValidation_1 = require("../lib/checkoutValidation");
 const rateLimit_1 = require("../middleware/rateLimit");
 const inventory_1 = require("../lib/inventory");
 const adminAudit_1 = require("../lib/adminAudit");
+const payments_1 = require("./payments");
+const metaConversions_1 = require("./metaConversions");
 const router = (0, express_1.Router)();
 const codOrderLimiter = (0, rateLimit_1.rateLimit)('cod-order-create', {
     windowMs: 15 * 60 * 1000,
@@ -112,6 +116,7 @@ router.get('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        (0, payments_1.triggerRecentRazorpayReconciliation)(25);
         const search = getSearchTerm(req.query.search);
         const params = [];
         const searchSql = search
@@ -142,6 +147,7 @@ router.get('/admin/pending-payments', auth_1.auth, auth_1.adminOnly, async (req,
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        (0, payments_1.triggerRecentRazorpayReconciliation)(50);
         const search = getSearchTerm(req.query.search);
         const params = [];
         const searchSql = search
@@ -229,49 +235,6 @@ const buildDeliveryPartnerOrderStatusTracking = (order, message) => ({
             remarks: message,
         }],
 });
-const buildOrderInvoiceDetails = (row) => ({
-    items: (0, dbHelpers_1.parseJson)(row.items, []),
-    total: Number(row.total),
-    itemsSubtotal: row.items_subtotal == null ? undefined : Number(row.items_subtotal),
-    shippingAmount: row.shipping_amount == null ? undefined : Number(row.shipping_amount),
-    packagingAmount: row.packaging_amount == null ? undefined : Number(row.packaging_amount),
-    packagingRate: row.packaging_rate == null ? undefined : Number(row.packaging_rate),
-    codAmount: row.cod_amount == null ? undefined : Number(row.cod_amount),
-    codAvailable: row.cod_available == null ? undefined : Boolean(Number(row.cod_available)),
-    codPincode: row.cod_pincode ?? undefined,
-    codMessage: row.cod_message ?? undefined,
-    couponCode: row.coupon_code ?? undefined,
-    couponDiscount: row.coupon_discount == null ? undefined : Number(row.coupon_discount),
-    couponDetails: (0, dbHelpers_1.parseJson)(row.coupon_details, null),
-    paymentMethod: row.payment_method,
-    shippingAddress: (0, dbHelpers_1.parseJson)(row.shipping_address, {}),
-    billingAddress: (0, dbHelpers_1.parseJson)(row.billing_address, {}),
-});
-const wrapInvoiceHtml = (invoiceHtml, autoPrint) => `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BrajMart Invoice</title>
-    <style>
-      @page { size: A4; margin: 8mm; }
-      @media print {
-        html, body { width: 210mm; min-height: 297mm; }
-        body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .no-print { display: none !important; }
-      }
-      * { box-sizing: border-box; }
-      body { margin: 0; background: #f7f4ef; }
-      .invoice-toolbar { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; font-family: Arial, sans-serif; }
-      .invoice-toolbar button { border: 1px solid #c58f1f; background: #c58f1f; color: #3b1c12; border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer; }
-    </style>
-  </head>
-  <body>
-    <div class="invoice-toolbar no-print"><button onclick="window.print()">Download PDF</button></div>
-    ${invoiceHtml}
-    ${autoPrint ? '<script>window.addEventListener("load", () => setTimeout(() => window.print(), 300));</script>' : ''}
-  </body>
-</html>`;
 const handleDeliveryPartnerTrack = async (req, res, isAdmin = false) => {
     try {
         if (!(0, db_1.isDbConnected)())
@@ -552,6 +515,10 @@ router.post('/', codOrderLimiter, auth_1.optionalAuth, async (req, res) => {
             JSON.stringify(statusHistory),
         ]);
         const orderId = result.insertId;
+        (0, metaConversions_1.captureMetaOrderContext)(orderId, {
+            ...(data.metaContext && typeof data.metaContext === 'object' ? data.metaContext : {}),
+            externalId: req.user?.id ? `user:${req.user.id}` : customerEmail,
+        }, req).catch(() => { });
         try {
             await (0, db_1.withDbTransaction)((connection) => (0, inventory_1.reserveInventoryForOrder)(connection, Number(orderId), priced.items));
         }
@@ -602,6 +569,20 @@ router.post('/', codOrderLimiter, auth_1.optionalAuth, async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
+router.get('/admin/invoices.zip', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        await (0, orderInvoiceExport_1.streamAllOrderInvoices)(res);
+    }
+    catch (err) {
+        if (res.headersSent) {
+            res.destroy(err);
+            return;
+        }
+        res.status(Number(err.status) || 500).json({ message: err.message || 'Failed to download invoices' });
+    }
+});
 router.get('/:id/invoice', auth_1.auth, auth_1.adminOnly, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
@@ -613,33 +594,15 @@ router.get('/:id/invoice', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         const row = rows[0];
         if (!row)
             return res.status(404).json({ message: 'Order not found' });
-        const paymentRows = await (0, db_1.dbQuery)(`SELECT transaction_id, amount, status, created_at
-       FROM payments
-       WHERE order_id = ?
-       ORDER BY FIELD(status, 'paid') DESC, created_at DESC, id DESC
-       LIMIT 1`, [req.params.id]).catch(() => []);
-        const paymentRow = paymentRows[0];
-        const paymentId = String(paymentRow?.transaction_id || row.tracking_id || row.id);
-        const amount = Number(paymentRow?.amount || row.total || 0);
-        const paidAt = (0, dbHelpers_1.toIsoString)(paymentRow?.created_at) || (0, dbHelpers_1.toIsoString)(row.created_at) || undefined;
-        const invoiceHtml = await (0, email_1.buildPaymentReceiptHtml)({
-            orderId: String(row.id),
-            invoiceNumber: row.id,
-            amount,
-            paymentId,
-            orderDate: (0, dbHelpers_1.toIsoString)(row.created_at) || undefined,
-            paidAt,
-            details: {
-                ...buildOrderInvoiceDetails(row),
-                transactionId: paymentId,
-            },
-        });
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Content-Disposition', `inline; filename="BrajMart-Invoice-${row.id}.html"`);
-        return res.send(wrapInvoiceHtml(invoiceHtml, req.query.print === '1'));
+        const payments = await (0, orderInvoiceExport_1.loadInvoicePayments)([row.id]);
+        const pdf = await (0, orderInvoice_1.buildOrderInvoicePdf)(row, payments.get(String(row.id)));
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('Content-Disposition', `${req.query.download === '1' || req.query.print === '1' ? 'attachment' : 'inline'}; filename="${(0, orderInvoice_1.orderInvoiceFilename)(row.id)}"`);
+        return res.send(pdf);
     }
     catch (err) {
-        res.status(500).json({ message: err.message || 'Failed to generate invoice' });
+        res.status(Number(err.status) || 500).json({ message: err.message || 'Failed to generate invoice' });
     }
 });
 router.put('/:id/status', auth_1.auth, auth_1.adminOnly, async (req, res) => {

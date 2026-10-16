@@ -179,7 +179,7 @@ export const StatusBadge = ({ status }: { status: string }) => {
   const statusKey = String(status || '').trim().toLowerCase();
   return (
     <span className={`admin-status-badge admin-status-${statusKey || 'unknown'} inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border`}>
-      {status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+      {statusKey === 'rto' ? 'RTO' : status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
     </span>
   );
 };

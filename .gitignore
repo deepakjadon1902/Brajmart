@@ -17,3 +17,7 @@ frontend/.seo-build-data-meta.json
 phase5-*-browser.json
 phase6-*.json
 phase7-*.json
+
+# Local PDF inspection tools and visual QA renders
+/tmp/pdf-tools/
+/tmp/pdfs/

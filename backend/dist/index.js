@@ -10,6 +10,7 @@ dotenv_1.default.config();
 const server_1 = __importDefault(require("./server"));
 const db_1 = require("./lib/db");
 const migrations_1 = require("./lib/migrations");
+const shippingLabels_1 = require("./lib/shippingLabels");
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5000;
 const ALLOW_DBLESS_START = String(process.env.ALLOW_DBLESS_START || '').toLowerCase() === 'true';
 const DB_CONNECT_RETRIES = Math.max(0, Number(process.env.DB_CONNECT_RETRIES ?? 10));
@@ -56,6 +57,7 @@ const start = async () => {
     }
     const server = server_1.default.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
+        (0, shippingLabels_1.startShippingLabelsSyncScheduler)();
     });
     server.on('error', (err) => {
         console.error('Server failed to listen:', err);

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { OrderStatus } from '@/store/orderStore';
 import { StatusBadge } from './AdminDashboard';
-import { Search, Eye, X, RefreshCw, MapPin, MessageCircle, FileText, Download } from 'lucide-react';
-import { adminCheckDeliveryServicePincode, adminTrackDeliveryServiceOrder, fetchOrderInvoice, fetchOrders, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
+import { Search, Eye, X, RefreshCw, MapPin, MessageCircle, FileText, Download, Printer } from 'lucide-react';
+import { adminCheckDeliveryServicePincode, adminTrackDeliveryServiceOrder, createShippingLabel, fetchAllOrderInvoices, fetchOrderInvoice, fetchOrders, syncShippingLabel, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 import AdminExportActions from '@/components/admin/AdminExportActions';
@@ -14,7 +14,7 @@ import {
   getOrderWhatsAppPhone,
 } from '@/lib/whatsappTemplates';
 
-const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
+const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'rto', 'cancelled'];
 const shippingServices = ['DTDC', 'Delhivery', 'Shree Maruti', 'India Post', 'Ekart'];
 
 type OrderExportItem = {
@@ -84,6 +84,9 @@ const AdminOrders = () => {
   const [pincodeResult, setPincodeResult] = useState<any | null>(null);
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [whatsappNote, setWhatsappNote] = useState('');
+  const [labelAction, setLabelAction] = useState<{ orderId: string; type: 'print' | 'sync' } | null>(null);
+  const [invoiceAction, setInvoiceAction] = useState<string | null>(null);
+  const [downloadingAllInvoices, setDownloadingAllInvoices] = useState(false);
   const [page, setPage] = useState(1);
   const previousSelectedOrder = useRef<string | null>(null);
 
@@ -195,6 +198,7 @@ const AdminOrders = () => {
   }, [filtered.length, page]);
 
   const detail = selectedOrder ? orders.find((o) => o.id === selectedOrder) : null;
+  const isDelhivery = String(detail?.shippingService || '').trim().toLowerCase() === 'delhivery';
 
   const handleUpdateTrackingId = async (orderId: string) => {
     if (!detail) return;
@@ -232,7 +236,7 @@ const AdminOrders = () => {
   };
 
   const handleAdminDeliveryTrack = async () => {
-    if (!detail) return;
+    if (!detail || !isDelhivery) return;
     const lookup = String(detail.trackingId || '').trim();
     if (!lookup) {
       toast.error('Add and update the Delhivery AWB/tracking ID first');
@@ -279,15 +283,111 @@ const AdminOrders = () => {
   };
 
   const handleInvoice = async (orderId: string, action: 'view' | 'download') => {
+    const preview = action === 'view' ? window.open('about:blank', '_blank') : null;
+    if (preview) { preview.opener = null; preview.document.body.textContent = 'Preparing invoice...'; }
+    setInvoiceAction(orderId);
     try {
-      const blob = await fetchOrderInvoice(orderId, { print: action === 'download' });
+      const blob = await fetchOrderInvoice(orderId, { download: action === 'download' });
       const url = URL.createObjectURL(blob);
-      const opened = window.open(url, '_blank', 'noopener,noreferrer');
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      if (!opened) toast.info('Allow popups to open the invoice PDF view');
-      else if (action === 'download') toast.info('Choose Save as PDF in the print dialog');
+      if (action === 'download') {
+        downloadInvoiceBlob(url, `BrajMart-Invoice-${orderId}.pdf`);
+        toast.success('Invoice PDF downloaded');
+      } else if (preview) {
+        preview.location.replace(url);
+      } else {
+        downloadInvoiceBlob(url, `BrajMart-Invoice-${orderId}.pdf`);
+        toast.info('Invoice downloaded. Allow popups to preview it in a new tab.');
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
     } catch (err: any) {
+      preview?.close();
       toast.error(err?.message || 'Unable to download invoice');
+    } finally {
+      setInvoiceAction(null);
+    }
+  };
+
+  const downloadInvoiceBlob = (url: string, filename: string) => {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  };
+
+  const handleDownloadAllInvoices = async () => {
+    setDownloadingAllInvoices(true);
+    try {
+      const blob = await fetchAllOrderInvoices();
+      const url = URL.createObjectURL(blob);
+      downloadInvoiceBlob(url, 'BrajMart-All-Invoices.zip');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      toast.success('All invoice PDFs downloaded in one ZIP');
+    } catch (err: any) {
+      toast.error(err?.message || 'Unable to download all invoices');
+    } finally {
+      setDownloadingAllInvoices(false);
+    }
+  };
+
+  const handleShippingLabel = async (order: any) => {
+    const orderId = String(order?._id || order?.id || '');
+    if (!orderId) return;
+    if (!String(order.shippingService || '').trim()) {
+      toast.error('Select and save the shipping service before creating the label');
+      return;
+    }
+    if (!String(order.trackingId || '').trim()) {
+      toast.error('Add and save the courier AWB/tracking ID before creating the label');
+      return;
+    }
+
+    const printWindow = window.open('about:blank', '_blank');
+    if (printWindow) {
+      printWindow.opener = null;
+      printWindow.document.title = 'Preparing shipping label...';
+      printWindow.document.body.textContent = 'Preparing shipping label...';
+    }
+    setLabelAction({ orderId, type: 'print' });
+    try {
+      const result = await createShippingLabel(orderId);
+      if (printWindow) printWindow.location.replace(result.printUrl);
+      else {
+        const opened = window.open(result.printUrl, '_blank', 'noopener,noreferrer');
+        if (!opened) toast.info('Allow popups to open the Shipping Labels print page');
+      }
+      toast.success(result.created ? 'Shipping label created and ready to print' : 'Existing shipping label opened');
+    } catch (err: any) {
+      printWindow?.close();
+      toast.error(err?.message || 'Unable to create shipping label');
+    } finally {
+      setLabelAction(null);
+    }
+  };
+
+  const handleShippingLabelSync = async (order: any) => {
+    const orderId = String(order?._id || order?.id || '');
+    if (!orderId) return;
+    if (!String(order.shippingService || '').trim()) {
+      toast.error('Select and save the shipping service before syncing courier status');
+      return;
+    }
+    if (!String(order.trackingId || '').trim()) {
+      toast.error('Add and save the courier AWB/tracking ID before syncing courier status');
+      return;
+    }
+    setLabelAction({ orderId, type: 'sync' });
+    try {
+      const result = await syncShippingLabel(orderId);
+      setOrders((current) => current.map((item) => (
+        String(item._id || item.id) === orderId ? { ...item, status: result.orderStatus } : item
+      )));
+      toast.success(result.updated ? `Order updated to ${result.orderStatus.replace(/_/g, ' ')}` : 'Courier status synced');
+    } catch (err: any) {
+      toast.error(err?.message || 'Unable to sync courier status');
+    } finally {
+      setLabelAction(null);
     }
   };
 
@@ -302,7 +402,7 @@ const AdminOrders = () => {
         </div>
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none">
           <option value="all">All Status</option>
-          {statusOptions.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+          {statusOptions.map((s) => <option key={s} value={s}>{s === 'rto' ? 'RTO' : s.replace(/_/g, ' ')}</option>)}
         </select>
         <AdminExportActions
           title="BrajMart Orders"
@@ -310,6 +410,16 @@ const AdminOrders = () => {
           rows={filtered as OrderExportRow[]}
           columns={orderExportColumns}
         />
+        <button
+          type="button"
+          onClick={handleDownloadAllInvoices}
+          disabled={downloadingAllInvoices}
+          title="Download one PDF for every order across all pages, regardless of current filters"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-200 hover:border-amber-500/50 hover:text-amber-300 disabled:cursor-wait disabled:opacity-60"
+        >
+          <Download size={16} />
+          {downloadingAllInvoices ? 'Preparing all invoices...' : 'Download All Invoices (ZIP)'}
+        </button>
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
@@ -344,13 +454,34 @@ const AdminOrders = () => {
                   <td className="px-5 py-3"><StatusBadge status={o.status} /></td>
                   <td className="px-5 py-3 text-slate-400 text-xs hidden md:table-cell">{new Date(o.createdAt).toLocaleDateString('en-IN')}</td>
                   <td className="px-5 py-3">
-                    <button onClick={() => setSelectedOrder(o.id)} className="text-amber-400 hover:text-amber-300"><Eye size={16} /></button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrder(o.id)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-300"
+                        title="View order"
+                        aria-label={`View order ${o.id}`}
+                      >
+                        <Eye size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleShippingLabel(o)}
+                        disabled={labelAction?.orderId === String(o._id || o.id)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-sky-500/50 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Create or print shipping label"
+                        aria-label={`Create or print shipping label for order ${o.id}`}
+                      >
+                        <Printer size={15} />
+                      </button>
+                    </div>
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleInvoice(o._id || o.id, 'view')}
+                        disabled={invoiceAction === String(o._id || o.id)}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-amber-500/50 hover:text-amber-300"
                         title="View PDF invoice"
                         aria-label={`View PDF invoice for order ${o.id}`}
@@ -360,6 +491,7 @@ const AdminOrders = () => {
                       <button
                         type="button"
                         onClick={() => handleInvoice(o._id || o.id, 'download')}
+                        disabled={invoiceAction === String(o._id || o.id)}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-emerald-500/50 hover:text-emerald-300"
                         title="Download PDF invoice"
                         aria-label={`Download PDF invoice for order ${o.id}`}
@@ -458,12 +590,12 @@ const AdminOrders = () => {
 
               {/* Tracking ID */}
               <div>
-                <h3 className="text-sm font-medium text-slate-400 mb-2">Delhivery AWB / Tracking ID</h3>
+                <h3 className="text-sm font-medium text-slate-400 mb-2">Courier AWB / Tracking ID</h3>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     value={editingTrackingId}
                     onChange={(e) => setEditingTrackingId(e.target.value)}
-                    placeholder="Enter Delhivery AWB"
+                    placeholder="Enter courier AWB / tracking ID"
                     className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 font-mono"
                   />
                   <button
@@ -473,7 +605,7 @@ const AdminOrders = () => {
                     Update
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">Save the Delhivery consignment/AWB number here before fetching live courier status.</p>
+                <p className="text-xs text-slate-500 mt-2">Save the courier consignment/AWB number here before printing a label or syncing courier status.</p>
               </div>
 
               {/* Delivery partner pincode + live tracking */}
@@ -482,25 +614,41 @@ const AdminOrders = () => {
                   <h3 className="text-sm font-medium text-slate-400">Delivery & Tracking</h3>
                   <div className="flex flex-wrap gap-2">
                     <button
+                      onClick={() => handleShippingLabel(detail)}
+                      disabled={labelAction?.orderId === String(detail._id || detail.id)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-sky-500/20 border border-sky-500/40 text-sky-300 hover:bg-sky-500/30 text-xs font-medium disabled:opacity-60"
+                    >
+                      <Printer size={14} />
+                      {labelAction?.orderId === String(detail._id || detail.id) && labelAction.type === 'print' ? 'Preparing...' : 'Print Shipping Label'}
+                    </button>
+                    <button
+                      onClick={() => handleShippingLabelSync(detail)}
+                      disabled={labelAction?.orderId === String(detail._id || detail.id)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:border-sky-500/50 hover:text-sky-300 text-xs disabled:opacity-60"
+                    >
+                      <RefreshCw size={14} className={labelAction?.orderId === String(detail._id || detail.id) && labelAction.type === 'sync' ? 'animate-spin' : ''} />
+                      {labelAction?.orderId === String(detail._id || detail.id) && labelAction.type === 'sync' ? 'Syncing...' : 'Sync Label Status'}
+                    </button>
+                    {isDelhivery && <button
                       onClick={handlePincodeCheck}
                       disabled={pincodeLoading}
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:border-amber-500/50 hover:text-amber-300 text-xs disabled:opacity-60"
                     >
                       <MapPin size={14} />
                       {pincodeLoading ? 'Checking...' : 'Check Delivery'}
-                    </button>
-                    <button
+                    </button>}
+                    {isDelhivery && <button
                       onClick={handleAdminDeliveryTrack}
                       disabled={deliveryLoading || !detail.trackingId}
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-xs font-medium disabled:opacity-60"
                     >
                       <RefreshCw size={14} className={deliveryLoading ? 'animate-spin' : ''} />
                       {deliveryLoading ? 'Fetching...' : 'Fetch Delhivery'}
-                    </button>
+                    </button>}
                   </div>
                 </div>
                 <div className="rounded-xl border border-slate-800 bg-slate-800/40 p-3">
-                  {pincodeResult && (
+                  {isDelhivery && pincodeResult && (
                     <div className="mb-3 rounded-lg border border-slate-700 bg-slate-900/60 p-3 text-xs text-slate-300">
                       <p className="font-medium text-white">Delivery partner serviceability</p>
                       <p className={pincodeResult.serviceable ? 'text-emerald-400' : 'text-red-400'}>
@@ -516,7 +664,7 @@ const AdminOrders = () => {
                       )}
                     </div>
                   )}
-                  {deliveryTracking ? (
+                  {isDelhivery && deliveryTracking ? (
                     <div>
                       <p className="text-sm font-semibold text-white">{deliveryTracking.currentStatus}</p>
                       {deliveryTracking.lastLocation && <p className="text-xs text-slate-400">Last location: {deliveryTracking.lastLocation}</p>}
@@ -546,7 +694,11 @@ const AdminOrders = () => {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-500">Select Delhivery as shipping service, add AWB/tracking ID, then fetch live courier status.</p>
+                    <p className="text-xs text-slate-500">
+                      {isDelhivery
+                        ? 'Save the Delhivery AWB/tracking ID, then fetch live courier status.'
+                        : 'Save the shipping service and AWB/tracking ID, then use Sync Label Status to fetch courier updates. The shipping label is linked automatically.'}
+                    </p>
                   )}
                 </div>
               </div>
@@ -575,7 +727,7 @@ const AdminOrders = () => {
                           onClick={() => handleStatusUpdate(detail._id, s)}
                           className={`admin-status-option admin-status-${s} px-3 py-1.5 rounded-lg text-xs font-medium border transition ${detail.status === s ? 'is-active' : ''}`}
                         >
-                          {s.replace(/_/g, ' ')}
+                          {s === 'rto' ? 'RTO' : s.replace(/_/g, ' ')}
                         </button>
                       ))}
                     </div>

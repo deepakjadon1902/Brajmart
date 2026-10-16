@@ -37,7 +37,9 @@ const statusSteps: { status: OrderStatus; label: string; icon: React.ComponentTy
   { status: 'delivered', label: 'Delivered', icon: MapPin },
 ];
 
-const statusLabel = (value: string) => value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const statusLabel = (value: string) => value.toLowerCase() === 'rto'
+  ? 'RTO'
+  : value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 const formatDate = (value?: string | Date) => {
   if (!value) return 'Not available';
@@ -55,7 +57,7 @@ const formatDateTime = (value?: string | Date) => {
 
 const statusPillClass = (status: string) => {
   if (status === 'delivered') return 'border-[#CFE8D2] bg-[#F1FAF2] text-[#2E7D32]';
-  if (status === 'cancelled') return 'border-red-200 bg-red-50 text-red-600';
+  if (status === 'cancelled' || status === 'rto') return 'border-red-200 bg-red-50 text-red-600';
   if (status === 'out_for_delivery') return 'border-blue-200 bg-blue-50 text-blue-700';
   return 'border-amber-200 bg-amber-50 text-amber-700';
 };
@@ -63,7 +65,7 @@ const statusPillClass = (status: string) => {
 const canLoadDelivery = (order: any) => {
   const service = String(order?.shippingService || '').toLowerCase();
   const awb = String(order?.trackingId || '').trim();
-  const shipped = ['shipped', 'out_for_delivery', 'delivered'].includes(String(order?.status || ''));
+  const shipped = ['shipped', 'out_for_delivery', 'delivered', 'rto'].includes(String(order?.status || ''));
   return service.includes('delhivery') && Boolean(awb) && shipped;
 };
 
@@ -214,7 +216,11 @@ const UserOrderTracking = () => {
     setDeliveryTracking(null);
   };
 
-  const currentStepIndex = selectedOrder ? statusSteps.findIndex((s) => s.status === selectedOrder.status) : -1;
+  const currentStepIndex = selectedOrder?.status === 'rto'
+    ? 2
+    : selectedOrder
+      ? statusSteps.findIndex((s) => s.status === selectedOrder.status)
+      : -1;
   const progressWidth = currentStepIndex > 0 ? (currentStepIndex / (statusSteps.length - 1)) * 100 : 0;
 
   return (

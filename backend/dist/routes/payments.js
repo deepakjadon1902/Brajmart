@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.triggerRecentRazorpayReconciliation = exports.reconcileRecentRazorpayPayments = exports.reconcileRazorpayToken = void 0;
 const express_1 = require("express");
 const db_1 = require("../lib/db");
 const auth_1 = require("../middleware/auth");
@@ -8,6 +9,8 @@ const eta_1 = require("../lib/eta");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const orderVisibility_1 = require("../lib/orderVisibility");
 const orderPricing_1 = require("../lib/orderPricing");
+const metaConversions_1 = require("./metaConversions");
+const razorpayVerification_1 = require("../lib/razorpayVerification");
 const router = (0, express_1.Router)();
 const mapPaymentRow = (row) => ({
     _id: String(row.id),
@@ -176,6 +179,18 @@ const applyRazorpayStatus = async (params) => {
     const current = rows[0];
     if (!current)
         return null;
+    if (params.status === 'paid') {
+        const orderData = await getPaymentOrderDetails(current.order_id);
+        if (String(current.method || '').toLowerCase() !== 'razorpay'
+            || String(orderData?.orderRow?.payment_method || '').toLowerCase() !== 'razorpay') {
+            throw new Error('Payment must belong to a Razorpay checkout');
+        }
+        const total = Number(orderData?.orderRow?.total);
+        if (!Number.isFinite(total) || Math.round(total * 100) !== Math.round(Number(current.amount) * 100)) {
+            throw new Error('Razorpay payment amount does not match the stored order total');
+        }
+        await (0, razorpayVerification_1.verifyCapturedRazorpayPayment)({ orderId: params.token, paymentId: params.paymentId || '', amount: total });
+    }
     if (String(current.status) === 'paid' && params.status === 'failed')
         return current;
     if (String(current.status) === params.status)
@@ -205,7 +220,7 @@ const applyRazorpayStatus = async (params) => {
     if (orderId) {
         orderData = await getPaymentOrderDetails(orderId);
         if (orderData?.orderRow) {
-            const orderStatus = params.status === 'paid' ? 'confirmed' : String(orderData.orderRow.status || 'processing');
+            const orderStatus = params.status === 'paid' ? 'confirmed' : 'cancelled';
             const history = (0, dbHelpers_1.parseJson)(orderData.orderRow.status_history, []);
             if (!history.some((entry) => String(entry.note || '') === params.note)) {
                 history.push({ status: orderStatus, date: new Date().toISOString(), note: params.note });
@@ -258,6 +273,14 @@ const applyRazorpayStatus = async (params) => {
             method: current.method || paymentRow?.method || 'Razorpay',
             customerEmail,
         }).catch(() => { });
+        if (params.status === 'paid' && orderId) {
+            if (orderData?.orderRow?.coupon_code) {
+                (0, orderPricing_1.markCouponUsed)(orderData.orderRow.coupon_code).catch(() => { });
+            }
+            (0, metaConversions_1.sendVerifiedMetaPurchaseForOrder)(orderId, transactionId, params.token).catch((err) => {
+                console.error('Meta verified Purchase event failed:', err);
+            });
+        }
     }
     catch {
         // ignore email failures during reconciliation
@@ -275,33 +298,10 @@ const reconcileRazorpayToken = async (token) => {
     let capturedPayment = null;
     let failedPayment = null;
     if (token.startsWith('order_')) {
-        const order = await fetchRazorpayJson(`/orders/${encodeURIComponent(token)}`);
         const orderPayments = await fetchRazorpayJson(`/orders/${encodeURIComponent(token)}/payments`);
         const items = Array.isArray(orderPayments?.items) ? orderPayments.items : [];
-        capturedPayment = items.find((p) => String(p?.status || '').toLowerCase() === 'captured') || null;
+        capturedPayment = items.find((p) => (0, razorpayVerification_1.isCapturedRazorpayPayment)(p, { orderId: token, paymentId: String(p?.id || ''), amount: Number(current.amount) })) || null;
         failedPayment = items.find((p) => String(p?.status || '').toLowerCase() === 'failed') || null;
-        if (!capturedPayment && (String(order?.status || '').toLowerCase() === 'paid' || Number(order?.amount_paid || 0) >= Number(order?.amount || 1))) {
-            capturedPayment = items[0] || { id: token };
-        }
-    }
-    else if (token.startsWith('pay_')) {
-        const payment = await fetchRazorpayJson(`/payments/${encodeURIComponent(token)}`);
-        if (String(payment?.status || '').toLowerCase() === 'captured')
-            capturedPayment = payment;
-        if (String(payment?.status || '').toLowerCase() === 'failed')
-            failedPayment = payment;
-    }
-    if (!capturedPayment && Number(current.amount || 0) > 0) {
-        const currentRows = await (0, db_1.dbQuery)('SELECT created_at FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1', [current.order_id]);
-        const createdAtMs = currentRows[0]?.created_at ? new Date(currentRows[0].created_at).getTime() : Date.now();
-        const from = Math.floor((createdAtMs - 60 * 60 * 1000) / 1000);
-        const to = Math.floor((Date.now() + 5 * 60 * 1000) / 1000);
-        const payments = await fetchRazorpayJson(`/payments?count=100&from=${from}&to=${to}`);
-        const matches = (Array.isArray(payments?.items) ? payments.items : []).filter((p) => String(p?.status || '').toLowerCase() === 'captured'
-            && !p?.order_id
-            && Math.round(Number(current.amount) * 100) === Number(p?.amount));
-        if (matches.length === 1)
-            capturedPayment = matches[0];
     }
     if (capturedPayment) {
         return applyRazorpayStatus({
@@ -321,10 +321,56 @@ const reconcileRazorpayToken = async (token) => {
     }
     return current;
 };
+exports.reconcileRazorpayToken = reconcileRazorpayToken;
+const reconcileRecentRazorpayPayments = async (limit = 50) => {
+    if (!(0, db_1.isDbConnected)())
+        return 0;
+    let reconciled = 0;
+    const safeLimit = Math.max(1, Math.min(100, Math.round(Number(limit) || 50)));
+    const razorpayRows = await (0, db_1.dbQuery)(`SELECT token, status
+       FROM payment_status
+      WHERE status IN ('pending', 'failed')
+        AND method = 'Razorpay'
+      ORDER BY updated_at DESC
+      LIMIT ${safeLimit}`);
+    for (const row of razorpayRows) {
+        const token = String(row?.token || '').trim();
+        if (!token)
+            continue;
+        try {
+            const beforeRows = await (0, db_1.dbQuery)('SELECT status FROM payment_status WHERE token = ? LIMIT 1', [token]);
+            const before = String(beforeRows?.[0]?.status || '');
+            const after = await (0, exports.reconcileRazorpayToken)(token);
+            const afterStatus = String(after?.status || '');
+            if (before !== afterStatus)
+                reconciled += 1;
+        }
+        catch {
+            // Keep admin pages responsive even if one gateway lookup fails.
+        }
+    }
+    return reconciled;
+};
+exports.reconcileRecentRazorpayPayments = reconcileRecentRazorpayPayments;
+let backgroundReconcilePromise = null;
+let lastBackgroundReconcileAt = 0;
+const triggerRecentRazorpayReconciliation = (limit = 50) => {
+    const now = Date.now();
+    if (backgroundReconcilePromise || now - lastBackgroundReconcileAt < 15000)
+        return;
+    lastBackgroundReconcileAt = now;
+    backgroundReconcilePromise = (0, exports.reconcileRecentRazorpayPayments)(limit)
+        .catch(() => 0)
+        .finally(() => {
+        backgroundReconcilePromise = null;
+    });
+};
+exports.triggerRecentRazorpayReconciliation = triggerRecentRazorpayReconciliation;
 router.get('/', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        (0, exports.triggerRecentRazorpayReconciliation)(50);
         res.json(await getAdminPaymentRows());
     }
     catch (err) {
@@ -335,24 +381,7 @@ router.post('/reconcile', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
-        let reconciled = 0;
-        const razorpayRows = await (0, db_1.dbQuery)("SELECT token, status FROM payment_status WHERE status IN ('pending', 'failed') AND method = 'Razorpay' ORDER BY updated_at DESC LIMIT 50");
-        for (const row of razorpayRows) {
-            const token = String(row?.token || '').trim();
-            if (!token)
-                continue;
-            try {
-                const beforeRows = await (0, db_1.dbQuery)('SELECT status FROM payment_status WHERE token = ? LIMIT 1', [token]);
-                const before = String(beforeRows?.[0]?.status || '');
-                const after = await reconcileRazorpayToken(token);
-                const afterStatus = String(after?.status || '');
-                if (before !== afterStatus)
-                    reconciled += 1;
-            }
-            catch {
-                // ignore
-            }
-        }
+        const reconciled = await (0, exports.reconcileRecentRazorpayPayments)();
         return res.json({ ok: true, reconciled });
     }
     catch (err) {
@@ -375,6 +404,10 @@ router.post('/admin/confirm-pending/:orderId', auth_1.auth, auth_1.adminOnly, as
         }
         const statusRows = await (0, db_1.dbQuery)("SELECT * FROM payment_status WHERE order_id = ? ORDER BY updated_at DESC LIMIT 1", [orderId]);
         const statusRow = statusRows[0];
+        if (String(orderRow.payment_method || '').toLowerCase() === 'razorpay'
+            || String(statusRow?.method || '').toLowerCase() === 'razorpay') {
+            return res.status(400).json({ message: 'Razorpay orders can only be confirmed by verified gateway payment.' });
+        }
         if (statusRow && String(statusRow.status || '') === 'paid') {
             return res.json({ ok: true, orderId, status: 'paid', alreadyConfirmed: true });
         }
@@ -497,7 +530,7 @@ router.get('/status/:token', async (req, res) => {
         const current = rows[0];
         if ((String(current.status) === 'pending' || String(current.status) === 'failed') && String(current.method || '') === 'Razorpay') {
             try {
-                const reconciled = await reconcileRazorpayToken(token);
+                const reconciled = await (0, exports.reconcileRazorpayToken)(token);
                 if (reconciled && String(reconciled.status) !== String(current.status))
                     return res.json(await mapPaymentStatusForClient(reconciled));
             }

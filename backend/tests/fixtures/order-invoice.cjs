@@ -1,0 +1,15 @@
+module.exports = {
+  id: 10339,
+  items: [{ name: 'Tulsi Kanthi Mala Two Round', sku: 'TMK-21', quantity: 1, price: 100 }],
+  total: 159,
+  items_subtotal: 100,
+  shipping_amount: 49,
+  packaging_amount: 10,
+  cod_amount: 0,
+  payment_method: 'UPI',
+  customer_name: 'Bikram Paul',
+  customer_email: 'bikram@example.com',
+  shipping_address: { fullName: 'Bikram Paul', street: 'Temple Road', addressLine2: 'Near Gate 2', city: 'Mathura', state: 'Uttar Pradesh', pincode: '281001', mobile: '9876543210' },
+  billing_address: {},
+  created_at: '2026-10-14T08:00:00.000Z',
+};

@@ -908,6 +908,7 @@
     border-color: #16864e !important;
   }
 
+  .admin-light .admin-status-rto,
   .admin-light .admin-status-cancelled,
   .admin-light .admin-status-failed,
   .admin-light .admin-status-blocked {

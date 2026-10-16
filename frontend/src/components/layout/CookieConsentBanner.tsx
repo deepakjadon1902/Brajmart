@@ -1,5 +1,6 @@
 import { Check, ShieldCheck, X } from 'lucide-react';
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { acceptCookieConsent, dismissCookieNotice, hasSeenCookieNotice } from '@/lib/cookieConsent';
 
 type CookieConsentBannerProps = {
@@ -8,8 +9,9 @@ type CookieConsentBannerProps = {
 
 const CookieConsentBanner = ({ onAccept }: CookieConsentBannerProps) => {
   const [visible, setVisible] = useState(() => !hasSeenCookieNotice());
+  const location = useLocation();
 
-  if (!visible) return null;
+  if (!visible || location.pathname.startsWith('/admin')) return null;
 
   const handleAccept = () => {
     acceptCookieConsent();

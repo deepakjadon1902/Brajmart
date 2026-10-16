@@ -7,6 +7,7 @@ dotenv.config();
 import app from './server';
 import { connectDb, describeDbTarget } from './lib/db';
 import { runDataMigrations } from './lib/migrations';
+import { startShippingLabelsSyncScheduler } from './lib/shippingLabels';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5000;
 const ALLOW_DBLESS_START = String(process.env.ALLOW_DBLESS_START || '').toLowerCase() === 'true';
@@ -56,6 +57,7 @@ const start = async () => {
   }
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    startShippingLabelsSyncScheduler();
   });
   server.on('error', (err) => {
     console.error('Server failed to listen:', err);

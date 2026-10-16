@@ -16,6 +16,8 @@ const cod_1 = require("../lib/cod");
 const checkoutValidation_1 = require("../lib/checkoutValidation");
 const rateLimit_1 = require("../middleware/rateLimit");
 const inventory_1 = require("../lib/inventory");
+const metaConversions_1 = require("./metaConversions");
+const razorpayVerification_1 = require("../lib/razorpayVerification");
 const router = (0, express_1.Router)();
 const razorpayCreateLimiter = (0, rateLimit_1.rateLimit)('razorpay-create-order', {
     windowMs: 15 * 60 * 1000,
@@ -37,6 +39,8 @@ const getRazorpayConfig = () => {
 };
 const hmacSha256 = (value, secret) => crypto_1.default.createHmac('sha256', secret).update(value).digest('hex');
 const timingSafeEqual = (a, b) => {
+    if (!/^[a-fA-F0-9]{64}$/.test(a) || !/^[a-fA-F0-9]{64}$/.test(b))
+        return false;
     const left = Buffer.from(a || '', 'hex');
     const right = Buffer.from(b || '', 'hex');
     return left.length === right.length && crypto_1.default.timingSafeEqual(left, right);
@@ -185,34 +189,25 @@ const fetchRazorpayOrderPayments = async (razorpayOrderId) => {
     return Array.isArray(data?.items) ? data.items : [];
 };
 const findCapturedRazorpayPayment = async (razorpayOrderId, razorpayPaymentId) => {
+    const rows = await (0, db_1.dbQuery)('SELECT amount FROM payment_status WHERE token = ? LIMIT 1', [razorpayOrderId]);
+    if (!rows[0])
+        return null;
+    const amount = Number(rows[0].amount);
     if (razorpayPaymentId) {
         const payment = await fetchRazorpayPayment(razorpayPaymentId);
-        if (String(payment?.status || '').toLowerCase() === 'captured'
-            && String(payment?.order_id || '') === razorpayOrderId) {
+        if ((0, razorpayVerification_1.isCapturedRazorpayPayment)(payment, { orderId: razorpayOrderId, paymentId: razorpayPaymentId, amount })) {
             return payment;
         }
     }
     const payments = await fetchRazorpayOrderPayments(razorpayOrderId);
-    return payments.find((payment) => String(payment?.status || '').toLowerCase() === 'captured') || null;
+    return payments.find((payment) => (0, razorpayVerification_1.isCapturedRazorpayPayment)(payment, { orderId: razorpayOrderId, paymentId: String(payment?.id || ''), amount })) || null;
 };
 const assertRazorpayPaymentCaptured = async (razorpayOrderId, razorpayPaymentId) => {
     const statusRows = await (0, db_1.dbQuery)('SELECT amount FROM payment_status WHERE token = ? LIMIT 1', [razorpayOrderId]);
     const statusRow = statusRows[0];
     if (!statusRow)
         throw new Error('Payment not found');
-    const payment = await fetchRazorpayPayment(razorpayPaymentId);
-    const paymentStatus = String(payment?.status || '').toLowerCase();
-    if (paymentStatus !== 'captured') {
-        throw new Error('Razorpay payment is not captured yet');
-    }
-    if (String(payment?.order_id || '') !== razorpayOrderId) {
-        throw new Error('Razorpay payment does not belong to this order');
-    }
-    const expectedAmount = Math.round(Number(statusRow.amount || 0) * 100);
-    if (expectedAmount <= 0 || Number(payment?.amount) !== expectedAmount) {
-        throw new Error('Razorpay payment amount does not match this order');
-    }
-    return payment;
+    return (0, razorpayVerification_1.verifyCapturedRazorpayPayment)({ orderId: razorpayOrderId, paymentId: razorpayPaymentId, amount: Number(statusRow.amount) });
 };
 const getOrderDetails = async (orderRow) => ({
     items: (0, dbHelpers_1.parseJson)(orderRow.items, []),
@@ -250,6 +245,18 @@ const updateOrderForPayment = async (params) => {
     const statusRow = statusRows[0];
     if (!statusRow)
         return null;
+    if (params.status === 'paid') {
+        const orderRows = await (0, db_1.dbQuery)('SELECT total, payment_method FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
+        if (String(statusRow.method || '').toLowerCase() !== 'razorpay'
+            || String(orderRows[0]?.payment_method || '').toLowerCase() !== 'razorpay') {
+            throw new Error('Payment must belong to a Razorpay checkout');
+        }
+        const total = Number(orderRows[0]?.total);
+        if (!Number.isFinite(total) || Math.round(total * 100) !== Math.round(Number(statusRow.amount) * 100)) {
+            throw new Error('Razorpay payment amount does not match the stored order total');
+        }
+        await (0, razorpayVerification_1.verifyCapturedRazorpayPayment)({ orderId: params.razorpayOrderId, paymentId: params.razorpayPaymentId || '', amount: total });
+    }
     if (String(statusRow.status || '') === 'paid' && params.status === 'failed') {
         return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
     }
@@ -269,7 +276,7 @@ const updateOrderForPayment = async (params) => {
     let orderRow = orderRows[0];
     if (!orderRow)
         return null;
-    const orderStatus = params.status === 'paid' ? 'confirmed' : String(orderRow.status || 'processing');
+    const orderStatus = params.status === 'paid' ? 'confirmed' : 'cancelled';
     const history = (0, dbHelpers_1.parseJson)(orderRow.status_history, []);
     const alreadyHasTerminalNote = history.some((entry) => String(entry.note || '') === params.note);
     if (!alreadyHasTerminalNote) {
@@ -337,41 +344,20 @@ const updateOrderForPayment = async (params) => {
         method: statusRow.method || 'Razorpay',
         customerEmail: orderRow.customer_email,
     }).catch(() => { });
+    if (params.status === 'paid') {
+        if (params.metaContext || params.request) {
+            await (0, metaConversions_1.captureMetaOrderContext)(statusRow.order_id, params.metaContext, params.request).catch(() => { });
+        }
+        (0, metaConversions_1.sendVerifiedMetaPurchaseForOrder)(statusRow.order_id, transactionId, params.razorpayOrderId).catch((err) => {
+            console.error('Meta verified Purchase event failed:', err);
+        });
+    }
     return { orderId: statusRow.order_id, paymentId: transactionId, status: params.status };
 };
 const resolveRazorpayStatusToken = async (payment, order) => {
     const razorpayOrderId = String(payment?.order_id || order?.id || '').trim();
     if (razorpayOrderId)
         return razorpayOrderId;
-    const notes = payment?.notes || {};
-    const noteOrderId = String(notes?.brajmart_order_id || notes?.order_id || notes?.orderId || '').trim();
-    if (/^\d+$/.test(noteOrderId)) {
-        const rows = await (0, db_1.dbQuery)("SELECT token FROM payment_status WHERE order_id = ? AND method = 'Razorpay' ORDER BY updated_at DESC LIMIT 1", [Number(noteOrderId)]);
-        if (rows[0]?.token)
-            return String(rows[0].token);
-    }
-    const paymentId = String(payment?.id || '').trim();
-    if (paymentId) {
-        const rows = await (0, db_1.dbQuery)('SELECT token FROM payment_status WHERE payment_id = ? LIMIT 1', [paymentId]);
-        if (rows[0]?.token)
-            return String(rows[0].token);
-    }
-    const amountPaise = Number(payment?.amount);
-    const createdAt = Number(payment?.created_at || 0);
-    if (Number.isFinite(amountPaise) && amountPaise > 0 && Number.isFinite(createdAt) && createdAt > 0) {
-        const rows = await (0, db_1.dbQuery)(`SELECT ps.token
-       FROM payment_status ps
-       JOIN payments p ON p.order_id = ps.order_id
-       WHERE ps.status = 'pending'
-         AND ps.method = 'Razorpay'
-         AND ROUND(p.amount * 100) = ?
-         AND p.created_at BETWEEN DATE_SUB(FROM_UNIXTIME(?), INTERVAL 45 MINUTE)
-                              AND DATE_ADD(FROM_UNIXTIME(?), INTERVAL 15 MINUTE)
-       ORDER BY p.created_at DESC, p.id DESC
-       LIMIT 2`, [amountPaise, createdAt, createdAt]);
-        if (rows.length === 1 && rows[0]?.token)
-            return String(rows[0].token);
-    }
     return '';
 };
 router.post('/create-order', razorpayCreateLimiter, auth_1.optionalAuth, async (req, res) => {
@@ -469,12 +455,16 @@ router.post('/create-order', razorpayCreateLimiter, auth_1.optionalAuth, async (
             couponDetails,
             total: totals.total,
             paymentMethod: 'Razorpay',
-            status: 'processing',
-            statusHistory: [{ status: 'processing', date: new Date().toISOString(), note: 'Payment initiated via Razorpay' }],
+            status: 'pending_payment',
+            statusHistory: [{ status: 'pending_payment', date: new Date().toISOString(), note: 'Razorpay payment initiated, waiting for payment confirmation' }],
             customerEmail,
             shippingAddress: contact.shippingAddress,
             billingAddress: contact.billingAddress,
         }, estimatedDelivery);
+        (0, metaConversions_1.captureMetaOrderContext)(orderRow.id, {
+            ...(req.body?.metaContext && typeof req.body.metaContext === 'object' ? req.body.metaContext : {}),
+            externalId: numericUserId ? `user:${numericUserId}` : customerEmail,
+        }, req).catch(() => { });
         if (numericUserId) {
             const addrToSave = contact.shippingAddress || contact.billingAddress;
             (0, userAddress_1.upsertUserDefaultAddress)(numericUserId, addrToSave).catch(() => { });
@@ -563,6 +553,10 @@ router.post('/retry-order', razorpayCreateLimiter, async (req, res) => {
         const orderRow = orderRows[0];
         if (!orderRow)
             return res.status(404).json({ message: 'Order not found' });
+        (0, metaConversions_1.captureMetaOrderContext)(orderRow.id, {
+            ...(req.body?.metaContext && typeof req.body.metaContext === 'object' ? req.body.metaContext : {}),
+            externalId: String(orderRow.user_id || '').trim() ? `user:${orderRow.user_id}` : String(orderRow.customer_email || ''),
+        }, req).catch(() => { });
         const amount = Number(statusRow.amount || orderRow.total || 0);
         if (!Number.isFinite(amount) || amount <= 0)
             return res.status(400).json({ message: 'Invalid retry amount' });
@@ -614,7 +608,11 @@ router.post('/verify', razorpayReportLimiter, async (req, res) => {
         if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
             return res.status(400).json({ message: 'Missing Razorpay payment details' });
         }
-        const expected = hmacSha256(`${razorpay_order_id}|${razorpay_payment_id}`, keySecret);
+        const statusRows = await (0, db_1.dbQuery)('SELECT token FROM payment_status WHERE token = ? LIMIT 1', [String(razorpay_order_id)]);
+        const storedOrderId = String(statusRows[0]?.token || '');
+        if (!storedOrderId || storedOrderId !== String(razorpay_order_id))
+            return res.status(404).json({ message: 'Payment not found' });
+        const expected = hmacSha256(`${storedOrderId}|${razorpay_payment_id}`, keySecret);
         if (!timingSafeEqual(expected, String(razorpay_signature))) {
             return res.status(400).json({ message: 'Invalid Razorpay signature' });
         }
@@ -624,6 +622,8 @@ router.post('/verify', razorpayReportLimiter, async (req, res) => {
             razorpayPaymentId: String(razorpay_payment_id),
             status: 'paid',
             note: 'Payment verified via Razorpay checkout signature',
+            metaContext: req.body?.metaContext,
+            request: req,
         });
         if (!result)
             return res.status(404).json({ message: 'Payment not found' });
@@ -659,6 +659,8 @@ router.post('/failed', razorpayReportLimiter, async (req, res) => {
                 razorpayPaymentId: String(capturedPayment.id),
                 status: 'paid',
                 note: 'Payment corrected from Razorpay captured status',
+                metaContext: req.body?.metaContext,
+                request: req,
             });
             if (!result)
                 return res.status(404).json({ message: 'Payment not found' });
@@ -687,7 +689,9 @@ router.post('/webhook', async (req, res) => {
         if (!webhookSecret)
             return res.status(500).json({ message: 'Razorpay webhook secret is not configured' });
         const signature = String(req.headers['x-razorpay-signature'] || '');
-        const rawBody = typeof req.rawBody === 'string' ? req.rawBody : JSON.stringify(req.body || {});
+        if (typeof req.rawBody !== 'string')
+            return res.status(400).json({ message: 'Missing raw webhook body' });
+        const rawBody = req.rawBody;
         const expected = hmacSha256(rawBody, webhookSecret);
         if (!signature || !timingSafeEqual(expected, signature)) {
             return res.status(400).json({ message: 'Invalid webhook signature' });

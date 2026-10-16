@@ -23,6 +23,7 @@ const statusIdx: Record<string, number> = {
   shipped: 2,
   out_for_delivery: 3,
   delivered: 4,
+  rto: 2,
   cancelled: 0,
 };
 
@@ -94,7 +95,7 @@ const TrackOrderPage = () => {
 
   const loadDeliveryTracking = async (foundOrder: any) => {
     const service = String(foundOrder?.shippingService || '').toLowerCase();
-    const shipped = ['shipped', 'out_for_delivery', 'delivered'].includes(String(foundOrder?.status || ''));
+    const shipped = ['shipped', 'out_for_delivery', 'delivered', 'rto'].includes(String(foundOrder?.status || ''));
     const lookup = foundOrder?.trackingId || foundOrder?.orderId || foundOrder?._id;
     if (!service.includes('delhivery') || !shipped || !lookup) return;
 

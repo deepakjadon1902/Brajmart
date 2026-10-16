@@ -1,6 +1,7 @@
 import { dbExecute, dbQuery, isDbConnected } from './db';
 import bcrypt from 'bcryptjs';
 import { ensureCommerceIntelligenceSchema } from './commerceIntelligence';
+import { ensureShippingLabelsSchema } from './shippingLabels';
 import { ensureDeliveryServiceSchema } from './deliveryService';
 
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
@@ -539,6 +540,7 @@ export const runDataMigrations = async () => {
   await ensurePhase5cReviewsSchema();
   await ensureOpenModeratedReviewsSchema();
   await ensureCommerceIntelligenceSchema();
+  await ensureShippingLabelsSchema();
   await migratePendingOnlineProcessingOrders();
   await migrateDeityShringarIntoIdolsSubcategory();
 };

@@ -490,9 +490,9 @@ const queryString = (params?: Record<string, string | number | boolean | undefin
 export const fetchOrders = (opts?: { search?: string }) => getJson<any[]>(`/orders${queryString({ search: opts?.search })}`);
 export const fetchPendingPaymentOrders = (opts?: { search?: string }) => getJson<Record<string, unknown>[]>(`/orders/admin/pending-payments${queryString({ search: opts?.search })}`);
 export const fetchMyOrders = () => getJson<any[]>('/orders/my');
-export const fetchOrderInvoice = async (id: string | number, opts?: { print?: boolean }) => {
+export const fetchOrderInvoice = async (id: string | number, opts?: { download?: boolean; print?: boolean }) => {
   const token = getAuthToken();
-  const res = await fetch(`${API_BASE}/orders/${encodeURIComponent(String(id))}/invoice${queryString({ print: opts?.print ? 1 : undefined })}`, {
+  const res = await fetch(`${API_BASE}/orders/${encodeURIComponent(String(id))}/invoice${queryString({ download: opts?.download || opts?.print ? 1 : undefined })}`, {
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
@@ -501,6 +501,17 @@ export const fetchOrderInvoice = async (id: string | number, opts?: { print?: bo
     const data = await res.json().catch(() => null);
     const message = typeof data?.message === 'string' ? data.message : `Invoice download failed (${res.status})`;
     throw new Error(message);
+  }
+  return res.blob();
+};
+export const fetchAllOrderInvoices = async () => {
+  const token = getAuthToken();
+  const res = await fetch(`${API_BASE}/orders/admin/invoices.zip`, {
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(typeof data?.message === 'string' ? data.message : `Invoice download failed (${res.status})`);
   }
   return res.blob();
 };
@@ -520,6 +531,16 @@ export const checkDeliveryServicePincode = (payload: { desPincode: string }) =>
   getJson('/orders/delivery-service/pincode', { method: 'POST', body: payload });
 export const adminCheckDeliveryServicePincode = (payload: { desPincode: string }) =>
   getJson('/orders/admin/delivery-service/pincode', { method: 'POST', body: payload });
+export const createShippingLabel = (orderId: string | number) =>
+  getJson<{ label: Record<string, unknown>; created: boolean; printUrl: string }>(
+    `/shipping-labels/orders/${encodeURIComponent(String(orderId))}/label`,
+    { method: 'POST' }
+  );
+export const syncShippingLabel = (orderId: string | number) =>
+  getJson<{ orderId: string; orderStatus: string; updated: boolean; label: Record<string, unknown> }>(
+    `/shipping-labels/orders/${encodeURIComponent(String(orderId))}/sync`,
+    { method: 'POST' }
+  );
 
 export type AdminCodConfig = {
   products: Array<{ id: string; name: string; slug: string; image: string; category: string; categoryId?: number; codEnabled: boolean | null }>;
