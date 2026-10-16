@@ -46,21 +46,54 @@ logo, legal company name, GSTIN, billing/shipping blocks and product/SKU table.
 attachment. Invoice numbers are the order ID followed by its order date in
 `ddmmyyyy` format, using India time.
 
-**Download All Invoices (ZIP)** on the Orders page downloads a separate PDF for
-every verified paid/COD order across all pages, regardless of active table
-filters. `GET /api/orders/admin/invoices.zip` streams the archive in database
-batches. Both endpoints require admin authentication and use private/no-store
-responses. Cancelling a download stops archive generation.
+**Save All Invoices to Folder** on the Orders page asks for a destination and
+creates one folder containing a separate PDF for every verified paid/COD order,
+regardless of table filters or pagination. This works in Chrome/Edge on HTTPS
+or localhost. Browsers without folder access offer **Download Invoice Folder**,
+which downloads a complete ZIP containing the PDFs in one folder.
+
+PDF filenames start with the customer's shipping name, followed by the order ID
+(for example `Bikram Paul - Invoice-10339.pdf`). Names fall back to the recorded
+customer name, then `Customer`. Windows filename characters are cleaned and long
+names are shortened; the order ID keeps repeat customers' invoices distinct.
+Individual downloads, folder downloads and ZIP entries use the same naming rule,
+including Unicode names.
+
+`GET /api/orders/admin/invoices` returns the order IDs and filenames. The browser
+fetches up to three individual PDFs at a time, validates their PDF header and
+closing marker, and shows progress. ZIPs are finalized in the browser after all
+requests finish, avoiding an interrupted long server response with no ZIP index.
+Failures are counted and listed by order in `Download-Report.txt`. Stopping a
+folder download preserves completed PDFs; stopping a ZIP download discards it.
+All invoice endpoints require admin authentication and use private/no-store
+responses. The legacy `/api/orders/admin/invoices.zip` streaming endpoint remains
+for older clients; the Orders page no longer uses it. Deploy both frontend and
+backend for the new manifest endpoint and folder download flow.
+
+The build/postinstall and test hooks apply a guarded fix to fontkit 2.0.4 for
+valid NULL font-positioning anchors. This prevents Hindi text such as `रे` from
+aborting invoice generation midway through an export. The patch skips only the
+missing attachment, keeping subsequent font lookups and shaping enabled; review
+and remove it when upgrading to an upstream release containing the fix.
 
 Prices, quantities, variants, charges, discounts and totals come from stored
 order snapshots, never current catalog prices. Payment IDs come only from paid
-payment records. Missing historical SKUs or payment IDs display as `-`; legacy
-orders without a split charge breakdown show combined shipping/packaging.
+payment records. New COD and Razorpay orders snapshot the product SKU on the
+server. Older invoices recover missing SKUs from the matching product ID, or a
+unique exact slug/name for legacy items without IDs, including archived products.
+Stored SKUs take precedence; deleted or ambiguous products show `Not assigned`.
+Missing payment IDs display as `-`; legacy orders without a split charge
+breakdown show combined shipping/packaging.
 The stored total remains authoritative and any difference is explicitly shown
 as an order adjustment. No new tax rate is inferred from packaging charges.
 
 Deploy `backend/assets/invoice` alongside `backend/dist`. Generate synthetic
 layout previews with `node -r ts-node/register/transpile-only scripts/previewInvoices.cjs`.
+
+To assign stable `BM-000098`-style codes to products without a SKU, run
+`node scripts/assignMissingProductSkus.cjs` from `backend` to preview the count,
+then add `--apply` to save. The assignment uses a transaction, preserves existing
+codes, and avoids collisions. It does not change prices or historical order data.
 
 ### Shipping Labels Dashboard
 

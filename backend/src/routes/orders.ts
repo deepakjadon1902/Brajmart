@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { isDbConnected, dbQuery, dbExecute, withDbTransaction } from '../lib/db';
 import { sendOrderConfirmation, sendShippingUpdate } from '../lib/email';
 import { buildOrderInvoicePdf, orderInvoiceFilename } from '../lib/orderInvoice';
-import { loadInvoicePayments, streamAllOrderInvoices } from '../lib/orderInvoiceExport';
+import { getOrderInvoiceManifest, loadInvoicePayments, resolveInvoiceOrderSkus, streamAllOrderInvoices } from '../lib/orderInvoiceExport';
 import { getEtaConfig, getEtaText, getEstimatedDeliveryDate } from '../lib/eta';
 import { auth, adminOnly, optionalAuth, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
@@ -610,6 +610,16 @@ router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) =>
   }
 });
 
+router.get('/admin/invoices', auth, adminOnly, async (_req, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json(await getOrderInvoiceManifest());
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || 'Failed to list invoices' });
+  }
+});
+
 router.get('/admin/invoices.zip', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
@@ -634,10 +644,14 @@ router.get('/:id/invoice', auth, adminOnly, async (req, res) => {
     if (!row) return res.status(404).json({ message: 'Order not found' });
 
     const payments = await loadInvoicePayments([row.id]);
-    const pdf = await buildOrderInvoicePdf(row, payments.get(String(row.id)));
+    const [invoiceOrder] = await resolveInvoiceOrderSkus([row]);
+    const pdf = await buildOrderInvoicePdf(invoiceOrder, payments.get(String(row.id)));
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Cache-Control', 'private, no-store');
-    res.setHeader('Content-Disposition', `${req.query.download === '1' || req.query.print === '1' ? 'attachment' : 'inline'}; filename="${orderInvoiceFilename(row.id)}"`);
+    const filename = orderInvoiceFilename(row.id, row);
+    const encodedFilename = encodeURIComponent(filename).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+    res.setHeader('Content-Disposition', `${req.query.download === '1' || req.query.print === '1' ? 'attachment' : 'inline'}; filename="BrajMart-Invoice-${row.id}.pdf"; filename*=UTF-8''${encodedFilename}`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     return res.send(pdf);
   } catch (err: any) {
     res.status(Number(err.status) || 500).json({ message: err.message || 'Failed to generate invoice' });

@@ -15,6 +15,7 @@ const money = (value: number) => `₹${(value / 100).toLocaleString('en-IN', { m
 const addressPresent = (address: any) => ['fullName', 'street', 'address', 'addressLine1', 'city', 'state', 'pincode'].some((key) => clean(address?.[key]));
 
 export type InvoicePayment = { transactionId?: string; method?: string };
+export const storedInvoiceItemSku = (item: any) => [item.sku, item.selectedSku, item.product?.sku].map(clean).find(Boolean) || '';
 
 export const buildOrderInvoiceModel = (row: any, payment: InvoicePayment = {}) => {
   const orderId = clean(row.id);
@@ -32,7 +33,7 @@ export const buildOrderInvoiceModel = (row: any, payment: InvoicePayment = {}) =
     return {
       name: clean(item.name || item.product?.name) || 'Item',
       variants: variants.join(', '),
-      sku: clean(item.sku || item.selectedSku || item.product?.sku),
+      sku: storedInvoiceItemSku(item),
       quantity, price,
     };
   });
@@ -74,7 +75,16 @@ export const buildOrderInvoiceModel = (row: any, payment: InvoicePayment = {}) =
   };
 };
 
-export const orderInvoiceFilename = (orderId: string | number) => `BrajMart-Invoice-${String(orderId).replace(/[^0-9]/g, '')}.pdf`;
+export const orderInvoiceFilename = (orderId: string | number, row: { shipping_address?: unknown; customer_name?: unknown } = {}) => {
+  const shipping = parseJson<any>(row.shipping_address, {}) || {};
+  const name = clean(shipping.fullName || shipping.name || row.customer_name)
+    .normalize('NFC')
+    .replace(/[<>:"/\\|?*\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, ' ')
+    .replace(/\s+/gu, ' ')
+    .replace(/^[. ]+|[. ]+$/gu, '');
+  const customer = Array.from(name).slice(0, 80).join('').trim() || 'Customer';
+  return `${customer} - Invoice-${String(orderId).replace(/[^0-9]/g, '')}.pdf`;
+};
 
 export const buildOrderInvoicePdf = async (row: any, payment: InvoicePayment = {}): Promise<Buffer> => {
   const model = buildOrderInvoiceModel(row, payment);
@@ -181,13 +191,15 @@ export const buildOrderInvoicePdf = async (row: any, payment: InvoicePayment = {
   tableHeader();
   model.items.forEach((item, index) => {
     const productHeight = height(item.name, 255) + (item.variants ? height(item.variants, 255, 8) + 2 : 0);
-    const rowHeight = Math.max(23, productHeight + 10, height(item.sku, 75) + 10);
+    const sku = item.sku || 'Not assigned';
+    const skuSize = Math.max(7.5, Math.min(9, 9 * 75 / Math.max(75, widthOf(sku, 9, false))));
+    const rowHeight = Math.max(23, productHeight + 10, height(sku, 75, skuSize) + 10);
     if (rowHeight > 640) return fail(`Order ${model.orderId}: item ${index + 1} is too long for an invoice page`);
     if (y + rowHeight > 740) continuation();
     text(`${index + 1}.`, 22, y + 5, 43, { align: 'center' });
     const productEnd = text(item.name, 75, y + 5, 255);
     if (item.variants) text(item.variants, 75, productEnd + 2, 255, { size: 8, color: '#444444' });
-    text(item.sku || '-', 345, y + 5, 75, { align: 'center' });
+    text(sku, 345, y + 5, 75, { align: 'center', size: skuSize });
     text(item.quantity, 435, y + 5, 55, { align: 'center' });
     text(money(item.price), 495, y + 5, 70, { align: 'right' });
     y += rowHeight; line(15, y, 575);

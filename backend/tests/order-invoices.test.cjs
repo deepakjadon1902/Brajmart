@@ -13,11 +13,13 @@ db.dbQuery = async (sql, params = []) => {
   if (sql.includes('FROM orders')) {
     assert.match(sql, /FROM payments/);
     if (sql.includes('MAX(id)')) return [{ max_id: state.orders.at(-1)?.id, invoice_count: state.orders.length }];
+    if (sql.startsWith('SELECT id, customer_name, shipping_address FROM orders')) return state.orders;
     if (sql.includes('id > ?')) return state.orders.filter((row) => row.id > Number(params[0]) && row.id <= Number(params[1])).slice(0, 100);
     return state.orders.filter((row) => String(row.id) === String(params[0]));
   }
   if (sql.includes('FROM payments')) { assert.match(sql, /status = 'paid'/); return state.payments; }
   if (sql.includes('FROM payment_status')) { assert.match(sql, /status = 'paid'/); return state.paymentStatuses; }
+  if (sql.includes('FROM products')) return state.products;
   throw new Error(`Unexpected invoice query: ${sql}`);
 };
 const router = require('../src/routes/orders').default;
@@ -44,7 +46,7 @@ async function request(path, { role = 'admin', token = true, params = {}, query 
   response.body = Buffer.concat(response.chunks);
   return response;
 }
-beforeEach(() => { state = { connected: true, orders: [{ ...fixture }], payments: [], paymentStatuses: [], queries: [] }; });
+beforeEach(() => { state = { connected: true, orders: [{ ...fixture }], products: [], payments: [], paymentStatuses: [], queries: [] }; });
 
 test('invoice numbers use the order date in India and prices come from the order snapshot', () => {
   const model = invoice.buildOrderInvoiceModel({ ...fixture, created_at: '2026-10-14T20:00:00Z', items: JSON.stringify(fixture.items) });
@@ -76,22 +78,58 @@ test('single invoice endpoint sends an actual PDF attachment using recorded paym
   const response = await request('/:id/invoice', { params: { id: String(fixture.id) }, query: { download: '1' } });
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers['content-type'], 'application/pdf');
-  assert.match(response.headers['content-disposition'], /attachment; filename="BrajMart-Invoice-10339.pdf"/);
+  assert.match(response.headers['content-disposition'], /attachment; filename="BrajMart-Invoice-10339.pdf"; filename\*=UTF-8''Bikram%20Paul%20-%20Invoice-10339.pdf/);
+  assert.equal(response.headers['access-control-expose-headers'], 'Content-Disposition');
   assert.equal(response.body.subarray(0, 5).toString(), '%PDF-');
   assert.match(response.body.toString('latin1'), /\/Count 1\b/);
   assert.equal(response.headers['cache-control'], 'private, no-store');
 });
+
+test('Hindi names and addresses containing रे render completely without the NULL-anchor font crash', async () => {
+  const pdf = await invoice.buildOrderInvoicePdf({
+    ...fixture,
+    shipping_address: { ...fixture.shipping_address, fullName: 'रेखा', street: 'रेती मार्ग, प्रेरणा भवन' },
+    items: [{ name: 'रेशमी माला', sku: 'TEST-21', quantity: 1, price: 100 }],
+  });
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+  assert.ok(pdf.subarray(-1024).toString().trimEnd().endsWith('%%EOF'));
+  assert.match(pdf.toString('latin1'), /\/Count 1\b/);
+});
 test('invoice endpoints enforce admin authorization', async () => {
-  for (const path of ['/:id/invoice', '/admin/invoices.zip']) {
+  for (const path of ['/:id/invoice', '/admin/invoices', '/admin/invoices.zip']) {
     assert.equal((await request(path, { token: false })).statusCode, 401);
     assert.equal((await request(path, { role: 'customer' })).statusCode, 403);
   }
   assert.equal(state.queries.length, 0);
 });
+
+test('invoice manifest lists customer filenames for every visible order without table filters or PDF rendering', async () => {
+  state.orders = Array.from({ length: 133 }, (_, index) => ({ ...fixture, id: 10000 + index }));
+  const response = await request('/admin/invoices', { query: { page: 2, search: 'does-not-match', status: 'shipped' } });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['cache-control'], 'private, no-store');
+  const entries = JSON.parse(response.body.toString()).invoices;
+  assert.equal(entries.length, 133);
+  assert.deepEqual(entries[0], { orderId: '10000', filename: 'Bikram Paul - Invoice-10000.pdf' });
+  assert.deepEqual(entries.at(-1), { orderId: '10132', filename: 'Bikram Paul - Invoice-10132.pdf' });
+  assert.equal(state.queries.length, 1);
+  assert.match(state.queries[0].sql, /ORDER BY id ASC/);
+});
+
+test('invoice manifest reports an empty list and database outages without creating an archive', async () => {
+  state.orders = [];
+  assert.deepEqual(JSON.parse((await request('/admin/invoices')).body.toString()), { invoices: [] });
+  state.connected = false;
+  assert.equal((await request('/admin/invoices')).statusCode, 503);
+});
 test('all invoices ZIP spans database batches and ignores table pagination and filters', async () => {
-  state.orders = Array.from({ length: 101 }, (_, index) => ({ ...fixture, id: 10000 + index }));
+  state.orders = Array.from({ length: 101 }, (_, index) => ({ ...fixture, id: 10000 + index, items: [{ ...fixture.items[0], sku: '', productId: '21' }] }));
+  state.products = [{ id: 21, sku: 'TMK-21' }];
   const originalBuild = invoice.buildOrderInvoicePdf;
-  invoice.buildOrderInvoicePdf = async (row) => Buffer.from(`%PDF-1.4\nOrder ${row.id}\n%%EOF`);
+  invoice.buildOrderInvoicePdf = async (row) => {
+    assert.equal(row.items[0].sku, 'TMK-21');
+    return Buffer.from(`%PDF-1.4\nOrder ${row.id}\n%%EOF`);
+  };
   try {
     const response = await request('/admin/invoices.zip', { query: { page: 2, search: 'does-not-match', status: 'shipped' } });
     assert.equal(response.statusCode, 200);
@@ -100,8 +138,8 @@ test('all invoices ZIP spans database batches and ignores table pagination and f
     assert.equal(response.body.subarray(0, 2).toString(), 'PK');
     const end = response.body.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
     assert.equal(response.body.readUInt16LE(end + 10), 101, 'ZIP central directory contains every invoice');
-    assert.ok(response.body.includes(Buffer.from('BrajMart-Invoice-10000.pdf')));
-    assert.ok(response.body.includes(Buffer.from('BrajMart-Invoice-10100.pdf')));
+    assert.ok(response.body.includes(Buffer.from('Bikram Paul - Invoice-10000.pdf')));
+    assert.ok(response.body.includes(Buffer.from('Bikram Paul - Invoice-10100.pdf')));
     const queries = state.queries.filter(({ sql }) => sql.includes('id > ?'));
     assert.deepEqual(queries.map(({ params }) => params[0]), ['0', '10099', '10100']);
   } finally { invoice.buildOrderInvoicePdf = originalBuild; }
@@ -111,4 +149,66 @@ test('an empty invoice export returns a useful error instead of an empty ZIP', a
   const response = await request('/admin/invoices.zip');
   assert.equal(response.statusCode, 404);
   assert.match(response.body.toString(), /no order invoices/);
+});
+
+test('invoice filenames preserve customer names safely and distinguish repeat customers by order', () => {
+  assert.equal(invoice.orderInvoiceFilename(10339, fixture), 'Bikram Paul - Invoice-10339.pdf');
+  assert.equal(invoice.orderInvoiceFilename(10340, fixture), 'Bikram Paul - Invoice-10340.pdf');
+  assert.equal(invoice.orderInvoiceFilename(1, { shipping_address: '{"fullName":"रेखा देवी"}', customer_name: 'Account Name' }), 'रेखा देवी - Invoice-1.pdf');
+  assert.equal(invoice.orderInvoiceFilename(2, { customer_name: '  A/B:C*D?E"F<G>H|I\\J\nK  ' }), 'A B C D E F G H I J K - Invoice-2.pdf');
+  assert.equal(invoice.orderInvoiceFilename(3, { customer_name: '../..' }), 'Customer - Invoice-3.pdf');
+  assert.equal(invoice.orderInvoiceFilename(4, { customer_name: 'Fallback Name', shipping_address: '{}' }), 'Fallback Name - Invoice-4.pdf');
+  assert.equal(invoice.orderInvoiceFilename(5), 'Customer - Invoice-5.pdf');
+  assert.equal(invoice.orderInvoiceFilename(6, { customer_name: 'A'.repeat(200) }), `${'A'.repeat(80)} - Invoice-6.pdf`);
+});
+
+test('legacy invoices resolve missing SKUs without changing stored prices, totals or saved SKUs', async () => {
+  const { resolveInvoiceOrderSkus } = require('../src/lib/orderInvoiceExport');
+  state.products = [{ id: 21, name: 'Renamed product', sku: 'BM-000021', price: 999 }];
+  const original = { ...fixture, items: JSON.stringify([
+    { productId: '21', name: 'Original Mala', quantity: 1, price: 100, selectedSize: 'Large' },
+    { productId: '21', name: 'Another Mala', quantity: 1, price: 50, sku: 'HISTORICAL-SKU' },
+  ]) };
+  const [resolved] = await resolveInvoiceOrderSkus([original]);
+  assert.deepEqual(resolved.items, [
+    { productId: '21', name: 'Original Mala', quantity: 1, price: 100, selectedSize: 'Large', sku: 'BM-000021' },
+    { productId: '21', name: 'Another Mala', quantity: 1, price: 50, sku: 'HISTORICAL-SKU' },
+  ]);
+  assert.equal(typeof original.items, 'string');
+  assert.equal(resolved.total, original.total);
+  assert.equal(state.queries.length, 1);
+  assert.deepEqual(state.queries[0].params, ['21']);
+  assert.doesNotMatch(state.queries[0].sql, /archived_at IS NULL/);
+});
+
+test('legacy SKU matches require a known ID or a unique exact slug/name; ambiguous or deleted products stay unassigned', async () => {
+  const { resolveInvoiceOrderSkus } = require('../src/lib/orderInvoiceExport');
+  state.products = [
+    { id: 1, name: 'Unique Mala', slug: 'unique', sku: 'SKU-1' },
+    { id: 2, name: 'Duplicate Mala', slug: 'other', sku: 'SKU-2' },
+    { id: 3, name: 'Duplicate Mala', slug: 'third', sku: 'SKU-3' },
+    { id: 4, name: 'Cow Ghee', slug: 'ghee', sku: 'SKU-4' },
+  ];
+  const [resolved] = await resolveInvoiceOrderSkus([{ items: [
+    { name: 'Unique Mala' }, { slug: 'other' }, { name: 'Duplicate Mala' },
+    { productId: '999', name: 'Unique Mala' }, { slug: 'missing', name: 'Unique Mala' },
+    { sku: '  ', selectedSku: 'SAVED-VARIANT' },
+    { name: 'Cow Ghee (Size: 1L)', selectedSize: '1L' },
+    { name: 'Cow Ghee (Size: 1L)', selectedSize: '500ml' },
+  ] }]);
+  assert.deepEqual(resolved.items.map(invoice.storedInvoiceItemSku), ['SKU-1', 'SKU-2', '', '', '', 'SAVED-VARIANT', 'SKU-4', '']);
+  assert.equal(resolved.items[6].name, 'Cow Ghee (Size: 1L)');
+});
+
+test('a single legacy invoice passes the recovered SKU into the PDF renderer', async () => {
+  state.orders = [{ ...fixture, items: [{ productId: '21', name: 'Mala', price: 100, quantity: 1 }] }];
+  state.products = [{ id: 21, sku: 'BM-000021' }];
+  const originalBuild = invoice.buildOrderInvoicePdf;
+  invoice.buildOrderInvoicePdf = async (row) => {
+    assert.equal(row.items[0].sku, 'BM-000021');
+    assert.equal(row.items[0].price, 100);
+    return Buffer.from('%PDF-1.4\nTest\n%%EOF');
+  };
+  try { assert.equal((await request('/:id/invoice', { params: { id: String(fixture.id) } })).statusCode, 200); }
+  finally { invoice.buildOrderInvoicePdf = originalBuild; }
 });

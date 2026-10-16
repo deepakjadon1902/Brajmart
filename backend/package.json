@@ -4,7 +4,9 @@
   "description": "BrajMart Backend API - Node.js + Express + MySQL",
   "main": "dist/index.js",
   "scripts": {
+    "prebuild": "node scripts/patchFontkit.cjs",
     "build": "tsc -p tsconfig.json",
+    "pretest": "node scripts/patchFontkit.cjs",
     "test": "node -r ts-node/register/transpile-only --test tests/*.test.cjs",
     "postinstall": "npm run build",
     "start": "node dist/index.js",
@@ -21,6 +23,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
+    "fontkit": "2.0.4",
     "google-auth-library": "^9.14.1",
     "imagekit": "^6.0.0",
     "jsonwebtoken": "^9.0.2",

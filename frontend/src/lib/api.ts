@@ -1,4 +1,5 @@
 import type { Product } from '@/types/product';
+import { isInvoiceFilename } from './invoiceFilenames';
 
 const normalizeApiBase = (value: unknown) => String(value || '').trim().replace(/\/$/, '');
 
@@ -490,9 +491,10 @@ const queryString = (params?: Record<string, string | number | boolean | undefin
 export const fetchOrders = (opts?: { search?: string }) => getJson<any[]>(`/orders${queryString({ search: opts?.search })}`);
 export const fetchPendingPaymentOrders = (opts?: { search?: string }) => getJson<Record<string, unknown>[]>(`/orders/admin/pending-payments${queryString({ search: opts?.search })}`);
 export const fetchMyOrders = () => getJson<any[]>('/orders/my');
-export const fetchOrderInvoice = async (id: string | number, opts?: { download?: boolean; print?: boolean }) => {
+export const fetchOrderInvoice = async (id: string | number, opts?: { download?: boolean; print?: boolean; signal?: AbortSignal }) => {
   const token = getAuthToken();
   const res = await fetch(`${API_BASE}/orders/${encodeURIComponent(String(id))}/invoice${queryString({ download: opts?.download || opts?.print ? 1 : undefined })}`, {
+    signal: opts?.signal,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
@@ -502,18 +504,32 @@ export const fetchOrderInvoice = async (id: string | number, opts?: { download?:
     const message = typeof data?.message === 'string' ? data.message : `Invoice download failed (${res.status})`;
     throw new Error(message);
   }
-  return res.blob();
-};
-export const fetchAllOrderInvoices = async () => {
-  const token = getAuthToken();
-  const res = await fetch(`${API_BASE}/orders/admin/invoices.zip`, {
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    throw new Error(typeof data?.message === 'string' ? data.message : `Invoice download failed (${res.status})`);
+  const blob = await res.blob();
+  const header = await blob.slice(0, 5).text();
+  const ending = await blob.slice(-1024).text();
+  if (header !== '%PDF-' || !ending.trimEnd().endsWith('%%EOF')) {
+    throw new Error(`Invoice ${id} is incomplete. Please retry downloading it.`);
   }
-  return res.blob();
+  const disposition = res.headers.get('Content-Disposition') || '';
+  let filename = `BrajMart-Invoice-${id}.pdf`;
+  try {
+    const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    const candidate = encoded ? decodeURIComponent(encoded) : disposition.match(/filename="([^"]+)"/i)?.[1];
+    if (isInvoiceFilename(candidate, String(id))) filename = candidate;
+  } catch { /* Older servers may not supply a UTF-8 filename. */ }
+  return Object.assign(blob, { filename });
+};
+export type InvoiceDownloadEntry = { orderId: string; filename: string };
+export const fetchOrderInvoiceManifest = (signal?: AbortSignal) => {
+  const token = getAuthToken();
+  return fetch(`${API_BASE}/orders/admin/invoices`, {
+    signal, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  }).then(async (res): Promise<{ invoices: InvoiceDownloadEntry[] }> => {
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.message || `Unable to list invoices (${res.status})`);
+    if (!Array.isArray(data?.invoices)) throw new Error('The invoice list could not be loaded. Please retry.');
+    return data;
+  });
 };
 export const updateOrderStatus = (id: string, payload: { status: string; note?: string; shippingService?: string; trackingId?: string | null }) =>
   getJson<Record<string, any>>(`/orders/${id}/status`, { method: 'PUT', body: payload });

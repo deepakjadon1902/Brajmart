@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { OrderStatus } from '@/store/orderStore';
 import { StatusBadge } from './AdminDashboard';
 import { Search, Eye, X, RefreshCw, MapPin, MessageCircle, FileText, Download, Printer } from 'lucide-react';
-import { adminCheckDeliveryServicePincode, adminTrackDeliveryServiceOrder, createShippingLabel, fetchAllOrderInvoices, fetchOrderInvoice, fetchOrders, syncShippingLabel, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
+import { adminCheckDeliveryServicePincode, adminTrackDeliveryServiceOrder, createShippingLabel, fetchOrderInvoiceManifest, fetchOrderInvoice, fetchOrders, syncShippingLabel, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
+import { downloadInvoiceFolderZip, getInvoiceDirectoryPicker, invoiceFolderName, saveInvoicesToFolder, type InvoiceDownloadProgress } from '@/lib/invoiceDownloads';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 import AdminExportActions from '@/components/admin/AdminExportActions';
@@ -87,8 +88,14 @@ const AdminOrders = () => {
   const [labelAction, setLabelAction] = useState<{ orderId: string; type: 'print' | 'sync' } | null>(null);
   const [invoiceAction, setInvoiceAction] = useState<string | null>(null);
   const [downloadingAllInvoices, setDownloadingAllInvoices] = useState(false);
+  const [invoiceProgress, setInvoiceProgress] = useState<InvoiceDownloadProgress | null>(null);
+  const [invoiceBatchMessage, setInvoiceBatchMessage] = useState('');
+  const invoiceDownloadController = useRef<AbortController | null>(null);
+  const supportsInvoiceFolder = Boolean(getInvoiceDirectoryPicker());
   const [page, setPage] = useState(1);
   const previousSelectedOrder = useRef<string | null>(null);
+
+  useEffect(() => () => invoiceDownloadController.current?.abort(), []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -290,12 +297,12 @@ const AdminOrders = () => {
       const blob = await fetchOrderInvoice(orderId, { download: action === 'download' });
       const url = URL.createObjectURL(blob);
       if (action === 'download') {
-        downloadInvoiceBlob(url, `BrajMart-Invoice-${orderId}.pdf`);
+        downloadInvoiceBlob(url, blob.filename);
         toast.success('Invoice PDF downloaded');
       } else if (preview) {
         preview.location.replace(url);
       } else {
-        downloadInvoiceBlob(url, `BrajMart-Invoice-${orderId}.pdf`);
+        downloadInvoiceBlob(url, blob.filename);
         toast.info('Invoice downloaded. Allow popups to preview it in a new tab.');
       }
       window.setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
@@ -317,16 +324,54 @@ const AdminOrders = () => {
   };
 
   const handleDownloadAllInvoices = async () => {
+    if (invoiceDownloadController.current) return;
+    const controller = new AbortController();
+    invoiceDownloadController.current = controller;
     setDownloadingAllInvoices(true);
+    setInvoiceProgress(null);
+    setInvoiceBatchMessage('');
     try {
-      const blob = await fetchAllOrderInvoices();
-      const url = URL.createObjectURL(blob);
-      downloadInvoiceBlob(url, 'BrajMart-All-Invoices.zip');
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      toast.success('All invoice PDFs downloaded in one ZIP');
+      // The picker needs the original button click, before any network request.
+      const picker = getInvoiceDirectoryPicker();
+      const parent = picker ? await picker({ id: 'brajmart-invoices', mode: 'readwrite', startIn: 'downloads' }) : null;
+      if (controller.signal.aborted) return;
+      const { invoices } = await fetchOrderInvoiceManifest(controller.signal);
+      if (!invoices.length) {
+        setInvoiceBatchMessage('There are no order invoices to download.');
+        return;
+      }
+      let result;
+      let destination: string;
+      if (parent) {
+        const name = invoiceFolderName();
+        const directory = await parent.getDirectoryHandle(name, { create: true });
+        destination = `folder “${name}”`;
+        result = await saveInvoicesToFolder(invoices, directory, controller.signal, setInvoiceProgress);
+      } else {
+        destination = 'BrajMart-All-Invoices.zip';
+        const archive = await downloadInvoiceFolderZip(invoices, controller.signal, setInvoiceProgress);
+        result = archive.result;
+        if (archive.blob) {
+          const url = URL.createObjectURL(archive.blob);
+          downloadInvoiceBlob(url, destination);
+          window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        }
+      }
+      if (result.cancelled) {
+        setInvoiceBatchMessage(parent
+          ? `Stopped. ${result.saved} of ${result.total} PDFs saved in ${destination}. Saved PDFs can be opened.`
+          : 'Download stopped. No ZIP was downloaded. Click the button to try again.');
+      } else if (result.failed) {
+        setInvoiceBatchMessage(`${result.saved} of ${result.total} PDFs saved in ${destination}. ${result.failed} failed. See Download-Report.txt for the order numbers and errors, then retry.`);
+      } else {
+        const message = `${result.saved} invoice PDFs saved in ${destination}.${parent ? '' : ' Extract it to open the invoice folder.'}`;
+        setInvoiceBatchMessage(message);
+        toast.success(`${result.saved} invoice PDFs downloaded`);
+      }
     } catch (err: any) {
-      toast.error(err?.message || 'Unable to download all invoices');
+      if (err?.name !== 'AbortError') setInvoiceBatchMessage(err?.message || 'Unable to download invoices. Please retry.');
     } finally {
+      invoiceDownloadController.current = null;
       setDownloadingAllInvoices(false);
     }
   };
@@ -418,9 +463,24 @@ const AdminOrders = () => {
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-200 hover:border-amber-500/50 hover:text-amber-300 disabled:cursor-wait disabled:opacity-60"
         >
           <Download size={16} />
-          {downloadingAllInvoices ? 'Preparing all invoices...' : 'Download All Invoices (ZIP)'}
+          {downloadingAllInvoices ? 'Saving invoices...' : supportsInvoiceFolder ? 'Save All Invoices to Folder' : 'Download Invoice Folder'}
         </button>
       </div>
+
+      {(downloadingAllInvoices || invoiceBatchMessage) && (
+        <div role="status" aria-live="polite" className="space-y-2 rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-200">
+          {downloadingAllInvoices ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>{invoiceProgress ? `${invoiceProgress.saved} of ${invoiceProgress.total} PDFs saved${invoiceProgress.failed ? ` · ${invoiceProgress.failed} failed` : ''}` : supportsInvoiceFolder ? 'Choose a folder, then wait while the invoice list loads...' : 'Loading all invoice details...'}</span>
+                <button type="button" onClick={() => invoiceDownloadController.current?.abort()} className="rounded-lg border border-slate-600 px-3 py-1 hover:border-amber-500">Stop Download</button>
+              </div>
+              {invoiceProgress && <progress aria-label="Invoice download progress" value={invoiceProgress.completed} max={invoiceProgress.total || 1} className="h-2 w-full accent-amber-500" />}
+              <p className="text-xs text-slate-400">Keep this page open until the download finishes.</p>
+            </>
+          ) : <p>{invoiceBatchMessage}</p>}
+        </div>
+      )}
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
