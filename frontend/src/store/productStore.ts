@@ -6,6 +6,13 @@ const STALE_AFTER_MS = 5 * 60 * 1000; // 5 minutes
 const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
 const PRODUCT_SYNC_EVENT = 'brajmart-products-updated';
 let productListRequest: Promise<void> | null = null;
+let queuedProductRefresh: Promise<void> | null = null;
+let productMutationRevision = 0;
+
+const releaseOccupiedPosition = (products: Product[], chosen: Product) => products.map((product) =>
+  product.id !== chosen.id && chosen.showOnHome && chosen.homePosition &&
+  categoryToSlug(product.category || '') === categoryToSlug(chosen.category || '') && Number(product.homePosition) === Number(chosen.homePosition)
+    ? { ...product, showOnHome: false, homePosition: null } : product);
 
 interface ProductStore {
   products: Product[];
@@ -43,7 +50,7 @@ export const useProductStore = create<ProductStore>((set, get) => ({
       loading: false,
       error: null,
 
-      setProducts: (products) => set({ products }),
+      setProducts: (products) => { productMutationRevision++; set({ products }); },
       setCategories: (categories) => set({ categories }),
       loadFromApi: async (opts) => {
         const force = Boolean(opts?.force);
@@ -69,8 +76,16 @@ export const useProductStore = create<ProductStore>((set, get) => ({
         const isAdminPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
         if (!force && !shouldSync && !isAdminPath && !isFirstLoad && hasData && isFresh) return;
 
-        if (productListRequest) return productListRequest;
+        if (productListRequest) {
+          if (!force && !shouldSync) return productListRequest;
+          if (!queuedProductRefresh) {
+            const active = productListRequest;
+            queuedProductRefresh = active.then(() => get().loadFromApi({ force: true })).finally(() => { queuedProductRefresh = null; });
+          }
+          return queuedProductRefresh;
+        }
         const request = (async () => {
+          const revision = productMutationRevision;
           if (!get().loading) set({ loading: true, error: null });
           try {
             const [products, categories] = await Promise.all([
@@ -101,7 +116,13 @@ export const useProductStore = create<ProductStore>((set, get) => ({
               }))
               .sort((a, b) => orderValue(a.displayOrder) - orderValue(b.displayOrder) || String(a.name).localeCompare(String(b.name)));
 
-            set({ products: mappedProducts, categories: mappedCategories, lastFetchedAt: Date.now(), loading: false, error: null });
+            // A request started before an admin save must not undo its immediate UI update.
+            set((current) => ({
+              products: revision === productMutationRevision ? mappedProducts : current.products,
+              categories: mappedCategories,
+              lastFetchedAt: revision === productMutationRevision ? Date.now() : current.lastFetchedAt,
+              loading: false, error: null,
+            }));
           } catch (err: any) {
             set({ loading: false, error: String(err?.message || 'Failed to load products') });
           }
@@ -114,11 +135,15 @@ export const useProductStore = create<ProductStore>((set, get) => ({
         }
       },
 
-      addProduct: (product) => set((s) => ({ products: [product, ...s.products] })),
-      updateProduct: (id, data) => set((s) => ({
-        products: s.products.map((p) => (p.id === id ? { ...p, ...data } : p)),
-      })),
-      deleteProduct: (id) => set((s) => ({ products: s.products.filter((p) => p.id !== id) })),
+      addProduct: (product) => { productMutationRevision++; set((s) => ({ products: [product, ...releaseOccupiedPosition(s.products, product)] })); },
+      updateProduct: (id, data) => set((s) => {
+        const current = s.products.find((product) => product.id === id);
+        if (!current) return {};
+        productMutationRevision++;
+        const updated = { ...current, ...data };
+        return { products: releaseOccupiedPosition(s.products, updated).map((product) => product.id === id ? updated : product) };
+      }),
+      deleteProduct: (id) => { productMutationRevision++; set((s) => ({ products: s.products.filter((p) => p.id !== id) })); },
 
       addCategory: (category) => set((s) => {
         const orderValue = (value: unknown) => {

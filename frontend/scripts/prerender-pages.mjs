@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getBuildData, slugify } from './build-data.mjs';
+import { pickHomeProducts as selectHomeProducts } from '../src/lib/homeProducts.mjs';
 
 const dist = path.resolve(process.cwd(), 'dist');
 const serverEntry = path.resolve(process.cwd(), 'dist-ssr/entry-server.js');
@@ -69,11 +70,7 @@ const compareProductsByQuality = (a, b) => {
   if (reviewsDiff) return reviewsDiff;
   return Number(b?.rating || 0) - Number(a?.rating || 0);
 };
-const pickHomeProducts = (items) => {
-  const selected = items.filter((product) => product.showOnHome);
-  const source = selected.length ? selected : [...items].sort(compareProductsByQuality);
-  return source.slice(0, 6);
-};
+const pickHomeProducts = (items, usePositions = true) => selectHomeProducts(items, compareProductsByQuality, usePositions);
 const uniqueByProductKey = (products) => {
   const seen = new Set();
   return products.filter((product) => {
@@ -100,7 +97,13 @@ const toProductListData = (product) => ({
   badge: product.badge,
   tags: product.tags,
   showOnHome: Boolean(product.showOnHome),
+  homePosition: product.homePosition ?? null,
   inStock: product.inStock,
+  stockQuantity: product.stockQuantity,
+  reservedQuantity: product.reservedQuantity,
+  soldCount: product.soldCount,
+  createdAt: product.createdAt,
+  updatedAt: product.updatedAt,
   codEnabled: product.codEnabled,
   categoryCodEnabled: product.categoryCodEnabled,
 });
@@ -117,16 +120,20 @@ const homeRouteProducts = () => {
         ...regularCategories.slice(booksIndex >= 0 ? booksIndex : regularCategories.length),
       ]
     : regularCategories;
-  const productsForCategory = (category) => category
-    ? pickHomeProducts(buildData.products.filter((product) => slugify(product.category || '') === slugify(category.name)))
-    : [];
+  const productsForCategory = (category) => {
+    if (!category) return [];
+    const candidates = buildData.products.filter((product) => slugify(product.category || '') === slugify(category.name));
+    // Retain displaced automatic candidates in the snapshot so SSR and hydration
+    // can reproduce the same numbered positions from the same ranking inputs.
+    return [...pickHomeProducts(candidates), ...pickHomeProducts(candidates, false)];
+  };
   const homepageGroups = [
     productsForCategory(brajmartSpecialCategory),
-    pickHomeProducts(buildData.products.filter((product) => (product.tags || []).includes('bestseller'))),
+    pickHomeProducts(buildData.products.filter((product) => (product.tags || []).includes('bestseller')), false),
     productsForCategory(prasadamCategory),
     ...orderedCategories.filter((category) => !isPrasadam(category.name)).map(productsForCategory),
     pickHomeProducts(buildData.products.filter((product) => isBooks(product.category))),
-    pickHomeProducts(buildData.products.filter((product) => (product.tags || []).includes('accessories') || isAccessories(product.category))),
+    pickHomeProducts(buildData.products.filter((product) => (product.tags || []).includes('accessories') || isAccessories(product.category)), false),
   ];
 
   return uniqueByProductKey(homepageGroups.flat()).map(toProductListData);

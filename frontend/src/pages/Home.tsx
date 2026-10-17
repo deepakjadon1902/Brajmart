@@ -23,6 +23,7 @@ import BrajYatra from '@/components/sections/BrajYatra';
 import Testimonials from '@/components/sections/Testimonials';
 import Footer from '@/components/layout/Footer';
 import { compareProductsByQuality } from '@/utils/productPresentation';
+import { pickHomeProducts } from '@/lib/homeProducts.mjs';
 
 const ProductTrustFAQ = lazy(() => import('@/components/sections/ProductTrustFAQ'));
 
@@ -32,26 +33,18 @@ const displayCategoryName = (name: string) =>
 const Home = () => {
   const products = useProductStore((state) => state.products);
   const categories = useProductStore((state) => state.categories);
-  const getProductsByCategory = useProductStore((state) => state.getProductsByCategory);
-  const pickHomeProducts = useMemo(() => {
-    return (items: typeof products) => {
-      const selected = items.filter((product) => product.showOnHome);
-      const source = selected.length ? selected : [...items].sort(compareProductsByQuality);
-      return source.slice(0, 6);
-    };
-  }, []);
   const bestSellingProducts = useMemo(() => {
     const items = products.filter((product) => product.tags?.includes('bestseller'));
-    return pickHomeProducts(items);
-  }, [pickHomeProducts, products]);
+    return pickHomeProducts(items, compareProductsByQuality, false);
+  }, [products]);
   const devotionalAccessories = useMemo(() => {
     const items = products.filter((product) => product.tags?.includes('accessories') || product.category === 'Accessories');
-    return pickHomeProducts(items);
-  }, [pickHomeProducts, products]);
+    return pickHomeProducts(items, compareProductsByQuality, false);
+  }, [products]);
   const getHomeProductsByCategory = useMemo(() => {
-    return (category: string) => pickHomeProducts(getProductsByCategory(category));
-  }, [getProductsByCategory, pickHomeProducts]);
-  // Build one home section per category. Until admin selects home products, it falls back to top 6.
+    return (category: string) => pickHomeProducts(products.filter((product) => categoryToSlug(product.category || '') === categoryToSlug(category)), compareProductsByQuality);
+  }, [products]);
+  // Manual positions override automatic top-six picks within each category.
   const categorySections = useMemo(() => categories || [], [categories]);
   const isBrajmartSpecial = (name: string) => (name || '').trim().toLowerCase() === 'brajmart special';
   const isPrasadam = (name: string) => (name || '').trim().toLowerCase() === 'prasadam';

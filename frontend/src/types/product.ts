@@ -19,6 +19,7 @@ export interface Product {
   badge?: 'new' | 'bestseller' | 'combo' | 'exclusive';
   tags?: string[];
   showOnHome?: boolean;
+  homePosition?: number | null;
   inStock: boolean;
   codEnabled?: boolean | null;
   categoryCodEnabled?: boolean;

@@ -7,7 +7,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "./pages/Home";
-import { fetchPublicSettings } from "./lib/api";
+import { fetchPublicSettings, productEventsUrl } from "./lib/api";
 import { useSettingsStore } from "./store/settingsStore";
 import { useProductStore } from "./store/productStore";
 import { useCartStore } from "./store/cartStore";
@@ -372,6 +372,7 @@ const App = () => {
     // Prerendered data makes the first paint fast, but it is only a snapshot from
     // build time. Always refresh in the background so newly added products and
     // images appear on every device without requiring another deployment.
+    if (window.location.pathname === '/') return runWhenIdle(() => { loadProducts({ force: true }); });
     return runAfterStartup(() => {
       loadProducts({ force: true });
     });
@@ -382,10 +383,13 @@ const App = () => {
       if (document.visibilityState === 'visible') loadProducts({ force: true });
     };
     const interval = window.setInterval(refreshCatalog, 60_000);
+    const updates = typeof EventSource !== 'undefined' ? new EventSource(productEventsUrl) : null;
+    updates?.addEventListener('catalog-updated', refreshCatalog);
     window.addEventListener('focus', refreshCatalog);
     document.addEventListener('visibilitychange', refreshCatalog);
     return () => {
       window.clearInterval(interval);
+      updates?.close();
       window.removeEventListener('focus', refreshCatalog);
       document.removeEventListener('visibilitychange', refreshCatalog);
     };

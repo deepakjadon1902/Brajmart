@@ -26,6 +26,7 @@ const resolveApiBase = () => {
 };
 
 const API_BASE = resolveApiBase();
+export const productEventsUrl = `${API_BASE}/products/events`;
 let memoryToken = '';
 
 type RequestOptions = {

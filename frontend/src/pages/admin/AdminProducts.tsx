@@ -2,7 +2,7 @@ import * as React from "react";
 import { useEffect, useRef, useState } from 'react';
 import { useProductStore } from '@/store/productStore';
 import { Product, Category, Subcategory } from '@/types/product';
-import { AlertTriangle, Search, Plus, Edit2, Trash2, X, Upload, ImageIcon, Truck, HomeIcon } from 'lucide-react';
+import { AlertTriangle, Search, Plus, Edit2, Trash2, X, Upload, ImageIcon, Truck } from 'lucide-react';
 import {
   createProduct,
   deleteProduct as deleteProductApi,
@@ -17,6 +17,9 @@ import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 import AdminExportActions from '@/components/admin/AdminExportActions';
 import type { ExportColumn } from '@/lib/adminExport';
+import HomeProductPlacement from '@/components/admin/HomeProductPlacement';
+import { homePositionOf, pickHomeProducts } from '@/lib/homeProducts.mjs';
+import { compareProductsByQuality } from '@/utils/productPresentation';
 
 const PRODUCT_SYNC_KEY = 'brajmart-products-updated-at';
 const PRODUCT_SYNC_EVENT = 'brajmart-products-updated';
@@ -65,6 +68,9 @@ const AdminProducts = () => {
   const [page, setPage] = useState(1);
   const [auditReport, setAuditReport] = useState<ProductAuditReport | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [savingHomeId, setSavingHomeId] = useState<string | null>(null);
+  const homeSaveInFlight = useRef(false);
+  const [savingProduct, setSavingProduct] = useState(false);
   const firstCategory = categories[0];
 
   useEffect(() => {
@@ -117,7 +123,7 @@ const AdminProducts = () => {
     { header: 'Reserved Quantity', value: (p) => p.reservedQuantity ?? 0 },
     { header: 'Low Stock Threshold', value: (p) => p.lowStockThreshold ?? '-' },
     { header: 'COD', value: (p) => p.codEnabled === null || p.codEnabled === undefined ? (p.categoryCodEnabled ? 'Category enabled' : 'No') : p.codEnabled ? 'Yes' : 'No' },
-    { header: 'Home Page', value: (p) => p.showOnHome ? 'Yes' : 'No' },
+    { header: 'Home Position', value: (p) => p.showOnHome ? p.homePosition || 'Selected' : 'Automatic' },
     { header: 'Tags', value: (p) => (p.tags || []).join(', ') },
     { header: 'Sizes', value: (p) => (p.sizes || []).join(', ') },
     { header: 'Meta Title', value: (p) => p.metaTitle || '-' },
@@ -146,20 +152,29 @@ const AdminProducts = () => {
     }
   };
 
-  const handleHomePlacementToggle = async (product: Product) => {
-    const nextShowOnHome = !product.showOnHome;
+  const handleHomePlacementChange = async (product: Product, position: number | null) => {
+    if (homeSaveInFlight.current) return;
+    homeSaveInFlight.current = true;
+    setSavingHomeId(product.id);
+    const previous = useProductStore.getState().products;
+    updateProduct(product.id, { homePosition: position, showOnHome: position !== null });
     try {
-      const updated: any = await updateProductApi(product.id, { showOnHome: nextShowOnHome });
-      updateProduct(product.id, { showOnHome: Boolean(updated?.showOnHome ?? nextShowOnHome) });
+      const updated: any = await updateProductApi(product.id, { homePosition: position });
+      updateProduct(product.id, updated);
       try {
         localStorage.setItem(PRODUCT_SYNC_KEY, String(Date.now()));
         window.dispatchEvent(new Event(PRODUCT_SYNC_EVENT));
       } catch {
         // ignore storage permission errors
       }
-      toast.success(nextShowOnHome ? 'Product added to home page' : 'Product removed from home page');
+      toast.success(position ? `Home position ${position} saved` : 'Manual position released. Home uses automatic picks.');
     } catch (err: any) {
+      useProductStore.getState().setProducts(previous);
+      void loadFromApi({ force: true });
       toast.error(err?.message || 'Failed to update home page placement');
+    } finally {
+      homeSaveInFlight.current = false;
+      setSavingHomeId(null);
     }
   };
 
@@ -180,13 +195,18 @@ const AdminProducts = () => {
     }
   };
 
-  const prepareProductForEdit = (product: Product): Product => ({
-    ...product,
-    images: Array.isArray(product.images) ? product.images : (product.image ? [product.image] : []),
-    colorVariants: Array.isArray(product.colorVariants) ? product.colorVariants : [],
-    tags: Array.isArray(product.tags) ? product.tags : (product.badge ? [product.badge] : []),
-    showOnHome: Boolean(product.showOnHome),
-  });
+  const prepareProductForEdit = (product: Product): Product => {
+    const candidates = useProductStore.getState().products.filter((item) => normalizeKey(item.category || '') === normalizeKey(product.category || ''));
+    const position = homePositionOf(product) ?? (product.showOnHome ? pickHomeProducts(candidates, compareProductsByQuality).findIndex((item) => item.id === product.id) + 1 || null : null);
+    return {
+      ...product,
+      images: Array.isArray(product.images) ? product.images : (product.image ? [product.image] : []),
+      colorVariants: Array.isArray(product.colorVariants) ? product.colorVariants : [],
+      tags: Array.isArray(product.tags) ? product.tags : (product.badge ? [product.badge] : []),
+      showOnHome: Boolean(position),
+      homePosition: position,
+    };
+  };
 
   const openEditProduct = async (product: Product) => {
     setIsCreating(false);
@@ -200,6 +220,8 @@ const AdminProducts = () => {
   };
 
   const handleSave = async (product: Product) => {
+    if (savingProduct) return;
+    setSavingProduct(true);
     try {
       if (!product.description || !product.description.trim()) {
         toast.error('Description is required');
@@ -292,6 +314,7 @@ const AdminProducts = () => {
         variantPricing: normalizedVariantPricing,
         colorVariants: normalizedColorVariants,
         showOnHome: Boolean(product.showOnHome),
+        homePosition: product.showOnHome ? product.homePosition ?? undefined : null,
         codEnabled: product.codEnabled === undefined ? null : product.codEnabled,
         sizes: Array.isArray(product.sizes) ? product.sizes : [],
         sizePricing: Array.isArray(product.sizePricing) ? product.sizePricing : [],
@@ -323,6 +346,8 @@ const AdminProducts = () => {
       setIsCreating(false);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to save product');
+    } finally {
+      setSavingProduct(false);
     }
   };
 
@@ -377,6 +402,8 @@ const AdminProducts = () => {
           </button>
         </div>
       </div>
+
+      <p className="text-sm text-slate-400">Each category shows up to 6 products on Home. Choose positions 1–6 to replace automatic picks; unassigned positions stay automatic.</p>
 
       {auditReport && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
@@ -489,17 +516,11 @@ const AdminProducts = () => {
                     </span>
                   </td>
                   <td className="px-5 py-3">
-                    <button
-                      type="button"
-                      onClick={() => handleHomePlacementToggle(p)}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${p.showOnHome ? 'border-amber-500/50 bg-amber-500/15 text-amber-200' : 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white'}`}
-                    >
-                      <HomeIcon size={13} />
-                      {p.showOnHome ? 'On Home' : 'Add Home'}
-                    </button>
+                    <HomeProductPlacement product={p} products={products} disabled={Boolean(savingHomeId)} onChange={(position) => handleHomePlacementChange(p, position)} />
+                    {savingHomeId === p.id && <span className="mt-1 block text-[11px] text-amber-200" role="status">Saving…</span>}
                   </td>
                   <td className="px-5 py-3 flex gap-2">
-                    <button onClick={() => openEditProduct(p)} className="text-blue-400 hover:text-blue-300"><Edit2 size={15} /></button>
+                    <button aria-label={`Edit ${p.name}`} disabled={Boolean(savingHomeId)} onClick={() => openEditProduct(p)} className="text-blue-400 hover:text-blue-300 disabled:opacity-50"><Edit2 size={15} /></button>
                     <button onClick={() => handleDelete(p.id)} className="text-red-400 hover:text-red-300"><Trash2 size={15} /></button>
                   </td>
                 </tr>
@@ -511,13 +532,13 @@ const AdminProducts = () => {
       </div>
 
       {editProduct && (
-        <ProductModal product={editProduct} categories={categories} isCreating={isCreating} onClose={() => { setEditProduct(null); setIsCreating(false); }} onSave={handleSave} />
+        <ProductModal product={editProduct} products={products} categories={categories} isCreating={isCreating} saving={savingProduct} onClose={() => { if (!savingProduct) { setEditProduct(null); setIsCreating(false); } }} onSave={handleSave} />
       )}
     </div>
   );
 };
 
-const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { product: Product; categories: Category[]; isCreating: boolean; onClose: () => void; onSave: (p: Product) => void }) => {
+const ProductModal = ({ product, products, categories, isCreating, saving, onClose, onSave }: { product: Product; products: Product[]; categories: Category[]; isCreating: boolean; saving: boolean; onClose: () => void; onSave: (p: Product) => void }) => {
   const [form, setForm] = useState<Product>(() => ({
     ...product,
     metaTitle: product.metaTitle || deriveProductMetaTitle(product.name, product.category),
@@ -769,7 +790,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label={isCreating ? 'Add Product' : 'Edit Product'} className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-slate-800">
           <h2 className="text-lg font-semibold text-white">{isCreating ? 'Add Product' : 'Edit Product'}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
@@ -1436,21 +1457,8 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
             </button>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-white">Show Product on Home Page</p>
-                <p className="mt-1 text-xs text-slate-500">Home page shows only selected products, up to 6 from each category. All products still remain visible on their category pages.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => update('showOnHome', !form.showOnHome)}
-                className={`mt-0.5 w-11 shrink-0 rounded-full p-0.5 transition ${form.showOnHome ? 'bg-amber-500' : 'bg-slate-600'}`}
-                aria-pressed={Boolean(form.showOnHome)}
-                aria-label="Toggle product on home page"
-              >
-                <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${form.showOnHome ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
-            </div>
+            <p className="mb-3 text-sm font-semibold text-white">Home Page Position</p>
+            <HomeProductPlacement product={form} products={products} disabled={saving} preview onChange={(position) => setForm((previous) => ({ ...previous, homePosition: position, showOnHome: position !== null }))} />
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-950/30 p-4">
             <div className="flex items-start gap-3">
@@ -1517,6 +1525,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
             <button onClick={onClose} className="flex-1 py-2.5 border border-slate-700 text-slate-300 rounded-xl text-sm hover:bg-slate-800 transition">Cancel</button>
             <button
+              disabled={saving}
               onClick={() => {
                 if (!form.description || !form.description.trim()) {
                   toast.error('Description is required');
@@ -1534,7 +1543,7 @@ const ProductModal = ({ product, categories, isCreating, onClose, onSave }: { pr
               }}
               className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition"
             >
-              {isCreating ? 'Create' : 'Save Changes'}
+              {saving ? 'Saving…' : isCreating ? 'Create' : 'Save Changes'}
             </button>
           </div>
         </div>
