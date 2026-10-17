@@ -13,6 +13,17 @@ const cents = (value: unknown, label: string) => {
 };
 const money = (value: number) => `₹${(value / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const addressPresent = (address: any) => ['fullName', 'street', 'address', 'addressLine1', 'city', 'state', 'pincode'].some((key) => clean(address?.[key]));
+// Compare the recipient and address, allowing legacy field names and formatting.
+// Contact details and saved-address metadata do not make a delivery address different.
+const invoiceAddressKey = (address: any, customerName: string) => JSON.stringify([
+  address.fullName || address.name || customerName,
+  address.street || address.address || address.addressLine1,
+  address.addressLine2 || address.line2,
+  address.city,
+  address.pincode || address.postalCode,
+  address.state,
+].map((value) => clean(value).normalize('NFC').replace(/\s+/gu, ' ').toLowerCase()));
+const alternateNumber = (address: any) => [address.alternateMobile, address.alternatePhone, address.altPhone, address.altMobile].map(clean).find(Boolean) || '';
 
 export type InvoicePayment = { transactionId?: string; method?: string };
 export const storedInvoiceItemSku = (item: any) => [item.sku, item.selectedSku, item.product?.sku].map(clean).find(Boolean) || '';
@@ -67,6 +78,7 @@ export const buildOrderInvoiceModel = (row: any, payment: InvoicePayment = {}) =
     invoiceNumber: `${orderId}${part('day')}${part('month')}${part('year')}`,
     orderDate: validDate ? new Intl.DateTimeFormat('en-US', { ...dateOptions, month: 'long', day: '2-digit', year: 'numeric' }).format(date!) : '',
     billing, shipping,
+    showShippingAddress: addressPresent(shipping) && invoiceAddressKey(billing, clean(row.customer_name)) !== invoiceAddressKey(shipping, clean(row.customer_name)),
     customerName: clean(row.customer_name),
     customerEmail: clean(row.customer_email),
     paymentMethod: clean(payment.method || row.payment_method),
@@ -160,19 +172,20 @@ export const buildOrderInvoicePdf = async (row: any, payment: InvoicePayment = {
     if (contacts) {
       y = labelled('Email', clean(address.email || model.customerEmail), x, y + 2, width);
       y = labelled('Phone', clean(address.mobile || address.phone || model.shipping.mobile || model.shipping.phone), x, y, width);
-      y = labelled('Alt No.', clean(address.alternateMobile || address.alternatePhone || address.altPhone || address.altMobile), x, y, width);
     }
+    const alternate = alternateNumber(address) || (contacts && !model.showShippingAddress ? alternateNumber(model.shipping) : '');
+    if (alternate) y = labelled('Alt No.', alternate, x, y, width);
     return y;
   };
-  const billingEnd = addressBlock('Billing Details', model.billing, 34, 170, true);
-  const shippingEnd = addressBlock('Shipping Details', model.shipping, 219, 128, false);
+  const billingEnd = addressBlock('Billing Details', model.billing, 34, model.showShippingAddress ? 170 : 300, true);
+  const shippingEnd = model.showShippingAddress ? addressBlock('Shipping Details', model.shipping, 219, 128, false) : 0;
   let metadataEnd = 178;
   for (const [label, value] of [['Invoice Number:', model.invoiceNumber], ['Order Number:', model.orderId], ['Order Date:', model.orderDate], ['Payment Method:', model.paymentMethod], ['Payment ID:', model.paymentId]]) {
     const end = text(value || '-', 441, metadataEnd, 130, { size: 8.5 });
     text(label, 350, metadataEnd, 80, { bold: true, size: 8.5, align: 'right' });
     metadataEnd = Math.max(end, metadataEnd + 13);
   }
-  let y = Math.max(275, billingEnd, shippingEnd + 10, metadataEnd + 10);
+  let y = Math.max(275, billingEnd + 10, shippingEnd + 10, metadataEnd + 10);
   if (y > 650) return fail(`Order ${model.orderId}: address details are too long for the invoice header`);
   const tableHeader = () => {
     doc.rect(15, y, 560, 15).fill('#000000');

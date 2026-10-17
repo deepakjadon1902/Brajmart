@@ -56,6 +56,56 @@ test('invoice numbers use the order date in India and prices come from the order
   assert.equal(model.total, 15900);
   assert.deepEqual(model.billing, fixture.shipping_address);
 });
+
+async function renderedInvoiceText(row) {
+  const PDFDocument = require('pdfkit');
+  const originalText = PDFDocument.prototype.text;
+  const drawn = [];
+  PDFDocument.prototype.text = function (value, ...args) {
+    drawn.push(String(value));
+    return originalText.call(this, value, ...args);
+  };
+  try {
+    await invoice.buildOrderInvoicePdf(row);
+    return drawn.join('\n');
+  } finally { PDFDocument.prototype.text = originalText; }
+}
+
+test('invoice PDFs show billing only for matching or missing legacy billing addresses and omit empty alternate numbers', async () => {
+  for (const billing of [{}, JSON.stringify({ ...fixture.shipping_address, alternateMobile: '  ' })]) {
+    const text = await renderedInvoiceText({ ...fixture, billing_address: billing });
+    assert.match(text, /Billing Details/);
+    assert.doesNotMatch(text, /Shipping Details|Alt No\./);
+  }
+});
+
+test('address comparison ignores formatting, legacy field names and contact metadata', () => {
+  const billing = {
+    name: ' BIKRAM   PAUL ', addressLine1: ' TEMPLE ROAD ', line2: 'near gate 2',
+    city: 'MATHURA', state: 'UTTAR PRADESH', postalCode: 281001,
+    email: 'billing@example.com', phone: '9876543211', id: 'saved-billing',
+  };
+  assert.equal(invoice.buildOrderInvoiceModel({ ...fixture, billing_address: JSON.stringify(billing) }).showShippingAddress, false);
+  for (const field of ['fullName', 'street', 'addressLine2', 'city', 'state', 'pincode']) {
+    assert.equal(invoice.buildOrderInvoiceModel({ ...fixture, billing_address: { ...fixture.shipping_address, [field]: 'Different' } }).showShippingAddress, true, field);
+  }
+});
+
+test('invoice PDFs show distinct shipping addresses and supplied alternate numbers in the correct section', async () => {
+  const text = await renderedInvoiceText({
+    ...fixture,
+    billing_address: { ...fixture.shipping_address, street: 'Office 12, Commercial Complex', alternateMobile: ' ', alternatePhone: '9876543212' },
+    shipping_address: { ...fixture.shipping_address, altMobile: '9876543213' },
+  });
+  assert.match(text, /Billing Details[\s\S]*Alt No\.:\n9876543212[\s\S]*Shipping Details[\s\S]*Alt No\.:\n9876543213/);
+});
+
+test('a shared address retains an alternate number stored only with shipping', async () => {
+  const text = await renderedInvoiceText({ ...fixture, billing_address: { ...fixture.shipping_address }, shipping_address: { ...fixture.shipping_address, altPhone: '9876543214' } });
+  assert.match(text, /Alt No\.:\n9876543214/);
+  assert.doesNotMatch(text, /Shipping Details/);
+});
+
 test('COD fees and discounts reconcile to the stored total using integer paise', () => {
   const model = invoice.buildOrderInvoiceModel({ ...fixture, items: [{ name: 'Mala', price: 0.1, quantity: 3 }], shipping_amount: 49, packaging_amount: 0, cod_amount: 40, coupon_discount: 10, coupon_code: 'SAVE10', total: 79.3 });
   assert.equal(model.totals.reduce((sum, row) => sum + row.amount, 0), 7930);
