@@ -117,7 +117,7 @@ const AdminCartFavorites = () => {
           <p className="mt-1 text-sm text-slate-400">Outstanding customer interest, hidden automatically after the same product is ordered.</p>
         </div>
         <button
-          onClick={load}
+          onClick={() => { void load(); }}
           disabled={loading}
           className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-amber-500/50 hover:text-amber-300 disabled:opacity-60"
         >

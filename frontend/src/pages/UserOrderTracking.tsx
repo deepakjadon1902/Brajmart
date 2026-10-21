@@ -25,11 +25,12 @@ import {
   Search,
   ShieldCheck,
   Truck,
+  type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPrice } from '@/utils/formatPrice';
 
-const statusSteps: { status: OrderStatus; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+const statusSteps: { status: OrderStatus; label: string; icon: LucideIcon }[] = [
   { status: 'confirmed', label: 'Confirmed', icon: CheckCircle },
   { status: 'processing', label: 'Processing', icon: BoxIcon },
   { status: 'shipped', label: 'Shipped', icon: Package },

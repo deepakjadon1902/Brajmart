@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../playwright-fixture';
 
 const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
 const pixelId = '1824114108557446';

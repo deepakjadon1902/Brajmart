@@ -15,7 +15,7 @@ import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimi
 import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
 import { insertAdminAuditLog } from '../lib/adminAudit';
 import { triggerRecentRazorpayReconciliation } from './payments';
-import { captureMetaOrderContext } from './metaConversions';
+import { capturePurchaseOrderContext } from '../lib/purchaseTracking';
 
 const router = Router();
 const codOrderLimiter = rateLimit('cod-order-create', {
@@ -547,7 +547,7 @@ router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) =>
     );
 
     const orderId = result.insertId;
-    captureMetaOrderContext(orderId, {
+    capturePurchaseOrderContext(orderId, {
       ...(data.metaContext && typeof data.metaContext === 'object' ? data.metaContext : {}),
       externalId: req.user?.id ? `user:${req.user.id}` : customerEmail,
     }, req).catch(() => {});

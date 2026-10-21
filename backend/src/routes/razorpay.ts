@@ -11,7 +11,7 @@ import { resolveCodHandleFee } from '../lib/cod';
 import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
 import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
-import { captureMetaOrderContext, sendVerifiedMetaPurchaseForOrder } from './metaConversions';
+import { capturePurchaseOrderContext, sendVerifiedPurchaseForOrder } from '../lib/purchaseTracking';
 import { isCapturedRazorpayPayment, verifyCapturedRazorpayPayment } from '../lib/razorpayVerification';
 
 const router = Router();
@@ -328,6 +328,12 @@ const updateOrderForPayment = async (params: {
         [params.razorpayPaymentId, statusRow.order_id]
       );
     }
+    if (params.status === 'paid') {
+      if (params.metaContext || params.request) await capturePurchaseOrderContext(statusRow.order_id, params.metaContext, params.request);
+      // A duplicate signed callback is also a safe retry after a provider outage.
+      // Each provider reserves the stable order ID before sending again.
+      void sendVerifiedPurchaseForOrder(statusRow.order_id, params.razorpayPaymentId || statusRow.payment_id, params.razorpayOrderId);
+    }
     return { orderId: statusRow.order_id, paymentId: params.razorpayPaymentId || statusRow.payment_id || params.razorpayOrderId, status: params.status };
   }
 
@@ -424,9 +430,9 @@ const updateOrderForPayment = async (params: {
 
   if (params.status === 'paid') {
     if (params.metaContext || params.request) {
-      await captureMetaOrderContext(statusRow.order_id, params.metaContext, params.request).catch(() => {});
+      await capturePurchaseOrderContext(statusRow.order_id, params.metaContext, params.request).catch(() => {});
     }
-    sendVerifiedMetaPurchaseForOrder(statusRow.order_id, transactionId, params.razorpayOrderId).catch((err) => {
+    sendVerifiedPurchaseForOrder(statusRow.order_id, transactionId, params.razorpayOrderId).catch((err) => {
       console.error('Meta verified Purchase event failed:', err);
     });
   }
@@ -541,7 +547,7 @@ router.post('/create-order', razorpayCreateLimiter, optionalAuth, async (req: Au
       billingAddress: contact.billingAddress,
     }, estimatedDelivery);
 
-    captureMetaOrderContext(orderRow.id, {
+    capturePurchaseOrderContext(orderRow.id, {
       ...(req.body?.metaContext && typeof req.body.metaContext === 'object' ? req.body.metaContext : {}),
       externalId: numericUserId ? `user:${numericUserId}` : customerEmail,
     }, req).catch(() => {});
@@ -643,7 +649,7 @@ router.post('/retry-order', razorpayCreateLimiter, async (req, res) => {
     const orderRow = orderRows[0];
     if (!orderRow) return res.status(404).json({ message: 'Order not found' });
 
-    captureMetaOrderContext(orderRow.id, {
+    capturePurchaseOrderContext(orderRow.id, {
       ...(req.body?.metaContext && typeof req.body.metaContext === 'object' ? req.body.metaContext : {}),
       externalId: String(orderRow.user_id || '').trim() ? `user:${orderRow.user_id}` : String(orderRow.customer_email || ''),
     }, req).catch(() => {});

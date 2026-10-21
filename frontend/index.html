@@ -4,7 +4,22 @@
     <meta charset="UTF-8" />
     <script>
       window.dataLayer = window.dataLayer || [];
-      window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
+      // Purchases belong to the payment-verifying backend, never a URL or click.
+      var isBrowserPurchase = function (entry) {
+        var event = entry && (entry.event || (entry[0] === 'event' ? entry[1] : ''));
+        if (String(event || '').trim().toLowerCase() === 'purchase') return true;
+        var params = entry && entry[2];
+        var destinations = params && params.send_to;
+        return String(event || '').toLowerCase() === 'conversion' && [].concat(destinations || []).some(function (destination) {
+          return String(destination).indexOf('AW-17517087439/al0OCM6NiK8cEM-V5qBB') !== -1;
+        });
+      };
+      var rawDataLayerPush = window.dataLayer.push;
+      window.dataLayer.push = function () {
+        var entries = Array.prototype.slice.call(arguments).filter(function (entry) { return !isBrowserPurchase(entry); });
+        return rawDataLayerPush.apply(this, entries);
+      };
+      window.gtag = function () { if (!isBrowserPurchase(arguments)) window.dataLayer.push(arguments); };
       (function () {
         var loaded = false;
         var loadScript = function (src) {
@@ -26,7 +41,25 @@
               return null;
             }
           };
-          var isBlockedMetaPixelUrl = function (value, data) {
+          var getGoogleTrackingUrl = function (value) {
+            try {
+              var url = new URL(String(value || ''), window.location.href);
+              return /(^|\.)(google-analytics\.com|googleadservices\.com|google\.com|doubleclick\.net)$/.test(url.hostname) && /collect|conversion/.test(url.pathname) ? url : null;
+            } catch (error) { return null; }
+          };
+          var isBlockedMarketingRequest = function (value, data) {
+            var googleUrl = getGoogleTrackingUrl(value);
+            if (googleUrl) {
+              // Measurement Protocol belongs on the server, with a private secret.
+              if (/\/mp\/collect/.test(googleUrl.pathname)) return true;
+              var googleParams = [googleUrl.searchParams];
+              if (typeof data === 'string') data.split(/\r?\n/).forEach(function (line) { googleParams.push(new URLSearchParams(line)); });
+              else if (data && typeof data.get === 'function') googleParams.push(data);
+              return googleParams.some(function (params) {
+                return String(params.get('en') || '').trim().toLowerCase() === 'purchase' ||
+                  (/\/17517087439\/?$/.test(googleUrl.pathname) && params.get('label') === 'al0OCM6NiK8cEM-V5qBB');
+              });
+            }
             var url = getMetaPixelUrl(value);
             if (!url) return false;
             var bodyParams = typeof data === 'string' ? new URLSearchParams(data)
@@ -45,8 +78,8 @@
             if (typeof navigator.sendBeacon === 'function') {
               var rawSendBeacon = navigator.sendBeacon.bind(navigator);
               navigator.sendBeacon = function (url, data) {
-                if (isBlockedMetaPixelUrl(url, data)) {
-                  if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel request.', url);
+                if (isBlockedMarketingRequest(url, data)) {
+                  if (window.console && window.console.warn) window.console.warn('Blocked unintended marketing request.', url);
                   return true;
                 }
                 return rawSendBeacon(url, data);
@@ -57,13 +90,13 @@
               var rawFetch = window.fetch.bind(window);
               window.fetch = function (input, init) {
                 var url = typeof input === 'string' ? input : input && (input.url || input.href);
-                if (isBlockedMetaPixelUrl(url, init && init.body)) {
-                  if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel request.', url);
+                if (isBlockedMarketingRequest(url, init && init.body)) {
+                  if (window.console && window.console.warn) window.console.warn('Blocked unintended marketing request.', url);
                   return Promise.resolve(new Response(null, { status: 204 }));
                 }
-                if (getMetaPixelUrl(url) && input && typeof input.clone === 'function' && input.body) {
+                if ((getMetaPixelUrl(url) || getGoogleTrackingUrl(url)) && input && typeof input.clone === 'function' && input.body) {
                   return input.clone().text().then(function (body) {
-                    if (isBlockedMetaPixelUrl(url, body)) return new Response(null, { status: 204 });
+                    if (isBlockedMarketingRequest(url, body)) return new Response(null, { status: 204 });
                     return rawFetch(input, init);
                   });
                 }
@@ -76,14 +109,14 @@
               var rawSend = window.XMLHttpRequest.prototype.send;
               window.XMLHttpRequest.prototype.open = function (method, url) {
                 this.__brajmartMetaPixelUrl = url;
-                if (isBlockedMetaPixelUrl(url)) {
-                  if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel request.', url);
+                if (isBlockedMarketingRequest(url)) {
+                  if (window.console && window.console.warn) window.console.warn('Blocked unintended marketing request.', url);
                   return rawOpen.apply(this, [method, 'about:blank']);
                 }
                 return rawOpen.apply(this, arguments);
               };
               window.XMLHttpRequest.prototype.send = function (body) {
-                if (isBlockedMetaPixelUrl(this.__brajmartMetaPixelUrl, body)) {
+                if (isBlockedMarketingRequest(this.__brajmartMetaPixelUrl, body)) {
                   this.abort();
                   return;
                 }
@@ -98,8 +131,8 @@
                 enumerable: imageSrc.enumerable,
                 get: imageSrc.get,
                 set: function (value) {
-                  if (isBlockedMetaPixelUrl(value)) {
-                    if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel image request.', value);
+                  if (isBlockedMarketingRequest(value)) {
+                    if (window.console && window.console.warn) window.console.warn('Blocked unintended marketing image request.', value);
                     return;
                   }
                   return imageSrc.set.call(this, value);
@@ -109,8 +142,8 @@
 
             var rawSetAttribute = Element.prototype.setAttribute;
             Element.prototype.setAttribute = function (name, value) {
-              if (this && String(name).toLowerCase() === 'src' && isBlockedMetaPixelUrl(value)) {
-                if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel resource request.', value);
+              if (this && String(name).toLowerCase() === 'src' && isBlockedMarketingRequest(value)) {
+                if (window.console && window.console.warn) window.console.warn('Blocked unintended marketing resource request.', value);
                 return;
               }
               return rawSetAttribute.apply(this, arguments);
@@ -125,8 +158,8 @@
                 enumerable: descriptor.enumerable,
                 get: descriptor.get,
                 set: function (value) {
-                  if (isBlockedMetaPixelUrl(value)) {
-                    if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel resource request.', value);
+                  if (isBlockedMarketingRequest(value)) {
+                    if (window.console && window.console.warn) window.console.warn('Blocked unintended marketing resource request.', value);
                     return;
                   }
                   return descriptor.set.call(this, value);
@@ -154,11 +187,11 @@
               var pixelId = args[1];
               if (command === 'set' && args[1] === 'autoConfig' && args[2] !== false) return;
               if (command === 'init' && String(pixelId || '') !== BRAJMART_META_PIXEL_ID) {
-                if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel init.', pixelId);
+                if (window.console && window.console.warn) window.console.warn('Blocked unintended marketing init.', pixelId);
                 return;
               }
               if ((command === 'trackSingle' || command === 'trackSingleCustom') && String(pixelId || '') !== BRAJMART_META_PIXEL_ID) {
-                if (window.console && window.console.warn) window.console.warn('Blocked unintended Meta Pixel trackSingle.', pixelId);
+                if (window.console && window.console.warn) window.console.warn('Blocked unintended marketing trackSingle.', pixelId);
                 return;
               }
               if ((command === 'trackSingle' || command === 'trackSingleCustom') && String(args[2] || '').toLowerCase() === 'purchase') {
@@ -185,8 +218,12 @@
           })();
           window.fbq('track', 'PageView');
 
-          window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
-          loadScript('https://www.googletagmanager.com/gtm.js?id=GTM-PBFHQWC4');
+          // Enable only after the account's conflicting tags have been cleaned up.
+          var legacyGtmEnabled = "__BRAJMART_LEGACY_GTM__" === true;
+          if (legacyGtmEnabled) {
+            window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+            loadScript('https://www.googletagmanager.com/gtm.js?id=GTM-PBFHQWC4');
+          }
 
           loadScript('https://www.googletagmanager.com/gtag/js?id=AW-17517087439');
           window.gtag('js', new Date());
@@ -262,15 +299,7 @@
   </head>
 
   <body>
-    <!-- Google Tag Manager (noscript) -->
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PBFHQWC4"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <!-- End Google Tag Manager (noscript) -->
-    <!-- Meta Pixel Code (noscript) -->
-    <noscript><img height="1" width="1" style="display:none"
-      src="https://www.facebook.com/tr?id=1824114108557446&ev=PageView&noscript=1"
-    /></noscript>
-    <!-- End Meta Pixel Code (noscript) -->
+    <!-- Tracking requires JavaScript so purchase guards cannot be bypassed by noscript tags. -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

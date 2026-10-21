@@ -23,8 +23,8 @@ export const verifyCapturedRazorpayPayment = async (expected: CapturedPaymentExp
   const keyId = process.env.RAZORPAY_PLATFORM_KEY_ID || process.env.RAZORPAY_KEY_ID || '';
   const keySecret = process.env.RAZORPAY_PLATFORM_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || '';
   if (!keyId || !keySecret) throw new Error('Razorpay credentials are not configured');
-  if (expected.liveOnly && !/^rzp_live_/.test(keyId)) {
-    throw new Error('Meta Purchase requires live-mode Razorpay verification');
+  if ((expected.liveOnly || process.env.NODE_ENV === 'production') && !/^rzp_live_/.test(keyId)) {
+    throw new Error('Production purchases require live-mode Razorpay verification');
   }
   if (!/^order_[A-Za-z0-9]+$/.test(expected.orderId) || !/^pay_[A-Za-z0-9]+$/.test(expected.paymentId)) {
     throw new Error('Invalid Razorpay payment identifiers');

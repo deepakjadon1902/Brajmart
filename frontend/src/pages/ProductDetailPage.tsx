@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import { Star, Heart, ShoppingCart, Truck, Shield, RotateCcw, ChevronRight, Minus, Plus, Zap, PackageCheck, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useProductStore } from '@/store/productStore';
+import type { Product } from '@/types/product';
 import { useCartStore } from '@/store/cartStore';
 import { preloadCartDrawer } from '@/components/cart/lazyCartDrawer';
 import { useWishlistStore } from '@/store/wishlistStore';
@@ -67,7 +68,7 @@ const truncateMeta = (value: string, maxLength: number) => {
 const safeJsonLd = (value: unknown) =>
   JSON.stringify(value).replace(/</g, '\\u003c');
 
-const makeHighlights = (product: NonNullable<ReturnType<typeof useProductStore.getState>['getProductBySlug']>) => {
+const makeHighlights = (product: Product) => {
   const highlights = new Set<string>();
   if (product.category) highlights.add(`Category: ${product.category}`);
   if (product.subcategory) highlights.add(`Collection: ${product.subcategory}`);

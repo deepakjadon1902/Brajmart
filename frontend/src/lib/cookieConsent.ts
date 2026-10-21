@@ -12,7 +12,8 @@ type ConsentRecord = {
 const readCookie = (name: string) => {
   if (typeof document === 'undefined') return '';
   const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&')}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : '';
+  try { return match ? decodeURIComponent(match[1]) : ''; }
+  catch { return ''; }
 };
 
 const readStoredConsent = (): ConsentRecord | null => {

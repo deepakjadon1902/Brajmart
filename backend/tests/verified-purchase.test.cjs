@@ -66,6 +66,7 @@ beforeEach(() => {
   process.env.RAZORPAY_PLATFORM_KEY_SECRET = 'isolated-test-secret';
   process.env.RAZORPAY_PLATFORM_WEBHOOK_SECRET = 'isolated-webhook-secret';
   delete process.env.META_TEST_EVENT_CODE;
+  delete process.env.GA4_API_SECRET;
   global.fetch = async (url, options) => {
     const target = new URL(url);
     if (target.hostname === 'graph.facebook.com') {
@@ -95,7 +96,7 @@ after(() => {
 async function route(router, routePath, body, extra = {}, method = 'post') {
   const layer = router.stack.find((entry) => entry.route?.path === routePath && entry.route.methods[method]);
   assert.ok(layer, `Route exists: ${routePath}`);
-  const response = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(data) { this.data = data; return this; } };
+  const response = { statusCode: 200, headers: {}, setHeader(key, value) { this.headers[key] = value; return this; }, status(code) { this.statusCode = code; return this; }, json(data) { this.data = data; return this; } };
   await layer.route.stack.at(-1).handle({ body, headers: {}, socket: {}, ...extra }, response);
   return response;
 }
@@ -385,6 +386,55 @@ test('a pending Purchase is never claimed by another sender', async () => {
   state.eventStatus = 'pending';
   await sendPurchase();
   assert.equal(state.metaCalls.length, 0);
+});
+
+test('a repeated signed paid callback retries a failed Meta delivery without recreating the order', async () => {
+  state.statusRow.status = 'paid'; state.statusRow.payment_id = 'pay_Real42';
+  state.metaError = true;
+  await route(razorpay, '/verify', checkoutBody());
+  await new Promise(setImmediate);
+  assert.equal(state.eventStatus, 'failed');
+  state.metaError = false;
+  await route(razorpay, '/verify', checkoutBody());
+  await new Promise(setImmediate);
+  assert.equal(state.eventStatus, 'sent');
+  assert.equal(state.metaCalls.length, 2);
+  assert.equal(state.writes.filter(({ sql }) => sql.includes('UPDATE orders SET status')).length, 0);
+});
+
+test('a paid database flag cannot display a verified receipt for an uncaptured payment', async () => {
+  state.statusRow.status = 'paid'; state.statusRow.payment_id = 'pay_Real42';
+  state.payment.status = 'authorized'; state.payment.captured = false;
+  const response = await route(payments.default, '/status/:token', {}, { params: { token: 'order_Real42' } }, 'get');
+  assert.equal(response.data.status, 'pending');
+  assert.equal(response.data.verificationStatus, 'unverified');
+  assert.match(response.headers['Cache-Control'], /no-store/);
+  assert.equal(state.metaCalls.length, 0);
+});
+
+test('a real captured receipt stays paid and cannot be served from a stale browser cache', async () => {
+  state.statusRow.status = 'paid'; state.statusRow.payment_id = 'pay_Real42';
+  const response = await route(payments.default, '/status/:token', {}, { params: { token: 'order_Real42' } }, 'get');
+  await new Promise(setImmediate);
+  assert.equal(response.data.status, 'paid');
+  assert.equal(response.data.orderId, 42);
+  assert.match(response.headers['Cache-Control'], /no-store/);
+});
+
+test('production payment confirmation rejects captured test-mode payments before paid writes', async () => {
+  const previousMode = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production'; process.env.RAZORPAY_PLATFORM_KEY_ID = 'rzp_test_Isolated';
+  try {
+    const response = await route(razorpay, '/verify', checkoutBody());
+    assert.equal(response.statusCode, 500);
+    assert.equal(state.writes.length, 0);
+  } finally { if (previousMode === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousMode; }
+});
+
+test('BLOB-encoded saved items still produce a correct verified Purchase', async () => {
+  state.order.items = Buffer.from(state.order.items);
+  assert.equal((await sendPurchase()).ok, true);
+  assert.equal(state.metaCalls[0].data[0].custom_data.contents[0].id, '101');
 });
 test('no Meta credentials means no outgoing event and no sent status', async () => {
   delete process.env.META_CONVERSIONS_API_TOKEN;

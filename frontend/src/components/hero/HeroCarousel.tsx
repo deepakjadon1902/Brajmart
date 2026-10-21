@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useHeroStore } from '@/store/heroStore';
+import { useHeroStore, type HeroSlide } from '@/store/heroStore';
 import { toResponsiveImageSrcSet, toResponsiveImageUrl } from '@/utils/responsiveImage';
 
 const mobileHeroWidths = [360, 480, 640, 720, 840];
@@ -15,7 +15,7 @@ const HeroCarousel = () => {
   const [failedSlideIds, setFailedSlideIds] = useState<Set<string>>(() => new Set());
   const slides = useHeroStore((s) => s.slides);
   const loadSlides = useHeroStore((s) => s.loadFromApi);
-  const fallbackSlide = useMemo(
+  const fallbackSlide = useMemo<HeroSlide>(
     () => ({
       id: 'fallback-hero',
       tag: 'AUTHENTIC BRAJ DEVOTIONAL GOODS',

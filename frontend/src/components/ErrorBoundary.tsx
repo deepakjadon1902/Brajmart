@@ -6,7 +6,7 @@ type ErrorBoundaryState = {
 
 class ErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null };
-  private reloadTimer: ReturnType<typeof window.setTimeout> | null = null;
+  private reloadTimer: number | null = null;
 
   static getDerivedStateFromError(error: Error) {
     return { error };

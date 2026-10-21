@@ -15,6 +15,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
 import { getMetaAttributionContext, trackMetaPixelEvent } from '@/lib/metaPixel';
+import { getGooglePurchaseContext } from '@/lib/googleAttribution';
 import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft';
 
 const steps = ['Address', 'Payment', 'Done'];
@@ -782,6 +783,7 @@ const CheckoutPage = () => {
         couponCode: appliedCoupon?.code || undefined,
       };
 
+      const purchaseContext = { ...checkoutMetaContext(), googleAnalytics: await getGooglePurchaseContext() };
       const result = await createRazorpayOrder({
         amount: grandTotal,
         idempotencyKey: getCheckoutIdempotencyKey({
@@ -796,7 +798,7 @@ const CheckoutPage = () => {
             selectedAttributes: item.product.selectedAttributes || {},
           })),
         }),
-        metaContext: checkoutMetaContext(),
+        metaContext: purchaseContext,
         order: orderPayload,
         customer: { name: cleanBillingAddress.fullName, email: effectiveEmail, phone: cleanBillingAddress.mobile },
       });
@@ -830,7 +832,7 @@ const CheckoutPage = () => {
               razorpay_order_id: payment.razorpay_order_id || result.orderId,
               razorpay_payment_id: payment.razorpay_payment_id || '',
               razorpay_signature: payment.razorpay_signature || '',
-              metaContext: checkoutMetaContext(),
+              metaContext: purchaseContext,
             });
             navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`);
           } catch (err: unknown) {

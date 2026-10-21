@@ -1,9 +1,9 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ isSsrBuild }) => ({
+export default defineConfig(({ isSsrBuild, mode }) => ({
   server: {
     host: "::",
     port: 8081,
@@ -22,7 +22,10 @@ export default defineConfig(({ isSsrBuild }) => ({
       overlay: false,
     },
   },
-  plugins: [react()],
+  plugins: [react(), {
+    name: 'brajmart-tracking-policy',
+    transformIndexHtml: (html: string) => html.replace('"__BRAJMART_LEGACY_GTM__"', String(loadEnv(mode, process.cwd(), 'VITE_').VITE_ENABLE_LEGACY_GTM === 'true')),
+  }],
   ssr: {
     noExternal: ['react-helmet-async', 'next-themes'],
   },

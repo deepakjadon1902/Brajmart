@@ -27,7 +27,7 @@ const MobileBottomNav = () => {
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to || (item.to !== '/' && pathname.startsWith(item.to));
-          const count = item.count === 'cart' ? cartCount : item.count === 'wishlist' ? wishlistCount : 0;
+          const count = 'count' in item ? (item.count === 'cart' ? cartCount : wishlistCount) : 0;
 
           return (
             <Link

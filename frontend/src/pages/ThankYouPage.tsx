@@ -10,6 +10,7 @@ type ThankYouOrder = {
   orderId?: string | number;
   total?: number;
   paymentMethod?: string;
+  status?: string;
   trackingId?: string;
   estimatedDelivery?: string;
   items?: Array<{ name?: string; quantity?: number | string; image?: string }>;
@@ -26,29 +27,26 @@ const readSessionOrder = (): ThankYouOrder | null => {
 
 const ThankYouPage = () => {
   const [searchParams] = useSearchParams();
-  const orderId = searchParams.get('orderId') || searchParams.get('order') || '';
-  const [loading, setLoading] = useState(Boolean(orderId));
-  const [order, setOrder] = useState<ThankYouOrder | null>(() => readSessionOrder());
+  // Session storage can suggest an ID, but cannot prove an order or a payment.
+  const orderId = searchParams.get('orderId') || searchParams.get('order') || String(readSessionOrder()?.orderId || '');
+  const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState<ThankYouOrder | null>(null);
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setOrder(null);
     const loadOrder = async () => {
-      if (!orderId) {
+      if (!/^\d+$/.test(orderId)) {
         setLoading(false);
         return;
       }
       try {
         const data = await trackOrder(orderId) as ThankYouOrder;
         if (!active) return;
-        setOrder((current) => ({
-          ...current,
-          ...data,
-          total: data.total ?? current?.total,
-          paymentMethod: data.paymentMethod ?? current?.paymentMethod,
-          items: data.items ?? current?.items,
-        }));
+        if (String(data.orderId) === orderId && ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered'].includes(String(data.status))) setOrder(data);
       } catch {
-        if (active) setOrder((current) => current || { orderId });
+        if (active) setOrder(null);
       } finally {
         if (active) setLoading(false);
       }

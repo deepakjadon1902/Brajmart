@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../playwright-fixture';
 
 const verifiedOrder = {
   _id: '10339',

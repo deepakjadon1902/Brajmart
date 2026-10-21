@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '../playwright-fixture';
 
 const categories = [{ id: '1', name: 'Prasadam', icon: '', color: '', productCount: 8, subcategories: [] }];
 const makeProducts = () => Array.from({ length: 8 }, (_, index) => ({

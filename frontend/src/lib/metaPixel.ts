@@ -1,5 +1,6 @@
 import { Product } from '@/types/product';
 import { getApiBase } from './api';
+import { publishGoogleCommerceIntent } from './googleCommerce';
 
 type MetaPixelEvent =
   | 'PageView'
@@ -65,7 +66,8 @@ const BROWSER_FALLBACK_EVENTS = new Set<MetaPixelEvent>([
 const readCookie = (name: string) => {
   if (typeof document === 'undefined') return '';
   const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&')}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : '';
+  try { return match ? decodeURIComponent(match[1]) : ''; }
+  catch { return ''; }
 };
 
 export const toPositiveMetaValue = (value: unknown): number | undefined => {
@@ -189,6 +191,8 @@ export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixel
     }
     return '';
   }
+
+  publishGoogleCommerceIntent(eventName, normalizedParams, eventId);
 
   if (typeof window.fbq !== 'function') {
     window.__brajmartLoadMarketing?.();

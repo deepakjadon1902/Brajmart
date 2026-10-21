@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import express from 'express';
 import { dbExecute, dbQuery, isDbConnected } from '../lib/db';
 import { verifyCapturedRazorpayPayment } from '../lib/razorpayVerification';
+import { parseJson } from '../lib/dbHelpers';
 
 const router = express.Router();
 
@@ -140,17 +141,11 @@ const isValidPurchasePayload = (eventId: string, customData: Record<string, unkn
 };
 
 const parseOrderItems = (value: unknown): Array<Record<string, unknown>> => {
-  if (Array.isArray(value)) return value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item)));
-  if (typeof value !== 'string') return [];
-  try {
-    const parsed = JSON.parse(value);
-    return parseOrderItems(parsed);
-  } catch {
-    return [];
-  }
+  const parsed = parseJson<unknown>(value, []);
+  return Array.isArray(parsed) ? parsed.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item))) : [];
 };
 
-const orderItemId = (item: Record<string, unknown>) => {
+export const orderItemId = (item: Record<string, unknown>) => {
   const product = item.product && typeof item.product === 'object' && !Array.isArray(item.product)
     ? item.product as Record<string, unknown>
     : item;
@@ -164,7 +159,7 @@ type RazorpayPurchaseVerification =
   | { ok: true; verifiedAt?: unknown }
   | { ok: false; reason: string };
 
-const getVerifiedRazorpayPurchase = async (
+export const getVerifiedRazorpayPurchase = async (
   customData: Record<string, unknown>,
   paymentId?: string,
   statusToken?: string
@@ -261,7 +256,7 @@ const getVerifiedRazorpayPurchase = async (
       liveOnly: true,
     });
     const createdAt = Number(payment.created_at);
-    if (!Number.isSafeInteger(createdAt) || createdAt <= 0) return { ok: false, reason: 'invalid_payment_time' };
+    if (!Number.isSafeInteger(createdAt) || createdAt <= 0 || createdAt > Math.floor(Date.now() / 1000) + 300) return { ok: false, reason: 'invalid_payment_time' };
     return { ok: true, verifiedAt: new Date(createdAt * 1000) };
   } catch {
     return { ok: false, reason: 'razorpay_verification_failed' };

@@ -53,7 +53,7 @@ const mockCheckoutApis = async (page: import('@playwright/test').Page, validatio
       cardEnabled: true,
     }),
   }));
-  await page.route('**/api/orders/dtdc/pincode', async (route) => route.fulfill({
+  await page.route('**/api/orders/delivery-service/pincode', async (route) => route.fulfill({
     contentType: 'application/json',
     body: JSON.stringify({
       carrier: 'DTDC',
@@ -102,7 +102,7 @@ const seedCart = async (page: import('@playwright/test').Page) => {
 
 const fillShippingAddress = async (page: import('@playwright/test').Page) => {
   await page.getByLabel(/full name/i).fill('Phase Tester');
-  await page.getByLabel(/address line 1/i).fill('Keshav Kunj, Raman Reti, Vrindavan');
+  await page.getByLabel(/house \/ flat \/ area/i).fill('Keshav Kunj, Raman Reti, Vrindavan');
   await page.getByLabel(/^city/i).fill('Vrindavan');
   await page.getByLabel(/^state/i).selectOption('Uttar Pradesh');
   await page.getByLabel(/pincode/i).fill('281121');
@@ -117,22 +117,22 @@ test('checkout reaches verified payment step without starting live payment', asy
   await fillShippingAddress(page);
   await page.getByRole('button', { name: /continue to payment/i }).click();
 
-  await expect(page.getByRole('heading', { name: /payment method/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible();
   await expect(page.getByText('Verified', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Pay with Razorpay - ₹248' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pay Now - ₹248', exact: true })).toBeVisible();
 });
 
 test('add to cart path reaches checkout without starting live payment', async ({ page }) => {
   await mockCheckoutApis(page);
 
   await page.goto('/products');
-  await page.getByRole('button', { name: /add cart: phase qa tulsi mala/i }).click();
+  await page.getByRole('button', { name: 'Add Phase QA Tulsi Mala to cart', exact: true }).click();
   await expect(page.getByText(/added to cart/i).first()).toBeVisible();
   await page.getByRole('link', { name: /^checkout$/i }).click();
 
   await fillShippingAddress(page);
   await page.getByRole('button', { name: /continue to payment/i }).click();
-  await expect(page.getByRole('heading', { name: /payment method/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible();
 });
 
 test('checkout blocks payment when backend validation reports cart changes', async ({ page }) => {
@@ -153,7 +153,7 @@ test('checkout blocks payment when backend validation reports cart changes', asy
 
   await expect(page.getByText('Phase QA Tulsi Mala price changed to ₹219.').last()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Apply cart updates', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /payment method/i })).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Payment', exact: true })).not.toBeVisible();
 });
 
 [
@@ -170,7 +170,7 @@ test('checkout blocks payment when backend validation reports cart changes', asy
     await fillShippingAddress(page);
     await page.getByRole('button', { name: /continue to payment/i }).click();
 
-    await expect(page.getByRole('heading', { name: /payment method/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible();
     await page.keyboard.press('Tab');
     const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(hasOverflow).toBe(false);

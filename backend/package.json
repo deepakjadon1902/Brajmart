@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "pretest": "node scripts/patchFontkit.cjs",
     "test": "node -r ts-node/register/transpile-only --test tests/*.test.cjs",
+    "validate:google-purchase": "node scripts/validateGooglePurchase.cjs",
     "postinstall": "npm run build",
     "start": "node dist/index.js",
     "dev": "nodemon --watch src --ext ts --exec \"node -r ts-node/register src/index.ts\"",

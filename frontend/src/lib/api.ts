@@ -1,4 +1,5 @@
 import type { Product } from '@/types/product';
+import type { BlogPost } from '@/types/blog';
 import { isInvoiceFilename } from './invoiceFilenames';
 
 const normalizeApiBase = (value: unknown) => String(value || '').trim().replace(/\/$/, '');
@@ -194,7 +195,7 @@ export const reportRazorpayPaymentFailed = (payload: {
   });
 
 export const fetchPaymentStatus = (token: string) =>
-  getJson(`/payments/status/${token}`);
+  getJson(`/payments/status/${encodeURIComponent(token)}`, { cache: 'no-store' });
 
 export const reconcilePayments = () =>
   getJson('/payments/reconcile', { method: 'POST' });
@@ -852,11 +853,11 @@ export const deleteHeroSlide = (id: string) =>
 // Blogs
 export const fetchBlogs = () => getJson('/blogs');
 export const fetchBlogBySlug = (slug: string) => getJson(`/blogs/${slug}`);
-export const fetchAdminBlogs = () => getJson('/blogs/admin');
+export const fetchAdminBlogs = () => getJson<BlogPost[]>('/blogs/admin');
 export const fetchAdminBlogBySlug = (slug: string) => getJson(`/blogs/admin/${slug}`);
 export const createBlog = (payload: Record<string, unknown>) =>
-  getJson('/blogs', { method: 'POST', body: payload });
+  getJson<BlogPost>('/blogs', { method: 'POST', body: payload });
 export const updateBlog = (id: string, payload: Record<string, unknown>) =>
-  getJson(`/blogs/${id}`, { method: 'PUT', body: payload });
+  getJson<BlogPost>(`/blogs/${id}`, { method: 'PUT', body: payload });
 export const deleteBlog = (id: string) =>
   getJson(`/blogs/${id}`, { method: 'DELETE' });

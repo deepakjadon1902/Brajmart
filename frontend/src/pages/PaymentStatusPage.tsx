@@ -10,6 +10,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import OrderSuccessCard from '@/components/orders/OrderSuccessCard';
 import { getMetaAttributionContext } from '@/lib/metaPixel';
+import { getGooglePurchaseContext } from '@/lib/googleAttribution';
 
 type PaymentStatusResponse = {
   status?: 'paid' | 'pending' | 'failed' | null;
@@ -97,6 +98,17 @@ const PaymentStatusPage = () => {
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setStatus(null);
+    setOrderId(null);
+    setOrderItems(null);
+    setMethod(null);
+    setAmount(null);
+    setPaymentId(null);
+    setCustomerEmail(null);
+    setCustomerPhone(null);
+    setTrackingId(null);
+    setEstimatedDelivery(null);
     const load = async () => {
       if (!token) return;
       try {
@@ -111,7 +123,7 @@ const PaymentStatusPage = () => {
         setCustomerPhone(data.customerPhone || null);
         if (Array.isArray(data.items)) setOrderItems(data.items);
       } catch {
-        if (active) setStatus('failed');
+        if (active) setStatus('pending');
       } finally {
         if (active) setLoading(false);
       }
@@ -122,9 +134,11 @@ const PaymentStatusPage = () => {
 
   useEffect(() => {
     if (!token || (status !== 'pending' && !(status === 'failed' && isRazorpayPayment))) return;
+    let active = true;
     const interval = setInterval(async () => {
       try {
         const data = await fetchPaymentStatus(token) as PaymentStatusResponse;
+        if (!active) return;
         setStatus(data.status || null);
         setOrderId(data.orderId || null);
         setAmount(data.amount === null || data.amount === undefined ? null : Number(data.amount));
@@ -137,7 +151,7 @@ const PaymentStatusPage = () => {
         // ignore polling errors
       }
     }, 2000);
-    return () => clearInterval(interval);
+    return () => { active = false; clearInterval(interval); };
   }, [token, status, isRazorpayPayment]);
 
   useEffect(() => {
@@ -179,7 +193,7 @@ const PaymentStatusPage = () => {
         throw new Error('Unable to load Razorpay checkout. Please disable browser shields/ad blockers and try again.');
       }
 
-      const metaContext = getMetaAttributionContext(customerEmail || undefined);
+      const metaContext = { ...getMetaAttributionContext(customerEmail || undefined), googleAnalytics: await getGooglePurchaseContext() };
       const result = await retryRazorpayOrder(token, metaContext);
       const checkout = new window.Razorpay({
         key: result.keyId,
