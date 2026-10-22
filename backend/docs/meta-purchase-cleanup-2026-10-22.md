@@ -3,8 +3,24 @@
 ## Result
 
 Repository changes protect the existing server-verified Purchase flow, recover
-failed delivery, and block an automatic Meta CAPI gateway bypass. These changes
-have not been deployed. Meta/GTM account settings still need the changes below.
+failed delivery, and block an automatic Meta CAPI gateway bypass. A later public
+deployment recheck confirmed the updated frontend protection is now live and
+passes the intercepted SDK replay on desktop and mobile. Backend deployment was
+not independently verified. Meta/GTM account settings still need the changes below.
+
+## Deployment recheck
+
+A follow-up check on 22 October found the updated gateway guard in the deployed
+homepage. The full SDK audit now passes for both deployed and local bootstraps on
+desktop and mobile: one PageView and one AddToCart reach the intercepted Pixel
+transport, and no Purchase or automatic gateway request escapes the guard.
+
+The public Meta configuration still contains active rule **1762288044988453** and
+the OpenBridge integration. The published GTM still contains tags **14**, **45**,
+and **46**, including Pixel **2744712869202681**. The updated frontend blocks the
+tested unwanted requests and keeps legacy GTM disabled, but account cleanup
+remains necessary. The original bypass reproduction below describes the earlier
+deployment, before the frontend update.
 
 ## Critical finding: homepage Purchase bypassed the deployed browser guard
 
@@ -85,7 +101,7 @@ counts were not accessed. Existing historical analytics data was not deleted.
 | Frontend unit suite | 75 passed |
 | Chromium checkout, confirmation, and transport suite | 28 passed across desktop/mobile |
 | Real Meta SDK replay with local bootstrap | Desktop and mobile passed |
-| Real Meta SDK replay with deployed bootstrap | Both detect the automatic gateway Purchase bypass |
+| Real Meta SDK replay with deployed bootstrap | Initially detected the bypass; follow-up desktop/mobile replay passed after the frontend update |
 | Frontend TypeScript and backend build | Passed |
 | ESLint on all modified tracking TypeScript files | Passed |
 | Frontend build | Completed with catalog fallback warning described below |
@@ -105,8 +121,9 @@ npm --prefix frontend run audit:meta-sdk -- --local-only
 npm --prefix frontend run audit:meta-sdk
 ```
 
-The last command checks both deployed and local code and is expected to fail
-against the currently deployed bootstrap until the bypass is resolved there.
+The last command checks both deployed and local code. It failed against the
+original deployment and passed after the frontend protection was deployed.
+Passing this replay does not certify private account settings or historical data.
 Public SDK audits need network access for public assets; replay traffic is fully
 intercepted. Backend tests use isolated database, gateway, and provider doubles.
 
