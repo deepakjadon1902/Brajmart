@@ -12,6 +12,8 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:tracking": "playwright test --config playwright.meta.config.ts",
+    "audit:meta-sdk": "node scripts/probe-meta-public.cjs",
     "verify:performance-budgets": "node scripts/phase7-budgets.mjs",
     "verify:seo": "node scripts/verify-seo.mjs",
     "test:watch": "vitest"

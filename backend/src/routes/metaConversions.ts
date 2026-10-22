@@ -64,7 +64,10 @@ const ensureMetaEventSchema = () => {
         KEY idx_meta_order_contexts_updated (updated_at)
       )
     `);
-  })();
+  })().catch((error) => {
+    metaEventSchemaReady = null;
+    throw error;
+  });
   return metaEventSchemaReady;
 };
 
@@ -142,7 +145,8 @@ const isValidPurchasePayload = (eventId: string, customData: Record<string, unkn
 
 const parseOrderItems = (value: unknown): Array<Record<string, unknown>> => {
   const parsed = parseJson<unknown>(value, []);
-  return Array.isArray(parsed) ? parsed.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item))) : [];
+  if (!Array.isArray(parsed) || parsed.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) return [];
+  return parsed;
 };
 
 export const orderItemId = (item: Record<string, unknown>) => {
@@ -371,7 +375,7 @@ const toMetaEventTime = (value: unknown) => {
   const now = Math.floor(Date.now() / 1000);
   // Meta CAPI accepts reasonably recent website events. Clamp future clock skew
   // and avoid sending very old reconciliations as brand-new purchases.
-  if (time > now + 300) return now;
+  if (time > now) return now;
   if (time < now - 7 * 24 * 60 * 60) return undefined;
   return time;
 };
@@ -387,9 +391,12 @@ const reserveMetaConversionEvent = async (eventId: string, eventName: string, or
 
   const rows = await dbQuery<any>('SELECT status FROM meta_conversion_events WHERE event_id = ? LIMIT 1', [eventId]);
   const status = cleanString(rows[0]?.status);
-  if (status === 'failed') {
+  if (status === 'failed' || status === 'pending') {
     const claimed: any = await dbExecute(
-      "UPDATE meta_conversion_events SET status = 'pending', attempts = attempts + 1, last_error = NULL, updated_at = NOW() WHERE event_id = ? AND status = 'failed'",
+      // Recover a process that stopped after reserving. The lease exceeds the
+      // HTTP timeout; concurrent retries still compete for one atomic claim.
+      `UPDATE meta_conversion_events SET status = 'pending', attempts = attempts + 1, last_error = NULL, updated_at = NOW()
+       WHERE event_id = ? AND (status = 'failed' OR (status = 'pending' AND updated_at < DATE_SUB(NOW(), INTERVAL 2 MINUTE)))`,
       [eventId]
     );
     return { reserved: Number(claimed?.affectedRows || 0) > 0, status: 'pending' };
@@ -408,14 +415,8 @@ const markMetaConversionEvent = async (eventId: string, status: 'sent' | 'failed
 };
 
 const parseObject = (value: unknown) => {
-  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
-  if (typeof value !== 'string') return {};
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
-  } catch {
-    return {};
-  }
+  const parsed = parseJson<unknown>(value, {});
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
 };
 
 const getOrderPhone = (order: any) => {
@@ -504,14 +505,18 @@ export const sendVerifiedMetaPurchaseForOrder = async (
   const paymentType = 'Razorpay';
   const items = parseOrderItems(order.items).map((item) => {
     const id = orderItemId(item);
-    const quantity = Number(item.quantity || 1);
-    const price = Number(item.price || item.item_price || 0);
+    const quantity = Number(item.quantity ?? 1);
+    const price = Number(item.price ?? item.item_price ?? 0);
     return {
       id,
-      quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
-      item_price: Number.isFinite(price) && price > 0 ? Math.round((price + Number.EPSILON) * 100) / 100 : undefined,
+      quantity,
+      item_price: Math.round((price + Number.EPSILON) * 100) / 100,
     };
-  }).filter((item) => item.id);
+  });
+  if (!items.length || items.some((item) => !item.id || !Number.isSafeInteger(item.quantity) || item.quantity <= 0
+    || !Number.isFinite(item.item_price) || item.item_price < 0)) {
+    return { ok: false, skipped: true, reason: 'invalid_purchase_payload' };
+  }
 
   const customData = normalizeCustomData({
     currency: 'INR',

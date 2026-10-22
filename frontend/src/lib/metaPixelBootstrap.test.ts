@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { Blob as ModernBlob } from 'node:buffer';
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,7 +31,7 @@ describe('actual HTML Meta Pixel guards', () => {
   afterEach(() => dom.window.close());
 
   for (const command of ['track', 'trackCustom']) {
-    for (const name of ['Purchase', 'purchase', 'PURCHASE']) {
+    for (const name of ['Purchase', 'purchase', 'PURCHASE', ' Purchase ']) {
       it(`blocks direct fbq ${command} ${name} on a forged success URL`, () => {
         dom.window.fbq(command, name, { order_id: 42, value: 199.99 });
         expect(rawFbq).not.toHaveBeenCalled();
@@ -97,6 +98,25 @@ describe('actual HTML Meta Pixel guards', () => {
     await dom.window.fetch('https://www.facebook.com/tr/', { method: 'POST', body: `id=${pixelId}&ev=PageView` });
     expect(rawFetch).toHaveBeenCalledOnce();
   });
+  it.each([
+    'https://fh-118116076e9a4c2a96a99fbb70bea2a0.ecs.us-west-2.on.aws/events',
+    'https://bded8a3c6ae-1-1053047382554.us-central1.run.app/events',
+  ])('blocks the automatic Meta gateway %s before it can create unverified CAPI events', async (url) => {
+    await dom.window.fetch(url, { method: 'POST', body: JSON.stringify({ event_name: 'Purchase' }) });
+    dom.window.navigator.sendBeacon(url, new Blob(['gateway payload']));
+    expect(rawFetch).not.toHaveBeenCalled();
+    expect(rawBeacon).not.toHaveBeenCalled();
+  });
+  it('blocks Meta Purchase JSON on a changed relay hostname, including Request and Blob fetch bodies', async () => {
+    const url = 'https://changed-relay.example/events';
+    const body = JSON.stringify({ data: [{ event_name: 'Purchase', action_source: 'website' }] });
+    await dom.window.fetch(url, { method: 'POST', body });
+    await dom.window.fetch(new Request(url, { method: 'POST', body }));
+    await dom.window.fetch(url, { method: 'POST', body: new ModernBlob([body]) });
+    expect(rawFetch).not.toHaveBeenCalled();
+    await dom.window.fetch('https://unrelated.example/events', { method: 'POST', body: JSON.stringify({ event_name: 'PageView' }) });
+    expect(rawFetch).toHaveBeenCalledOnce();
+  });
   it('blocks attempts to re-enable automatic Pixel configuration', () => {
     dom.window.fbq('set', 'autoConfig', true, pixelId);
     expect(rawFbq).not.toHaveBeenCalled();
@@ -107,5 +127,24 @@ describe('actual HTML Meta Pixel guards', () => {
     expect(image.getAttribute('src')).toBeNull();
     image.setAttribute('src', purchaseUrl);
     expect(image.getAttribute('src')).toBeNull();
+  });
+
+  it('protects tracking transports before any deferred SDK startup', async () => {
+    const early = new JSDOM(html, { url: 'https://www.brajmart.com/', runScripts: 'outside-only' });
+    try {
+      const fetchSpy = vi.fn();
+      early.window.fetch = fetchSpy;
+      early.window.Response = Response;
+      early.window.console.warn = vi.fn();
+      early.window.eval(early.window.document.querySelector('script')!.textContent!);
+      await early.window.fetch(purchaseUrl);
+      await early.window.fetch('https://www.facebook.com/tr?id=2744712869202681&ev=PageView');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(early.window.fbq).toBeUndefined();
+      await early.window.fetch('/api/payments/status/order_Real');
+      expect(fetchSpy).toHaveBeenCalledOnce();
+    } finally {
+      early.window.close();
+    }
   });
 });

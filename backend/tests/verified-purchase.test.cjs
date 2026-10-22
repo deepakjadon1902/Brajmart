@@ -22,14 +22,19 @@ db.dbQuery = async (sql) => {
 };
 db.dbExecute = async (sql, params) => {
   state.writes.push({ sql, params });
+  if (sql.includes('CREATE TABLE') && state.schemaFailures > 0) {
+    state.schemaFailures -= 1;
+    throw new Error('Simulated temporary schema outage');
+  }
   if (sql.includes('INSERT IGNORE INTO meta_conversion_events')) {
     if (state.eventStatus) return { affectedRows: 0 };
     state.eventStatus = 'pending';
     return { affectedRows: 1 };
   }
   if (sql.includes('attempts = attempts + 1')) {
-    if (sql.includes("AND status = 'failed'") && state.eventStatus !== 'failed') return { affectedRows: 0 };
+    if (state.eventStatus !== 'failed' && !(state.eventStatus === 'pending' && state.eventStale)) return { affectedRows: 0 };
     state.eventStatus = 'pending';
+    state.eventStale = false;
     return { affectedRows: 1 };
   }
   if (sql.includes('UPDATE meta_conversion_events SET status = ?')) state.eventStatus = params[0];
@@ -107,6 +112,14 @@ async function assertBlocked() {
   assert.equal(state.metaCalls.length, 0);
 }
 
+test('a temporary schema failure can recover without restarting the backend', async () => {
+  state.schemaFailures = 1;
+  await assert.rejects(sendPurchase, /temporary schema outage/);
+  assert.equal(state.metaCalls.length, 0);
+  assert.equal((await sendPurchase()).ok, true);
+  assert.equal(state.metaCalls.length, 1);
+});
+
 test('public CAPI endpoint rejects a forged Purchase', async () => {
   const response = await route(meta.default, '/', { eventName: 'Purchase', eventId: 'brajmart.Purchase.order.42', customData: { order_id: 42, value: 199.99 } });
   assert.equal(response.statusCode, 403);
@@ -164,6 +177,19 @@ test('manual payment identifiers are blocked', async () => {
 test('gateway payment older than seven days cannot be refreshed by database updates', async () => {
   state.payment.created_at -= 8 * 86400;
   await assertBlocked();
+});
+
+for (const createdAt of [0, -1, 'invalid', 1.5, Math.floor(Date.now() / 1000) + 3600]) {
+  test(`invalid gateway payment time cannot produce a purchase: ${createdAt}`, async () => {
+    state.payment.created_at = createdAt;
+    await assertBlocked();
+  });
+}
+
+test('small gateway clock skew is clamped to the present rather than sending a future Meta event', async () => {
+  state.payment.created_at += 120;
+  await sendPurchase();
+  assert.ok(state.metaCalls[0].data[0].event_time <= Math.floor(Date.now() / 1000));
 });
 test('simultaneous first sends produce one outgoing Purchase', async () => {
   await Promise.all([sendPurchase(), sendPurchase(), sendPurchase()]);
@@ -298,6 +324,22 @@ test('stored payment amount differing by one paise is rejected', async () => { s
 test('different payment and settlement identifiers cannot be combined', async () => { state.paidRows[0].transaction_id = 'pay_Other'; await assertBlocked(); });
 test('zero-value orders cannot generate purchases', async () => { state.order.total = 0; await assertBlocked(); });
 test('empty order contents cannot generate purchases', async () => { state.order.items = '[]'; await assertBlocked(); });
+
+for (const items of [
+  [null, { id: '101', quantity: 1, price: 199.99 }],
+  [{ quantity: 1, price: 199.99 }],
+  [{ id: '101', quantity: 0, price: 199.99 }],
+  [{ id: '101', quantity: -1, price: 199.99 }],
+  [{ id: '101', quantity: 1.5, price: 199.99 }],
+  [{ id: '101', quantity: 'invalid', price: 199.99 }],
+  [{ id: '101', quantity: 1, price: -1 }],
+  [{ id: '101', quantity: 1, price: 'invalid' }],
+]) {
+  test(`invalid saved contents cannot be silently repaired into a Purchase: ${JSON.stringify(items)}`, async () => {
+    state.order.items = JSON.stringify(items);
+    await assertBlocked();
+  });
+}
 test('Meta HTTP error permits retry using the stable ID', async () => {
   state.metaHttpError = true;
   await sendPurchase();
@@ -386,6 +428,21 @@ test('a pending Purchase is never claimed by another sender', async () => {
   state.eventStatus = 'pending';
   await sendPurchase();
   assert.equal(state.metaCalls.length, 0);
+});
+
+test('simultaneous retries recover an abandoned pending Purchase with the same event ID', async () => {
+  state.eventStatus = 'pending';
+  state.eventStale = true;
+  await Promise.all([sendPurchase(), sendPurchase(), sendPurchase()]);
+  assert.equal(state.metaCalls.length, 1);
+  assert.equal(state.metaCalls[0].data[0].event_id, 'brajmart.Purchase.order.42');
+  assert.equal(state.eventStatus, 'sent');
+});
+
+test('BLOB-encoded addresses retain hashed purchase matching data', async () => {
+  state.order.billing_address = Buffer.from(JSON.stringify({ mobile: '9876543210' }));
+  await sendPurchase();
+  assert.deepEqual(state.metaCalls[0].data[0].user_data.ph, [crypto.createHash('sha256').update('919876543210').digest('hex')]);
 });
 
 test('a repeated signed paid callback retries a failed Meta delivery without recreating the order', async () => {

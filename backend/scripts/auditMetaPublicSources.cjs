@@ -7,9 +7,12 @@ const urls = [
 
 const { parse } = require('../../frontend/node_modules/acorn');
 const readTrackingRules = (source) => {
-  const result = { derivedPurchaseRules: [], derivedRuleContexts: [], gtmTags: [], gtmPredicates: [], gtmMacros: [], gtmRules: [] };
+  const result = { derivedPurchaseRules: [], derivedRuleContexts: [], metaGatewayConfigurations: [], gtmTags: [], gtmPredicates: [], gtmMacros: [], gtmRules: [] };
   const visit = (node) => {
     if (!node || typeof node !== 'object') return;
+    if (node.type === 'CallExpression' && node.callee?.property?.name === 'set' && /openbridge|parallelfire/i.test(String(node.arguments?.[1]?.value))) {
+      result.metaGatewayConfigurations.push(source.slice(node.start, node.end));
+    }
     if (node.type === 'ObjectExpression' && node.properties?.some((property) => property.key?.value === 'derived_event_name' && property.value?.value === 'Purchase')) {
       try {
         result.derivedPurchaseRules.push(JSON.parse(source.slice(node.start, node.end)));

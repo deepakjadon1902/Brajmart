@@ -57,6 +57,10 @@ declare global {
 
 const DEFAULT_CURRENCY = 'INR';
 const META_PIXEL_ID = '1824114108557446';
+const BROWSER_EVENTS = new Set<MetaPixelEvent>([
+  'PageView', 'ViewContent', 'Search', 'Contact', 'AddPaymentInfo',
+  'AddToCart', 'AddToWishlist', 'InitiateCheckout', 'Lead',
+]);
 const BROWSER_FALLBACK_EVENTS = new Set<MetaPixelEvent>([
   'AddToCart',
   'InitiateCheckout',
@@ -119,21 +123,25 @@ const sendMetaConversionEvent = (eventName: MetaPixelEvent, eventId: string, par
     clientUserAgent: window.navigator?.userAgent || undefined,
   };
 
-  fetch(`${getApiBase()}/meta/conversions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      eventName,
-      eventId,
-      eventSourceUrl: options.eventSourceUrl || window.location.href,
-      userData,
-      customData: {
-        currency: DEFAULT_CURRENCY,
-        ...params,
-      },
-    }),
-    keepalive: true,
-  }).catch(() => undefined);
+  try {
+    void fetch(`${getApiBase()}/meta/conversions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventName,
+        eventId,
+        eventSourceUrl: options.eventSourceUrl || window.location.href,
+        userData,
+        customData: {
+          currency: DEFAULT_CURRENCY,
+          ...params,
+        },
+      }),
+      keepalive: true,
+    }).catch(() => undefined);
+  } catch {
+    // Optional analytics must never interrupt a cart update or checkout.
+  }
 };
 
 const appendMetaPixelParam = (searchParams: URLSearchParams, key: string, value: unknown) => {
@@ -177,7 +185,7 @@ const sendBrowserMetaPixelFallback = (eventName: MetaPixelEvent, eventId: string
 };
 
 export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixelParams = {}, options: MetaPixelOptions = {}) => {
-  if (typeof window === 'undefined') return '';
+  if (typeof window === 'undefined' || !BROWSER_EVENTS.has(eventName)) return '';
 
   const eventId = options.eventId || createMetaEventId(eventName);
   const normalizedParams = {
@@ -185,25 +193,24 @@ export const trackMetaPixelEvent = (eventName: MetaPixelEvent, params: MetaPixel
     ...normalizeMetaPixelParams(params),
   };
 
-  if (eventName === 'Purchase') {
-    if (window.console && window.console.warn) {
-      window.console.warn('Blocked browser Meta Purchase event. Purchase is sent only after server-verified Razorpay payment.', { eventID: eventId, url: window.location.href });
+  try {
+    publishGoogleCommerceIntent(eventName, normalizedParams, eventId);
+  } catch {
+    // Another tag may replace dataLayer; keep the shopping action working.
+  }
+
+  let browserSent = false;
+  try {
+    if (typeof window.fbq !== 'function') window.__brajmartLoadMarketing?.();
+    if (typeof window.fbq === 'function') {
+      window.fbq('track', eventName, normalizedParams, { eventID: eventId });
+      browserSent = true;
     }
-    return '';
+  } catch {
+    // A blocked/broken SDK can fall back without preventing CAPI delivery.
   }
 
-  publishGoogleCommerceIntent(eventName, normalizedParams, eventId);
-
-  if (typeof window.fbq !== 'function') {
-    window.__brajmartLoadMarketing?.();
-  }
-
-  const hasFbq = typeof window.fbq === 'function';
-  if (hasFbq) {
-    window.fbq('track', eventName, normalizedParams, { eventID: eventId });
-  }
-
-  if (!hasFbq) {
+  if (!browserSent) {
     sendBrowserMetaPixelFallback(eventName, eventId, normalizedParams);
   }
   sendMetaConversionEvent(eventName, eventId, normalizedParams, options);

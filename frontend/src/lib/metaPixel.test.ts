@@ -90,6 +90,18 @@ describe('metaPixel', () => {
     }));
   });
 
+  it.each(['purchase', 'PURCHASE', ' Purchase ', 'unknown', '__proto__'])('rejects unsupported runtime event %s before any tracking', (eventName) => {
+    expect(trackMetaPixelEvent(eventName as Parameters<typeof trackMetaPixelEvent>[0])).toBe('');
+    expect(window.fbq).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('a broken browser SDK cannot interrupt shopping or the server tracking fallback', () => {
+    window.fbq = vi.fn(() => { throw new Error('SDK failure'); });
+    expect(() => trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product(99)))).not.toThrow();
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/meta/conversions'), expect.objectContaining({ method: 'POST' }));
+  });
+
   it('loads deferred marketing before sending browser pixel events', () => {
     window.fbq = undefined;
     const fbq = vi.fn();

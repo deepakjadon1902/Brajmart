@@ -8,12 +8,15 @@
       var isBrowserPurchase = function (entry) {
         var event = entry && (entry.event || (entry[0] === 'event' ? entry[1] : ''));
         if (String(event || '').trim().toLowerCase() === 'purchase') return true;
-        var params = entry && entry[2];
+        var params = entry && (entry[2] || entry.eventModel || entry);
         var destinations = params && params.send_to;
-        return String(event || '').toLowerCase() === 'conversion' && [].concat(destinations || []).some(function (destination) {
+        return String(event || '').trim().toLowerCase() === 'conversion' && [].concat(destinations || []).some(function (destination) {
           return String(destination).indexOf('AW-17517087439/al0OCM6NiK8cEM-V5qBB') !== -1;
         });
       };
+      for (var queuedIndex = window.dataLayer.length - 1; queuedIndex >= 0; queuedIndex--) {
+        if (isBrowserPurchase(window.dataLayer[queuedIndex])) window.dataLayer.splice(queuedIndex, 1);
+      }
       var rawDataLayerPush = window.dataLayer.push;
       window.dataLayer.push = function () {
         var entries = Array.prototype.slice.call(arguments).filter(function (entry) { return !isBrowserPurchase(entry); });
@@ -28,10 +31,8 @@
           script.src = src;
           document.head.appendChild(script);
         };
-        var loadMarketing = function () {
-          if (loaded) return;
-          loaded = true;
-          var BRAJMART_META_PIXEL_ID = '1824114108557446';
+        var BRAJMART_META_PIXEL_ID = '1824114108557446';
+        (function () {
           var getMetaPixelUrl = function (value) {
             try {
               var url = new URL(String(value || ''), window.location.href);
@@ -47,7 +48,29 @@
               return /(^|\.)(google-analytics\.com|googleadservices\.com|google\.com|doubleclick\.net)$/.test(url.hostname) && /collect|conversion/.test(url.pathname) ? url : null;
             } catch (error) { return null; }
           };
+          var getMetaGatewayUrl = function (value) {
+            try {
+              var url = new URL(String(value || ''), window.location.href);
+              return /\/events\/?$/.test(url.pathname) ? url : null;
+            } catch (error) { return null; }
+          };
+          var hasMetaPurchase = function (value) {
+            if (!value || typeof value !== 'object') return false;
+            if (String(value.event_name || '').trim().toLowerCase() === 'purchase') return true;
+            return Object.keys(value).some(function (key) { return hasMetaPurchase(value[key]); });
+          };
           var isBlockedMarketingRequest = function (value, data) {
+            var gatewayUrl = getMetaGatewayUrl(value);
+            if (gatewayUrl) {
+              // The public Pixel configuration enables an automatic CAPI relay.
+              // Keep our payment-verifying backend as the server event owner.
+              if (gatewayUrl.hostname === 'fh-118116076e9a4c2a96a99fbb70bea2a0.ecs.us-west-2.on.aws' ||
+                  gatewayUrl.hostname === 'bded8a3c6ae-1-1053047382554.us-central1.run.app') return true;
+              // Detect Purchase payloads even if the account changes relay hosts.
+              if (typeof data === 'string') {
+                try { if (hasMetaPurchase(JSON.parse(data))) return true; } catch (error) {}
+              }
+            }
             var googleUrl = getGoogleTrackingUrl(value);
             if (googleUrl) {
               // Measurement Protocol belongs on the server, with a private secret.
@@ -94,7 +117,14 @@
                   if (window.console && window.console.warn) window.console.warn('Blocked unintended marketing request.', url);
                   return Promise.resolve(new Response(null, { status: 204 }));
                 }
-                if ((getMetaPixelUrl(url) || getGoogleTrackingUrl(url)) && input && typeof input.clone === 'function' && input.body) {
+                var isTrackingUrl = getMetaPixelUrl(url) || getGoogleTrackingUrl(url) || getMetaGatewayUrl(url);
+                if (isTrackingUrl && init && init.body && typeof init.body.text === 'function') {
+                  return init.body.text().then(function (body) {
+                    if (isBlockedMarketingRequest(url, body)) return new Response(null, { status: 204 });
+                    return rawFetch(input, init);
+                  });
+                }
+                if (isTrackingUrl && input && typeof input.clone === 'function' && input.body) {
                   return input.clone().text().then(function (body) {
                     if (isBlockedMarketingRequest(url, body)) return new Response(null, { status: 204 });
                     return rawFetch(input, init);
@@ -168,7 +198,11 @@
             });
           };
           installMetaPixelNetworkGuard();
+        })();
 
+        var loadMarketing = function () {
+          if (loaded) return;
+          loaded = true;
           !function(f,b,e,v,n,t,s)
           {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
           n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -194,13 +228,13 @@
                 if (window.console && window.console.warn) window.console.warn('Blocked unintended marketing trackSingle.', pixelId);
                 return;
               }
-              if ((command === 'trackSingle' || command === 'trackSingleCustom') && String(args[2] || '').toLowerCase() === 'purchase') {
+              if ((command === 'trackSingle' || command === 'trackSingleCustom') && String(args[2] || '').trim().toLowerCase() === 'purchase') {
                 if (window.console && window.console.warn) {
                   window.console.warn('Blocked browser Meta Purchase event. Purchase is sent only by verified Conversions API.', { url: window.location.href });
                 }
                 return;
               }
-              if ((command === 'track' || command === 'trackCustom') && String(args[1] || '').toLowerCase() === 'purchase') {
+              if ((command === 'track' || command === 'trackCustom') && String(args[1] || '').trim().toLowerCase() === 'purchase') {
                 if (window.console && window.console.warn) {
                   window.console.warn('Blocked browser Meta Purchase event. Purchase is sent only by verified Conversions API.', { url: window.location.href });
                 }

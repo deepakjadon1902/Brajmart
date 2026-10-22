@@ -7,6 +7,7 @@ const pixelId = '1824114108557446';
 
 test('browser transport guards block Purchase and retain legitimate SDK events', async ({ page }) => {
   const pixelRequests: string[] = [];
+  const gatewayRequests: string[] = [];
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.hostname === 'brajmart-meta.test' && route.request().isNavigationRequest()) {
@@ -21,6 +22,7 @@ test('browser transport guards block Purchase and retain legitimate SDK events',
       ` });
     }
     if (url.hostname.endsWith('facebook.com')) pixelRequests.push(route.request().url());
+    if (url.pathname === '/events') gatewayRequests.push(route.request().url());
     // Every external request is intercepted. No tracking or payments reach a service.
     return route.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
   });
@@ -43,6 +45,14 @@ test('browser transport guards block Purchase and retain legitimate SDK events',
     await fetch(new Request('https://www.facebook.com/tr/', { method: 'POST', body: `id=${id}&ev=Purchase` }));
     navigator.sendBeacon(url, '');
     navigator.sendBeacon('https://www.facebook.com/tr/', `id=${id}&ev=Purchase`);
+    const gateway = 'https://fh-118116076e9a4c2a96a99fbb70bea2a0.ecs.us-west-2.on.aws/events';
+    await fetch(gateway, { method: 'POST', body: JSON.stringify({ event_name: 'Purchase' }) });
+    navigator.sendBeacon(gateway, new Blob(['gateway payload']));
+    const changedGateway = 'https://changed-relay.example/events';
+    const purchaseBody = JSON.stringify({ data: [{ event_name: 'Purchase', action_source: 'website' }] });
+    await fetch(changedGateway, { method: 'POST', body: purchaseBody });
+    await fetch(new Request(changedGateway, { method: 'POST', body: purchaseBody }));
+    await fetch(changedGateway, { method: 'POST', body: new Blob([purchaseBody]) });
     const image = new Image();
     image.src = url;
     image.setAttribute('src', url);
@@ -67,4 +77,5 @@ test('browser transport guards block Purchase and retain legitimate SDK events',
   expect(dispatched.some((args) => args.includes('Purchase'))).toBe(false);
   expect(dispatched.some((args) => args.includes('2744712869202681'))).toBe(false);
   expect(pixelRequests).toEqual([]);
+  expect(gatewayRequests).toEqual([]);
 });

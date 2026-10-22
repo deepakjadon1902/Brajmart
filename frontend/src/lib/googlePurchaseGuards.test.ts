@@ -30,6 +30,22 @@ it('blocks the legacy purchase conversion label without blocking other funnel ev
   dom.window.dataLayer.push({ event: 'add_to_cart' });
   expect(dom.window.dataLayer).toHaveLength(2);
 });
+it('blocks legacy purchase labels in object and eventModel dataLayer formats', () => {
+  dom.window.dataLayer.length = 0;
+  dom.window.dataLayer.push({ event: 'conversion', send_to: 'AW-17517087439/al0OCM6NiK8cEM-V5qBB' });
+  dom.window.dataLayer.push({ event: 'conversion', eventModel: { send_to: ['AW-17517087439/al0OCM6NiK8cEM-V5qBB'] } });
+  expect(dom.window.dataLayer).toHaveLength(0);
+});
+it('removes preloaded purchase messages while preserving existing funnel messages', () => {
+  const early = new JSDOM(html, { url: 'https://www.brajmart.com/', runScripts: 'outside-only' });
+  try {
+    early.window.dataLayer = [{ event: 'purchase' }, ['event', 'Purchase', {}], { event: 'add_to_cart' }];
+    early.window.eval(early.window.document.querySelector('script')!.textContent!);
+    expect(early.window.dataLayer.map((entry: { event: string }) => entry.event)).toEqual(['add_to_cart']);
+  } finally {
+    early.window.close();
+  }
+});
 it('blocks Google purchase fetch, beacon, Request bodies and server-only MP from browsers', async () => {
   await dom.window.fetch('https://region1.google-analytics.com/g/collect?en=purchase');
   dom.window.navigator.sendBeacon('https://www.google-analytics.com/g/collect', 'en=purchase');
