@@ -519,15 +519,30 @@ export const syncShippingLabelsBatch = async () => {
   }
 };
 
+export const getNextShippingLabelsSyncAt = (now = new Date()) => {
+  // 06:00 and 18:00 Asia/Kolkata are 00:30 and 12:30 UTC year-round.
+  const next = new Date(now);
+  next.setUTCHours(0, 30, 0, 0);
+  if (next.getTime() <= now.getTime()) next.setUTCHours(12, 30, 0, 0);
+  if (next.getTime() <= now.getTime()) next.setUTCHours(24, 30, 0, 0);
+  return next;
+};
+
 export const startShippingLabelsSyncScheduler = () => {
   if (schedulerStarted || !isShippingLabelsConfigured()) return;
   schedulerStarted = true;
-  const intervalMs = Math.max(60_000, Number(process.env.SHIPPING_LABELS_SYNC_INTERVAL_MS || 10 * 60_000));
-  const run = () => syncShippingLabelsBatch().catch((error) => {
-    console.error('Shipping Labels background sync failed:', error?.message || error);
-  });
-  setTimeout(run, Math.min(30_000, intervalMs));
-  const timer = setInterval(run, intervalMs);
-  timer.unref?.();
+
+  const scheduleNextRun = () => {
+    const now = new Date();
+    const timer = setTimeout(() => {
+      scheduleNextRun();
+      syncShippingLabelsBatch().catch((error) => {
+        console.error('Shipping Labels background sync failed:', error?.message || error);
+      });
+    }, getNextShippingLabelsSyncAt(now).getTime() - now.getTime());
+    timer.unref?.();
+  };
+
+  scheduleNextRun();
 };
 

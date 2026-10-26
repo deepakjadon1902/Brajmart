@@ -391,3 +391,53 @@ test('maps only courier-owned progress and never downgrades terminal or advanced
   assert.equal(shipping.shouldApplyShippingLabelStatus('cancelled', 'delivered'), false);
 });
 
+test('automatic sync selects the next 6 AM or 6 PM IST across day and year boundaries', () => {
+  const cases = [
+    ['2026-10-25T23:00:00.000Z', '2026-10-26T00:30:00.000Z'],
+    ['2026-10-26T00:29:59.999Z', '2026-10-26T00:30:00.000Z'],
+    ['2026-10-26T00:30:00.000Z', '2026-10-26T12:30:00.000Z'],
+    ['2026-10-26T06:00:00.000Z', '2026-10-26T12:30:00.000Z'],
+    ['2026-10-26T12:29:59.999Z', '2026-10-26T12:30:00.000Z'],
+    ['2026-10-26T12:30:00.000Z', '2026-10-27T00:30:00.000Z'],
+    ['2026-10-26T18:30:00.000Z', '2026-10-27T00:30:00.000Z'],
+    ['2026-12-31T23:59:59.999Z', '2027-01-01T00:30:00.000Z'],
+  ];
+  for (const [now, expected] of cases) {
+    assert.equal(shipping.getNextShippingLabelsSyncAt(new Date(now)).toISOString(), expected, now);
+  }
+});
+
+test('automatic sync waits for 6 AM and 6 PM IST without startup or ten-minute requests', async (t) => {
+  state.mapping = { ...staleMapping(), external_label_id: 'label-10339' };
+  process.env.SHIPPING_LABELS_SYNC_INTERVAL_MS = '600000';
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: new Date('2026-10-26T00:15:00.000Z') });
+  t.after(() => t.mock.timers.reset());
+
+  const advance = async (ms) => {
+    t.mock.timers.tick(ms);
+    await new Promise(setImmediate);
+  };
+
+  shipping.startShippingLabelsSyncScheduler();
+  shipping.startShippingLabelsSyncScheduler();
+  await advance(30_000);
+  assert.equal(state.requests.length, 0, 'startup must not trigger a sync');
+  await advance(10 * 60_000);
+  assert.equal(state.requests.length, 0, 'the legacy ten-minute setting must be ignored');
+  await advance(269_999);
+  assert.equal(state.requests.length, 0, 'no requests before 6 AM IST');
+  await advance(1);
+  assert.equal(state.refreshPosts, 1, 'exactly one refresh at 6 AM IST');
+
+  const morningRequests = state.requests.length;
+  await advance(12 * 60 * 60_000 - 1);
+  assert.equal(state.requests.length, morningRequests, 'no requests between scheduled times');
+  await advance(1);
+  assert.equal(state.refreshPosts, 2, 'exactly one refresh at 6 PM IST');
+  await advance(12 * 60 * 60_000);
+  assert.equal(state.refreshPosts, 3, 'the next day repeats at 6 AM IST');
+  await advance(12 * 60 * 60_000);
+  assert.equal(state.refreshPosts, 4, 'the next day repeats at 6 PM IST');
+  assert.equal(state.handoffPosts, 0, 'automatic status sync must not open a print handoff');
+});
+

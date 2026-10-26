@@ -115,7 +115,6 @@ SHIPPING_LABELS_APP_URL=https://labels.brajmart.com
 SHIPPING_LABELS_API_URL=https://labels.brajmart.com/api/v1
 SHIPPING_LABELS_USERNAME=your_labels_app_username
 SHIPPING_LABELS_PASSWORD=your_labels_app_password
-SHIPPING_LABELS_SYNC_INTERVAL_MS=600000
 SHIPPING_LABELS_SYNC_BATCH_SIZE=25
 ```
 
@@ -135,6 +134,14 @@ register delivered or RTO shipments without changing their terminal order
 status. A database creation claim, the remote order reference, and matching
 unassigned courier/AWB labels make repeated or concurrent print and sync clicks
 idempotent. Missing remote labels are recovered on either action.
+
+Automatic background sync runs twice daily at **6:00 AM and 6:00 PM IST
+(Asia/Kolkata)**, regardless of the server's timezone. Starting or restarting
+the backend waits for the next scheduled time; it does not trigger an extra
+sync. The old `SHIPPING_LABELS_SYNC_INTERVAL_MS` setting is no longer used.
+The backend must be running at the scheduled time. Each run processes up to
+`SHIPPING_LABELS_SYNC_BATCH_SIZE` labels and makes requests for each label.
+Manual printing and **Sync Label Status** remain available on demand.
 
 The background sync asks ShippingLabelsDashboard to refresh the courier before
 reading it. If that lookup is skipped or fails, BrajMart keeps the existing
