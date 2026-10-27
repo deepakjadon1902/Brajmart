@@ -116,6 +116,9 @@ const UserOrderTracking = () => {
 
   const userOrders = orders.length ? orders : (user ? getOrdersByUser(user.id) : []);
   const selectedOrder = trackedOrder || (selectedOrderId ? getOrderById(selectedOrderId) : null);
+  const hasOrderTotal = selectedOrder?.total != null
+    && String(selectedOrder.total).trim() !== ''
+    && Number.isFinite(Number(selectedOrder.total));
 
   const normalizeApiOrder = (o: any) => ({
     ...o,
@@ -128,7 +131,7 @@ const UserOrderTracking = () => {
         image: i?.image || i?.product?.image || '',
       },
       quantity: i?.quantity || 1,
-      price: Number(i?.price || i?.product?.price || 0),
+      price: i?.price ?? i?.product?.price,
     })),
     shippingAddress: o.shippingAddress || {},
     billingAddress: o.billingAddress || {},
@@ -413,7 +416,9 @@ const UserOrderTracking = () => {
                           </Link>
                         )}
                       </div>
-                      <p className="font-semibold text-foreground">{formatPrice(item.price * item.quantity)}</p>
+                      {item.price != null && (
+                        <p className="font-semibold text-foreground">{formatPrice(item.price * item.quantity)}</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -421,17 +426,21 @@ const UserOrderTracking = () => {
 
               <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
                 <h2 className="mb-4 font-cinzel text-lg font-bold text-foreground">Payment Summary</h2>
-                <OrderPaymentBreakdown
-                  itemsSubtotal={selectedOrder.itemsSubtotal}
-                  packagingAmount={selectedOrder.packagingAmount}
-                  packagingRate={selectedOrder.packagingRate}
-                  shippingAmount={selectedOrder.shippingAmount}
-                  codAmount={selectedOrder.codAmount}
-                  codPincode={selectedOrder.codPincode}
-                  total={selectedOrder.total}
-                  calculatedItemsSubtotal={selectedOrder.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0)}
-                  paymentMethod={selectedOrder.paymentMethod}
-                />
+                {hasOrderTotal ? (
+                  <OrderPaymentBreakdown
+                    itemsSubtotal={selectedOrder.itemsSubtotal}
+                    packagingAmount={selectedOrder.packagingAmount}
+                    packagingRate={selectedOrder.packagingRate}
+                    shippingAmount={selectedOrder.shippingAmount}
+                    codAmount={selectedOrder.codAmount}
+                    codPincode={selectedOrder.codPincode}
+                    total={selectedOrder.total}
+                    calculatedItemsSubtotal={selectedOrder.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0)}
+                    paymentMethod={selectedOrder.paymentMethod}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Payment details are available in your order confirmation.</p>
+                )}
               </div>
             </div>
 
