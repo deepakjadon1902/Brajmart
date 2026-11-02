@@ -6,8 +6,10 @@
   "scripts": {
     "prebuild": "node scripts/patchFontkit.cjs",
     "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.type-tests.json",
     "pretest": "node scripts/patchFontkit.cjs",
-    "test": "node -r ts-node/register/transpile-only --test tests/*.test.cjs",
+    "test": "node -r ts-node/register/transpile-only --test tests/*.test.cjs tests/integration/*.test.cjs",
+    "test:integration": "node -r ts-node/register/transpile-only --test tests/integration/*.test.cjs",
     "test:tracking": "node -r ts-node/register/transpile-only --test tests/verified-purchase.test.cjs tests/google-purchases.test.cjs",
     "audit:tracking-public": "node scripts/auditMetaPublicSources.cjs",
     "validate:google-purchase": "node scripts/validateGooglePurchase.cjs",
@@ -23,6 +25,16 @@
     "migrate:images:imagekit": "node -r ts-node/register scripts/migrateLegacyLocalImagesToImageKit.ts"
   },
   "dependencies": {
+    "@types/archiver": "^6.0.4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.7.5",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^20.14.10",
+    "@types/nodemailer": "^6.4.23",
+    "@types/pdfkit": "^0.17.6",
     "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
     "compression": "^1.8.0",
@@ -42,16 +54,6 @@
     "typescript": "^5.5.4"
   },
   "devDependencies": {
-    "@types/archiver": "^6.0.4",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/compression": "^1.7.5",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
-    "@types/jsonwebtoken": "^9.0.6",
-    "@types/multer": "^1.4.12",
-    "@types/node": "^20.14.10",
-    "@types/nodemailer": "^6.4.23",
-    "@types/pdfkit": "^0.17.6",
     "nodemon": "^3.1.4"
   }
 }

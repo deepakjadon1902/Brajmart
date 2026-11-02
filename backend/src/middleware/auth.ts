@@ -1,8 +1,10 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import jwt from 'jsonwebtoken';
 
+export type AuthenticatedUser = { id: string; email: string; role?: string; pwdReset?: boolean };
+
 export interface AuthRequest extends Request {
-  user?: { id: string; email: string; role?: string; pwdReset?: boolean };
+  user?: AuthenticatedUser;
 }
 
 export const getJwtSecret = () => {
@@ -12,12 +14,12 @@ export const getJwtSecret = () => {
   return secret || 'dev-secret-change-me';
 };
 
-export const auth = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const auth: RequestHandler = (req: AuthRequest, res: Response, next: NextFunction) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ message: 'No token, access denied' });
 
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as any;
+    const decoded = jwt.verify(token, getJwtSecret());
     req.user = decoded as AuthRequest['user'];
     next();
   } catch {
@@ -25,12 +27,12 @@ export const auth = (req: AuthRequest, res: Response, next: NextFunction) => {
   }
 };
 
-export const optionalAuth = (req: AuthRequest, _res: Response, next: NextFunction) => {
+export const optionalAuth: RequestHandler = (req: AuthRequest, _res: Response, next: NextFunction) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
   if (!token) return next();
 
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as any;
+    const decoded = jwt.verify(token, getJwtSecret());
     req.user = decoded as AuthRequest['user'];
   } catch {
     req.user = undefined;
@@ -38,7 +40,7 @@ export const optionalAuth = (req: AuthRequest, _res: Response, next: NextFunctio
   next();
 };
 
-export const adminOnly = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const adminOnly: RequestHandler = (req: AuthRequest, res: Response, next: NextFunction) => {
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ message: 'Admin access required' });
   }

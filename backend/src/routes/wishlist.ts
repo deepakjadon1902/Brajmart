@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import { auth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
@@ -13,7 +13,7 @@ const mapWishlistRow = (row: any) => ({
   updatedAt: toIsoString(row.updated_at),
 });
 
-router.get('/', auth, async (req: AuthRequest, res) => {
+router.get('/', auth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -27,7 +27,7 @@ router.get('/', auth, async (req: AuthRequest, res) => {
   }
 });
 
-router.put('/', auth, async (req: AuthRequest, res) => {
+router.put('/', auth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -46,7 +46,7 @@ router.put('/', auth, async (req: AuthRequest, res) => {
   }
 });
 
-router.delete('/', auth, async (req: AuthRequest, res) => {
+router.delete('/', auth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });

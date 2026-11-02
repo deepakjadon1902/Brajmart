@@ -10,6 +10,40 @@ Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 4. Add ImageKit credentials to `.env` if you want permanent deployed image storage.
 5. Run `npm run dev` (development) or `npm start` (production)
 
+## Render production TypeScript builds
+
+This backend compiles during `postinstall`. With `NODE_ENV=production`, npm
+omits development dependencies by default. The compiler and every external
+declaration package needed by `src` therefore belong in `dependencies` for
+this install-and-build lifecycle. `nodemon` remains a development dependency.
+Keep these declarations in the production installation even though they do
+not execute at runtime; otherwise installation fails before the server starts.
+
+The lockfile retains Express 4 and its compatible Express 4 declarations.
+Missing Express declarations cause follow-on errors in `AuthRequest.body`,
+`params`, `query`, and inferred handler parameters. Do not fix these by adding
+declaration shims, weakening strict checking, or changing production runtime
+mode. `AuthRequest` extends the actual Express `Request` and preserves the
+existing optional authenticated-user fields.
+
+For a reviewed Render release, the service root is `backend`; `npm ci --omit=dev`
+installs the locked production dependencies and runs the existing build hook.
+`npm start` runs `dist/index.js`. No Render environment changes are required
+for this fix. Local verification commands are:
+
+```sh
+npm install --include=dev
+npm run typecheck
+npm run build
+npm test
+npm run test:integration
+```
+
+`typecheck` includes compilation-only Express request contracts. Integration
+tests use loopback HTTP servers and in-memory persistence doubles. The older
+`phase*Smoke.ts` scripts insert/delete database records and must not be pointed
+at production as part of build verification.
+
 ## Razorpay checkout environment on Render
 
 `Razorpay production environment mismatch` originates in this backend before

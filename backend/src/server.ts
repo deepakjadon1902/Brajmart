@@ -1,6 +1,7 @@
-import express from 'express';
+import express, { type Request, type Response, type NextFunction, type ErrorRequestHandler } from 'express';
 import compression from 'compression';
-import cors from 'cors';
+import cors, { type CorsOptions, type CorsOptionsDelegate } from 'cors';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -54,7 +55,7 @@ const toPositiveInt = (value: unknown, fallback: number) => {
 };
 const allowedUploadExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif']);
 
-app.get('/uploads/:filename', async (req, res, next) => {
+app.get('/uploads/:filename', async (req: Request, res: Response, next: NextFunction) => {
   const width = toPositiveInt(req.query.width, 0);
   const height = toPositiveInt(req.query.height, 0);
   const quality = toPositiveInt(req.query.quality ?? req.query.q, 78);
@@ -85,25 +86,29 @@ app.get('/uploads/:filename', async (req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.type('image/webp');
     const stream = image.webp({ quality: Math.max(35, Math.min(quality, 85)) }).pipe(res);
-    stream.on?.('error', (err: any) => {
+    stream.on?.('error', (err: Error) => {
       if (!res.headersSent) res.status(500).end(err?.message || 'Image processing failed');
     });
-  } catch (err: any) {
-    return res.status(500).send(err?.message || 'Image processing failed');
+  } catch (err: unknown) {
+    const message = err !== null && (typeof err === 'object' || typeof err === 'function') && 'message' in err ? err.message : undefined;
+    return res.status(500).send(message || 'Image processing failed');
   }
 });
 
 app.use(compression());
-app.use(cors((req, callback) => {
+const corsOptions: CorsOptionsDelegate<Request> = (req: Request, callback: (err: Error | null, options?: CorsOptions) => void) => {
   const origin = req.headers.origin;
   const allowed = isCorsOriginAllowed(origin, corsOrigins);
 
   if (!allowed) return callback(Object.assign(new Error(`CORS blocked origin: ${origin}`), { status: 403 }));
   callback(null, { origin: true, credentials: true });
-}));
+};
+app.use(cors(corsOptions));
+
+type RawBodyRequest = IncomingMessage & { originalUrl?: string; rawBody?: string };
 app.use(express.json({
   limit: '50mb',
-  verify: (req: any, _res, buf) => {
+  verify: (req: RawBodyRequest, _res: ServerResponse, buf: Buffer) => {
     if (req.originalUrl === '/api/razorpay/webhook') {
       req.rawBody = buf.toString('utf8');
     }
@@ -135,30 +140,30 @@ const legacyProductTagRedirects: Record<string, string> = {
   exclusive: 'exclusive',
 };
 
-app.get(['/product-tag/:slug', '/product-tag/:slug/'], (req, res) => {
+app.get(['/product-tag/:slug', '/product-tag/:slug/'], (req: Request, res: Response) => {
   const tag = legacyProductTagRedirects[normalizeLegacySlug(req.params.slug)];
   res.redirect(301, tag ? `/products?tag=${encodeURIComponent(tag)}` : '/products');
 });
 
-app.get(['/product-category/:slug', '/product-category/:slug/'], (req, res) => {
+app.get(['/product-category/:slug', '/product-category/:slug/'], (req: Request, res: Response) => {
   const slug = normalizeLegacySlug(req.params.slug);
   res.redirect(301, slug ? `/category/${slug}` : '/categories');
 });
 
-app.get(['/product-category/:slug/:subSlug', '/product-category/:slug/:subSlug/'], (req, res) => {
+app.get(['/product-category/:slug/:subSlug', '/product-category/:slug/:subSlug/'], (req: Request, res: Response) => {
   const slug = normalizeLegacySlug(req.params.slug);
   const subSlug = normalizeLegacySlug(req.params.subSlug);
   res.redirect(301, slug && subSlug ? `/category/${slug}/${subSlug}` : slug ? `/category/${slug}` : '/categories');
 });
 
-app.use('/uploads', (req, res, next) => {
+app.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
   const ext = path.extname(String(req.path || '')).toLowerCase();
   if (!allowedUploadExtensions.has(ext)) return res.status(404).send('Not found');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   next();
 }, express.static(UPLOADS_DIR, {
   maxAge: '7d',
-  setHeaders: (res) => {
+  setHeaders: (res: ServerResponse) => {
     res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
     res.setHeader('X-Content-Type-Options', 'nosniff');
   },
@@ -189,7 +194,7 @@ app.use('/api/bundles', bundleRoutes);
 app.use('/api/meta/conversions', metaConversionRoutes);
 app.use('/api/email-followups', emailFollowupRoutes);
 
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/api/health', (_req: Request, res: Response) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 const xmlEscape = (value: unknown) =>
   String(value ?? '')
@@ -250,7 +255,7 @@ const staticSitemapEntries: SitemapEntry[] = [
   { path: '/payment-method', priority: '0.3', changefreq: 'yearly' },
 ];
 
-app.get('/robots.txt', (_req, res) => {
+app.get('/robots.txt', (_req: Request, res: Response) => {
   res.type('text/plain').send([
     'User-agent: *',
     'Allow: /',
@@ -291,7 +296,7 @@ app.get('/robots.txt', (_req, res) => {
   ].join('\n'));
 });
 
-app.get('/llms.txt', async (_req, res) => {
+app.get('/llms.txt', async (_req: Request, res: Response) => {
   const generatedAt = new Date().toISOString();
   const categories: string[] = [];
   const products: string[] = [];
@@ -391,7 +396,7 @@ app.get('/llms.txt', async (_req, res) => {
     .send(content);
 });
 
-app.get('/sitemap_index.xml', (_req, res) => {
+app.get('/sitemap_index.xml', (_req: Request, res: Response) => {
   res
     .type('application/xml')
     .setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400')
@@ -405,7 +410,7 @@ app.get('/sitemap_index.xml', (_req, res) => {
     ].join('\n'));
 });
 
-app.get('/sitemap.xml', async (_req, res) => {
+app.get('/sitemap.xml', async (_req: Request, res: Response) => {
   const entries: SitemapEntry[] = [...staticSitemapEntries];
 
   if (isDbConnected()) {
@@ -465,9 +470,10 @@ app.get('/sitemap.xml', async (_req, res) => {
     .send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`);
 });
 
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+const errorHandler: ErrorRequestHandler = (err: Error & { status?: number }, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
-});
+};
+app.use(errorHandler);
 
 export default app;

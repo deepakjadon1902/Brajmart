@@ -3,7 +3,7 @@ import { parseJson, toIsoString, boolFromDb } from './dbHelpers';
 import { approvedReviewAggregateSql } from './reviewAggregates';
 import { paidOnlinePaymentExistsSql } from './orderVisibility';
 import { mapProductRow } from '../routes/products';
-import { AuthRequest } from '../middleware/auth';
+import type { AuthRequest } from '../middleware/auth';
 import { insertAdminAuditLog } from './adminAudit';
 
 type OrderItem = {

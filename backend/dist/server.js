@@ -32,6 +32,7 @@ const reviews_1 = __importDefault(require("./routes/reviews"));
 const recommendations_1 = __importDefault(require("./routes/recommendations"));
 const bundles_1 = __importDefault(require("./routes/bundles"));
 const metaConversions_1 = __importDefault(require("./routes/metaConversions"));
+const emailFollowups_1 = __importDefault(require("./routes/emailFollowups"));
 const db_1 = require("./lib/db");
 const environmentOrigins_1 = require("./lib/environmentOrigins");
 const app = (0, express_1.default)();
@@ -89,17 +90,19 @@ app.get('/uploads/:filename', async (req, res, next) => {
         });
     }
     catch (err) {
-        return res.status(500).send(err?.message || 'Image processing failed');
+        const message = err !== null && (typeof err === 'object' || typeof err === 'function') && 'message' in err ? err.message : undefined;
+        return res.status(500).send(message || 'Image processing failed');
     }
 });
 app.use((0, compression_1.default)());
-app.use((0, cors_1.default)((req, callback) => {
+const corsOptions = (req, callback) => {
     const origin = req.headers.origin;
     const allowed = (0, environmentOrigins_1.isCorsOriginAllowed)(origin, corsOrigins);
     if (!allowed)
-        return callback(new Error(`CORS blocked origin: ${origin}`));
+        return callback(Object.assign(new Error(`CORS blocked origin: ${origin}`), { status: 403 }));
     callback(null, { origin: true, credentials: true });
-}));
+};
+app.use((0, cors_1.default)(corsOptions));
 app.use(express_1.default.json({
     limit: '50mb',
     verify: (req, _res, buf) => {
@@ -179,6 +182,7 @@ app.use('/api/reviews', reviews_1.default);
 app.use('/api/recommendations', recommendations_1.default);
 app.use('/api/bundles', bundles_1.default);
 app.use('/api/meta/conversions', metaConversions_1.default);
+app.use('/api/email-followups', emailFollowups_1.default);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 const xmlEscape = (value) => String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -440,8 +444,9 @@ app.get('/sitemap.xml', async (_req, res) => {
         .setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400')
         .send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`);
 });
-app.use((err, _req, res, _next) => {
+const errorHandler = (err, _req, res, _next) => {
     console.error('Error:', err);
     res.status(err.status || 500).json({ message: err.message || 'Internal server error' });
-});
+};
+app.use(errorHandler);
 exports.default = app;

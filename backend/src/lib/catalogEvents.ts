@@ -1,11 +1,11 @@
 import { EventEmitter } from 'node:events';
-import type { Request, Response } from 'express';
+import type { Request, Response, RequestHandler } from 'express';
 
 const events = new EventEmitter();
 events.setMaxListeners(0);
 export const publishCatalogUpdate = () => events.emit('updated');
 
-export const streamCatalogUpdates = (req: Request, res: Response) => {
+export const streamCatalogUpdates: RequestHandler = (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');

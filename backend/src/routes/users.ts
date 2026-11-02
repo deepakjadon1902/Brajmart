@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
@@ -45,7 +45,7 @@ const mapCustomerRow = (row: any) => ({
 const getSearchTerm = (value: unknown) => String(value || '').trim().toLowerCase();
 const likeSearch = (term: string) => `%${term}%`;
 
-router.get('/', auth, adminOnly, async (req, res) => {
+router.get('/', auth, adminOnly, async (req: AuthRequest, res: Response) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const search = getSearchTerm(req.query.search);
@@ -112,7 +112,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
   }
 });
 
-router.get('/admin/cart-favorites', auth, adminOnly, async (req, res) => {
+router.get('/admin/cart-favorites', auth, adminOnly, async (req: AuthRequest, res: Response) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const search = getSearchTerm(req.query.search);
@@ -189,7 +189,7 @@ router.get('/admin/cart-favorites', auth, adminOnly, async (req, res) => {
   }
 });
 
-router.put('/me', auth, async (req: AuthRequest, res) => {
+router.put('/me', auth, async (req: AuthRequest, res: Response) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const userIdRaw = req.user?.id;
@@ -252,7 +252,7 @@ router.put('/me', auth, async (req: AuthRequest, res) => {
   }
 });
 
-router.put('/me/password', auth, async (req: AuthRequest, res) => {
+router.put('/me/password', auth, async (req: AuthRequest, res: Response) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const userIdRaw = req.user?.id;
@@ -283,7 +283,7 @@ router.put('/me/password', auth, async (req: AuthRequest, res) => {
   }
 });
 
-router.get('/:id', auth, adminOnly, async (req, res) => {
+router.get('/:id', auth, adminOnly, async (req: AuthRequest, res: Response) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const rows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
@@ -294,7 +294,7 @@ router.get('/:id', auth, adminOnly, async (req, res) => {
   }
 });
 
-router.put('/:id/role', auth, adminOnly, async (req: AuthRequest, res) => {
+router.put('/:id/role', auth, adminOnly, async (req: AuthRequest, res: Response) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const beforeRows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
@@ -317,7 +317,7 @@ router.put('/:id/role', auth, adminOnly, async (req: AuthRequest, res) => {
   }
 });
 
-router.put('/:id/status', auth, adminOnly, async (req: AuthRequest, res) => {
+router.put('/:id/status', auth, adminOnly, async (req: AuthRequest, res: Response) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const beforeRows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
@@ -340,7 +340,7 @@ router.put('/:id/status', auth, adminOnly, async (req: AuthRequest, res) => {
   }
 });
 
-router.delete('/:id', auth, adminOnly, async (req: AuthRequest, res) => {
+router.delete('/:id', auth, adminOnly, async (req: AuthRequest, res: Response) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const beforeRows = await dbQuery<any>('SELECT * FROM users WHERE id = ? LIMIT 1', [req.params.id]);
