@@ -11,6 +11,9 @@ VITE_SITE_URL=https://www.brajmart.com
 API_BASE_URL=https://brajmart-1.onrender.com/api
 ```
 
-The sitemap generator runs before `vite build`. If `API_BASE_URL`/`VITE_API_URL`
-does not point to the live backend, `sitemap.xml` will contain only static
-pages and product/category/blog URLs will be missing.
+Prerender waits for the configured backend's `/api/health` endpoint before
+fetching catalog data. The default readiness window is 90 seconds; set
+`BUILD_API_READY_TIMEOUT_MS` (up to 180000) if the backend needs longer during a
+deployment. The build still fails if the backend does not become ready or its
+catalog endpoints fail, so incomplete product/category pages are not published.
+Deploy the backend first when coordinating a manual production release.

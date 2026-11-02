@@ -70,8 +70,89 @@ const apiUrl = (resource) => {
 
 const FETCH_TIMEOUT_MS = Math.max(1_000, Number(process.env.BUILD_API_TIMEOUT_MS || 12_000));
 const FETCH_RETRIES = Math.max(0, Math.min(3, Number(process.env.BUILD_API_RETRIES ?? 1)));
+// Vercel and Render can auto-deploy the same commit concurrently. Wait for the
+// backend process to become ready before requesting catalog routes; otherwise
+// prerender can fail during Render's replacement/cold-start window.
+const configuredReadyTimeout = Number(process.env.BUILD_API_READY_TIMEOUT_MS ?? 90_000);
+const API_READY_TIMEOUT_MS = Number.isFinite(configuredReadyTimeout)
+  ? Math.max(1_000, Math.min(180_000, configuredReadyTimeout))
+  : 90_000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const waitForApiReady = async (meta) => {
+  if (!API_BASE) return;
+
+  const url = apiUrl('/health');
+  const startedAt = Date.now();
+  const deadline = startedAt + API_READY_TIMEOUT_MS;
+  let delayMs = 1_000;
+  let attempts = 0;
+  let lastFailure = 'no response';
+  let lastStatusCode = null;
+  let lastBytes = 0;
+
+  while (Date.now() < deadline) {
+    const attemptStartedAt = Date.now();
+    const controller = new AbortController();
+    const timeoutMs = Math.max(1, Math.min(FETCH_TIMEOUT_MS, deadline - attemptStartedAt));
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    attempts += 1;
+
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      // Consume the small health response so the underlying connection can be reused.
+      lastBytes = (await response.arrayBuffer()).byteLength;
+      lastStatusCode = response.status;
+      if (response.ok) {
+        meta.requests.push({
+          resource: '/health',
+          url,
+          status: 'OK',
+          statusCode: response.status,
+          bytes: lastBytes,
+          durationMs: Date.now() - startedAt,
+          attempts,
+          error: '',
+        });
+        clearTimeout(timeout);
+        return;
+      }
+
+      lastFailure = `backend health endpoint returned HTTP ${response.status}`;
+      // A wrong path/configuration will not be repaired by waiting for a restart.
+      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+        throw new Error(lastFailure);
+      }
+    } catch (caught) {
+      lastFailure = caught instanceof Error ? caught.message : 'backend health request failed';
+      if (/returned HTTP 4\d\d/.test(lastFailure) && !/HTTP 429/.test(lastFailure)) {
+        clearTimeout(timeout);
+        meta.requests.push({
+          resource: '/health', url, status: 'FAILED', statusCode: lastStatusCode, bytes: lastBytes,
+          durationMs: Date.now() - startedAt, attempts, error: lastFailure,
+        });
+        throw new Error(`Catalog backend readiness check failed: ${lastFailure}`);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+    await sleep(Math.min(delayMs, remainingMs));
+    delayMs = Math.min(delayMs * 2, 8_000);
+  }
+
+  meta.requests.push({
+    resource: '/health', url, status: 'FAILED', statusCode: lastStatusCode, bytes: lastBytes,
+    durationMs: Date.now() - startedAt, attempts, error: lastFailure,
+  });
+  throw new Error(`Catalog backend did not become ready within ${API_READY_TIMEOUT_MS}ms (${lastFailure})`);
+};
 
 const fetchJson = async (resource, fallback, meta) => {
   const url = apiUrl(resource);
@@ -154,6 +235,7 @@ export const getBuildData = async ({ strict = isStrictSeoBuild() } = {}) => {
   };
 
   try {
+    await waitForApiReady(meta);
     [products, categories, blogs, heroSlides, settings] = await Promise.all([
       fetchJson('/products?view=detail', [], meta),
       fetchJson('/categories', [], meta),
