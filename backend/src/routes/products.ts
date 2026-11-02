@@ -345,7 +345,7 @@ export const mapProductListRow = (row: any) => ({
   image: row.image,
   images: (() => {
     const parsed = parseJson(row.images, []);
-    if (Array.isArray(parsed) && parsed.length) return parsed.slice(0, 2);
+    if (Array.isArray(parsed) && parsed.length) return parsed;
     return row.image ? [row.image] : [];
   })(),
   categoryId: row.category_id !== undefined && row.category_id !== null ? Number(row.category_id) : undefined,
