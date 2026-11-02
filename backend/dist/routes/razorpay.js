@@ -17,6 +17,7 @@ const checkoutValidation_1 = require("../lib/checkoutValidation");
 const rateLimit_1 = require("../middleware/rateLimit");
 const inventory_1 = require("../lib/inventory");
 const purchaseTracking_1 = require("../lib/purchaseTracking");
+const cartFollowups_1 = require("../lib/cartFollowups");
 const razorpayVerification_1 = require("../lib/razorpayVerification");
 const razorpayEnvironment_1 = require("../lib/razorpayEnvironment");
 const router = (0, express_1.Router)();
@@ -34,6 +35,18 @@ const razorpayReportLimiter = (0, rateLimit_1.rateLimit)('razorpay-status-report
 });
 const getRazorpayConfig = () => {
     return (0, razorpayEnvironment_1.resolveRazorpayCredentials)();
+};
+const respondToConfigurationFailure = (res, error) => {
+    if (!(error instanceof razorpayEnvironment_1.RazorpayConfigurationError))
+        return false;
+    console.error('Razorpay configuration invalid; run npm run check:razorpay on the backend service.', {
+        code: error.code, issues: error.issues,
+    });
+    res.status(503).json({
+        code: 'PAYMENT_UNAVAILABLE',
+        message: 'Online payment is temporarily unavailable. Please try again shortly or contact support.',
+    });
+    return true;
 };
 const hmacSha256 = (value, secret) => crypto_1.default.createHmac('sha256', secret).update(value).digest('hex');
 const timingSafeEqual = (a, b) => {
@@ -269,6 +282,8 @@ const updateOrderForPayment = async (params) => {
             await (0, db_1.dbExecute)('UPDATE payments SET transaction_id = ?, updated_at = NOW() WHERE order_id = ? ORDER BY id DESC LIMIT 1', [params.razorpayPaymentId, statusRow.order_id]);
         }
         if (params.status === 'paid') {
+            const paidOrderRows = await (0, db_1.dbQuery)('SELECT customer_email FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
+            await (0, cartFollowups_1.cancelCartRemindersForOrder)(paidOrderRows[0]?.customer_email).catch(() => { });
             if (params.metaContext || params.request)
                 await (0, purchaseTracking_1.capturePurchaseOrderContext)(statusRow.order_id, params.metaContext, params.request);
             // A duplicate signed callback is also a safe retry after a provider outage.
@@ -298,6 +313,8 @@ const updateOrderForPayment = async (params) => {
         await (0, db_1.dbExecute)('INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)', [statusRow.order_id, orderRow.customer_name || '', orderRow.customer_email || '', statusRow.method || 'Razorpay', Number(statusRow.amount || orderRow.total || 0), params.status, transactionId]);
     }
     await (0, db_1.dbExecute)('INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()', [params.razorpayOrderId, params.status, statusRow.order_id, Number(statusRow.amount || orderRow.total || 0), statusRow.method || 'Razorpay', transactionId]);
+    if (params.status === 'paid')
+        await (0, cartFollowups_1.cancelCartRemindersForOrder)(orderRow.customer_email).catch(() => { });
     const orderItems = (0, dbHelpers_1.parseJson)(orderRow.items, []);
     if (params.status === 'paid') {
         await (0, db_1.withDbTransaction)((connection) => (0, inventory_1.convertReservationToSale)(connection, Number(statusRow.order_id), orderItems));
@@ -521,6 +538,8 @@ router.post('/create-order', razorpayCreateLimiter, auth_1.optionalAuth, async (
         });
     }
     catch (err) {
+        if (respondToConfigurationFailure(res, err))
+            return;
         return res.status(500).json({ message: err?.message || 'Failed to create Razorpay order' });
     }
 });
@@ -599,6 +618,8 @@ router.post('/retry-order', razorpayCreateLimiter, async (req, res) => {
         });
     }
     catch (err) {
+        if (respondToConfigurationFailure(res, err))
+            return;
         return res.status(500).json({ message: err?.message || 'Failed to retry Razorpay payment' });
     }
 });
@@ -635,6 +656,8 @@ router.post('/verify', razorpayReportLimiter, async (req, res) => {
         return res.json({ ok: true, ...result });
     }
     catch (err) {
+        if (respondToConfigurationFailure(res, err))
+            return;
         return res.status(500).json({ message: err?.message || 'Failed to verify Razorpay payment' });
     }
 });
@@ -642,6 +665,7 @@ router.post('/failed', razorpayReportLimiter, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        getRazorpayConfig();
         const { razorpay_order_id, razorpay_payment_id, customer_email, reason, } = req.body || {};
         const razorpayOrderId = String(razorpay_order_id || '').trim();
         const customerEmail = String(customer_email || '').trim().toLowerCase();
@@ -683,6 +707,8 @@ router.post('/failed', razorpayReportLimiter, async (req, res) => {
         return res.json({ ok: true, ...result });
     }
     catch (err) {
+        if (respondToConfigurationFailure(res, err))
+            return;
         return res.status(500).json({ message: err?.message || 'Failed to record Razorpay payment failure' });
     }
 });
@@ -737,6 +763,8 @@ router.post('/webhook', async (req, res) => {
         return res.json({ ok: true });
     }
     catch (err) {
+        if (respondToConfigurationFailure(res, err))
+            return;
         console.error(err);
         return res.status(500).json({ message: err?.message || 'Webhook processing failed' });
     }

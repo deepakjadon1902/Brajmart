@@ -10,6 +10,44 @@ Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 4. Add ImageKit credentials to `.env` if you want permanent deployed image storage.
 5. Run `npm run dev` (development) or `npm start` (production)
 
+## Razorpay checkout environment on Render
+
+`Razorpay production environment mismatch` originates in this backend before
+it contacts Razorpay. For the live storefront, configure **all three** settings
+in **Render → Brajmart-1 → Environment**:
+
+```env
+APP_ENV=production
+NODE_ENV=production
+RAZORPAY_MODE=live
+```
+
+Keep the existing `RAZORPAY_PLATFORM_KEY_ID` (a live `rzp_live_` ID), its paired
+`RAZORPAY_PLATFORM_KEY_SECRET`, and `RAZORPAY_PLATFORM_WEBHOOK_SECRET` on that
+backend service. Remove or empty every `RAZORPAY_TEST_*` variable there.
+Production rejects missing mode flags, test credentials and a mixed environment;
+these checks must remain enabled. A local `.env` edit or Vercel frontend setting
+does not update Render. After reviewing these changes, apply the matching Render
+environment settings and restart/deploy the backend through the normal release
+process.
+
+Run `npm run check:razorpay` in the backend directory (or Render Shell) to list
+the exact settings that need attention. It only inspects configuration: no
+database access, gateway requests, orders, payments or emails. It logs setting
+names and fixed instructions, never key IDs or secrets; it does not authenticate
+the keys with Razorpay. Exit code 0 means both checkout and webhook configuration
+are complete. Startup also reports configuration problems before customers
+attempt payment. Checkout returns a customer-safe HTTP 503 while misconfigured,
+without creating an order or reserving inventory.
+
+For staging use `APP_ENV=staging`, `NODE_ENV=production`, `RAZORPAY_MODE=test`,
+and only `RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET`, and
+`RAZORPAY_TEST_WEBHOOK_SECRET`. Local test payments use `APP_ENV=development`,
+`NODE_ENV=development`, and the same dedicated test variables. Never copy live
+credentials into the staging or development credential namespace.
+
+Reference: [Razorpay API keys and Test/Live modes](https://razorpay.com/docs/payments/dashboard/account-settings/api-keys).
+
 ## Vercel frontend CORS on Render
 
 `CORS blocked origin` means the running backend does not allow the URL opened
@@ -86,6 +124,29 @@ process restarts and are picked up afterward, but delivery can be delayed while
 a Render service is asleep or unavailable. A job interrupted during provider
 submission is marked uncertain and is not automatically resent, avoiding a
 possible duplicate at the cost of requiring manual review for that rare case.
+
+To diagnose a worker batch failure, run `npm run check:email-followups` from
+`backend` with the same environment as the server. This command reads schema
+metadata only: it does not read recipient records, update jobs, run migrations,
+or send emails. It reports provider configuration, database connectivity, and
+the exact missing follow-up tables, columns, or queue statuses. Provider
+configuration being present does not prove that the sender is verified.
+
+The worker checks the follow-up schema before modifying either queue. Missing
+schema reports `EMAIL_FOLLOWUP_SCHEMA_INCOMPLETE` with the affected table names;
+review `sql/migrate_email_followups.sql` against the intended database. Existing
+partial tables need a reviewed repair for the named columns/statuses because
+`CREATE TABLE IF NOT EXISTS` does not alter an existing table. Database failures
+report a safe code (for example `ETIMEDOUT` or `ER_TABLEACCESS_DENIED_ERROR`) and
+the batch stage instead of raw SQL, credentials or recipient details. The next
+scheduled batch retries automatically after the underlying problem is repaired.
+
+If this check times out with a literal IPv6 `DB_HOST`, verify the MySQL server
+hostname and its IPv4 route before changing the local connection setting. The
+hostname must identify the same intended database; a longer timeout does not
+repair an unreachable IPv6 route. Nodemon does not watch `.env`: enter `rs` in
+the running `npm run dev` terminal after changing database configuration, or
+restart the backend process normally.
 
 Checkout offers three separate, unchecked opt-ins: one cart reminder, occasional
 offer emails, and WhatsApp cart/favorite follow-up. Existing account emails and

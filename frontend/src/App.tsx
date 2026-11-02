@@ -8,6 +8,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "./pages/Home";
 import { fetchPublicSettings, productEventsUrl } from "./lib/api";
+import { FestivalDecorations } from '@/components/festival/FestivalDecor';
+import FestivalWelcome from '@/components/festival/FestivalWelcome';
 import { useSettingsStore } from "./store/settingsStore";
 import { useProductStore } from "./store/productStore";
 import { useCartStore } from "./store/cartStore";
@@ -340,6 +342,7 @@ const App = () => {
             favicon: data.favicon,
             socialLinks: data.socialLinks,
             announcementBar: data.announcementBar,
+            festivalTheme: data.festivalTheme ?? 'none',
             notifications: data.notifications,
             heroBadges: sanitizeBadges(data.heroBadges),
           });
@@ -351,7 +354,7 @@ const App = () => {
     const isAdminPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
     const cleanupStartupSettings = isAdminPath
       ? (loadSettings(), () => undefined)
-      : runAfterStartup(loadSettings, 7000);
+      : runAfterStartup(loadSettings, 1000);
     const refreshSettings = () => {
       if (document.visibilityState === 'visible') loadSettings();
     };
@@ -422,6 +425,8 @@ const App = () => {
         <CookieConsentBanner onAccept={() => queryClient.setDefaultOptions(getQueryDefaults())} />
         <ScrollToTop />
         <RouteSEO />
+        <FestivalDecorations />
+        <FestivalWelcome />
           <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={suspenseRoute(<LoginPage />)} />

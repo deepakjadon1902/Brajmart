@@ -27,6 +27,8 @@ import WhatsAppButton from '@/components/layout/WhatsAppButton';
 import MobileBottomNav from '@/components/layout/MobileBottomNav';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
+import { FestivalDecorations } from '@/components/festival/FestivalDecor';
+import FestivalWelcome from '@/components/festival/FestivalWelcome';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -52,6 +54,8 @@ const ServerApp = () => {
         <Toaster />
         <Sonner />
         <RouteSEO />
+        <FestivalDecorations />
+        <FestivalWelcome />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/categories" element={<CategoriesPage />} />

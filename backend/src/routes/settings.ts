@@ -11,6 +11,14 @@ const SETTINGS_CACHE_TTL_MS = 5 * 60_000;
 const SETTINGS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=600';
 let settingsCache: { at: number; data: any } | null = null;
 
+const festivalThemes = ['none', 'diwali', 'holi'];
+// Keep presentation preferences in the existing JSON column. No runtime DDL or
+// database migration is needed, and announcement visibility is independent.
+const readAnnouncement = (row: any): Record<string, any> => {
+  const value = parseJson(row.announcement_bar, { enabled: true, messages: [] });
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : { enabled: true, messages: [] };
+};
+
 const mapSettingsRow = (row: any) => ({
   _id: String(row.id),
   storeName: row.store_name,
@@ -38,13 +46,14 @@ const mapSettingsRow = (row: any) => ({
   favicon: row.favicon,
   socialLinks: parseJson(row.social_links, { instagram: '', facebook: '', youtube: '', whatsapp: '' }),
   announcementBar: parseJson(row.announcement_bar, { enabled: true, messages: [] }),
+  festivalTheme: festivalThemes.includes(readAnnouncement(row).festivalTheme) ? readAnnouncement(row).festivalTheme : 'none',
   notifications: parseJson(row.notifications, { orders: true, users: true, payments: true, stock: false }),
   heroBadges: parseJson(row.hero_badges, ['🏛️ Temple Authenticated', '🌿 100% Organic', '🚚 Pan-India Delivery']),
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
 });
 
-const buildUpdate = (data: any) => {
+const buildUpdate = (data: any, current: any) => {
   const fields: string[] = [];
   const values: any[] = [];
 
@@ -80,7 +89,15 @@ const buildUpdate = (data: any) => {
   if (data.storeLogo !== undefined) set('store_logo', data.storeLogo);
   if (data.favicon !== undefined) set('favicon', data.favicon);
   if (data.socialLinks !== undefined) set('social_links', JSON.stringify(data.socialLinks || {}));
-  if (data.announcementBar !== undefined) set('announcement_bar', JSON.stringify(data.announcementBar || {}));
+  if (data.announcementBar !== undefined || data.festivalTheme !== undefined) {
+    const previous = readAnnouncement(current);
+    set('announcement_bar', JSON.stringify({
+      ...previous,
+      ...(data.announcementBar || {}),
+      // Only the validated top-level preference can change the active festival.
+      festivalTheme: data.festivalTheme ?? previous.festivalTheme ?? 'none',
+    }));
+  }
   if (data.notifications !== undefined) set('notifications', JSON.stringify(data.notifications || {}));
   if (data.heroBadges !== undefined) set('hero_badges', JSON.stringify(data.heroBadges || []));
 
@@ -112,13 +129,16 @@ router.get('/', async (req, res) => {
 
 router.put('/', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
+    if (req.body?.festivalTheme !== undefined && !festivalThemes.includes(req.body.festivalTheme)) {
+      return res.status(400).json({ message: 'Festival theme must be none, diwali, or holi.' });
+    }
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     let rows = await dbQuery<any>('SELECT * FROM settings LIMIT 1');
     if (!rows[0]) {
       await dbExecute('INSERT INTO settings () VALUES ()');
       rows = await dbQuery<any>('SELECT * FROM settings LIMIT 1');
     }
-    const update = buildUpdate(req.body || {});
+    const update = buildUpdate(req.body || {}, rows[0]);
     if (update) {
       await dbExecute(`UPDATE settings SET ${update.sql} WHERE id = ?`, [...update.values, rows[0].id]);
     }

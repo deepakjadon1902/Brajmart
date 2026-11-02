@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import crypto from 'crypto';
 import { optionalAuth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute, withDbTransaction } from '../lib/db';
@@ -14,7 +14,7 @@ import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryFor
 import { capturePurchaseOrderContext, sendVerifiedPurchaseForOrder } from '../lib/purchaseTracking';
 import { cancelCartRemindersForOrder } from '../lib/cartFollowups';
 import { isCapturedRazorpayPayment, verifyCapturedRazorpayPayment } from '../lib/razorpayVerification';
-import { resolveRazorpayCredentials } from '../lib/razorpayEnvironment';
+import { RazorpayConfigurationError, resolveRazorpayCredentials } from '../lib/razorpayEnvironment';
 
 const router = Router();
 const razorpayCreateLimiter = rateLimit('razorpay-create-order', {
@@ -32,6 +32,18 @@ const razorpayReportLimiter = rateLimit('razorpay-status-report', {
 
 const getRazorpayConfig = () => {
   return resolveRazorpayCredentials();
+};
+
+const respondToConfigurationFailure = (res: Response, error: unknown) => {
+  if (!(error instanceof RazorpayConfigurationError)) return false;
+  console.error('Razorpay configuration invalid; run npm run check:razorpay on the backend service.', {
+    code: error.code, issues: error.issues,
+  });
+  res.status(503).json({
+    code: 'PAYMENT_UNAVAILABLE',
+    message: 'Online payment is temporarily unavailable. Please try again shortly or contact support.',
+  });
+  return true;
 };
 
 const hmacSha256 = (value: string, secret: string) =>
@@ -614,6 +626,7 @@ router.post('/create-order', razorpayCreateLimiter, optionalAuth, async (req: Au
       },
     });
   } catch (err: any) {
+    if (respondToConfigurationFailure(res, err)) return;
     return res.status(500).json({ message: err?.message || 'Failed to create Razorpay order' });
   }
 });
@@ -702,6 +715,7 @@ router.post('/retry-order', razorpayCreateLimiter, async (req, res) => {
       },
     });
   } catch (err: any) {
+    if (respondToConfigurationFailure(res, err)) return;
     return res.status(500).json({ message: err?.message || 'Failed to retry Razorpay payment' });
   }
 });
@@ -739,6 +753,7 @@ router.post('/verify', razorpayReportLimiter, async (req, res) => {
 
     return res.json({ ok: true, ...result });
   } catch (err: any) {
+    if (respondToConfigurationFailure(res, err)) return;
     return res.status(500).json({ message: err?.message || 'Failed to verify Razorpay payment' });
   }
 });
@@ -746,6 +761,7 @@ router.post('/verify', razorpayReportLimiter, async (req, res) => {
 router.post('/failed', razorpayReportLimiter, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    getRazorpayConfig();
 
     const {
       razorpay_order_id,
@@ -795,6 +811,7 @@ router.post('/failed', razorpayReportLimiter, async (req, res) => {
 
     return res.json({ ok: true, ...result });
   } catch (err: any) {
+    if (respondToConfigurationFailure(res, err)) return;
     return res.status(500).json({ message: err?.message || 'Failed to record Razorpay payment failure' });
   }
 });
@@ -848,6 +865,7 @@ router.post('/webhook', async (req: any, res) => {
 
     return res.json({ ok: true });
   } catch (err: any) {
+    if (respondToConfigurationFailure(res, err)) return;
     console.error(err);
     return res.status(500).json({ message: err?.message || 'Webhook processing failed' });
   }

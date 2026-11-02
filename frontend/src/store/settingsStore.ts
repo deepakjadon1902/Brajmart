@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+export type FestivalTheme = 'none' | 'diwali' | 'holi';
+export const normalizeFestivalTheme = (value: unknown): FestivalTheme =>
+  value === 'diwali' || value === 'holi' ? value : 'none';
+
 interface SocialLinks {
   instagram: string;
   facebook: string;
@@ -14,6 +18,7 @@ interface AnnouncementBar {
 }
 
 interface StoreSettings {
+  festivalTheme: FestivalTheme;
   storeName: string;
   tagline: string;
   currency: string;
@@ -50,15 +55,19 @@ interface SettingsStore {
   updateAnnouncementMessages: (messages: string[]) => void;
 }
 
-const cleanSettingsPatch = (partial: Partial<StoreSettings>) =>
-  Object.fromEntries(
+const cleanSettingsPatch = (partial: Partial<StoreSettings>) => {
+  const clean = Object.fromEntries(
     Object.entries(partial).filter(([, value]) => value !== undefined)
   ) as Partial<StoreSettings>;
+  if (clean.festivalTheme !== undefined) clean.festivalTheme = normalizeFestivalTheme(clean.festivalTheme);
+  return clean;
+};
 
 export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
       settings: {
+        festivalTheme: 'none',
         storeName: '',
         tagline: '',
         currency: 'INR',
@@ -127,6 +136,14 @@ export const useSettingsStore = create<SettingsStore>()(
           },
         })),
     }),
-    { name: 'brajmart-settings', skipHydration: true }
+    {
+      name: 'brajmart-settings', skipHydration: true,
+      // The server snapshot owns this shared preference; an old browser cache
+      // must not override a freshly prerendered festival selection.
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<SettingsStore> | undefined;
+        return { ...current, ...saved, settings: { ...current.settings, ...saved?.settings, festivalTheme: current.settings.festivalTheme } };
+      },
+    }
   )
 );

@@ -3,6 +3,7 @@ import { dbExecute, dbQuery, isDbConnected, withDbTransaction } from './db';
 import { EmailProviderResponseError, sendCartReminderEmail, sendCouponOfferEmail, sendPendingPaymentReminderEmail } from './email';
 import { parseJson } from './dbHelpers';
 import { priceAndValidateOrderItems } from './orderPricing';
+import { describeEmailFollowupFailure, EmailFollowupBatchError, EmailFollowupSchemaError, inspectEmailFollowupSchema } from './emailFollowupHealth';
 
 const MAX_ATTEMPTS = 3;
 const STALE_SEND_MINUTES = 15;
@@ -409,6 +410,44 @@ export const isFollowupEmailProviderConfigured = (env: NodeJS.ProcessEnv = proce
   && Boolean(String(env.RESEND_API_KEY || '').trim())
   && Boolean(String(env.EMAIL_FROM || '').trim());
 
+export const runCartFollowupBatch = async () => {
+  let stage = 'schema-check';
+  try {
+    const issues = await inspectEmailFollowupSchema();
+    if (issues.length) throw new EmailFollowupSchemaError(issues);
+    stage = 'cart-reminder-recovery';
+    await dbExecute(
+      `UPDATE cart_reminder_jobs
+          SET status = 'uncertain',
+              last_error = 'Worker interrupted during provider submission; manual reconciliation required', updated_at = NOW()
+        WHERE status = 'sending' AND updated_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+      [STALE_SEND_MINUTES]
+    );
+    stage = 'offer-email-recovery';
+    await dbExecute(
+      `UPDATE offer_email_deliveries
+          SET status = 'uncertain', last_error = 'Worker interrupted during provider submission', updated_at = NOW()
+        WHERE status = 'sending' AND updated_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+      [STALE_SEND_MINUTES]
+    );
+    stage = 'cart-reminder-queue';
+    const reminderRows = await dbQuery<any>(
+      `SELECT id FROM cart_reminder_jobs WHERE status = 'pending' AND due_at <= NOW() AND attempts < ? ORDER BY due_at, id LIMIT 10`,
+      [MAX_ATTEMPTS]
+    );
+    stage = 'cart-reminder-processing';
+    for (const row of reminderRows) await processReminder(row);
+    stage = 'offer-email-queue';
+    const offerRows = await dbQuery<any>(
+      "SELECT id FROM offer_email_deliveries WHERE status = 'pending' ORDER BY id LIMIT 10"
+    );
+    stage = 'offer-email-processing';
+    for (const row of offerRows) await processOfferDelivery(row);
+  } catch (error) {
+    throw new EmailFollowupBatchError(stage, error);
+  }
+};
+
 export const startCartReminderScheduler = () => {
   if (schedulerStarted || !shouldStartCartReminderScheduler()) return;
   schedulerStarted = true;
@@ -420,32 +459,9 @@ export const startCartReminderScheduler = () => {
     }
     schedulerRunning = true;
     try {
-      await dbExecute(
-        `UPDATE cart_reminder_jobs
-            SET status = 'uncertain',
-                last_error = 'Worker interrupted during provider submission; manual reconciliation required', updated_at = NOW()
-          WHERE status = 'sending' AND updated_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
-        [STALE_SEND_MINUTES]
-      );
-      await dbExecute(
-        `UPDATE offer_email_deliveries
-            SET status = 'uncertain', last_error = 'Worker interrupted during provider submission', updated_at = NOW()
-          WHERE status = 'sending' AND updated_at < DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
-        [STALE_SEND_MINUTES]
-      );
-      const reminderRows = await dbQuery<any>(
-        `SELECT id FROM cart_reminder_jobs WHERE status = 'pending' AND due_at <= NOW() AND attempts < ? ORDER BY due_at, id LIMIT 10`,
-        [MAX_ATTEMPTS]
-      );
-      for (const row of reminderRows) await processReminder(row);
-
-      const offerRows = await dbQuery<any>(
-        "SELECT id FROM offer_email_deliveries WHERE status = 'pending' ORDER BY id LIMIT 10"
-      );
-      for (const row of offerRows) await processOfferDelivery(row);
+      await runCartFollowupBatch();
     } catch (error) {
-      void error;
-      console.error('Cart follow-up worker batch failed; inspect database and email-provider health without logging recipient data');
+      console.error('Cart follow-up worker batch failed', describeEmailFollowupFailure(error));
     } finally {
       schedulerRunning = false;
     }

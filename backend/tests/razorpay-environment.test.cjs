@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const {
   resolveRazorpayCredentials,
+  inspectRazorpayConfiguration,
+  RazorpayConfigurationError,
 } = require('../src/lib/razorpayEnvironment');
 const {
   verifyCapturedRazorpayPaymentWithOptions,
@@ -47,6 +49,64 @@ test('production accepts only explicitly selected live credentials and rejects t
   assert.throws(() => resolveRazorpayCredentials(liveEnv({ RAZORPAY_MODE: 'test' })), /environment mismatch/);
   assert.throws(() => resolveRazorpayCredentials(liveEnv({ RAZORPAY_PLATFORM_KEY_ID: 'rzp_test_TestOnly' })), /live credentials/);
   assert.throws(() => resolveRazorpayCredentials(liveEnv({ RAZORPAY_TEST_KEY_ID: 'rzp_test_TestOnly' })), /environment mismatch/);
+});
+
+test('the reported production failure identifies both missing flags without guessing a mode', () => {
+  const env = liveEnv({ NODE_ENV: undefined, RAZORPAY_MODE: undefined });
+  assert.throws(() => resolveRazorpayCredentials(env), error => {
+    assert.ok(error instanceof RazorpayConfigurationError);
+    assert.equal(error.message, 'Razorpay production environment mismatch');
+    assert.deepEqual(error.issues.map(issue => issue.setting), ['NODE_ENV', 'RAZORPAY_MODE']);
+    return true;
+  });
+  assert.equal(inspectRazorpayConfiguration(env).checkoutReady, false);
+  Object.assign(env, { NODE_ENV: 'production', RAZORPAY_MODE: 'live' });
+  assert.deepEqual(inspectRazorpayConfiguration(env), {
+    checkoutReady: true, webhookReady: true, mode: 'live', code: 'CONFIGURED', issues: [],
+  });
+});
+
+test('configuration reports identify mixed namespaces and never echo supplied values or secrets', () => {
+  const sentinel = 'PRIVATE_VALUE_DO_NOT_LOG';
+  for (const env of [
+    liveEnv({ NODE_ENV: sentinel, RAZORPAY_MODE: sentinel, RAZORPAY_TEST_KEY_SECRET: sentinel }),
+    liveEnv({ RAZORPAY_PLATFORM_KEY_ID: sentinel, RAZORPAY_PLATFORM_KEY_SECRET: '' }),
+    stagingEnv({ RAZORPAY_PLATFORM_KEY_SECRET: sentinel }),
+    stagingEnv({ RAZORPAY_TEST_KEY_ID: sentinel }),
+    liveEnv({ APP_ENV: sentinel }),
+    liveEnv(), stagingEnv(),
+  ]) {
+    const report = inspectRazorpayConfiguration(env);
+    const serialized = JSON.stringify(report);
+    for (const forbidden of [sentinel, 'rzp_live_ProductionOnly', 'rzp_test_StagingOnly', 'isolated-live-secret', 'isolated-live-webhook-secret', 'isolated-test-secret']) {
+      assert.equal(serialized.includes(forbidden), false);
+    }
+  }
+  const mixed = inspectRazorpayConfiguration(liveEnv({ RAZORPAY_TEST_KEY_SECRET: sentinel }));
+  assert.deepEqual(mixed.issues.map(issue => issue.setting), ['RAZORPAY_TEST_KEY_SECRET']);
+  assert.equal(mixed.checkoutReady, false);
+});
+
+test('a missing live webhook secret is reported separately from checkout readiness', () => {
+  const report = inspectRazorpayConfiguration(liveEnv({ RAZORPAY_PLATFORM_WEBHOOK_SECRET: '' }));
+  assert.equal(report.checkoutReady, true);
+  assert.equal(report.webhookReady, false);
+  assert.deepEqual(report.issues.map(issue => issue.setting), ['RAZORPAY_PLATFORM_WEBHOOK_SECRET']);
+});
+
+test('the example production configuration includes the mandatory environment flags', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dotenv = require('dotenv');
+  const example = dotenv.parse(fs.readFileSync(path.resolve(__dirname, '../.env.example')));
+  assert.equal(example.APP_ENV, 'production');
+  assert.equal(example.NODE_ENV, 'production');
+  assert.equal(example.RAZORPAY_MODE, 'live');
+  // Supply isolated fixtures only: the example must never contain real keys.
+  assert.equal(example.RAZORPAY_PLATFORM_KEY_ID, '');
+  const report = inspectRazorpayConfiguration({ ...example, ...Object.fromEntries(Object.entries(liveEnv()).filter(([key]) => key.startsWith('RAZORPAY_PLATFORM_'))) });
+  assert.equal(report.checkoutReady, true);
+  assert.equal(report.webhookReady, true);
 });
 
 test('unknown environments, unknown mode, and runtime/environment mismatch fail closed', () => {

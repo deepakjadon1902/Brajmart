@@ -10,6 +10,7 @@ import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 import PublicBreadcrumbs from '@/components/seo/PublicBreadcrumbs';
 import { useProductStore, categoryToSlug } from '@/store/productStore';
 import { trackMetaPixelEvent } from '@/lib/metaPixel';
+import { FestivalToran } from '@/components/festival/FestivalDecor';
 
 const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -301,6 +302,7 @@ const Navbar = () => {
           )}
         </div>
       )}
+      <FestivalToran />
     </header>
     <PublicBreadcrumbs />
     </>

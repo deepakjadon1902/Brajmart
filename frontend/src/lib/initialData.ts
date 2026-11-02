@@ -3,7 +3,7 @@ import type { Category, Product } from '@/types/product';
 import type { HeroSlide } from '@/store/heroStore';
 import { useHeroStore } from '@/store/heroStore';
 import { useProductStore } from '@/store/productStore';
-import { useSettingsStore } from '@/store/settingsStore';
+import { normalizeFestivalTheme, useSettingsStore } from '@/store/settingsStore';
 
 export type BrajmartInitialData = {
   products: Product[];
@@ -64,7 +64,7 @@ export const applyInitialData = (data: BrajmartInitialData | null) => {
   Object.assign(useProductStore.getInitialState(), productState);
   Object.assign(useHeroStore.getInitialState(), heroState);
   if (data.settings && typeof data.settings === 'object') {
-    useSettingsStore.getState().updateSettings(data.settings as never);
+    useSettingsStore.getState().updateSettings({ ...data.settings, festivalTheme: normalizeFestivalTheme(data.settings.festivalTheme) } as never);
     useSettingsStore.getInitialState().settings = useSettingsStore.getState().settings;
   }
 };

@@ -8,6 +8,7 @@ import app from './server';
 import { connectDb, describeDbTarget } from './lib/db';
 import { startShippingLabelsSyncScheduler } from './lib/shippingLabels';
 import { startCartReminderScheduler } from './lib/cartFollowups';
+import { inspectRazorpayConfiguration } from './lib/razorpayEnvironment';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5000;
 const ALLOW_DBLESS_START = String(process.env.ALLOW_DBLESS_START || '').toLowerCase() === 'true';
@@ -48,6 +49,10 @@ const formatStartupError = (err: any) => {
 };
 
 const start = async () => {
+  const razorpayConfiguration = inspectRazorpayConfiguration();
+  if (!razorpayConfiguration.checkoutReady || !razorpayConfiguration.webhookReady) {
+    console.error('Razorpay configuration needs attention; run npm run check:razorpay on this backend service.', razorpayConfiguration);
+  }
   try {
     await connectDbWithRetry();
   } catch (err) {

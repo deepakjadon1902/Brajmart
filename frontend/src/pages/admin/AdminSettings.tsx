@@ -5,6 +5,7 @@ import { useProductStore } from '@/store/productStore';
 import { Save, Store, Bell, Shield, Truck, CheckCircle, Globe, Megaphone, CreditCard, Image, Search, Settings2, Plus, X, Upload, Tag, Trash2, Pencil, Mail } from 'lucide-react';
 import { createCoupon, deleteCoupon, fetchCoupons, fetchPublicSettings, queueCouponOfferEmails, sendTestEmail, updateCoupon, updatePublicSettings, uploadImage } from '@/lib/api';
 import { toast } from 'sonner';
+import FestivalSettings from '@/components/festival/FestivalSettings';
 
 type CouponFormState = {
   code: string;
@@ -347,6 +348,8 @@ const AdminSettings = () => {
           <p className="text-sm text-slate-400">All changes here reflect instantly across the main application.</p>
         </div>
       </div>
+
+      <FestivalSettings disabled={loading} />
 
       {/* Tabs */}
       <div className="admin-settings-tabs">

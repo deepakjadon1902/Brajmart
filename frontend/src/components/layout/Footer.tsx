@@ -4,6 +4,7 @@ import { FaFacebookF, FaInstagram, FaWhatsapp, FaYoutube } from 'react-icons/fa'
 import { useSettingsStore } from '@/store/settingsStore';
 import { toResponsiveImageUrl } from '@/utils/responsiveImage';
 import { categoryToSlug, useProductStore } from '@/store/productStore';
+import { FestivalFooter } from '@/components/festival/FestivalDecor';
 
 const footerLinks = {
   'Get to Know Us': [
@@ -122,6 +123,7 @@ const Footer = () => {
     )}
 
     <footer className="bg-maroon-dark text-primary-foreground">
+      <FestivalFooter />
       <div className="container mx-auto px-4 py-2 md:py-2">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_2.8fr] gap-7 lg:gap-9 items-start">
           <div>

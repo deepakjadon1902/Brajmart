@@ -48,7 +48,12 @@ function stub(relative, exports) {
 const noop = async () => {};
 stub('lib/email', Object.fromEntries(['sendAdminPaymentNotice', 'sendOrderConfirmation', 'sendPaymentFailed', 'sendPaymentReceipt'].map((name) => [name, noop])));
 stub('lib/eta', { getEtaConfig: async () => ({ min: 1, max: 3 }), getEtaText: () => '1-3 days', getEstimatedDeliveryDate: () => new Date() });
-stub('lib/orderPricing', { markCouponUsed: noop });
+stub('lib/orderPricing', {
+  markCouponUsed: noop,
+  priceAndValidateOrderItems: async () => ({ ok: true, items: JSON.parse(state.order.items), itemsSubtotal: state.order.total }),
+  getCheckoutSettings: async () => ({ packagingRate: 0, shippingFee: 0, freeShippingThreshold: 0 }),
+  computeTotals: (itemsSubtotal) => ({ itemsSubtotal, packaging: 0, shipping: 0, total: itemsSubtotal }),
+});
 stub('lib/inventory', { convertReservationToSale: noop, releaseInventoryForOrder: noop, reserveInventoryForOrder: noop });
 db.withDbTransaction = async (fn) => fn({});
 
@@ -64,7 +69,7 @@ beforeEach(() => {
     statusRow: { token: 'order_Real42', order_id: 42, amount: 199.99, method: 'Razorpay', status: 'pending' },
     paidRows: [{ token: 'order_Real42', payment_id: 'pay_Real42', transaction_id: 'pay_Real42', amount: 199.99, payment_amount: 199.99, status_updated_at: now, payment_updated_at: now }],
     payment: { id: 'pay_Real42', order_id: 'order_Real42', amount: 19999, currency: 'INR', status: 'captured', captured: true, amount_refunded: 0, created_at: Math.floor(now.getTime() / 1000) },
-    orderPayments: [], queries: [], writes: [], metaCalls: [], gatewayCalls: [], eventStatus: null,
+    orderPayments: [], queries: [], writes: [], metaCalls: [], gatewayCalls: [], gatewayRequests: [], eventStatus: null,
   };
   process.env.META_CONVERSIONS_API_TOKEN = 'isolated-test-token';
   process.env.APP_ENV = 'production';
@@ -92,7 +97,11 @@ beforeEach(() => {
     }
     assert.equal(target.hostname, 'api.razorpay.com');
     state.gatewayCalls.push(target.pathname + target.search);
+    state.gatewayRequests.push({ url: target.href, options });
     if (state.gatewayError) throw new Error('Simulated Razorpay outage');
+    if (target.pathname === '/v1/orders' && options?.method === 'POST') {
+      return { ok: true, json: async () => ({ id: 'order_Real42', amount: 19999, currency: 'INR' }) };
+    }
     const data = target.pathname.endsWith('/payments') || target.search ? { items: state.orderPayments } : target.pathname.includes('/orders/') ? (state.gatewayOrder || {}) : state.payment;
     return { ok: !state.gatewayHttpError, json: async () => data };
   };
@@ -489,9 +498,63 @@ test('production payment confirmation rejects captured test-mode payments before
   process.env.NODE_ENV = 'production'; process.env.RAZORPAY_PLATFORM_KEY_ID = 'rzp_test_Isolated';
   try {
     const response = await route(razorpay, '/verify', checkoutBody());
-    assert.equal(response.statusCode, 500);
+    assert.equal(response.statusCode, 503);
+    assert.equal(response.data.code, 'PAYMENT_UNAVAILABLE');
     assert.equal(state.writes.length, 0);
   } finally { if (previousMode === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousMode; }
+});
+
+test('missing production mode flags stop every Razorpay write path with safe diagnostics', async () => {
+  delete process.env.NODE_ENV;
+  delete process.env.RAZORPAY_MODE;
+  const logs = [];
+  const originalError = console.error;
+  console.error = (...args) => logs.push(args);
+  try {
+    for (const path of ['/create-order', '/retry-order', '/verify', '/failed', '/webhook']) {
+      const response = await route(razorpay, path, { token: 'order_Real42', razorpay_order_id: 'order_Real42' });
+      assert.equal(response.statusCode, 503, path);
+      assert.equal(response.data.code, 'PAYMENT_UNAVAILABLE');
+      assert.equal(JSON.stringify(response.data).includes('NODE_ENV'), false);
+    }
+  } finally { console.error = originalError; }
+  assert.equal(logs.length, 5);
+  assert.deepEqual(logs[0][1].issues.map(issue => issue.setting), ['NODE_ENV', 'RAZORPAY_MODE']);
+  assert.equal(JSON.stringify(logs).includes('isolated-test-secret'), false);
+  assert.equal(state.queries.length, 0);
+  assert.equal(state.writes.length, 0);
+  assert.equal(state.gatewayCalls.length, 0);
+});
+
+test('a correctly configured live checkout creates a gateway order with the server key and total', async () => {
+  const address = { fullName: 'Checkout Customer', mobile: '9876543210', street: 'House 42, Temple Road', city: 'Vrindavan', state: 'Uttar Pradesh', pincode: '281121' };
+  const response = await route(razorpay, '/create-order', {
+    amount: 199.99,
+    order: { customerName: 'Checkout Customer', items: [{ productId: '101', quantity: 1 }], shippingAddress: address, billingAddress: address },
+    customer: { name: 'Checkout Customer', email: 'checkout@example.invalid', phone: address.mobile },
+  });
+  assert.equal(response.statusCode, 200, JSON.stringify(response.data));
+  assert.equal(response.data.keyId, 'rzp_live_IsolatedTest');
+  assert.equal(response.data.orderId, 'order_Real42');
+  assert.equal(response.data.amount, 19999);
+  assert.equal(response.data.currency, 'INR');
+  assert.equal(JSON.stringify(response.data).includes('isolated-test-secret'), false);
+  const request = state.gatewayRequests.find(({ options }) => options.method === 'POST');
+  assert.equal(request.options.headers.Authorization, `Basic ${Buffer.from('rzp_live_IsolatedTest:isolated-test-secret').toString('base64')}`);
+  assert.equal(JSON.parse(request.options.body).amount, 19999);
+  assert.ok(state.writes.some(({ sql }) => sql.includes('INSERT INTO orders')));
+  assert.ok(state.writes.some(({ sql }) => sql.includes('INSERT INTO payment_status')));
+});
+
+test('a configured live retry still reconciles the old payment before creating another gateway order', async () => {
+  state.paidRows = [];
+  const response = await route(razorpay, '/retry-order', { token: 'order_Real42' });
+  assert.equal(response.statusCode, 200, JSON.stringify(response.data));
+  assert.equal(response.data.keyId, 'rzp_live_IsolatedTest');
+  assert.equal(response.data.amount, 19999);
+  const reconciliation = state.gatewayRequests.findIndex(({ url }) => url.endsWith('/orders/order_Real42/payments'));
+  const creation = state.gatewayRequests.findIndex(({ options }) => options.method === 'POST');
+  assert.ok(reconciliation >= 0 && creation > reconciliation);
 });
 
 test('BLOB-encoded saved items still produce a correct verified Purchase', async () => {

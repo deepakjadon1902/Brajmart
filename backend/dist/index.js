@@ -10,6 +10,8 @@ dotenv_1.default.config();
 const server_1 = __importDefault(require("./server"));
 const db_1 = require("./lib/db");
 const shippingLabels_1 = require("./lib/shippingLabels");
+const cartFollowups_1 = require("./lib/cartFollowups");
+const razorpayEnvironment_1 = require("./lib/razorpayEnvironment");
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5000;
 const ALLOW_DBLESS_START = String(process.env.ALLOW_DBLESS_START || '').toLowerCase() === 'true';
 const DB_CONNECT_RETRIES = Math.max(0, Number(process.env.DB_CONNECT_RETRIES ?? 10));
@@ -45,6 +47,10 @@ const formatStartupError = (err) => {
     ].join(' '));
 };
 const start = async () => {
+    const razorpayConfiguration = (0, razorpayEnvironment_1.inspectRazorpayConfiguration)();
+    if (!razorpayConfiguration.checkoutReady || !razorpayConfiguration.webhookReady) {
+        console.error('Razorpay configuration needs attention; run npm run check:razorpay on this backend service.', razorpayConfiguration);
+    }
     try {
         await connectDbWithRetry();
     }
@@ -56,6 +62,7 @@ const start = async () => {
     const server = server_1.default.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
         (0, shippingLabels_1.startShippingLabelsSyncScheduler)();
+        (0, cartFollowups_1.startCartReminderScheduler)();
     });
     server.on('error', (err) => {
         console.error('Server failed to listen:', err);
