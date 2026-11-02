@@ -28,10 +28,12 @@ import reviewRoutes from './routes/reviews';
 import recommendationRoutes from './routes/recommendations';
 import bundleRoutes from './routes/bundles';
 import metaConversionRoutes from './routes/metaConversions';
+import emailFollowupRoutes from './routes/emailFollowups';
 import { isDbConnected, dbQuery } from './lib/db';
+import { isCorsOriginAllowed, resolveCorsOrigins, resolveSiteUrl } from './lib/environmentOrigins';
 
 const app = express();
-const SITE_URL = (process.env.SITE_URL || 'https://www.brajmart.com').replace(/\/$/, '');
+const SITE_URL = resolveSiteUrl();
 const DEFAULT_CORS_ORIGINS = [
   'http://localhost:8080',
   'http://127.0.0.1:8080',
@@ -41,13 +43,7 @@ const DEFAULT_CORS_ORIGINS = [
   'https://brajmart.com',
 ];
 
-const corsOrigins = Array.from(new Set([
-  ...DEFAULT_CORS_ORIGINS,
-  ...String(process.env.CORS_ORIGIN || '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean),
-]));
+const corsOrigins = resolveCorsOrigins(process.env, DEFAULT_CORS_ORIGINS);
 
 const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -100,9 +96,7 @@ app.get('/uploads/:filename', async (req, res, next) => {
 app.use(compression());
 app.use(cors((req, callback) => {
   const origin = req.headers.origin;
-  const allowed = !origin
-    || origin === 'null'
-    || corsOrigins.includes(origin);
+  const allowed = isCorsOriginAllowed(origin, corsOrigins);
 
   if (!allowed) return callback(new Error(`CORS blocked origin: ${origin}`));
   callback(null, { origin: true, credentials: true });
@@ -193,6 +187,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/recommendations', recommendationRoutes);
 app.use('/api/bundles', bundleRoutes);
 app.use('/api/meta/conversions', metaConversionRoutes);
+app.use('/api/email-followups', emailFollowupRoutes);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 

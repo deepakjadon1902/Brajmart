@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useAdminStore } from '@/store/adminStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useProductStore } from '@/store/productStore';
-import { Save, Store, Bell, Shield, Truck, CheckCircle, Globe, Megaphone, CreditCard, Image, Search, Settings2, Plus, X, Upload, Tag, Trash2, Pencil } from 'lucide-react';
-import { createCoupon, deleteCoupon, fetchCoupons, fetchPublicSettings, sendTestEmail, updateCoupon, updatePublicSettings, uploadImage } from '@/lib/api';
+import { Save, Store, Bell, Shield, Truck, CheckCircle, Globe, Megaphone, CreditCard, Image, Search, Settings2, Plus, X, Upload, Tag, Trash2, Pencil, Mail } from 'lucide-react';
+import { createCoupon, deleteCoupon, fetchCoupons, fetchPublicSettings, queueCouponOfferEmails, sendTestEmail, updateCoupon, updatePublicSettings, uploadImage } from '@/lib/api';
 import { toast } from 'sonner';
 
 type CouponFormState = {
@@ -78,6 +78,7 @@ const AdminSettings = () => {
   const [couponForm, setCouponForm] = useState<CouponFormState>(emptyCouponForm);
   const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
+  const [emailCampaignCouponId, setEmailCampaignCouponId] = useState<string | null>(null);
 
   const [socialLinks, setSocialLinks] = useState(settings.socialLinks);
   const sanitizeBadges = (badges?: string[]) =>
@@ -302,6 +303,20 @@ const AdminSettings = () => {
       toast.error(err?.message || 'Failed to archive coupon');
     } finally {
       setCouponLoading(false);
+    }
+  };
+
+  const handleEmailCouponOffer = async (coupon: any) => {
+    const id = String(coupon.id);
+    if (!window.confirm(`Queue “${coupon.title || coupon.code}” for customers who opted in to BrajMart offer emails?`)) return;
+    setEmailCampaignCouponId(id);
+    try {
+      const result = await queueCouponOfferEmails(id);
+      toast.success(`${result.queued} offer emails queued for opted-in customers.`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not queue offer emails');
+    } finally {
+      setEmailCampaignCouponId(null);
     }
   };
 
@@ -593,6 +608,16 @@ const AdminSettings = () => {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { void handleEmailCouponOffer(coupon); }}
+                            disabled={!coupon.isActive || couponLoading || emailCampaignCouponId !== null}
+                            title="Queue email for opted-in customers"
+                            aria-label={`Email offer ${coupon.code} to opted-in customers`}
+                            className="rounded-lg border border-emerald-700/60 p-2 text-emerald-300 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Mail size={14} className={emailCampaignCouponId === String(coupon.id) ? 'animate-pulse' : ''} />
+                          </button>
                           <button type="button" onClick={() => handleEditCoupon(coupon)} className="rounded-lg border border-slate-700 p-2 text-slate-300 hover:text-amber-300"><Pencil size={14} /></button>
                           <button type="button" onClick={() => handleDeleteCoupon(String(coupon.id))} className="rounded-lg border border-red-500/30 p-2 text-red-300 hover:bg-red-500/10"><Trash2 size={14} /></button>
                         </div>

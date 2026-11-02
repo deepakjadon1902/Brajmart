@@ -29,6 +29,8 @@ const { sendVerifiedGooglePurchaseForOrder, captureGoogleOrderContext, buildGoog
 beforeEach(() => {
   process.env.GA4_MEASUREMENT_ID = 'G-ISOLATED'; process.env.GA4_API_SECRET = 'isolated-secret';
   process.env.RAZORPAY_PLATFORM_KEY_ID = 'rzp_live_Isolated'; process.env.RAZORPAY_PLATFORM_KEY_SECRET = 'isolated-secret';
+  process.env.APP_ENV = 'production'; process.env.NODE_ENV = 'production'; process.env.RAZORPAY_MODE = 'live';
+  delete process.env.RAZORPAY_TEST_KEY_ID; delete process.env.RAZORPAY_TEST_KEY_SECRET; delete process.env.RAZORPAY_TEST_WEBHOOK_SECRET;
   state = {
     connected: true,
     order: { id: 42, total: 159, payment_method: 'Razorpay', items: [{ id: '101', name: 'Tulsi Mala', quantity: 1, price: 100 }] },

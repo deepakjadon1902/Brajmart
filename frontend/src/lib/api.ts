@@ -102,8 +102,7 @@ const getJson = async <T>(path: string, options: RequestOptions = {}): Promise<T
   if (!res.ok) {
     const maybe = data as { message?: unknown } | null | undefined;
     const rawMessage = typeof maybe?.message === 'string' ? maybe.message : '';
-    const message = rawMessage.trim() ? rawMessage.trim() : `Request failed (${res.status})`;
-    throw new Error(message);
+    throw new Error(rawMessage.trim() ? rawMessage.trim() : `Request failed (${res.status})`);
   }
   return data as T;
 };
@@ -636,8 +635,20 @@ export const updateCoupon = (id: string, payload: Record<string, unknown>) =>
   getJson(`/coupons/${id}`, { method: 'PUT', body: payload });
 export const deleteCoupon = (id: string) =>
   getJson(`/coupons/${id}`, { method: 'DELETE' });
+export const queueCouponOfferEmails = (id: string) =>
+  getJson<{ queued: number; pending: number; message: string }>(`/coupons/${id}/email-offer`, { method: 'POST', body: {} });
 export const validateCoupon = (payload: { code: string; items: unknown[] }) =>
   getJson('/coupons/validate', { method: 'POST', body: payload });
+
+export const captureEmailFollowup = (payload: {
+  email: string;
+  customerName: string;
+  items: PersistedProductInterestItem[];
+  consent: { cartReminder: boolean; offerEmail: boolean; whatsappFollowup: boolean };
+}) => getJson<{ saved: boolean; reminderScheduled: boolean }>('/email-followups/capture', { method: 'POST', body: payload });
+
+export const unsubscribeEmailFollowups = (token: string) =>
+  getJson<{ ok: boolean; message: string }>('/email-followups/unsubscribe', { method: 'POST', body: { token } });
 
 // Users
 export const fetchUsers = (opts?: { search?: string }) => getJson(`/users${queryString({ search: opts?.search })}`);
@@ -683,6 +694,7 @@ export type PersistedProductInterestItem = {
 export const updateCart = (items: PersistedProductInterestItem[]) =>
   getJson('/cart', { method: 'PUT', body: { items } });
 export const clearCartApi = () => getJson('/cart', { method: 'DELETE' });
+
 export type CartValidationResponse = {
   items: Array<PersistedProductInterestItem & {
     productId: string;

@@ -9,7 +9,6 @@ dotenv_1.default.config({ path: path_1.default.resolve(__dirname, '..', '.env') 
 dotenv_1.default.config();
 const server_1 = __importDefault(require("./server"));
 const db_1 = require("./lib/db");
-const migrations_1 = require("./lib/migrations");
 const shippingLabels_1 = require("./lib/shippingLabels");
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5000;
 const ALLOW_DBLESS_START = String(process.env.ALLOW_DBLESS_START || '').toLowerCase() === 'true';
@@ -48,7 +47,6 @@ const formatStartupError = (err) => {
 const start = async () => {
     try {
         await connectDbWithRetry();
-        await (0, migrations_1.runDataMigrations)();
     }
     catch (err) {
         if (!ALLOW_DBLESS_START)

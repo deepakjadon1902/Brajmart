@@ -6,8 +6,8 @@ dotenv.config();
 
 import app from './server';
 import { connectDb, describeDbTarget } from './lib/db';
-import { runDataMigrations } from './lib/migrations';
 import { startShippingLabelsSyncScheduler } from './lib/shippingLabels';
+import { startCartReminderScheduler } from './lib/cartFollowups';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5000;
 const ALLOW_DBLESS_START = String(process.env.ALLOW_DBLESS_START || '').toLowerCase() === 'true';
@@ -50,7 +50,6 @@ const formatStartupError = (err: any) => {
 const start = async () => {
   try {
     await connectDbWithRetry();
-    await runDataMigrations();
   } catch (err) {
     if (!ALLOW_DBLESS_START) throw err;
     console.error('Starting without DB (ALLOW_DBLESS_START=true). DB error:', err);
@@ -58,6 +57,7 @@ const start = async () => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     startShippingLabelsSyncScheduler();
+    startCartReminderScheduler();
   });
   server.on('error', (err) => {
     console.error('Server failed to listen:', err);

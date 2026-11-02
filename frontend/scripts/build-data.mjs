@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { isStrictSeoBuild } from './build-data-policy.mjs';
 
 const loadEnvFile = async (file) => {
   try {
@@ -128,8 +129,6 @@ const fetchJson = async (resource, fallback, meta) => {
 
 const slugify = (value) => String(value || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
-const isStrictSeoBuild = () => String(process.env.SEO_STRICT_BUILD || '').toLowerCase() === 'true';
-
 export const getBuildData = async ({ strict = isStrictSeoBuild() } = {}) => {
   let products = [];
   let categories = [];
@@ -183,9 +182,9 @@ export const getBuildData = async ({ strict = isStrictSeoBuild() } = {}) => {
   } catch (caught) {
     error = caught instanceof Error ? caught : new Error(String(caught));
     if (strict) {
-      throw new Error(`SEO strict build stopped to prevent publishing empty HTML: ${error.message}. Configure BUILD_API_BASE_URL or API_BASE_URL with an absolute backend API URL, or set SEO_STRICT_BUILD=false for an emergency deploy.`);
+      throw new Error(`SEO catalog validation failed; release build stopped to prevent publishing incomplete catalog HTML: ${error.message}. Configure BUILD_API_BASE_URL or API_BASE_URL with an absolute backend API URL and repair the catalog API. A local-only fallback build requires SEO_STRICT_BUILD=false; Vercel and CI builds ignore that opt-out.`);
     }
-    console.warn(`SEO build is using limited fallback data because the catalog API is unavailable: ${error.message}`);
+    console.warn(`LOCAL SEO FALLBACK OPT-OUT ACTIVE; this build is not release-ready. Limited fallback data is being used because the catalog API is unavailable: ${error.message}`);
   }
 
   return {

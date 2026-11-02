@@ -15,6 +15,7 @@
     "test:tracking": "playwright test --config playwright.meta.config.ts",
     "audit:meta-sdk": "node scripts/probe-meta-public.cjs",
     "verify:performance-budgets": "node scripts/phase7-budgets.mjs",
+    "verify:vercel-routing": "node scripts/verify-vercel-routing.mjs",
     "verify:seo": "node scripts/verify-seo.mjs",
     "test:watch": "vitest"
   },

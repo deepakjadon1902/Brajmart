@@ -70,6 +70,10 @@ export const isShippingLabelsConfigured = () => {
   return Boolean(config.apiUrl && config.username && config.password);
 };
 
+export const shouldStartShippingLabelsSyncScheduler = (env: NodeJS.ProcessEnv = process.env) =>
+  String(env.APP_ENV || '').toLowerCase() !== 'staging'
+  || String(env.SHIPPING_LABELS_SYNC_ENABLED || '').toLowerCase() === 'true';
+
 const fetchWithTimeout = async (url: string, init: RequestInit = {}) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), labelsConfig().timeoutMs);
@@ -529,7 +533,7 @@ export const getNextShippingLabelsSyncAt = (now = new Date()) => {
 };
 
 export const startShippingLabelsSyncScheduler = () => {
-  if (schedulerStarted || !isShippingLabelsConfigured()) return;
+  if (!shouldStartShippingLabelsSyncScheduler() || schedulerStarted || !isShippingLabelsConfigured()) return;
   schedulerStarted = true;
 
   const scheduleNextRun = () => {

@@ -201,6 +201,10 @@
         })();
 
         var loadMarketing = function () {
+          // Recovery capabilities are temporarily held in same-origin browser
+          // storage while authentication may be required. Do not load third
+          // party analytics or marketing scripts on these two routes.
+          if (window.__brajmartIsRecoveryRoute) return;
           if (loaded) return;
           loaded = true;
           !function(f,b,e,v,n,t,s)

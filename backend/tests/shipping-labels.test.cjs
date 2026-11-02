@@ -407,6 +407,17 @@ test('automatic sync selects the next 6 AM or 6 PM IST across day and year bound
   }
 });
 
+test('staging shipping-label scheduler is disabled unless explicitly enabled', () => {
+  assert.equal(shipping.shouldStartShippingLabelsSyncScheduler({ APP_ENV: 'staging' }), false);
+  assert.equal(shipping.shouldStartShippingLabelsSyncScheduler({ APP_ENV: 'staging', SHIPPING_LABELS_SYNC_ENABLED: 'false' }), false);
+  assert.equal(shipping.shouldStartShippingLabelsSyncScheduler({ APP_ENV: 'staging', SHIPPING_LABELS_SYNC_ENABLED: 'true' }), true);
+});
+
+test('non-staging shipping-label scheduler preserves the existing startup policy', () => {
+  assert.equal(shipping.shouldStartShippingLabelsSyncScheduler({ APP_ENV: 'production' }), true);
+  assert.equal(shipping.shouldStartShippingLabelsSyncScheduler({}), true);
+});
+
 test('automatic sync waits for 6 AM and 6 PM IST without startup or ten-minute requests', async (t) => {
   state.mapping = { ...staleMapping(), external_label_id: 'label-10339' };
   process.env.SHIPPING_LABELS_SYNC_INTERVAL_MS = '600000';

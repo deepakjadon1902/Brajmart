@@ -9,8 +9,9 @@ const eta_1 = require("../lib/eta");
 const dbHelpers_1 = require("../lib/dbHelpers");
 const orderVisibility_1 = require("../lib/orderVisibility");
 const orderPricing_1 = require("../lib/orderPricing");
-const metaConversions_1 = require("./metaConversions");
+const purchaseTracking_1 = require("../lib/purchaseTracking");
 const razorpayVerification_1 = require("../lib/razorpayVerification");
+const razorpayEnvironment_1 = require("../lib/razorpayEnvironment");
 const router = (0, express_1.Router)();
 const mapPaymentRow = (row) => ({
     _id: String(row.id),
@@ -46,13 +47,28 @@ const mapOrderItemForMeta = (item) => {
 };
 const mapPaymentStatusForClient = async (row) => {
     const base = mapPaymentStatusRow(row);
-    if (String(row?.status || '') !== 'paid' || !row?.order_id)
+    if (String(row?.status || '') !== 'paid')
         return base;
+    if (!row?.order_id)
+        return { ...base, status: 'pending', verificationStatus: 'unverified' };
     const orderData = await getPaymentOrderDetails(row.order_id).catch(() => null);
     const orderRow = orderData?.orderRow;
     const details = orderData?.details;
     if (!orderRow || !details)
-        return base;
+        return { ...base, status: 'pending', verificationStatus: 'unverified' };
+    if (String(row.method || '').toLowerCase() === 'razorpay') {
+        try {
+            const amount = Number(orderRow.total);
+            if (String(orderRow.payment_method || '').toLowerCase() !== 'razorpay' || Math.round(Number(row.amount) * 100) !== Math.round(amount * 100))
+                throw new Error('Payment total mismatch');
+            await (0, razorpayVerification_1.verifyCapturedRazorpayPayment)({ orderId: String(row.token), paymentId: String(row.payment_id || ''), amount });
+        }
+        catch {
+            // A historical DB flag alone cannot display a verified payment receipt.
+            return { ...base, status: 'pending', verificationStatus: 'unverified' };
+        }
+        void (0, purchaseTracking_1.sendVerifiedPurchaseForOrder)(orderRow.id, String(row.payment_id), String(row.token));
+    }
     const billingAddress = details.billingAddress && typeof details.billingAddress === 'object' ? details.billingAddress : {};
     const shippingAddress = details.shippingAddress && typeof details.shippingAddress === 'object' ? details.shippingAddress : {};
     return {
@@ -118,9 +134,7 @@ const getAdminPaymentRows = async () => {
     }));
 };
 const getRazorpayConfig = () => {
-    const keyId = process.env.RAZORPAY_PLATFORM_KEY_ID || process.env.RAZORPAY_KEY_ID || '';
-    const keySecret = process.env.RAZORPAY_PLATFORM_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || '';
-    return { keyId, keySecret };
+    return (0, razorpayEnvironment_1.resolveRazorpayCredentials)();
 };
 const fetchRazorpayJson = async (path) => {
     const { keyId, keySecret } = getRazorpayConfig();
@@ -277,7 +291,7 @@ const applyRazorpayStatus = async (params) => {
             if (orderData?.orderRow?.coupon_code) {
                 (0, orderPricing_1.markCouponUsed)(orderData.orderRow.coupon_code).catch(() => { });
             }
-            (0, metaConversions_1.sendVerifiedMetaPurchaseForOrder)(orderId, transactionId, params.token).catch((err) => {
+            (0, purchaseTracking_1.sendVerifiedPurchaseForOrder)(orderId, transactionId, params.token).catch((err) => {
                 console.error('Meta verified Purchase event failed:', err);
             });
         }
@@ -520,6 +534,7 @@ router.post('/admin/cod-paid/:orderId', auth_1.auth, auth_1.adminOnly, async (re
 });
 router.get('/status/:token', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'private, no-store, max-age=0');
         const token = req.params.token;
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });

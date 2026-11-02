@@ -10,6 +10,48 @@ Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 4. Add ImageKit credentials to `.env` if you want permanent deployed image storage.
 5. Run `npm run dev` (development) or `npm start` (production)
 
+## Cart reminders and offer emails
+
+This feature uses BrajMart's existing application MySQL database. The owner-run,
+reviewed schema change is `backend/sql/migrate_email_followups.sql`; it creates
+preference and queue tables only. It does not copy or enroll existing customer
+data. The runtime migration implementation is in `src/lib/migrations.ts` and
+remains subject to the existing guarded migration policy; application startup
+does not apply it automatically.
+
+Before enabling the worker, apply the reviewed SQL to the intended application
+database after verifying its identity and backup. Configure the existing email
+provider with `EMAIL_PROVIDER=resend`, a valid `RESEND_API_KEY`, a verified
+`EMAIL_FROM`, and the production `FRONTEND_URL`. Then set
+`EMAIL_FOLLOWUPS_WORKER_ENABLED=true` on the backend. The worker polls persistent
+database queues once per minute. Cart reminders become eligible four hours after
+the customer reaches checkout and explicitly opts in. Pending jobs survive
+process restarts and are picked up afterward, but delivery can be delayed while
+a Render service is asleep or unavailable. A job interrupted during provider
+submission is marked uncertain and is not automatically resent, avoiding a
+possible duplicate at the cost of requiring manual review for that rare case.
+
+Checkout offers three separate, unchecked opt-ins: one cart reminder, occasional
+offer emails, and WhatsApp cart/favorite follow-up. Existing account emails and
+historical carts are not automatically subscribed. The backend reprices the
+cart before sending, links to the existing payment-status/retry page when a
+Razorpay payment is still pending, and suppresses a reminder after a confirmed order. A
+Resend idempotency key protects repeated provider submissions; an ambiguous
+provider result is recorded as uncertain and is not blindly resent. Each email
+links to a confirmation page where the recipient can unsubscribe from all three
+optional message types. Essential order emails are unaffected.
+
+To email a new coupon, an admin explicitly clicks its mail icon in Settings →
+Coupons. The campaign queue includes only customers who opted in to offer emails.
+The Cart & Favorite admin page shows a **Prepare WhatsApp message** button only
+when the customer opted in. That button opens a prefilled `wa.me` draft addressed
+to the customer; the admin must review and send it manually from the company's
+WhatsApp Business session. It does not send WhatsApp messages automatically.
+
+Do not enable the worker until the migration, verified Resend sender, production
+frontend URL, and consent language have been reviewed. No migration, email, or
+WhatsApp message is performed by the code change itself.
+
 ## API Endpoints
 
 ### Auth

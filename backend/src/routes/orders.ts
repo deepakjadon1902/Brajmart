@@ -14,6 +14,7 @@ import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
 import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
 import { insertAdminAuditLog } from '../lib/adminAudit';
+import { cancelCartRemindersForOrder } from '../lib/cartFollowups';
 import { triggerRecentRazorpayReconciliation } from './payments';
 import { capturePurchaseOrderContext } from '../lib/purchaseTracking';
 
@@ -561,6 +562,7 @@ router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) =>
       ).catch(() => {});
       throw err;
     }
+    await cancelCartRemindersForOrder(customerEmail).catch(() => {});
     if (couponDetails?.code) {
       await markCouponUsed(couponDetails.code);
     }

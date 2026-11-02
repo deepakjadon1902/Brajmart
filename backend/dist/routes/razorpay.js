@@ -16,8 +16,9 @@ const cod_1 = require("../lib/cod");
 const checkoutValidation_1 = require("../lib/checkoutValidation");
 const rateLimit_1 = require("../middleware/rateLimit");
 const inventory_1 = require("../lib/inventory");
-const metaConversions_1 = require("./metaConversions");
+const purchaseTracking_1 = require("../lib/purchaseTracking");
 const razorpayVerification_1 = require("../lib/razorpayVerification");
+const razorpayEnvironment_1 = require("../lib/razorpayEnvironment");
 const router = (0, express_1.Router)();
 const razorpayCreateLimiter = (0, rateLimit_1.rateLimit)('razorpay-create-order', {
     windowMs: 15 * 60 * 1000,
@@ -32,10 +33,7 @@ const razorpayReportLimiter = (0, rateLimit_1.rateLimit)('razorpay-status-report
     message: 'Too many payment status attempts. Please wait before trying again.',
 });
 const getRazorpayConfig = () => {
-    const keyId = process.env.RAZORPAY_PLATFORM_KEY_ID || process.env.RAZORPAY_KEY_ID || '';
-    const keySecret = process.env.RAZORPAY_PLATFORM_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || '';
-    const webhookSecret = process.env.RAZORPAY_PLATFORM_WEBHOOK_SECRET || process.env.RAZORPAY_WEBHOOK_SECRET || '';
-    return { keyId, keySecret, webhookSecret };
+    return (0, razorpayEnvironment_1.resolveRazorpayCredentials)();
 };
 const hmacSha256 = (value, secret) => crypto_1.default.createHmac('sha256', secret).update(value).digest('hex');
 const timingSafeEqual = (a, b) => {
@@ -270,6 +268,13 @@ const updateOrderForPayment = async (params) => {
             await (0, db_1.dbExecute)('UPDATE payment_status SET payment_id = ?, updated_at = NOW() WHERE token = ?', [params.razorpayPaymentId, params.razorpayOrderId]);
             await (0, db_1.dbExecute)('UPDATE payments SET transaction_id = ?, updated_at = NOW() WHERE order_id = ? ORDER BY id DESC LIMIT 1', [params.razorpayPaymentId, statusRow.order_id]);
         }
+        if (params.status === 'paid') {
+            if (params.metaContext || params.request)
+                await (0, purchaseTracking_1.capturePurchaseOrderContext)(statusRow.order_id, params.metaContext, params.request);
+            // A duplicate signed callback is also a safe retry after a provider outage.
+            // Each provider reserves the stable order ID before sending again.
+            void (0, purchaseTracking_1.sendVerifiedPurchaseForOrder)(statusRow.order_id, params.razorpayPaymentId || statusRow.payment_id, params.razorpayOrderId);
+        }
         return { orderId: statusRow.order_id, paymentId: params.razorpayPaymentId || statusRow.payment_id || params.razorpayOrderId, status: params.status };
     }
     const orderRows = await (0, db_1.dbQuery)('SELECT * FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
@@ -346,9 +351,9 @@ const updateOrderForPayment = async (params) => {
     }).catch(() => { });
     if (params.status === 'paid') {
         if (params.metaContext || params.request) {
-            await (0, metaConversions_1.captureMetaOrderContext)(statusRow.order_id, params.metaContext, params.request).catch(() => { });
+            await (0, purchaseTracking_1.capturePurchaseOrderContext)(statusRow.order_id, params.metaContext, params.request).catch(() => { });
         }
-        (0, metaConversions_1.sendVerifiedMetaPurchaseForOrder)(statusRow.order_id, transactionId, params.razorpayOrderId).catch((err) => {
+        (0, purchaseTracking_1.sendVerifiedPurchaseForOrder)(statusRow.order_id, transactionId, params.razorpayOrderId).catch((err) => {
             console.error('Meta verified Purchase event failed:', err);
         });
     }
@@ -461,7 +466,7 @@ router.post('/create-order', razorpayCreateLimiter, auth_1.optionalAuth, async (
             shippingAddress: contact.shippingAddress,
             billingAddress: contact.billingAddress,
         }, estimatedDelivery);
-        (0, metaConversions_1.captureMetaOrderContext)(orderRow.id, {
+        (0, purchaseTracking_1.capturePurchaseOrderContext)(orderRow.id, {
             ...(req.body?.metaContext && typeof req.body.metaContext === 'object' ? req.body.metaContext : {}),
             externalId: numericUserId ? `user:${numericUserId}` : customerEmail,
         }, req).catch(() => { });
@@ -553,7 +558,7 @@ router.post('/retry-order', razorpayCreateLimiter, async (req, res) => {
         const orderRow = orderRows[0];
         if (!orderRow)
             return res.status(404).json({ message: 'Order not found' });
-        (0, metaConversions_1.captureMetaOrderContext)(orderRow.id, {
+        (0, purchaseTracking_1.capturePurchaseOrderContext)(orderRow.id, {
             ...(req.body?.metaContext && typeof req.body.metaContext === 'object' ? req.body.metaContext : {}),
             externalId: String(orderRow.user_id || '').trim() ? `user:${orderRow.user_id}` : String(orderRow.customer_email || ''),
         }, req).catch(() => { });

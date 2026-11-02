@@ -13,7 +13,7 @@ import {
   Truck,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useCartStore } from '@/store/cartStore';
+import { getCartLineKey, useCartStore } from '@/store/cartStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { formatPrice } from '@/utils/formatPrice';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
@@ -43,7 +43,7 @@ const CartPage = () => {
   const shipping = subtotal >= freeShippingThreshold ? 0 : shippingFee;
   const grandTotal = subtotal + packagingCost + shipping;
   const itemCount = items.reduce((count, item) => count + item.quantity, 0);
-  const validationById = useMemo(() => new Map((validation?.items || []).map((item) => [String(item.productId), item])), [validation]);
+  const validationById = useMemo(() => new Map((validation?.items || []).map((item) => [getCartLineKey(item), item])), [validation]);
   const unavailableIds = useMemo(() => new Set((validation?.unavailableItems || []).map((item) => String(item.productId))), [validation]);
   const hasUnavailableItems = unavailableIds.size > 0 || items.some((item) => !isProductPurchasable(item.product));
   const hasValidationChanges = Boolean(validation?.changes?.length);
@@ -131,6 +131,9 @@ const CartPage = () => {
       category: item.category,
       inStock: item.inStock,
       availableQuantity: item.availableQuantity,
+      selectedSize: item.selectedSize,
+      selectedPieces: item.selectedPieces,
+      selectedAttributes: item.selectedAttributes,
     })));
   };
 
@@ -223,7 +226,7 @@ const CartPage = () => {
                   {items.map(item => (
                     (() => {
                     const baseId = String(item.product.id).split('::')[0];
-                    const validated = validationById.get(baseId);
+                    const validated = validationById.get(getCartLineKey(item));
                     const unavailable = unavailableIds.has(baseId) || !isProductPurchasable(item.product);
                     const currentPrice = Number(validated?.price ?? item.product.price);
                     const currentMrp = Number(validated?.originalPrice || 0) > currentPrice ? Number(validated?.originalPrice) : getValidMrp(item.product);
@@ -231,7 +234,7 @@ const CartPage = () => {
                     const maxQuantity = validated?.availableQuantity === null || validated?.availableQuantity === undefined ? 99 : Math.max(1, Number(validated.availableQuantity));
                     return (
                     <motion.div
-                      key={item.product.id}
+                      key={getCartLineKey(item)}
                       layout
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -271,15 +274,15 @@ const CartPage = () => {
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-1.5 sm:mt-4 sm:pt-3">
                             <div className="flex items-center rounded-md border border-border bg-card shadow-sm">
-                              <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)} disabled={unavailable} className="flex h-7 w-7 items-center justify-center rounded-l-md transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9" aria-label="Decrease quantity">
+                              <button onClick={() => updateQuantity(item, item.quantity - 1)} disabled={unavailable} className="flex h-7 w-7 items-center justify-center rounded-l-md transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9" aria-label="Decrease quantity">
                                 <Minus size={14} />
                               </button>
                               <span className="min-w-8 px-2 text-center text-xs font-bold sm:min-w-10 sm:px-3 sm:text-sm">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item.product.id, Math.min(maxQuantity, item.quantity + 1))} disabled={unavailable || item.quantity >= maxQuantity} className="flex h-7 w-7 items-center justify-center rounded-r-md transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9" aria-label="Increase quantity">
+                              <button onClick={() => updateQuantity(item, Math.min(maxQuantity, item.quantity + 1))} disabled={unavailable || item.quantity >= maxQuantity} className="flex h-7 w-7 items-center justify-center rounded-r-md transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:w-9" aria-label="Increase quantity">
                                 <Plus size={14} />
                               </button>
                             </div>
-                            <button onClick={() => removeItem(item.product.id)} className="inline-flex min-h-7 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-destructive transition-colors hover:bg-destructive/10 sm:min-h-9 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm">
+                            <button onClick={() => removeItem(item)} className="inline-flex min-h-7 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-destructive transition-colors hover:bg-destructive/10 sm:min-h-9 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm">
                               <Trash2 size={15} /> Remove
                             </button>
                           </div>

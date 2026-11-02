@@ -69,6 +69,7 @@ const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
 const OAuthCallbackPage = lazy(() => import("./pages/OAuthCallbackPage"));
 const VerifyOtpPage = lazy(() => import("./pages/VerifyOtpPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const EmailUnsubscribePage = lazy(() => import("./pages/EmailUnsubscribePage"));
 const CartPage = lazy(() => import("./pages/CartPage"));
 const WishlistPage = lazy(() => import("./pages/WishlistPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
@@ -222,6 +223,7 @@ const noIndexPaths = new Set([
   '/track-orders',
   '/verify-email',
   '/verify-otp',
+  '/email/unsubscribe',
   '/wishlist',
 ]);
 
@@ -427,6 +429,7 @@ const App = () => {
           <Route path="/verify-email" element={suspenseRoute(<VerifyEmailPage />)} />
           <Route path="/verify-otp" element={suspenseRoute(<VerifyOtpPage />)} />
           <Route path="/forgot-password" element={suspenseRoute(<ForgotPasswordPage />)} />
+          <Route path="/email/unsubscribe" element={suspenseRoute(<EmailUnsubscribePage />)} />
           <Route path="/oauth-callback" element={suspenseRoute(<OAuthCallbackPage />)} />
           <Route path="/cart" element={suspenseRoute(<CartPage />)} />
           <Route path="/wishlist" element={suspenseRoute(<WishlistPage />)} />

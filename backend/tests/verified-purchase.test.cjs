@@ -67,6 +67,12 @@ beforeEach(() => {
     orderPayments: [], queries: [], writes: [], metaCalls: [], gatewayCalls: [], eventStatus: null,
   };
   process.env.META_CONVERSIONS_API_TOKEN = 'isolated-test-token';
+  process.env.APP_ENV = 'production';
+  process.env.NODE_ENV = 'production';
+  process.env.RAZORPAY_MODE = 'live';
+  delete process.env.RAZORPAY_TEST_KEY_ID;
+  delete process.env.RAZORPAY_TEST_KEY_SECRET;
+  delete process.env.RAZORPAY_TEST_WEBHOOK_SECRET;
   process.env.RAZORPAY_PLATFORM_KEY_ID = 'rzp_live_IsolatedTest';
   process.env.RAZORPAY_PLATFORM_KEY_SECRET = 'isolated-test-secret';
   process.env.RAZORPAY_PLATFORM_WEBHOOK_SECRET = 'isolated-webhook-secret';

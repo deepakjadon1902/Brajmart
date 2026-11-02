@@ -1,8 +1,9 @@
-import { dbExecute, dbQuery, isDbConnected } from './db';
+import { dbExecute, dbQuery, isDbConnected, withMigrationDdlPermit } from './db';
 import bcrypt from 'bcryptjs';
 import { ensureCommerceIntelligenceSchema } from './commerceIntelligence';
 import { ensureShippingLabelsSchema } from './shippingLabels';
 import { ensureDeliveryServiceSchema } from './deliveryService';
+import { isConfirmedLocalMigrationDatabaseIdentity, isLocalMigrationCliInvocation, resolveAutomaticMigrationDecision } from './automaticMigrationPolicy';
 
 const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
@@ -266,6 +267,90 @@ const ensureCouponSchema = async () => {
   await setMigrationDone(MIGRATION_KEY);
 };
 
+const ensureEmailFollowupSchema = async () => {
+  const MIGRATION_KEY = '2026-11-02_email_cart_followups_and_offers';
+  if (await isMigrationDone(MIGRATION_KEY)) return;
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS email_contact_preferences (
+      email VARCHAR(255) NOT NULL,
+      user_id BIGINT UNSIGNED NULL,
+      customer_name VARCHAR(255) NOT NULL DEFAULT '',
+      cart_reminder_consent TINYINT(1) NOT NULL DEFAULT 0,
+      offer_email_consent TINYINT(1) NOT NULL DEFAULT 0,
+      whatsapp_followup_consent TINYINT(1) NOT NULL DEFAULT 0,
+      cart_reminder_consented_at DATETIME NULL,
+      offer_email_consented_at DATETIME NULL,
+      whatsapp_followup_consented_at DATETIME NULL,
+      consent_source VARCHAR(40) NOT NULL DEFAULT '',
+      consent_version VARCHAR(40) NOT NULL DEFAULT '',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (email),
+      KEY idx_email_contact_preferences_user (user_id),
+      KEY idx_email_contact_preferences_offers (offer_email_consent, email),
+      KEY idx_email_contact_preferences_whatsapp (whatsapp_followup_consent, email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS cart_reminder_jobs (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      email VARCHAR(255) NOT NULL,
+      user_id BIGINT UNSIGNED NULL,
+      customer_name VARCHAR(255) NOT NULL DEFAULT '',
+      items JSON NOT NULL,
+      items_subtotal DECIMAL(10,2) NOT NULL DEFAULT 0,
+      activity_at DATETIME NOT NULL,
+      due_at DATETIME NOT NULL,
+      status ENUM('pending','sending','sent','cancelled','failed','uncertain') NOT NULL DEFAULT 'pending',
+      attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+      idempotency_key CHAR(64) NOT NULL,
+      last_error VARCHAR(255) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_cart_reminder_idempotency (idempotency_key),
+      KEY idx_cart_reminder_due (status, due_at),
+      KEY idx_cart_reminder_email_status (email, status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS email_unsubscribe_tokens (
+      token_hash CHAR(64) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      used_at DATETIME NULL,
+      PRIMARY KEY (token_hash),
+      KEY idx_email_unsubscribe_email (email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS offer_email_deliveries (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      campaign_key CHAR(64) NOT NULL,
+      coupon_id BIGINT UNSIGNED NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      customer_name VARCHAR(255) NOT NULL DEFAULT '',
+      status ENUM('pending','sending','sent','failed','uncertain','cancelled') NOT NULL DEFAULT 'pending',
+      attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+      idempotency_key CHAR(64) NOT NULL,
+      last_error VARCHAR(255) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_offer_campaign_recipient (campaign_key, email),
+      UNIQUE KEY uq_offer_email_idempotency (idempotency_key),
+      KEY idx_offer_email_queue (status, id),
+      CONSTRAINT fk_offer_email_coupon FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `);
+
+  await setMigrationDone(MIGRATION_KEY);
+};
+
 const ensureFreeShippingThresholdDefault = async () => {
   const MIGRATION_KEY = '2026-07-07_free_shipping_threshold_299';
   if (await isMigrationDone(MIGRATION_KEY)) return;
@@ -520,18 +605,14 @@ const isMigrationDone = async (key: string) => {
   return Boolean(rows?.length);
 };
 
-export const runDataMigrations = async () => {
-  if (!isDbConnected()) return;
-  // Default: run safe idempotent data migrations.
-  // Set RUN_DATA_MIGRATIONS=false to disable.
-  if (String(process.env.RUN_DATA_MIGRATIONS || '').toLowerCase() === 'false') return;
-
+const runMigrationBody = async () => {
   await ensureCoreTables();
   await ensureCustomerInterestSchema();
   await syncAdminFromEnv();
   await ensureOrderPricingSchema();
   await ensureOrderCodSchema();
   await ensureCouponSchema();
+  await ensureEmailFollowupSchema();
   await ensurePhaseZeroCommerceSchema();
   await ensureDeliveryCodColumns();
   await ensurePurposeCollectionsSchema();
@@ -543,6 +624,30 @@ export const runDataMigrations = async () => {
   await ensureShippingLabelsSchema();
   await migratePendingOnlineProcessingOrders();
   await migrateDeityShringarIntoIdolsSubcategory();
+};
+
+export const runDataMigrations = async () => {
+  // Keep the migration implementation fail-closed even if a future startup
+  // path imports and calls it without going through index.ts.
+  if (!resolveAutomaticMigrationDecision(process.env).allowed || !isLocalMigrationCliInvocation()) return;
+  if (!isDbConnected()) return;
+  const identityRows = await dbQuery<any>(
+    'SELECT DATABASE() AS database_name, @@hostname AS server_hostname, CAST(@@server_id AS CHAR) AS server_id, CAST(@@port AS CHAR) AS server_port',
+  );
+  if (!identityRows[0] || !isConfirmedLocalMigrationDatabaseIdentity({
+    databaseName: String(process.env.LOCAL_MIGRATION_DB_NAME || ''),
+    hostname: String(process.env.LOCAL_MIGRATION_DB_HOSTNAME || ''),
+    serverId: String(process.env.LOCAL_MIGRATION_DB_SERVER_ID || ''),
+    port: String(process.env.LOCAL_MIGRATION_DB_PORT || ''),
+  }, {
+    databaseName: identityRows[0].database_name,
+    hostname: identityRows[0].server_hostname,
+    serverId: identityRows[0].server_id,
+    port: identityRows[0].server_port,
+  })) {
+    throw new Error('Local migration database identity did not match the explicitly confirmed target; no migrations were run');
+  }
+  await withMigrationDdlPermit(runMigrationBody);
 };
 
 const migratePendingOnlineProcessingOrders = async () => {

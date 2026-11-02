@@ -176,7 +176,7 @@ const priceAndValidateOrderItems = async (items) => {
     // De-duplicate ids for query.
     const uniqueIds = Array.from(new Set(ids));
     const placeholders = uniqueIds.map(() => '?').join(',');
-    const rows = await (0, db_1.dbQuery)(`SELECT id, name, slug, price, image, category, category_id, in_stock, stock_quantity, reserved_quantity
+    const rows = await (0, db_1.dbQuery)(`SELECT id, sku, name, slug, price, image, category, category_id, in_stock, stock_quantity, reserved_quantity
      FROM products
      WHERE id IN (${placeholders}) AND archived_at IS NULL`, uniqueIds);
     const byId = new Map((rows || []).map((r) => [String(r.id), r]));
@@ -210,6 +210,7 @@ const priceAndValidateOrderItems = async (items) => {
         subtotal += quantity * price;
         pricedItems.push({
             productId,
+            sku: String(product.sku || '').trim(),
             slug: String(product.slug || ''),
             name: String(product.name || ''),
             image: String(product.image || ''),

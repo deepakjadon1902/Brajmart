@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, CreditCard, CheckCircle2, ShieldCheck, Check, Minus, Plus, Trash2, Truck, Tag, X } from 'lucide-react';
 import { SiRazorpay } from 'react-icons/si';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useCartStore } from '@/store/cartStore';
+import { getCartLineKey, useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
 import { Address } from '@/store/orderStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
+import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, captureEmailFollowup, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
 import { getMetaAttributionContext, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { getGooglePurchaseContext } from '@/lib/googleAttribution';
 import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft';
@@ -205,6 +205,9 @@ const CheckoutPage = () => {
   const [checkoutValidation, setCheckoutValidation] = useState<CartValidationResponse | null>(null);
   const [checkoutValidationError, setCheckoutValidationError] = useState('');
   const [checkoutValidating, setCheckoutValidating] = useState(false);
+  const [cartReminderConsent, setCartReminderConsent] = useState(false);
+  const [offerEmailConsent, setOfferEmailConsent] = useState(false);
+  const [whatsappFollowupConsent, setWhatsappFollowupConsent] = useState(false);
 
   const freeShippingThreshold = Number(settings.freeShippingThreshold) > 0 ? Number(settings.freeShippingThreshold) : DEFAULT_FREE_SHIPPING_THRESHOLD;
   const shippingFee = Number(settings.shippingFee) > 0 ? Number(settings.shippingFee) : DEFAULT_SHIPPING_FEE;
@@ -223,11 +226,11 @@ const CheckoutPage = () => {
   const codDecisionItems = checkoutValidation?.items?.length
     ? checkoutValidation.items
     : items.map((i) => i.product);
-  const hasPrasadamItems = codDecisionItems.some((item: any) => {
+  const hasPrasadamItems = codDecisionItems.some((item) => {
     const text = `${item.category || ''} ${item.name || ''} ${item.slug || ''}`.toLowerCase();
     return /\bprasadam\b|\bprasad\b/.test(text);
   });
-  const codEligibleItems = codDecisionItems.every((product: any) => {
+  const codEligibleItems = codDecisionItems.every((product) => {
     if (product.codEnabled !== null && product.codEnabled !== undefined) return Boolean(product.codEnabled);
     if (product.categoryCodEnabled !== undefined) return Boolean(product.categoryCodEnabled);
     return true;
@@ -454,6 +457,9 @@ const CheckoutPage = () => {
       codEnabled: item.codEnabled,
       categoryCodEnabled: item.categoryCodEnabled,
       availableQuantity: item.availableQuantity,
+      selectedSize: item.selectedSize,
+      selectedPieces: item.selectedPieces,
+      selectedAttributes: item.selectedAttributes,
     })));
     setCheckoutValidation(null);
     setAppliedCoupon(null);
@@ -739,6 +745,22 @@ const CheckoutPage = () => {
     }
     const cartIsCurrent = await runCheckoutValidation('submit');
     if (!cartIsCurrent) return;
+    if (cartReminderConsent || offerEmailConsent || whatsappFollowupConsent) {
+      try {
+        await captureEmailFollowup({
+          email: effectiveEmail,
+          customerName: cleanText(effectiveShipping.fullName),
+          items: checkoutItemsPayload(),
+          consent: {
+            cartReminder: cartReminderConsent,
+            offerEmail: offerEmailConsent,
+            whatsappFollowup: whatsappFollowupConsent,
+          },
+        });
+      } catch {
+        toast.info('Checkout can continue. We could not save your optional contact preferences this time.');
+      }
+    }
     setStep(1);
   };
 
@@ -1140,6 +1162,23 @@ const CheckoutPage = () => {
                     </div>
                     {renderAddressForm(shippingAddress, setShippingAddress, 'Contact and address')}
 
+                    <div className="space-y-3 rounded-lg border border-border bg-background/60 p-3.5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Optional messages from BrajMart</p>
+                      <label className="flex cursor-pointer items-start gap-3 text-sm text-foreground">
+                        <input type="checkbox" checked={cartReminderConsent} onChange={(event) => setCartReminderConsent(event.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-saffron" />
+                        <span>Send me one email reminder about this cart if I leave checkout unfinished. It will be sent after 4 hours.</span>
+                      </label>
+                      <label className="flex cursor-pointer items-start gap-3 text-sm text-foreground">
+                        <input type="checkbox" checked={offerEmailConsent} onChange={(event) => setOfferEmailConsent(event.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-saffron" />
+                        <span>Email me occasional BrajMart offers and new deals.</span>
+                      </label>
+                      <label className="flex cursor-pointer items-start gap-3 text-sm text-foreground">
+                        <input type="checkbox" checked={whatsappFollowupConsent} onChange={(event) => setWhatsappFollowupConsent(event.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-saffron" />
+                        <span>Allow BrajMart&apos;s team to follow up with me manually on WhatsApp about products I leave in my cart or favorites.</span>
+                      </label>
+                      <p className="text-xs text-muted-foreground">These choices are optional and separate from order updates. You can opt out using the link in a BrajMart message.</p>
+                    </div>
+
                     <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/20 px-3.5 py-3 transition-colors hover:border-gold/40 sm:items-center sm:px-4">
                       <input
                         type="checkbox"
@@ -1356,7 +1395,7 @@ const CheckoutPage = () => {
                 )}
                 <div className="space-y-3 mb-5">
                   {items.map((item) => (
-                    <div key={item.product.id} className="flex min-w-0 gap-3">
+                    <div key={getCartLineKey(item)} className="flex min-w-0 gap-3">
                       <img src={item.product.image} alt={item.product.name} className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-foreground line-clamp-1">{item.product.name}</p>
@@ -1365,7 +1404,7 @@ const CheckoutPage = () => {
                             <div className="inline-flex items-center overflow-hidden rounded-lg border border-border bg-background">
                               <button
                                 type="button"
-                                onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                                onClick={() => updateQuantity(item, item.quantity - 1)}
                                 className="px-2.5 py-1.5 transition-colors hover:bg-muted"
                                 aria-label={`Decrease quantity of ${item.product.name}`}
                               >
@@ -1374,7 +1413,7 @@ const CheckoutPage = () => {
                               <span className="px-3 text-xs font-semibold tabular-nums">{item.quantity}</span>
                               <button
                                 type="button"
-                                onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                                onClick={() => updateQuantity(item, item.quantity + 1)}
                                 className="px-2.5 py-1.5 transition-colors hover:bg-muted"
                                 aria-label={`Increase quantity of ${item.product.name}`}
                               >
@@ -1383,7 +1422,7 @@ const CheckoutPage = () => {
                             </div>
                             <button
                               type="button"
-                              onClick={() => removeItem(item.product.id)}
+                              onClick={() => removeItem(item)}
                               className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                               aria-label={`Remove ${item.product.name} from order`}
                             >

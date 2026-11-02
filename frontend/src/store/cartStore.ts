@@ -16,8 +16,8 @@ interface CartStore {
   drawerOpen: boolean;
   lastAddedProductId: string;
   addItem: (product: Product, quantity?: number) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  removeItem: (item: CartItem) => void;
+  updateQuantity: (item: CartItem, quantity: number) => void;
   reconcileValidatedItems: (items: Array<{
     productId: string;
     quantity: number;
@@ -31,6 +31,9 @@ interface CartStore {
     codEnabled?: boolean | null;
     categoryCodEnabled?: boolean;
     availableQuantity?: number | null;
+    selectedSize?: string;
+    selectedPieces?: string | number;
+    selectedAttributes?: Record<string, string>;
   }>) => void;
   clearCart: () => void;
   openDrawer: (productId?: string) => void;
@@ -62,6 +65,24 @@ const stringField = (value: unknown) => typeof value === 'string' ? value : '';
 const numberField = (value: unknown) => {
   const number = Number(value || 0);
   return Number.isFinite(number) ? number : 0;
+};
+
+export const getCartLineKey = (item: CartItem | PersistedProductInterestItem) => {
+  const persisted = item as PersistedProductInterestItem;
+  const product = ('product' in item ? item.product : undefined) as (Partial<Product> & { _id?: string }) | undefined;
+  const id = String(persisted.productId || persisted.id || persisted._id || product?.id || product?._id || '').split('::')[0];
+  const attrs = persisted.selectedAttributes || product?.selectedAttributes || {};
+  return [id, persisted.selectedSize || product?.selectedSize || '', persisted.selectedPieces || product?.selectedPieces || '', JSON.stringify(Object.fromEntries(Object.entries(attrs).sort(([a], [b]) => a.localeCompare(b))))].join('|');
+};
+
+let cartSyncQueue: Promise<void> = Promise.resolve();
+const queueCartSync = (items: CartItem[]) => {
+  if (!getAuthToken()) return Promise.resolve();
+  const snapshot = toApiItems(items);
+  cartSyncQueue = cartSyncQueue.catch(() => undefined).then(async () => {
+    await updateCart(snapshot);
+  }).catch(() => undefined);
+  return cartSyncQueue;
 };
 
 const fromApiItem = (i: PersistedProductInterestItem): CartItem => {
@@ -98,19 +119,19 @@ export const useCartStore = create<CartStore>()(
       drawerOpen: false,
       lastAddedProductId: '',
       loadFromApi: async () => {
+        if (!getAuthToken()) return;
         try {
-          if (!getAuthToken()) return;
           const cart = await fetchCart() as CartApiResponse;
           const remoteItems = (cart?.items || []).map(fromApiItem).filter((item) => item.product.id);
           const localItems = get().items.filter((item) => item.product.id);
           const items = [...remoteItems];
           for (const localItem of localItems) {
-            const existing = items.find((remoteItem) => remoteItem.product.id === localItem.product.id);
+            const existing = items.find((remoteItem) => getCartLineKey(remoteItem) === getCartLineKey(localItem));
             if (existing) existing.quantity = Math.max(existing.quantity, localItem.quantity);
             else items.push(localItem);
           }
-          if (localItems.length && (items.length !== remoteItems.length || items.some((item, index) => item.quantity !== remoteItems[index]?.quantity))) {
-            updateCart(toApiItems(items)).catch(() => {});
+          if (localItems.length && (items.length !== remoteItems.length || items.some((item) => item.quantity !== remoteItems.find((remote) => getCartLineKey(remote) === getCartLineKey(item))?.quantity))) {
+            await queueCartSync(items);
           }
           set({ items });
         } catch {
@@ -119,41 +140,38 @@ export const useCartStore = create<CartStore>()(
       },
       addItem: (product, quantity = 1) => set((state) => {
         const safeQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
-        const existing = state.items.find(i => i.product.id === product.id);
+        const candidate: CartItem = { product, quantity: safeQuantity };
+        const candidateKey = getCartLineKey(candidate);
+        const existing = state.items.find((item) => getCartLineKey(item) === candidateKey);
         let items: CartItem[];
         if (existing) {
-          items = state.items.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + safeQuantity } : i);
+          items = state.items.map((item) => getCartLineKey(item) === candidateKey ? { ...item, quantity: item.quantity + safeQuantity } : item);
         } else {
-          items = [...state.items, { product, quantity: safeQuantity }];
+          items = [...state.items, candidate];
         }
-        if (getAuthToken()) {
-          updateCart(toApiItems(items)).catch(() => {});
-        }
+        queueCartSync(items);
         trackMetaPixelEvent('AddToCart', productToMetaPixelParams(product, safeQuantity));
         return { items, lastAddedProductId: product.id };
       }),
-      removeItem: (productId) => set((state) => {
-        const items = state.items.filter(i => i.product.id !== productId);
-        if (getAuthToken()) {
-          updateCart(toApiItems(items)).catch(() => {});
-        }
+      removeItem: (target) => set((state) => {
+        const key = getCartLineKey(target);
+        const items = state.items.filter((item) => getCartLineKey(item) !== key);
+        queueCartSync(items);
         return { items };
       }),
-      updateQuantity: (productId, quantity) => set((state) => {
+      updateQuantity: (target, quantity) => set((state) => {
+        const key = getCartLineKey(target);
         const items = quantity <= 0
-          ? state.items.filter(i => i.product.id !== productId)
-          : state.items.map(i => i.product.id === productId ? { ...i, quantity } : i);
-        if (getAuthToken()) {
-          updateCart(toApiItems(items)).catch(() => {});
-        }
+          ? state.items.filter((item) => getCartLineKey(item) !== key)
+          : state.items.map((item) => getCartLineKey(item) === key ? { ...item, quantity } : item);
+        queueCartSync(items);
         return { items };
       }),
       reconcileValidatedItems: (validatedItems) => set((state) => {
-        const byId = new Map(validatedItems.map((item) => [String(item.productId), item]));
+        const byVariant = new Map(validatedItems.map((item) => [getCartLineKey(item), item]));
         const items = state.items
           .map((item) => {
-            const baseId = String(item.product.id).split('::')[0];
-            const validated = byId.get(baseId);
+            const validated = byVariant.get(getCartLineKey(item));
             if (!validated) return item;
             return {
               product: {
@@ -174,19 +192,12 @@ export const useCartStore = create<CartStore>()(
               quantity: Math.max(1, Number(validated.quantity || item.quantity)),
             };
           })
-          .filter((item) => byId.has(String(item.product.id).split('::')[0]));
-        if (getAuthToken()) {
-          updateCart(toApiItems(items).map((item) => ({
-            ...item,
-            productId: String(item.productId).split('::')[0],
-          }))).catch(() => {});
-        }
+          .filter((item) => byVariant.has(getCartLineKey(item)));
+        queueCartSync(items);
         return { items };
       }),
       clearCart: () => {
-        if (getAuthToken()) {
-          clearCartApi().catch(() => {});
-        }
+        if (getAuthToken()) clearCartApi().catch(() => undefined);
         set({ items: [] });
       },
       openDrawer: (productId) => set((state) => ({

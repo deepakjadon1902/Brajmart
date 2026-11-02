@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { useCartStore } from '@/store/cartStore';
+import { getCartLineKey, useCartStore } from '@/store/cartStore';
 import { useProductStore } from '@/store/productStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { formatPrice } from '@/utils/formatPrice';
@@ -94,7 +94,7 @@ const CartDrawer = () => {
               {items.length ? (
                 <div className="space-y-3">
                   {items.slice(0, 4).map((item) => (
-                    <div key={item.product.id} className="grid grid-cols-[72px_1fr] gap-3 rounded-lg border border-border bg-card p-2.5">
+                    <div key={getCartLineKey(item)} className="grid grid-cols-[72px_1fr] gap-3 rounded-lg border border-border bg-card p-2.5">
                       <Link to={`/product/${item.product.slug}`} onClick={closeDrawer} className="h-[72px] overflow-hidden rounded-md bg-brand-raised">
                         <img src={item.product.image} alt={item.product.name} className="h-full w-full object-contain p-1.5" />
                       </Link>
@@ -104,16 +104,16 @@ const CartDrawer = () => {
                         </Link>
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <span className="font-sans text-sm font-bold">{formatPrice(item.product.price)}</span>
-                          <button type="button" onClick={() => removeItem(item.product.id)} className="text-destructive" aria-label={`Remove ${item.product.name}`}>
+                          <button type="button" onClick={() => removeItem(item)} className="text-destructive" aria-label={`Remove ${item.product.name}`}>
                             <Trash2 size={15} />
                           </button>
                         </div>
                         <div className="mt-2 inline-flex items-center rounded-md border border-border bg-background">
-                          <button type="button" onClick={() => updateQuantity(item.product.id, item.quantity - 1)} className="flex h-8 w-8 items-center justify-center" aria-label="Decrease quantity">
+                          <button type="button" onClick={() => updateQuantity(item, item.quantity - 1)} className="flex h-8 w-8 items-center justify-center" aria-label="Decrease quantity">
                             <Minus size={13} />
                           </button>
                           <span className="min-w-8 text-center text-xs font-bold">{item.quantity}</span>
-                          <button type="button" onClick={() => updateQuantity(item.product.id, item.quantity + 1)} className="flex h-8 w-8 items-center justify-center" aria-label="Increase quantity">
+                          <button type="button" onClick={() => updateQuantity(item, item.quantity + 1)} className="flex h-8 w-8 items-center justify-center" aria-label="Increase quantity">
                             <Plus size={13} />
                           </button>
                         </div>

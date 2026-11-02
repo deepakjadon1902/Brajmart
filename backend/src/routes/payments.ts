@@ -8,6 +8,7 @@ import { finalPaymentWhereSql } from '../lib/orderVisibility';
 import { markCouponUsed } from '../lib/orderPricing';
 import { sendVerifiedPurchaseForOrder } from '../lib/purchaseTracking';
 import { isCapturedRazorpayPayment, verifyCapturedRazorpayPayment } from '../lib/razorpayVerification';
+import { resolveRazorpayCredentials } from '../lib/razorpayEnvironment';
 
 const router = Router();
 
@@ -138,9 +139,7 @@ const getAdminPaymentRows = async () => {
 };
 
 const getRazorpayConfig = () => {
-  const keyId = process.env.RAZORPAY_PLATFORM_KEY_ID || process.env.RAZORPAY_KEY_ID || '';
-  const keySecret = process.env.RAZORPAY_PLATFORM_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || '';
-  return { keyId, keySecret };
+  return resolveRazorpayCredentials();
 };
 
 const fetchRazorpayJson = async (path: string) => {

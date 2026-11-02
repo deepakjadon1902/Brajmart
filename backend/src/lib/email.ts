@@ -65,16 +65,31 @@ const getTransporter = () => {
   return cachedTransporter;
 };
 
-const sendViaResend = async (to: string, subject: string, html: string) => {
+export type SendEmailOptions = {
+  idempotencyKey?: string;
+  suppressRecipientLog?: boolean;
+};
+
+export class EmailProviderResponseError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'EmailProviderResponseError';
+  }
+}
+
+const sendViaResend = async (to: string, subject: string, html: string, idempotencyKey?: string) => {
   const { apiKey, from } = getResendConfig();
   if (!apiKey) throw new Error('Resend not configured');
 
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       from,
       to,
@@ -86,20 +101,24 @@ const sendViaResend = async (to: string, subject: string, html: string) => {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = typeof data?.message === 'string' ? data.message : `Resend request failed (${res.status})`;
-    throw new Error(msg);
+    throw new EmailProviderResponseError(msg, res.status);
   }
 };
 
-export const sendEmail = async (to: string, subject: string, html: string) => {
+export const sendEmail = async (to: string, subject: string, html: string, options: SendEmailOptions = {}) => {
   const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@brajmart.com';
   const from = `BrajMart <${fromAddress}>`;
 
   // Prefer HTTPS-based email providers in production since many hosts block outbound SMTP ports.
   const preferProvider = String(process.env.EMAIL_PROVIDER || '').toLowerCase();
   if (preferProvider === 'resend' || process.env.RESEND_API_KEY) {
-    await sendViaResend(to, subject, html);
-    console.log('Email sent (resend)', { to, subject });
+    await sendViaResend(to, subject, html, options.idempotencyKey);
+    console.log('Email sent (resend)', options.suppressRecipientLog ? { subject } : { to, subject });
     return;
+  }
+
+  if (options.idempotencyKey) {
+    throw new Error('Idempotent email delivery requires the Resend provider');
   }
 
   const transporter = getTransporter();
@@ -277,6 +296,99 @@ const renderItemsTable = (items?: OrderItem[]) => {
       <tbody>${rows}</tbody>
     </table>
   `;
+};
+
+const getPublicStoreUrl = () => {
+  const configured = String(process.env.FRONTEND_URL || process.env.PUBLIC_APP_URL || process.env.SITE_URL || process.env.APP_URL || 'https://brajmart.com').trim();
+  try {
+    const url = new URL(configured);
+    if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') return 'https://brajmart.com';
+    return url.origin;
+  } catch {
+    return 'https://brajmart.com';
+  }
+};
+
+export const sendCartReminderEmail = async (to: string, payload: {
+  customerName: string;
+  items: OrderItem[];
+  itemsSubtotal: number;
+  unsubscribeUrl: string;
+  idempotencyKey: string;
+}) => {
+  const firstName = String(payload.customerName || '').trim().split(/\s+/)[0] || 'there';
+  const html = await brandWrapper(
+    'Your BrajMart cart is waiting',
+    `<p>Namaste ${escapeHtml(firstName)},</p>
+     <p>You left a few lovely items in your cart. We saved this summary to make it easy to pick up where you left off:</p>
+     ${renderItemsTable(payload.items)}
+     <p style="text-align:right;margin:12px 0 18px;"><strong>Current item subtotal: ${formatMoney(payload.itemsSubtotal)}</strong></p>
+     <p>Prices and availability are confirmed again when you return to checkout. If you have already placed your order, please disregard this note.</p>
+     <p><a href="${escapeHtml(`${getPublicStoreUrl()}/cart`)}" style="display:inline-block;padding:12px 18px;background:#c58f1f;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;">Continue to your cart</a></p>
+     <p style="margin-top:20px;font-size:12px;color:#74685a;">You received this one-time cart reminder because you asked BrajMart to send it during checkout. <a href="${escapeHtml(payload.unsubscribeUrl)}">Stop cart and offer emails</a>.</p>`
+  );
+  await sendEmail(to, 'A little reminder from BrajMart', html, {
+    idempotencyKey: payload.idempotencyKey,
+    suppressRecipientLog: true,
+  });
+};
+
+export const sendPendingPaymentReminderEmail = async (to: string, payload: {
+  customerName: string;
+  orderId: string;
+  items: OrderItem[];
+  amountDue: number;
+  paymentUrl: string;
+  unsubscribeUrl: string;
+  idempotencyKey: string;
+}) => {
+  const firstName = String(payload.customerName || '').trim().split(/\s+/)[0] || 'there';
+  const html = await brandWrapper(
+    'Your BrajMart payment is waiting',
+    `<p>Namaste ${escapeHtml(firstName)},</p>
+     <p>It looks like payment for order <strong>#${escapeHtml(payload.orderId)}</strong> was not completed. Here is the order summary:</p>
+     ${renderItemsTable(payload.items)}
+     <p style="text-align:right;margin:12px 0 18px;"><strong>Amount due: ${formatMoney(payload.amountDue)}</strong></p>
+     <p>When convenient, you can safely return to the payment page to check the status or try again. If you have already paid, please disregard this note.</p>
+     <p><a href="${escapeHtml(payload.paymentUrl)}" style="display:inline-block;padding:12px 18px;background:#c58f1f;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;">Review order and payment</a></p>
+     <p style="margin-top:20px;font-size:12px;color:#74685a;">You received this reminder because you asked BrajMart to contact you if checkout was left unfinished. <a href="${escapeHtml(payload.unsubscribeUrl)}">Stop optional BrajMart follow-ups</a>.</p>`
+  );
+  await sendEmail(to, `Complete payment for BrajMart order #${payload.orderId}`, html, {
+    idempotencyKey: payload.idempotencyKey,
+    suppressRecipientLog: true,
+  });
+};
+
+export const sendCouponOfferEmail = async (to: string, payload: {
+  customerName: string;
+  code: string;
+  title?: string;
+  description: string;
+  validUntil?: string | null;
+  unsubscribeUrl: string;
+  idempotencyKey: string;
+}) => {
+  const firstName = String(payload.customerName || '').trim().split(/\s+/)[0] || 'there';
+  const validUntilText = payload.validUntil
+    ? new Date(payload.validUntil).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+    : '';
+  const html = await brandWrapper(
+    payload.title || 'A BrajMart offer for you',
+    `<p>Namaste ${escapeHtml(firstName)},</p>
+     <p>We have a new BrajMart offer we thought you might enjoy.</p>
+     <div style="margin:16px 0;padding:16px;border:1px solid #eadfce;border-radius:10px;background:#fffaf2;">
+       <p style="margin:0;font-size:18px;font-weight:800;color:#3b1c12;">${escapeHtml(payload.title || 'A special offer')}</p>
+       <p style="margin:8px 0;">${escapeHtml(payload.description)}</p>
+       <p style="margin:8px 0 0;">Use code <strong style="font-family:monospace;">${escapeHtml(payload.code)}</strong> at checkout.</p>
+       ${validUntilText ? `<p style="margin:8px 0 0;font-size:12px;color:#74685a;">Offer ends ${escapeHtml(validUntilText)}.</p>` : ''}
+     </div>
+     <p><a href="${escapeHtml(`${getPublicStoreUrl()}/products`)}" style="display:inline-block;padding:12px 18px;background:#c58f1f;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;">Explore BrajMart</a></p>
+     <p style="margin-top:20px;font-size:12px;color:#74685a;">You are receiving offers because you opted in to BrajMart email updates. <a href="${escapeHtml(payload.unsubscribeUrl)}">Stop optional BrajMart follow-ups</a>.</p>`
+  );
+  await sendEmail(to, payload.title || 'A new offer from BrajMart', html, {
+    idempotencyKey: payload.idempotencyKey,
+    suppressRecipientLog: true,
+  });
 };
 
 const renderAddress = (label: string, addr?: OrderAddress) => {

@@ -168,10 +168,22 @@ router.get('/admin/cart-favorites', auth, adminOnly, async (req, res) => {
     ]);
 
     const orderedProducts = buildOrderedProductSet(orderRows);
-    res.json(mergeCustomerInterestRows([
+    const interests = mergeCustomerInterestRows([
       { source: 'cart', rows: cartRows },
       { source: 'favorite', rows: wishlistRows },
-    ], orderedProducts));
+    ], orderedProducts);
+    const emails = Array.from(new Set(interests.map((entry) => String(entry.email || '').trim().toLowerCase()).filter(Boolean)));
+    const preferences = emails.length
+      ? await dbQuery<any>(
+          `SELECT email, whatsapp_followup_consent FROM email_contact_preferences WHERE email IN (${emails.map(() => '?').join(',')})`,
+          emails
+        )
+      : [];
+    const whatsappConsentByEmail = new Map(preferences.map((row: any) => [String(row.email).toLowerCase(), Boolean(Number(row.whatsapp_followup_consent))]));
+    res.json(interests.map((entry) => ({
+      ...entry,
+      whatsappConsent: whatsappConsentByEmail.get(String(entry.email || '').toLowerCase()) === true,
+    })));
   } catch (err: any) {
     res.status(500).json({ message: err.message });
   }

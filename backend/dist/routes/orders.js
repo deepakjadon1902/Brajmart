@@ -17,7 +17,7 @@ const rateLimit_1 = require("../middleware/rateLimit");
 const inventory_1 = require("../lib/inventory");
 const adminAudit_1 = require("../lib/adminAudit");
 const payments_1 = require("./payments");
-const metaConversions_1 = require("./metaConversions");
+const purchaseTracking_1 = require("../lib/purchaseTracking");
 const router = (0, express_1.Router)();
 const codOrderLimiter = (0, rateLimit_1.rateLimit)('cod-order-create', {
     windowMs: 15 * 60 * 1000,
@@ -515,7 +515,7 @@ router.post('/', codOrderLimiter, auth_1.optionalAuth, async (req, res) => {
             JSON.stringify(statusHistory),
         ]);
         const orderId = result.insertId;
-        (0, metaConversions_1.captureMetaOrderContext)(orderId, {
+        (0, purchaseTracking_1.capturePurchaseOrderContext)(orderId, {
             ...(data.metaContext && typeof data.metaContext === 'object' ? data.metaContext : {}),
             externalId: req.user?.id ? `user:${req.user.id}` : customerEmail,
         }, req).catch(() => { });
@@ -569,6 +569,17 @@ router.post('/', codOrderLimiter, auth_1.optionalAuth, async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
+router.get('/admin/invoices', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
+    try {
+        if (!(0, db_1.isDbConnected)())
+            return res.status(503).json({ message: 'Database unavailable' });
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.json(await (0, orderInvoiceExport_1.getOrderInvoiceManifest)());
+    }
+    catch (err) {
+        res.status(500).json({ message: err.message || 'Failed to list invoices' });
+    }
+});
 router.get('/admin/invoices.zip', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
@@ -595,10 +606,14 @@ router.get('/:id/invoice', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         if (!row)
             return res.status(404).json({ message: 'Order not found' });
         const payments = await (0, orderInvoiceExport_1.loadInvoicePayments)([row.id]);
-        const pdf = await (0, orderInvoice_1.buildOrderInvoicePdf)(row, payments.get(String(row.id)));
+        const [invoiceOrder] = await (0, orderInvoiceExport_1.resolveInvoiceOrderSkus)([row]);
+        const pdf = await (0, orderInvoice_1.buildOrderInvoicePdf)(invoiceOrder, payments.get(String(row.id)));
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Cache-Control', 'private, no-store');
-        res.setHeader('Content-Disposition', `${req.query.download === '1' || req.query.print === '1' ? 'attachment' : 'inline'}; filename="${(0, orderInvoice_1.orderInvoiceFilename)(row.id)}"`);
+        const filename = (0, orderInvoice_1.orderInvoiceFilename)(row.id, row);
+        const encodedFilename = encodeURIComponent(filename).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+        res.setHeader('Content-Disposition', `${req.query.download === '1' || req.query.print === '1' ? 'attachment' : 'inline'}; filename="BrajMart-Invoice-${row.id}.pdf"; filename*=UTF-8''${encodedFilename}`);
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
         return res.send(pdf);
     }
     catch (err) {

@@ -12,7 +12,9 @@ import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
 import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
 import { capturePurchaseOrderContext, sendVerifiedPurchaseForOrder } from '../lib/purchaseTracking';
+import { cancelCartRemindersForOrder } from '../lib/cartFollowups';
 import { isCapturedRazorpayPayment, verifyCapturedRazorpayPayment } from '../lib/razorpayVerification';
+import { resolveRazorpayCredentials } from '../lib/razorpayEnvironment';
 
 const router = Router();
 const razorpayCreateLimiter = rateLimit('razorpay-create-order', {
@@ -29,10 +31,7 @@ const razorpayReportLimiter = rateLimit('razorpay-status-report', {
 });
 
 const getRazorpayConfig = () => {
-  const keyId = process.env.RAZORPAY_PLATFORM_KEY_ID || process.env.RAZORPAY_KEY_ID || '';
-  const keySecret = process.env.RAZORPAY_PLATFORM_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || '';
-  const webhookSecret = process.env.RAZORPAY_PLATFORM_WEBHOOK_SECRET || process.env.RAZORPAY_WEBHOOK_SECRET || '';
-  return { keyId, keySecret, webhookSecret };
+  return resolveRazorpayCredentials();
 };
 
 const hmacSha256 = (value: string, secret: string) =>
@@ -329,6 +328,8 @@ const updateOrderForPayment = async (params: {
       );
     }
     if (params.status === 'paid') {
+      const paidOrderRows = await dbQuery<any>('SELECT customer_email FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
+      await cancelCartRemindersForOrder(paidOrderRows[0]?.customer_email).catch(() => {});
       if (params.metaContext || params.request) await capturePurchaseOrderContext(statusRow.order_id, params.metaContext, params.request);
       // A duplicate signed callback is also a safe retry after a provider outage.
       // Each provider reserves the stable order ID before sending again.
@@ -373,6 +374,8 @@ const updateOrderForPayment = async (params: {
     'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
     [params.razorpayOrderId, params.status, statusRow.order_id, Number(statusRow.amount || orderRow.total || 0), statusRow.method || 'Razorpay', transactionId]
   );
+
+  if (params.status === 'paid') await cancelCartRemindersForOrder(orderRow.customer_email).catch(() => {});
 
   const orderItems = parseJson(orderRow.items, []);
   if (params.status === 'paid') {

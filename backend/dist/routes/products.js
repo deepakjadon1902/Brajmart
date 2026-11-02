@@ -8,6 +8,8 @@ const dbHelpers_1 = require("../lib/dbHelpers");
 const productDataQuality_1 = require("../lib/productDataQuality");
 const adminAudit_1 = require("../lib/adminAudit");
 const reviewAggregates_1 = require("../lib/reviewAggregates");
+const productHomePlacement_1 = require("../lib/productHomePlacement");
+const catalogEvents_1 = require("../lib/catalogEvents");
 const router = (0, express_1.Router)();
 const asFiniteNumber = (value) => {
     const n = typeof value === 'number' ? value : Number(value);
@@ -125,6 +127,7 @@ const LIST_CACHE_CONTROL = 'public, max-age=60, stale-while-revalidate=300';
 let listCache = null;
 const clearListCache = () => {
     listCache = null;
+    (0, catalogEvents_1.publishCatalogUpdate)();
 };
 const getMissingProductColumns = async (cols) => {
     const rows = await (0, db_1.dbQuery)(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND COLUMN_NAME IN (${cols.map(() => '?').join(',')})`, cols);
@@ -212,11 +215,32 @@ const ensureProductCodColumn = async () => {
         await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN cod_enabled TINYINT(1) NULL AFTER in_stock');
     }
 };
+let homeSchemaReady = false;
+let homeSchemaRequest = null;
 const ensureProductHomeColumn = async () => {
-    const missing = await getMissingProductColumns(['show_on_home']);
-    if (missing.show_on_home) {
-        await (0, db_1.dbExecute)('ALTER TABLE products ADD COLUMN show_on_home TINYINT(1) NOT NULL DEFAULT 0 AFTER tags');
-    }
+    if (homeSchemaReady)
+        return;
+    if (!homeSchemaRequest)
+        homeSchemaRequest = (async () => {
+            const missing = await getMissingProductColumns(['show_on_home', 'home_position']);
+            const definitions = {
+                show_on_home: 'TINYINT(1) NOT NULL DEFAULT 0 AFTER tags',
+                home_position: 'TINYINT UNSIGNED NULL AFTER show_on_home',
+            };
+            for (const [column, definition] of Object.entries(definitions)) {
+                if (!missing[column])
+                    continue;
+                try {
+                    await (0, db_1.dbExecute)(`ALTER TABLE products ADD COLUMN ${column} ${definition}`);
+                }
+                catch (error) {
+                    if (error.code !== 'ER_DUP_FIELDNAME')
+                        throw error;
+                }
+            }
+            homeSchemaReady = true;
+        })().finally(() => { homeSchemaRequest = null; });
+    return homeSchemaRequest;
 };
 const ensureCategoryCodColumn = async () => {
     const rows = await (0, db_1.dbQuery)(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
@@ -269,6 +293,7 @@ const mapProductRow = (row) => ({
     badge: row.badge ?? null,
     tags: (0, dbHelpers_1.parseJson)(row.tags, []),
     showOnHome: (0, dbHelpers_1.boolFromDb)(row.show_on_home),
+    homePosition: row.home_position == null ? null : Number(row.home_position),
     inStock: (0, dbHelpers_1.boolFromDb)(row.in_stock),
     codEnabled: row.cod_enabled === undefined || row.cod_enabled === null ? null : (0, dbHelpers_1.boolFromDb)(row.cod_enabled),
     categoryCodEnabled: row.category_cod_enabled === undefined || row.category_cod_enabled === null ? undefined : (0, dbHelpers_1.boolFromDb)(row.category_cod_enabled),
@@ -315,10 +340,12 @@ const mapProductListRow = (row) => ({
     badge: row.badge ?? null,
     tags: (0, dbHelpers_1.parseJson)(row.tags, []),
     showOnHome: (0, dbHelpers_1.boolFromDb)(row.show_on_home),
+    homePosition: row.home_position == null ? null : Number(row.home_position),
     inStock: (0, dbHelpers_1.boolFromDb)(row.in_stock),
     codEnabled: row.cod_enabled === undefined || row.cod_enabled === null ? null : (0, dbHelpers_1.boolFromDb)(row.cod_enabled),
     categoryCodEnabled: row.category_cod_enabled === undefined || row.category_cod_enabled === null ? undefined : (0, dbHelpers_1.boolFromDb)(row.category_cod_enabled),
     stockQuantity: row.stock_quantity === undefined || row.stock_quantity === null ? null : Number(row.stock_quantity),
+    reservedQuantity: row.reserved_quantity === undefined || row.reserved_quantity === null ? 0 : Number(row.reserved_quantity),
     sku: row.sku ?? '',
     soldCount: Number(row.sold_count ?? 0),
     description: row.description ?? '',
@@ -367,6 +394,8 @@ const buildUpdate = (data) => {
         set('tags', JSON.stringify(data.tags || []));
     if (data.showOnHome !== undefined || data.show_on_home !== undefined)
         set('show_on_home', (data.showOnHome ?? data.show_on_home) ? 1 : 0);
+    if (data.homePosition !== undefined)
+        set('home_position', data.homePosition);
     if (data.inStock !== undefined)
         set('in_stock', data.inStock ? 1 : 0);
     if (data.codEnabled !== undefined) {
@@ -418,6 +447,7 @@ const buildUpdate = (data) => {
     fields.push('updated_at = NOW()');
     return { sql: fields.join(', '), values };
 };
+router.get('/events', catalogEvents_1.streamCatalogUpdates);
 router.get('/', async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
@@ -436,7 +466,7 @@ router.get('/', async (req, res) => {
             ? 'p.*'
             : `p.id, p.name, p.slug, p.price, p.original_price, p.image, p.images,
          p.category_id, p.subcategory_id, p.rating, p.review_count, p.badge, p.tags,
-         p.show_on_home, p.in_stock, p.cod_enabled, p.stock_quantity, p.sku, p.sold_count,
+         p.show_on_home, p.home_position, p.in_stock, p.cod_enabled, p.stock_quantity, p.reserved_quantity, p.sku, p.sold_count,
          p.description, p.created_at, p.updated_at`;
         const rows = await (0, db_1.dbQuery)(`SELECT ${productProjection}, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name, ra.real_rating, ra.real_review_count
        FROM products p
@@ -461,7 +491,7 @@ router.get('/schema', auth_1.auth, auth_1.adminOnly, async (_req, res) => {
         await ensureProductPlacementSchema();
         const dbRow = await (0, db_1.dbQuery)('SELECT DATABASE() AS db');
         const database = dbRow?.[0]?.db ?? null;
-        const cols = ['meta_title', 'meta_description', 'cod_enabled', 'show_on_home', 'sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants'];
+        const cols = ['meta_title', 'meta_description', 'cod_enabled', 'show_on_home', 'home_position', 'sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants'];
         const missing = await getMissingProductColumns(cols);
         res.json({
             database,
@@ -532,6 +562,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         await ensureCodSchema();
         await ensureProductPlacementSchema();
         const data = req.body || {};
+        (0, productHomePlacement_1.normalizeHomePlacement)(data);
         if (data.sku !== undefined) {
             data.sku = normalizeSku(data.sku);
         }
@@ -605,7 +636,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             if (found)
                 categoryIdToSave = Number(found);
         }
-        const insertWithVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `sku`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `show_on_home`, `in_stock`, `stock_quantity`, `low_stock_threshold`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithVariants = async (execute) => execute('INSERT INTO products (`name`, `slug`, `sku`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `show_on_home`, `in_stock`, `stock_quantity`, `low_stock_threshold`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`, `sizes`, `size_pricing`, `piece_pricing`, `attributes`, `variant_pricing`, `color_variants`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.sku || null,
@@ -636,7 +667,7 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             JSON.stringify(sanitizeVariantPricing(data.variantPricing || [])),
             JSON.stringify(sanitizeColorVariants(data.colorVariants || [])),
         ]);
-        const insertWithoutVariants = async () => (0, db_1.dbExecute)('INSERT INTO products (`name`, `slug`, `sku`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `show_on_home`, `in_stock`, `stock_quantity`, `low_stock_threshold`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+        const insertWithoutVariants = async (execute) => execute('INSERT INTO products (`name`, `slug`, `sku`, `price`, `original_price`, `image`, `images`, `category`, `category_id`, `subcategory_id`, `rating`, `review_count`, `badge`, `tags`, `show_on_home`, `in_stock`, `stock_quantity`, `low_stock_threshold`, `cod_enabled`, `sold_count`, `description`, `meta_title`, `meta_description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             data.name,
             data.slug,
             data.sku || null,
@@ -661,29 +692,39 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             data.metaTitle ?? '',
             data.metaDescription ?? '',
         ]);
-        let result;
-        try {
-            result = await insertWithVariants();
-        }
-        catch (err) {
-            const message = String(err?.message || '');
-            if (message.includes("Unknown column 'sizes'") ||
-                message.includes("Unknown column 'size_pricing'") ||
-                message.includes("Unknown column 'piece_pricing'") ||
-                message.includes("Unknown column 'attributes'") ||
-                message.includes("Unknown column 'variant_pricing'") ||
-                message.includes("Unknown column 'color_variants'")) {
-                if (wantsVariants) {
-                    const missing = await getMissingVariantColumns();
-                    const msg = variantSchemaErrorMessage(missing) || 'Database schema missing product variant columns. Run the SQL migration and retry.';
-                    return res.status(400).json({ message: msg });
+        let replacedHomeProductIds = [];
+        const insertProduct = async (execute) => {
+            try {
+                return await insertWithVariants(execute);
+            }
+            catch (err) {
+                const message = String(err?.message || '');
+                if (message.includes("Unknown column 'sizes'") ||
+                    message.includes("Unknown column 'size_pricing'") ||
+                    message.includes("Unknown column 'piece_pricing'") ||
+                    message.includes("Unknown column 'attributes'") ||
+                    message.includes("Unknown column 'variant_pricing'") ||
+                    message.includes("Unknown column 'color_variants'")) {
+                    if (wantsVariants) {
+                        const missing = await getMissingVariantColumns();
+                        const msg = variantSchemaErrorMessage(missing) || 'Database schema missing product variant columns. Run the SQL migration and retry.';
+                        throw Object.assign(new Error(msg), { status: 400 });
+                    }
+                    return insertWithoutVariants(execute);
                 }
-                result = await insertWithoutVariants();
+                else {
+                    throw err;
+                }
             }
-            else {
-                throw err;
-            }
-        }
+        };
+        const result = await (0, db_1.withDbTransaction)(async (connection) => {
+            await (0, productHomePlacement_1.lockHomeCategories)(connection, [categoryIdToSave]);
+            replacedHomeProductIds = await (0, productHomePlacement_1.claimHomePosition)(connection, data, categoryIdToSave);
+            const execute = async (sql, params = []) => (await connection.execute(sql, params))[0];
+            const created = await insertProduct(execute);
+            await execute('UPDATE products SET home_position = ? WHERE id = ?', [data.homePosition ?? null, created.insertId]);
+            return created;
+        });
         const rows = await (0, db_1.dbQuery)(`SELECT p.*, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
@@ -698,11 +739,12 @@ router.post('/', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             entityId: result.insertId,
             after: rows[0],
             reason: 'Product created',
+            metadata: { replacedHomeProductIds },
         }).catch(() => { });
-        res.status(201).json((0, exports.mapProductRow)(rows[0]));
+        res.status(201).json({ ...(0, exports.mapProductRow)(rows[0]), replacedHomeProductIds });
     }
     catch (err) {
-        res.status(500).json({ message: err.message });
+        res.status(err.status || 500).json({ message: err.message });
     }
 });
 router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
@@ -714,6 +756,7 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
         await ensureCodSchema();
         await ensureProductPlacementSchema();
         const body = req.body || {};
+        (0, productHomePlacement_1.normalizeHomePlacement)(body);
         if (body.sku !== undefined) {
             body.sku = normalizeSku(body.sku);
         }
@@ -828,16 +871,31 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             if (body.piecePricing === undefined)
                 body.piecePricing = [];
         }
-        const update = buildUpdate(body);
-        if (!update)
+        if (!buildUpdate(body))
             return res.status(400).json({ message: 'No fields to update' });
         let beforeProduct = null;
-        try {
+        let replacedHomeProductIds = [];
+        const writeUpdate = async (data) => {
             const beforeRows = await (0, db_1.dbQuery)('SELECT * FROM products WHERE id = ? LIMIT 1', [req.params.id]);
-            beforeProduct = beforeRows[0];
-            if (!beforeProduct)
-                return res.status(404).json({ message: 'Product not found' });
-            await (0, db_1.dbExecute)(`UPDATE products SET ${update.sql} WHERE id = ?`, [...update.values, req.params.id]);
+            const snapshot = beforeRows[0];
+            if (!snapshot)
+                throw Object.assign(new Error('Product not found'), { status: 404 });
+            const targetCategoryId = data.categoryId !== undefined ? (data.categoryId === null ? null : Number(data.categoryId)) : snapshot.category_id == null ? null : Number(snapshot.category_id);
+            await (0, db_1.withDbTransaction)(async (connection) => {
+                await (0, productHomePlacement_1.lockHomeCategories)(connection, [snapshot.category_id, targetCategoryId]);
+                const [locked] = await connection.execute('SELECT * FROM products WHERE id = ? FOR UPDATE', [req.params.id]);
+                beforeProduct = locked[0];
+                if (!beforeProduct)
+                    throw Object.assign(new Error('Product not found'), { status: 404 });
+                if (Number(beforeProduct.category_id) !== Number(snapshot.category_id))
+                    throw Object.assign(new Error('Product category changed. Refresh and try again.'), { status: 409 });
+                replacedHomeProductIds = await (0, productHomePlacement_1.claimHomePosition)(connection, data, targetCategoryId, String(req.params.id), beforeProduct);
+                const update = buildUpdate(data);
+                await connection.execute(`UPDATE products SET ${update.sql} WHERE id = ?`, [...update.values, req.params.id]);
+            });
+        };
+        try {
+            await writeUpdate(body);
         }
         catch (err) {
             const message = String(err?.message || '');
@@ -862,7 +920,7 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
                 const fallbackUpdate = buildUpdate(fallbackBody);
                 if (!fallbackUpdate)
                     return res.status(400).json({ message: 'No fields to update' });
-                await (0, db_1.dbExecute)(`UPDATE products SET ${fallbackUpdate.sql} WHERE id = ?`, [...fallbackUpdate.values, req.params.id]);
+                await writeUpdate(fallbackBody);
             }
             else {
                 throw err;
@@ -898,17 +956,19 @@ router.put('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             before: beforeProduct,
             after: rows[0],
             reason: 'Product updated',
+            metadata: { replacedHomeProductIds },
         }).catch(() => { });
-        res.json((0, exports.mapProductRow)(rows[0]));
+        res.json({ ...(0, exports.mapProductRow)(rows[0]), replacedHomeProductIds });
     }
     catch (err) {
-        res.status(500).json({ message: err.message });
+        res.status(err.status || 500).json({ message: err.message });
     }
 });
 router.delete('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
     try {
         if (!(0, db_1.isDbConnected)())
             return res.status(503).json({ message: 'Database unavailable' });
+        await ensureProductPlacementSchema();
         const reason = String(req.body?.reason || req.query.reason || 'Product archived by admin').trim().slice(0, 255);
         const actor = (0, adminAudit_1.actorFromRequest)(req);
         let archived = null;
@@ -918,7 +978,7 @@ router.delete('/:id', auth_1.auth, auth_1.adminOnly, async (req, res) => {
             if (!before)
                 throw new Error('Product not found');
             if (!before.archived_at) {
-                await connection.execute('UPDATE products SET archived_at = NOW(), archived_by = ?, archive_reason = ?, in_stock = 0, updated_at = NOW() WHERE id = ?', [actor.adminEmail || actor.adminId || 'admin', reason, req.params.id]);
+                await connection.execute('UPDATE products SET archived_at = NOW(), archived_by = ?, archive_reason = ?, in_stock = 0, home_position = NULL, show_on_home = 0, updated_at = NOW() WHERE id = ?', [actor.adminEmail || actor.adminId || 'admin', reason, req.params.id]);
             }
             const [afterRows] = await connection.execute('SELECT * FROM products WHERE id = ? LIMIT 1', [req.params.id]);
             archived = afterRows[0];

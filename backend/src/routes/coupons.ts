@@ -5,12 +5,19 @@ import { applyCouponToTotals, computeTotals, getCheckoutSettings, priceAndValida
 import { toIsoString } from '../lib/dbHelpers';
 import { rateLimit } from '../middleware/rateLimit';
 import { actorFromRequest, insertAdminAuditLog } from '../lib/adminAudit';
+import { createHash } from 'crypto';
+import { getCouponCampaignKey, isFollowupEmailProviderConfigured } from '../lib/cartFollowups';
 
 const router = Router();
 const couponValidateLimiter = rateLimit('coupon-validate', {
   windowMs: 15 * 60 * 1000,
   max: 60,
   message: 'Too many coupon checks. Please wait before trying again.',
+});
+const couponOfferLimiter = rateLimit('coupon-email-offer', {
+  windowMs: 15 * 60 * 1000,
+  max: 4,
+  message: 'Too many offer email campaigns. Please wait before trying again.',
 });
 
 const cleanCode = (value: unknown) => String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
@@ -203,6 +210,76 @@ router.delete('/:id', auth, adminOnly, async (req: AuthRequest, res) => {
   } catch (err: any) {
     const message = err?.message || 'Failed to archive coupon';
     res.status(message === 'Coupon not found' ? 404 : 500).json({ message });
+  }
+});
+
+router.post('/:id/email-offer', auth, adminOnly, couponOfferLimiter, async (req: AuthRequest, res) => {
+  try {
+    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    if (String(process.env.EMAIL_FOLLOWUPS_WORKER_ENABLED || '').trim().toLowerCase() !== 'true') {
+      return res.status(503).json({ message: 'Email follow-up worker is disabled' });
+    }
+    if (!isFollowupEmailProviderConfigured()) {
+      return res.status(503).json({ message: 'Offer emails require Resend and a configured verified sender address' });
+    }
+
+    const rows = await dbQuery<any>(
+      `SELECT * FROM coupons
+        WHERE id = ? AND is_active = 1 AND archived_at IS NULL
+          AND (starts_at IS NULL OR starts_at <= NOW())
+          AND (ends_at IS NULL OR ends_at >= NOW())
+        LIMIT 1`,
+      [req.params.id]
+    );
+    const coupon = rows[0];
+    if (!coupon) return res.status(409).json({ message: 'Only a currently active offer can be emailed' });
+
+    const campaignKey = getCouponCampaignKey(coupon);
+    const recipients = await dbQuery<any>(
+      `SELECT email, customer_name FROM email_contact_preferences
+        WHERE offer_email_consent = 1 AND email <> '' ORDER BY email`
+    );
+    let queued = 0;
+    for (let offset = 0; offset < recipients.length; offset += 100) {
+      const batch = recipients.slice(offset, offset + 100);
+      if (!batch.length) continue;
+      const placeholders = batch.map(() => '(?, ?, ?, ?, \'pending\', ?)').join(',');
+      const values = batch.flatMap((recipient: any) => {
+        const email = String(recipient.email || '').trim().toLowerCase();
+        const recipientKey = createHash('sha256').update(`${campaignKey}:${email}`).digest('hex');
+        return [campaignKey, coupon.id, email, String(recipient.customer_name || '').slice(0, 255), recipientKey];
+      });
+      const result: any = await dbExecute(
+        `INSERT IGNORE INTO offer_email_deliveries
+          (campaign_key, coupon_id, email, customer_name, status, idempotency_key)
+         VALUES ${placeholders}`,
+        values
+      );
+      queued += Number(result.affectedRows || 0);
+    }
+
+    // Explicitly failed sends may be retried by the admin. Uncertain provider
+    // outcomes are deliberately excluded to avoid sending a duplicate offer.
+    await dbExecute(
+      `UPDATE offer_email_deliveries SET status = 'pending', last_error = NULL, updated_at = NOW()
+        WHERE campaign_key = ? AND status = 'failed'`,
+      [campaignKey]
+    );
+    const pendingRows = await dbQuery<any>(
+      "SELECT COUNT(*) AS count FROM offer_email_deliveries WHERE campaign_key = ? AND status = 'pending'",
+      [campaignKey]
+    );
+    await insertAdminAuditLog(null, {
+      req,
+      action: 'COUPON_OFFER_EMAIL_QUEUED',
+      entityType: 'coupon',
+      entityId: coupon.id,
+      after: { campaignKey, queuedRecipients: queued },
+      reason: 'Opted-in offer email campaign queued',
+    }).catch(() => {});
+    res.json({ queued, pending: Number(pendingRows[0]?.count || 0), message: 'Offer emails queued for customers who opted in.' });
+  } catch (err: any) {
+    res.status(500).json({ message: err?.message || 'Failed to queue offer emails' });
   }
 });
 

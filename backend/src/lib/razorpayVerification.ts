@@ -1,3 +1,5 @@
+import { resolveRazorpayCredentials } from './razorpayEnvironment';
+
 export type CapturedPaymentExpectation = {
   orderId: string;
   paymentId: string;
@@ -20,18 +22,22 @@ export const isCapturedRazorpayPayment = (payment: any, expected: CapturedPaymen
 };
 
 export const verifyCapturedRazorpayPayment = async (expected: CapturedPaymentExpectation) => {
-  const keyId = process.env.RAZORPAY_PLATFORM_KEY_ID || process.env.RAZORPAY_KEY_ID || '';
-  const keySecret = process.env.RAZORPAY_PLATFORM_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || '';
-  if (!keyId || !keySecret) throw new Error('Razorpay credentials are not configured');
-  if ((expected.liveOnly || process.env.NODE_ENV === 'production') && !/^rzp_live_/.test(keyId)) {
-    throw new Error('Production purchases require live-mode Razorpay verification');
-  }
+  return verifyCapturedRazorpayPaymentWithOptions(expected, {});
+};
+
+export const verifyCapturedRazorpayPaymentWithOptions = async (
+  expected: CapturedPaymentExpectation,
+  options: { env?: NodeJS.ProcessEnv; fetcher?: typeof fetch } = {},
+) => {
+  const credentials = resolveRazorpayCredentials(options.env || process.env);
+  if (expected.liveOnly && credentials.mode !== 'live') throw new Error('Production purchases require live-mode Razorpay verification');
   if (!/^order_[A-Za-z0-9]+$/.test(expected.orderId) || !/^pay_[A-Za-z0-9]+$/.test(expected.paymentId)) {
     throw new Error('Invalid Razorpay payment identifiers');
   }
 
-  const response = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(expected.paymentId)}`, {
-    headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}` },
+  const fetcher = options.fetcher || fetch;
+  const response = await fetcher(`https://api.razorpay.com/v1/payments/${encodeURIComponent(expected.paymentId)}`, {
+    headers: { Authorization: `Basic ${Buffer.from(`${credentials.keyId}:${credentials.keySecret}`).toString('base64')}` },
     signal: AbortSignal.timeout(10_000),
   });
   if (!response.ok) throw new Error('Unable to verify Razorpay payment');

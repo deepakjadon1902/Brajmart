@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Heart, Mail, Phone, RefreshCw, Search, ShoppingCart, UserRound } from 'lucide-react';
+import { Heart, Mail, Phone, RefreshCw, Search, ShoppingCart, UserRound, MessageCircle } from 'lucide-react';
 import { fetchUsersCartFavorites } from '@/lib/api';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
@@ -26,6 +26,7 @@ type CustomerInterest = {
   statuses: InterestStatus[];
   products: InterestProduct[];
   updatedAt?: string;
+  whatsappConsent?: boolean;
 };
 
 const statusLabels: Record<InterestStatus, string> = {
@@ -100,6 +101,32 @@ const AdminCartFavorites = () => {
   });
   const paginatedRows = filtered.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
 
+  const getWhatsAppDraftUrl = (row: CustomerInterest) => {
+    if (!row.whatsappConsent) return '';
+    let phone = String(row.phone || '').replace(/\D/g, '');
+    if (phone.length === 10) phone = `91${phone}`;
+    if (!/^\d{11,15}$/.test(phone)) return '';
+    const firstName = String(row.name || '').trim().split(/\s+/)[0] || 'there';
+    const itemLines = row.products.slice(0, 8).map((product) =>
+      `• ${product.name} — ${product.status === 'cart' ? `in cart, qty ${product.quantity}` : 'saved to favorites'}${product.selectedSize ? `, size ${product.selectedSize}` : ''}${product.selectedPieces ? `, ${product.selectedPieces}` : ''}`
+    );
+    const moreItems = row.products.length > 8 ? `\n…and ${row.products.length - 8} more item(s)` : '';
+    const continueLinks = row.statuses.includes('cart') && row.statuses.includes('favorite')
+      ? 'Continue in your cart at https://brajmart.com/cart or revisit favorites at https://brajmart.com/wishlist.'
+      : row.statuses.includes('favorite')
+        ? 'Revisit your saved favorites at https://brajmart.com/wishlist.'
+        : 'Continue in your cart at https://brajmart.com/cart.';
+    const message = [
+      `Namaste ${firstName}, this is BrajMart.`,
+      row.statuses.includes('cart') ? 'It looks like you left these items in your cart:' : 'You saved these items to your favorites:',
+      ...itemLines,
+      moreItems,
+      continueLinks,
+      'Prices and availability are confirmed at checkout. If you have already placed an order, please ignore this message. If you prefer no further WhatsApp follow-up, please let our team know.',
+    ].filter(Boolean).join('\n');
+    return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+  };
+
   useEffect(() => {
     setPage(1);
   }, [search, filter]);
@@ -115,6 +142,7 @@ const AdminCartFavorites = () => {
         <div>
           <h1 className="text-2xl font-bold text-white">Users Add to Cart or Favorite</h1>
           <p className="mt-1 text-sm text-slate-400">Outstanding customer interest, hidden automatically after the same product is ordered.</p>
+          <p className="mt-1 text-xs text-slate-500">WhatsApp drafts are available for customers who opted in. Review and send each message manually from BrajMart&apos;s WhatsApp account.</p>
         </div>
         <button
           onClick={() => { void load(); }}
@@ -168,13 +196,14 @@ const AdminCartFavorites = () => {
 
       <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-sm">
+          <table className="w-full min-w-[1200px] text-sm">
             <thead>
               <tr className="border-b border-slate-800 text-slate-400">
                 <th className="px-5 py-3 text-left font-medium">User Details</th>
                 <th className="px-5 py-3 text-left font-medium">Status</th>
                 <th className="px-5 py-3 text-left font-medium">Products</th>
                 <th className="px-5 py-3 text-left font-medium">Last Activity</th>
+                <th className="px-5 py-3 text-left font-medium">Follow-up</th>
               </tr>
             </thead>
             <tbody>
@@ -214,18 +243,33 @@ const AdminCartFavorites = () => {
                   <td className="px-5 py-4 text-xs text-slate-400">
                     {row.updatedAt ? new Date(row.updatedAt).toLocaleString('en-IN') : '-'}
                   </td>
+                  <td className="px-5 py-4">
+                    {getWhatsAppDraftUrl(row) ? (
+                      <a
+                        href={getWhatsAppDraftUrl(row)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg border border-emerald-700/60 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/10"
+                        aria-label={`Prepare WhatsApp message for ${row.name || row.email}`}
+                      >
+                        <MessageCircle size={14} /> Prepare WhatsApp message
+                      </a>
+                    ) : (
+                      <span className="text-xs text-slate-500">{row.phone ? 'No WhatsApp opt-in' : 'No phone number'}</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-500">
                     No outstanding cart or favorite products found.
                   </td>
                 </tr>
               )}
               {loading && (
                 <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-slate-500">
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-500">
                     Loading customer interest...
                   </td>
                 </tr>
