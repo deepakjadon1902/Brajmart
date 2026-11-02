@@ -143,135 +143,7 @@ const getMissingProductColumns = async (cols: string[]) => {
   return missing;
 };
 
-let ensuredCategorySchema = false;
-const ensureSubcategoriesTable = async () => {
-  await dbExecute(`
-    CREATE TABLE IF NOT EXISTS subcategories (
-      id INT NOT NULL AUTO_INCREMENT,
-      category_id INT NOT NULL,
-      name VARCHAR(255) NOT NULL,
-      display_order INT DEFAULT 0,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      KEY idx_subcategories_category_id (category_id),
-      UNIQUE KEY uq_subcategories_category_name (category_id, name)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
-};
-
-const ensureProductCategorySchema = async () => {
-  if (ensuredCategorySchema) return;
-
-  const missing = await getMissingProductColumns(['category_id', 'subcategory_id']);
-
-  if (missing.category_id) {
-    await dbExecute('ALTER TABLE products ADD COLUMN category_id INT NULL AFTER category');
-  }
-  if (missing.subcategory_id) {
-    await dbExecute('ALTER TABLE products ADD COLUMN subcategory_id INT NULL AFTER category_id');
-  }
-
-  await ensureSubcategoriesTable();
-
-  // Backfill category_id for existing products that only have legacy `category` name.
-  try {
-    await dbExecute(
-      `UPDATE products p
-       JOIN categories c ON LOWER(TRIM(p.category)) = LOWER(TRIM(c.name))
-       SET p.category_id = c.id
-       WHERE (p.category_id IS NULL OR p.category_id = 0) AND p.category IS NOT NULL AND p.category <> ''`
-    );
-  } catch {
-    // ignore best-effort backfill errors
-  }
-
-  ensuredCategorySchema = true;
-};
-
-const ensureProductVariantColumns = async () => {
-  const missing = await getMissingProductColumns(['sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants']);
-
-  if (!missing.sizes && !missing.size_pricing && !missing.piece_pricing && !missing.attributes && !missing.variant_pricing && !missing.color_variants) return;
-
-  // Add columns in a safe order so AFTER clauses work.
-  if (missing.sizes) {
-    await dbExecute('ALTER TABLE products ADD COLUMN sizes JSON NULL AFTER description');
-  }
-  if (missing.size_pricing) {
-    await dbExecute('ALTER TABLE products ADD COLUMN size_pricing JSON NULL AFTER sizes');
-  }
-  if (missing.piece_pricing) {
-    await dbExecute('ALTER TABLE products ADD COLUMN piece_pricing JSON NULL AFTER size_pricing');
-  }
-  if (missing.attributes) {
-    await dbExecute('ALTER TABLE products ADD COLUMN attributes JSON NULL AFTER piece_pricing');
-  }
-  if (missing.variant_pricing) {
-    await dbExecute('ALTER TABLE products ADD COLUMN variant_pricing JSON NULL AFTER attributes');
-  }
-  if (missing.color_variants) {
-    await dbExecute('ALTER TABLE products ADD COLUMN color_variants JSON NULL AFTER variant_pricing');
-  }
-};
-
-const ensureProductSeoColumns = async () => {
-  const missing = await getMissingProductColumns(['meta_title', 'meta_description']);
-  if (missing.meta_title) {
-    await dbExecute('ALTER TABLE products ADD COLUMN meta_title VARCHAR(255) NULL AFTER description');
-  }
-  if (missing.meta_description) {
-    await dbExecute('ALTER TABLE products ADD COLUMN meta_description TEXT NULL AFTER meta_title');
-  }
-};
-
-const ensureProductCodColumn = async () => {
-  const missing = await getMissingProductColumns(['cod_enabled']);
-  if (missing.cod_enabled) {
-    await dbExecute('ALTER TABLE products ADD COLUMN cod_enabled TINYINT(1) NULL AFTER in_stock');
-  }
-};
-
-let homeSchemaReady = false;
-let homeSchemaRequest: Promise<void> | null = null;
-const ensureProductHomeColumn = async () => {
-  if (homeSchemaReady) return;
-  if (!homeSchemaRequest) homeSchemaRequest = (async () => {
-    const missing = await getMissingProductColumns(['show_on_home', 'home_position']);
-    const definitions = {
-      show_on_home: 'TINYINT(1) NOT NULL DEFAULT 0 AFTER tags',
-      home_position: 'TINYINT UNSIGNED NULL AFTER show_on_home',
-    };
-    for (const [column, definition] of Object.entries(definitions)) {
-      if (!missing[column]) continue;
-      try { await dbExecute(`ALTER TABLE products ADD COLUMN ${column} ${definition}`); }
-      catch (error: any) { if (error.code !== 'ER_DUP_FIELDNAME') throw error; }
-    }
-    homeSchemaReady = true;
-  })().finally(() => { homeSchemaRequest = null; });
-  return homeSchemaRequest;
-};
-
-const ensureCategoryCodColumn = async () => {
-  const rows = await dbQuery<{ COLUMN_NAME: string }[]>(
-    `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'categories' AND COLUMN_NAME = 'cod_enabled'
-     LIMIT 1`
-  );
-  if (!rows.length) {
-    await dbExecute('ALTER TABLE categories ADD COLUMN cod_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER product_count');
-  }
-};
-
-const ensureCodSchema = async () => {
-  await ensureProductCodColumn();
-  await ensureCategoryCodColumn();
-};
-
-const ensureProductPlacementSchema = async () => {
-  await ensureProductHomeColumn();
-};
-
+// Catalog requests rely on reviewed migrations; they must never modify schema or backfill data.
 const variantFieldsProvided = (data: any) =>
   data?.sizes !== undefined ||
   data?.sizePricing !== undefined ||
@@ -452,10 +324,6 @@ router.get('/', async (req, res) => {
     if (!fresh && listCache && listCache.view === view && (Date.now() - listCache.at) < LIST_CACHE_TTL_MS) {
       return res.json(listCache.data);
     }
-    await ensureProductCategorySchema();
-    await ensureProductSeoColumns();
-    await ensureCodSchema();
-    await ensureProductPlacementSchema();
     const productProjection = view === 'detail'
       ? 'p.*'
       : `p.id, p.name, p.slug, p.price, p.original_price, p.image, p.images,
@@ -483,7 +351,6 @@ router.get('/', async (req, res) => {
 router.get('/schema', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureProductPlacementSchema();
     const dbRow = await dbQuery<any>('SELECT DATABASE() AS db');
     const database = dbRow?.[0]?.db ?? null;
     const cols = ['meta_title', 'meta_description', 'cod_enabled', 'show_on_home', 'home_position', 'sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants'];
@@ -504,10 +371,6 @@ router.get('/schema', auth, adminOnly, async (_req, res) => {
 router.get('/audit', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureProductCategorySchema();
-    await ensureProductSeoColumns();
-    await ensureCodSchema();
-    await ensureProductPlacementSchema();
     const rows = await dbQuery<any>(
       `SELECT p.*, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name
        FROM products p
@@ -528,10 +391,6 @@ router.get('/:slug', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     res.setHeader('Cache-Control', 'no-store');
-    await ensureProductCategorySchema();
-    await ensureProductSeoColumns();
-    await ensureCodSchema();
-    await ensureProductPlacementSchema();
     const rows = await dbQuery<any>(
       `SELECT p.*, c.name AS category_name, c.cod_enabled AS category_cod_enabled, s.name AS subcategory_name, ra.real_rating, ra.real_review_count
        FROM products p
@@ -553,10 +412,6 @@ router.get('/:slug', async (req, res) => {
 router.post('/', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureProductCategorySchema();
-    await ensureProductSeoColumns();
-    await ensureCodSchema();
-    await ensureProductPlacementSchema();
 
     const data = req.body || {};
     normalizeHomePlacement(data);
@@ -585,14 +440,6 @@ router.post('/', auth, adminOnly, async (req, res) => {
       console.log('POST /products variantPricing count:', Array.isArray(data.variantPricing) ? data.variantPricing.length : 'n/a');
     }
     const wantsVariants = variantFieldsProvided(data);
-    if (wantsVariants) {
-      try {
-        await ensureProductVariantColumns();
-      } catch {
-        // If permissions are restricted, we'll validate below and return a helpful error
-        // instead of silently dropping fields.
-      }
-    }
 
     // If schema is missing required columns, fail fast with a clear message.
     if (wantsVariants) {
@@ -755,10 +602,6 @@ router.post('/', auth, adminOnly, async (req, res) => {
 router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureProductCategorySchema();
-    await ensureProductSeoColumns();
-    await ensureCodSchema();
-    await ensureProductPlacementSchema();
 
     const body = req.body || {};
     normalizeHomePlacement(body);
@@ -839,14 +682,6 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
       if (body.variantPricing !== undefined) console.log('PUT /products variantPricing raw:', body.variantPricing);
     }
     const wantsVariants = variantFieldsProvided(body);
-    if (wantsVariants) {
-      try {
-        await ensureProductVariantColumns();
-      } catch {
-        // If permissions are restricted, we'll validate below and return a helpful error
-        // instead of silently dropping fields.
-      }
-    }
 
     if (wantsVariants) {
       const missing = await getMissingVariantColumns();
@@ -961,7 +796,6 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
 router.delete('/:id', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureProductPlacementSchema();
     const reason = String(req.body?.reason || req.query.reason || 'Product archived by admin').trim().slice(0, 255);
     const actor = actorFromRequest(req);
     let archived: any = null;

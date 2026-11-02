@@ -10,6 +10,62 @@ Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 4. Add ImageKit credentials to `.env` if you want permanent deployed image storage.
 5. Run `npm run dev` (development) or `npm start` (production)
 
+## Vercel frontend CORS on Render
+
+`CORS blocked origin` means the running backend does not allow the URL opened
+in the browser. Configure the backend service's **Environment** settings on
+Render; changing a local `.env` does not change that service's environment.
+For the BrajMart Vercel project shown in the deployment logs, use:
+
+```env
+FRONTEND_URL=https://www.brajmart.com
+SITE_URL=https://www.brajmart.com
+CORS_ORIGIN=https://www.brajmart.com,https://brajmart.com
+CORS_VERCEL_PROJECT=brajmart
+CORS_VERCEL_SCOPE=ibrajmarts-projects
+```
+
+The optional Vercel settings must both be set. They allow HTTPS deployment URLs
+such as `https://brajmart-cv48hs1e2-ibrajmarts-projects.vercel.app` and branch
+aliases such as `https://brajmart-git-main-ibrajmarts-projects.vercel.app`.
+Use the project and scope slugs from your own deployment URL. Other Vercel
+projects and scopes are rejected. To allow only specific deployments instead,
+leave these two settings empty and append their exact origins to `CORS_ORIGIN`.
+
+After deploying this backend change, save and deploy the environment settings.
+Render's **Save, rebuild, and deploy** option also builds updated source.
+`FRONTEND_URL` and `SITE_URL` each take one URL; only `CORS_ORIGIN` takes a
+comma-separated list. Valid configured origins are normalized to handle a
+trailing slash or a default port. A denied browser origin returns HTTP 403.
+
+With `APP_ENV=staging`, only exact HTTPS origins in `CORS_ORIGIN` are accepted;
+the Vercel settings do not broaden staging access. Include the staging
+`FRONTEND_URL` in that list and use a staging `SITE_URL`.
+
+The frontend's build-time catalog requests do not send a browser `Origin`
+header, so a CORS rejection alone does not diagnose a Vercel build failure.
+Set an absolute `BUILD_API_BASE_URL` or `API_BASE_URL` in Vercel for prerendering
+(for example `https://your-backend.onrender.com/api`) and inspect the final
+build error if the build fails. Relative `/api` is not a build-time backend URL.
+
+References: [Vercel generated URLs](https://vercel.com/docs/deployments/generated-urls)
+and [Render environment variables](https://render.com/docs/configure-environment-variables).
+
+## Catalog HTTP 500 and prerender failures
+
+If `/api/health` returns 200 but `/api/products` or `/api/categories` returns
+`Runtime database DDL is disabled`, deploy the updated backend first. The old
+catalog handlers attempted `CREATE TABLE IF NOT EXISTS` on requests, which the
+runtime database guard rejects even when the table already exists. Product and
+category routes now use the existing schema without automatic DDL or category
+backfills. The guard remains enabled, and genuinely missing schema still fails.
+
+Schema changes and backfills belong in the reviewed migrations in `backend/sql`,
+not in web requests. Product variant saves retain their missing-column checks
+and return the existing migration instructions instead of attempting `ALTER`.
+After deploying the backend, verify both catalog endpoints return their normal
+JSON arrays before rerunning the Vercel frontend build.
+
 ## Cart reminders and offer emails
 
 This feature uses BrajMart's existing application MySQL database. The owner-run,

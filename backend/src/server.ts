@@ -98,7 +98,7 @@ app.use(cors((req, callback) => {
   const origin = req.headers.origin;
   const allowed = isCorsOriginAllowed(origin, corsOrigins);
 
-  if (!allowed) return callback(new Error(`CORS blocked origin: ${origin}`));
+  if (!allowed) return callback(Object.assign(new Error(`CORS blocked origin: ${origin}`), { status: 403 }));
   callback(null, { origin: true, credentials: true });
 }));
 app.use(express.json({
