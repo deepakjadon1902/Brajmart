@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "allowScripts": {
+    "@swc/core@1.13.2": true,
+    "esbuild@0.21.5": true,
+    "sharp@0.34.5": true
+  },
   "scripts": {
     "dev": "vite",
     "generate:sitemap": "node scripts/generate-sitemap.mjs",
