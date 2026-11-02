@@ -3,14 +3,21 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getBuildData, slugify } from './build-data.mjs';
 import { pickHomeProducts as selectHomeProducts } from '../src/lib/homeProducts.mjs';
+import { renderCatalogPage } from './prerender-diagnostics.mjs';
 
 const dist = path.resolve(process.cwd(), 'dist');
 const serverEntry = path.resolve(process.cwd(), 'dist-ssr/entry-server.js');
 const template = await fs.readFile(path.join(dist, 'index.html'), 'utf8');
 const { render } = await import(`${pathToFileURL(serverEntry).href}?t=${Date.now()}`);
-const buildData = await getBuildData();
 const buildDataCache = path.resolve(process.cwd(), '.seo-build-data-cache.json');
 const buildDataMeta = path.resolve(process.cwd(), '.seo-build-data-meta.json');
+let buildData;
+try {
+  buildData = await getBuildData();
+} catch (error) {
+  await fs.writeFile(buildDataMeta, JSON.stringify({ live: false, error: error.message, meta: error.diagnostics }, null, 2));
+  throw error;
+}
 const buildSummary = {
   generatedAt: buildData.generatedAt,
   live: buildData.live,
@@ -233,7 +240,7 @@ const getHomeHeroPreload = (routeData) => {
 
 for (const route of routes) {
   const routeData = dataForRoute(route);
-  const { appHtml, head } = await render(route, routeData);
+  const { appHtml, head } = await renderCatalogPage(render, route, routeData, buildData);
   const initialDataScript = `<script>window.__BRAJMART_INITIAL_DATA__=${serialize(routeData)};</script>`;
   const heroPreload = route === '/' ? getHomeHeroPreload(routeData) : '';
   const html = stripManagedHead(template)
@@ -257,7 +264,7 @@ for (const route of routes) {
 // the explicit SPA allowlist. Keeping the React not-found UI also preserves a
 // consistent customer experience for broken external links.
 const notFoundData = dataForRoute('/404');
-const { appHtml: notFoundHtml, head: notFoundHead } = await render('/404', notFoundData);
+const { appHtml: notFoundHtml, head: notFoundHead } = await renderCatalogPage(render, '/404', notFoundData, buildData);
 const notFoundInitialData = `<script>window.__BRAJMART_INITIAL_DATA__=${serialize(notFoundData)};</script>`;
 const notFoundDocument = stripManagedHead(template)
   .replace('</head>', `${notFoundHead}\n${notFoundInitialData}\n</head>`)

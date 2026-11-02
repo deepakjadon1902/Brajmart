@@ -18,5 +18,6 @@ assert.ok(config.headers.some((entry) => entry.source === '/assets/(.*)'));
 assert.ok(config.headers.some((entry) => entry.source.includes('robots.txt') && entry.source.includes('sitemap.xml')));
 assert.ok(config.redirects.length > 0, 'Existing redirects must remain present');
 assert.ok(!config.rewrites.some((rule) => rule.source === '/(.*)' || rule.source === '/api/(.*)'));
+assert.equal(rewrite('/api/:path*')?.destination, 'https://brajmart-1.onrender.com/api/:path*', 'Relative browser API requests must reach Render');
 
 console.log('Vercel SPA, SEO, static asset, and redirect routing checks passed.');

@@ -22,12 +22,12 @@ FRONTEND_URL=https://www.brajmart.com
 SITE_URL=https://www.brajmart.com
 CORS_ORIGIN=https://www.brajmart.com,https://brajmart.com
 CORS_VERCEL_PROJECT=brajmart
-CORS_VERCEL_SCOPE=ibrajmarts-projects
+CORS_VERCEL_SCOPE=itbrajmarts-projects
 ```
 
 The optional Vercel settings must both be set. They allow HTTPS deployment URLs
-such as `https://brajmart-cv48hs1e2-ibrajmarts-projects.vercel.app` and branch
-aliases such as `https://brajmart-git-main-ibrajmarts-projects.vercel.app`.
+such as `https://brajmart-cv48hs1e2-itbrajmarts-projects.vercel.app` and branch
+aliases such as `https://brajmart-git-main-itbrajmarts-projects.vercel.app`.
 Use the project and scope slugs from your own deployment URL. Other Vercel
 projects and scopes are rejected. To allow only specific deployments instead,
 leave these two settings empty and append their exact origins to `CORS_ORIGIN`.

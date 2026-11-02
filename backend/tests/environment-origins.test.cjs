@@ -56,27 +56,27 @@ test('configured frontend and CORS origins are normalized and deduplicated', () 
 const vercelEnv = {
   APP_ENV: 'production',
   CORS_VERCEL_PROJECT: 'brajmart',
-  CORS_VERCEL_SCOPE: 'ibrajmarts-projects',
+  CORS_VERCEL_SCOPE: 'itbrajmarts-projects',
 };
-const deploymentOrigin = 'https://brajmart-cv48hs1e2-ibrajmarts-projects.vercel.app';
+const deploymentOrigin = 'https://brajmart-cv48hs1e2-itbrajmarts-projects.vercel.app';
 
 test('Vercel deployment hashes and branch aliases require an explicit project and scope', () => {
-  for (const origin of [deploymentOrigin, 'https://brajmart-next12345-ibrajmarts-projects.vercel.app', 'https://brajmart-git-main-ibrajmarts-projects.vercel.app', 'https://brajmart-git-fix-cors-ibrajmarts-projects.vercel.app']) {
+  for (const origin of [deploymentOrigin, 'https://brajmart-next12345-itbrajmarts-projects.vercel.app', 'https://brajmart-git-main-itbrajmarts-projects.vercel.app', 'https://brajmart-git-fix-cors-itbrajmarts-projects.vercel.app']) {
     assert.equal(isCorsOriginAllowed(origin, [], vercelEnv), true, origin);
   }
   assert.equal(isCorsOriginAllowed(deploymentOrigin, [], {}), false);
   assert.equal(isCorsOriginAllowed(deploymentOrigin, [], { CORS_VERCEL_PROJECT: 'brajmart' }), false);
-  assert.equal(isCorsOriginAllowed(deploymentOrigin, [], { CORS_VERCEL_SCOPE: 'ibrajmarts-projects' }), false);
+  assert.equal(isCorsOriginAllowed(deploymentOrigin, [], { CORS_VERCEL_SCOPE: 'itbrajmarts-projects' }), false);
   assert.equal(isCorsOriginAllowed(deploymentOrigin, [], { ...vercelEnv, CORS_VERCEL_PROJECT: '*' }), false);
 });
 
 test('Vercel preview access rejects unrelated hosts and malformed origins', () => {
   for (const origin of [
-    'https://other-cv48hs1e2-ibrajmarts-projects.vercel.app',
+    'https://other-cv48hs1e2-itbrajmarts-projects.vercel.app',
     'https://brajmart-cv48hs1e2-other-projects.vercel.app',
-    'https://brajmart-other-cv48hs1e2-ibrajmarts-projects.vercel.app',
-    'https://brajmart-ibrajmarts-projects.vercel.app',
-    'https://brajmart--ibrajmarts-projects.vercel.app',
+    'https://brajmart-other-cv48hs1e2-itbrajmarts-projects.vercel.app',
+    'https://brajmart-itbrajmarts-projects.vercel.app',
+    'https://brajmart--itbrajmarts-projects.vercel.app',
     `${deploymentOrigin}.evil.invalid`,
     `${deploymentOrigin}:8443`,
     `${deploymentOrigin}/`,
@@ -85,7 +85,7 @@ test('Vercel preview access rejects unrelated hosts and malformed origins', () =
     `${deploymentOrigin}#fragment`,
     deploymentOrigin.replace('https:', 'http:'),
     deploymentOrigin.replace('https://', 'https://user:password@'),
-    `https://brajmart-${'a'.repeat(64)}-ibrajmarts-projects.vercel.app`,
+    `https://brajmart-${'a'.repeat(64)}-itbrajmarts-projects.vercel.app`,
     'not a URL',
   ]) {
     assert.equal(isCorsOriginAllowed(origin, [], vercelEnv), false, origin);

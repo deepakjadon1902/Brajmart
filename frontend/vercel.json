@@ -251,6 +251,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/:path*", "destination": "https://brajmart-1.onrender.com/api/:path*" },
     { "source": "/category/:slug", "destination": "/category/:slug/index.html" },
     { "source": "/category/:slug/:subSlug", "destination": "/category/:slug/:subSlug/index.html" },
     { "source": "/product/:slug", "destination": "/product/:slug/index.html" },

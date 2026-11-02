@@ -1,6 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { isStrictSeoBuild } from './build-data-policy.mjs';
+import { slugify, validateSeoCatalog } from './catalog-validation.mjs';
+import { sanitizeBuildDiagnostic } from './seo-diagnostics.mjs';
 
 const loadEnvFile = async (file) => {
   try {
@@ -44,15 +47,9 @@ const normalizeAbsoluteApiBase = (value) => {
   return raw.replace(/\/$/, '');
 };
 
-const configuredApi = [
-  process.env.BUILD_API_BASE_URL,
-  process.env.API_BASE_URL,
-  process.env.BACKEND_URL,
-  process.env.VITE_API_URL,
-  process.env.VITE_API_BASE_URL,
-]
-  .map(normalizeAbsoluteApiBase)
-  .find(Boolean);
+const configuredApi = ['BUILD_API_BASE_URL', 'API_BASE_URL', 'BACKEND_URL', 'VITE_API_URL', 'VITE_API_BASE_URL']
+  .map((key) => ({ key, url: normalizeAbsoluteApiBase(process.env[key]) }))
+  .find(({ url }) => Boolean(url));
 
 const ignoredRelativeApi = [process.env.BUILD_API_BASE_URL, process.env.API_BASE_URL, process.env.VITE_API_URL, process.env.VITE_API_BASE_URL]
   .map((value) => String(value || '').trim())
@@ -60,7 +57,7 @@ const ignoredRelativeApi = [process.env.BUILD_API_BASE_URL, process.env.API_BASE
 
 const API_BASE = (() => {
   if (!configuredApi) return '';
-  return configuredApi;
+  return configuredApi.url;
 })();
 
 const apiUrl = (resource) => {
@@ -71,21 +68,21 @@ const apiUrl = (resource) => {
 const FETCH_TIMEOUT_MS = Math.max(1_000, Number(process.env.BUILD_API_TIMEOUT_MS || 12_000));
 const FETCH_RETRIES = Math.max(0, Math.min(3, Number(process.env.BUILD_API_RETRIES ?? 1)));
 // Vercel and Render can auto-deploy the same commit concurrently. Wait for the
-// backend process to become ready before requesting catalog routes; otherwise
-// prerender can fail during Render's replacement/cold-start window.
+// backend process and required catalog routes to become ready; /health can
+// succeed on the previous deployment while its catalog still returns HTTP 500.
 const configuredReadyTimeout = Number(process.env.BUILD_API_READY_TIMEOUT_MS ?? 90_000);
 const API_READY_TIMEOUT_MS = Number.isFinite(configuredReadyTimeout)
   ? Math.max(1_000, Math.min(180_000, configuredReadyTimeout))
   : 90_000;
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms, signal) => delay(ms, undefined, { signal });
 
-const waitForApiReady = async (meta) => {
+const waitForApiReady = async (meta, deadline) => {
   if (!API_BASE) return;
 
   const url = apiUrl('/health');
+  const diagnosticUrl = sanitizeBuildDiagnostic(url);
   const startedAt = Date.now();
-  const deadline = startedAt + API_READY_TIMEOUT_MS;
   let delayMs = 1_000;
   let attempts = 0;
   let lastFailure = 'no response';
@@ -110,7 +107,7 @@ const waitForApiReady = async (meta) => {
       if (response.ok) {
         meta.requests.push({
           resource: '/health',
-          url,
+          url: diagnosticUrl,
           status: 'OK',
           statusCode: response.status,
           bytes: lastBytes,
@@ -128,11 +125,11 @@ const waitForApiReady = async (meta) => {
         throw new Error(lastFailure);
       }
     } catch (caught) {
-      lastFailure = caught instanceof Error ? caught.message : 'backend health request failed';
+      lastFailure = sanitizeBuildDiagnostic(caught instanceof Error ? caught.message : 'backend health request failed');
       if (/returned HTTP 4\d\d/.test(lastFailure) && !/HTTP 429/.test(lastFailure)) {
         clearTimeout(timeout);
         meta.requests.push({
-          resource: '/health', url, status: 'FAILED', statusCode: lastStatusCode, bytes: lastBytes,
+          resource: '/health', url: diagnosticUrl, status: 'FAILED', statusCode: lastStatusCode, bytes: lastBytes,
           durationMs: Date.now() - startedAt, attempts, error: lastFailure,
         });
         throw new Error(`Catalog backend readiness check failed: ${lastFailure}`);
@@ -148,17 +145,17 @@ const waitForApiReady = async (meta) => {
   }
 
   meta.requests.push({
-    resource: '/health', url, status: 'FAILED', statusCode: lastStatusCode, bytes: lastBytes,
+    resource: '/health', url: diagnosticUrl, status: 'FAILED', statusCode: lastStatusCode, bytes: lastBytes,
     durationMs: Date.now() - startedAt, attempts, error: lastFailure,
   });
   throw new Error(`Catalog backend did not become ready within ${API_READY_TIMEOUT_MS}ms (${lastFailure})`);
 };
 
-const fetchJson = async (resource, fallback, meta) => {
+const fetchJson = async (resource, fallback, meta, { deadline = 0, signal } = {}) => {
   const url = apiUrl(resource);
   const record = {
     resource,
-    url,
+    url: sanitizeBuildDiagnostic(url),
     status: 'SKIPPED',
     statusCode: null,
     bytes: 0,
@@ -169,46 +166,75 @@ const fetchJson = async (resource, fallback, meta) => {
   meta.requests.push(record);
   if (!url) {
     record.error = ignoredRelativeApi
-      ? `No absolute build API URL configured; ignored relative value "${ignoredRelativeApi}".`
+      ? 'No absolute build API URL configured; relative API settings cannot be used during prerendering.'
       : 'No build API URL configured.';
     return fallback;
   }
 
   let lastError = null;
-  for (let attempt = 0; attempt <= FETCH_RETRIES; attempt++) {
+  while (true) {
     const started = Date.now();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const timeoutMs = deadline ? Math.max(1, Math.min(FETCH_TIMEOUT_MS, deadline - started)) : FETCH_TIMEOUT_MS;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     record.attempts += 1;
+    record.statusCode = null;
+    record.bytes = 0;
+    let retryable = true;
     try {
       const response = await fetch(url, {
         headers: { Accept: 'application/json' },
-        signal: controller.signal,
+        cache: 'no-store',
+        signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
       });
-      const text = await response.text();
-      clearTimeout(timeout);
-      record.durationMs += Date.now() - started;
       record.statusCode = response.status;
+      retryable = response.ok || response.status === 429 || response.status >= 500;
+      const text = await response.text();
       record.bytes = Buffer.byteLength(text);
-      if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
+      if (!response.ok) {
+        let detail = '';
+        try {
+          const data = JSON.parse(text);
+          if (typeof data?.message === 'string') detail = data.message.replace(/\s+/g, ' ').slice(0, 240);
+        } catch {
+          // Do not copy an HTML error document into deployment logs.
+        }
+        throw new Error(`Catalog API ${resource} returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
+      }
+      retryable = false;
       const contentType = response.headers.get('content-type') || '';
-      if (!contentType.includes('json')) throw new Error(`${url} did not return JSON`);
+      if (!contentType.includes('json')) throw new Error(`Catalog API ${resource} did not return JSON`);
+      let data;
+      try {
+        data = text ? JSON.parse(text) : fallback;
+      } catch {
+        throw new Error(`Catalog API ${resource} returned invalid JSON`);
+      }
       record.status = 'OK';
-      return text ? JSON.parse(text) : fallback;
+      record.error = '';
+      if (record.attempts > 1) console.log(`Catalog API ${resource} recovered after ${record.attempts} attempts.`);
+      return data;
     } catch (caught) {
-      clearTimeout(timeout);
-      record.durationMs += Date.now() - started;
-      lastError = caught instanceof Error ? caught : new Error(String(caught));
+      lastError = new Error(sanitizeBuildDiagnostic(caught instanceof Error ? caught.message : String(caught)));
       record.status = 'FAILED';
       record.error = lastError.message;
-      if (attempt < FETCH_RETRIES) await sleep(250 * (attempt + 1));
+      if (signal?.aborted || !retryable) break;
+      if (deadline ? Date.now() >= deadline : record.attempts > FETCH_RETRIES) break;
+    } finally {
+      clearTimeout(timeout);
+      record.durationMs += Date.now() - started;
     }
+    const backoff = Math.min(250 * (2 ** Math.min(record.attempts - 1, 5)), 8_000);
+    const retryDelay = deadline ? Math.min(backoff, deadline - Date.now()) : backoff;
+    if (retryDelay <= 0) break;
+    if (deadline && record.attempts === 1) {
+      console.warn(`${record.error}. Waiting for the catalog during backend deployment (up to ${API_READY_TIMEOUT_MS}ms total).`);
+    }
+    await sleep(retryDelay, signal);
   }
 
   throw lastError || new Error(`${url} failed`);
 };
-
-const slugify = (value) => String(value || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
 
 export const getBuildData = async ({ strict = isStrictSeoBuild() } = {}) => {
   let products = [];
@@ -219,8 +245,11 @@ export const getBuildData = async ({ strict = isStrictSeoBuild() } = {}) => {
   let live = false;
   let error = null;
   const meta = {
-    apiBase: API_BASE,
-    ignoredRelativeApi: ignoredRelativeApi || '',
+    apiBase: sanitizeBuildDiagnostic(API_BASE),
+    apiSource: configuredApi?.key || null,
+    siteUrl: sanitizeBuildDiagnostic(SITE_URL),
+    stage: 'catalog-fetch',
+    ignoredRelativeApi: sanitizeBuildDiagnostic(ignoredRelativeApi || ''),
     strict,
     timeoutMs: FETCH_TIMEOUT_MS,
     retries: FETCH_RETRIES,
@@ -234,16 +263,20 @@ export const getBuildData = async ({ strict = isStrictSeoBuild() } = {}) => {
     },
   };
 
+  const catalogRequests = new AbortController();
+  const deadline = Date.now() + API_READY_TIMEOUT_MS;
   try {
-    await waitForApiReady(meta);
+    await waitForApiReady(meta, deadline);
     [products, categories, blogs, heroSlides, settings] = await Promise.all([
-      fetchJson('/products?view=detail', [], meta),
-      fetchJson('/categories', [], meta),
-      fetchJson('/blogs', [], meta),
-      fetchJson('/hero-slides', [], meta).catch(() => []),
-      fetchJson('/settings', {}, meta).catch(() => ({})),
+      fetchJson('/products?view=detail', [], meta, { deadline, signal: catalogRequests.signal }),
+      fetchJson('/categories', [], meta, { deadline, signal: catalogRequests.signal }),
+      fetchJson('/blogs', [], meta, { signal: catalogRequests.signal }),
+      fetchJson('/hero-slides', [], meta, { signal: catalogRequests.signal }).catch(() => []),
+      fetchJson('/settings', {}, meta, { signal: catalogRequests.signal }).catch(() => ({})),
     ]);
-    products = Array.isArray(products) ? products.map((product) => ({ ...product, id: String(product.id || product._id || '') })) : [];
+    meta.stage = 'catalog-validation';
+    meta.validation = validateSeoCatalog({ products, categories, blogs });
+    products = products.map((product) => ({ ...product, id: String(product.id || product._id || '') }));
     categories = Array.isArray(categories) ? categories.map((category) => ({
       ...category,
       id: String(category.id || category._id || ''),
@@ -261,12 +294,17 @@ export const getBuildData = async ({ strict = isStrictSeoBuild() } = {}) => {
     meta.counts.settings = Object.keys(settings).length ? 1 : 0;
     live = products.length > 0 && categories.length > 0;
     if (!live) throw new Error('The public catalog API returned no products or categories');
+    meta.stage = 'complete';
   } catch (caught) {
-    error = caught instanceof Error ? caught : new Error(String(caught));
+    error = new Error(sanitizeBuildDiagnostic(caught instanceof Error ? caught.message : String(caught)));
     if (strict) {
-      throw new Error(`SEO catalog validation failed; release build stopped to prevent publishing incomplete catalog HTML: ${error.message}. Configure BUILD_API_BASE_URL or API_BASE_URL with an absolute backend API URL and repair the catalog API. A local-only fallback build requires SEO_STRICT_BUILD=false; Vercel and CI builds ignore that opt-out.`);
+      const failure = new Error(`SEO catalog validation failed; release build stopped to prevent publishing incomplete catalog HTML: ${error.message}. Stage=${meta.stage}; API setting=${meta.apiSource || 'missing'}. Configure BUILD_API_BASE_URL or API_BASE_URL with an absolute backend API URL and repair the catalog API. A local-only fallback build requires SEO_STRICT_BUILD=false; Vercel and CI builds ignore that opt-out.`);
+      failure.diagnostics = meta;
+      throw failure;
     }
     console.warn(`LOCAL SEO FALLBACK OPT-OUT ACTIVE; this build is not release-ready. Limited fallback data is being used because the catalog API is unavailable: ${error.message}`);
+  } finally {
+    catalogRequests.abort();
   }
 
   return {

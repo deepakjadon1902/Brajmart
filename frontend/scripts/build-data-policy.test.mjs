@@ -38,6 +38,7 @@ test('CI builds cannot opt out of catalog validation', () => {
 test('strict release catalog failure rejects instead of returning empty product/category data', async () => {
   process.env.BUILD_API_BASE_URL = 'https://catalog-check.invalid/api';
   process.env.BUILD_API_RETRIES = '0';
+  process.env.BUILD_API_READY_TIMEOUT_MS = '1000';
   process.env.VERCEL = '1';
   process.env.SEO_STRICT_BUILD = 'false';
   globalThis.fetch = async () => new Response('catalog unavailable', { status: 500 });
