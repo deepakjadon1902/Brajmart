@@ -51,6 +51,11 @@ const start = async () => {
     if (!razorpayConfiguration.checkoutReady || !razorpayConfiguration.webhookReady) {
         console.error('Razorpay configuration needs attention; run npm run check:razorpay on this backend service.', razorpayConfiguration);
     }
+    else {
+        console.info('Razorpay environment checks passed.', {
+            mode: razorpayConfiguration.mode, webhookReady: razorpayConfiguration.webhookReady,
+        });
+    }
     try {
         await connectDbWithRetry();
     }

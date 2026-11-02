@@ -40,6 +40,15 @@ are complete. Startup also reports configuration problems before customers
 attempt payment. Checkout returns a customer-safe HTTP 503 while misconfigured,
 without creating an order or reserving inventory.
 
+If this check passes but an already-running local checkout returns
+`PAYMENT_UNAVAILABLE`, restart the backend or enter `rs` in its nodemon terminal.
+The check is a new process; an older server retains the settings it read at
+startup. The development command watches both `src` and `.env`, so subsequent
+environment edits restart the API automatically. A server started with an older
+development command needs one restart to adopt the updated watch list. Successful
+startup logs `Razorpay environment checks passed` with the mode and webhook
+readiness only; this validates configuration, not provider authentication.
+
 For staging use `APP_ENV=staging`, `NODE_ENV=production`, `RAZORPAY_MODE=test`,
 and only `RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET`, and
 `RAZORPAY_TEST_WEBHOOK_SECRET`. Local test payments use `APP_ENV=development`,
@@ -144,9 +153,9 @@ scheduled batch retries automatically after the underlying problem is repaired.
 If this check times out with a literal IPv6 `DB_HOST`, verify the MySQL server
 hostname and its IPv4 route before changing the local connection setting. The
 hostname must identify the same intended database; a longer timeout does not
-repair an unreachable IPv6 route. Nodemon does not watch `.env`: enter `rs` in
-the running `npm run dev` terminal after changing database configuration, or
-restart the backend process normally.
+repair an unreachable IPv6 route. The current `npm run dev` command watches
+`.env` and restarts after configuration changes. If the server was started with
+the older command, enter `rs` in its nodemon terminal or restart it normally.
 
 Checkout offers three separate, unchecked opt-ins: one cart reminder, occasional
 offer emails, and WhatsApp cart/favorite follow-up. Existing account emails and

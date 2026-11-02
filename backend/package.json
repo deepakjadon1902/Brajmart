@@ -16,7 +16,7 @@
     "migrate:local": "node -r ts-node/register scripts/migrateLocal.ts",
     "check:email-followups": "node -r ts-node/register/transpile-only scripts/checkEmailFollowups.cjs",
     "check:razorpay": "node -r ts-node/register/transpile-only scripts/checkRazorpay.cjs",
-    "dev": "nodemon --watch src --ext ts --exec \"node -r ts-node/register src/index.ts\"",
+    "dev": "nodemon --watch src --watch .env --ext ts,env --exec \"node -r ts-node/register src/index.ts\"",
     "seed:admin": "node -r ts-node/register scripts/seedAdmin.ts",
     "audit:images": "node -r ts-node/register scripts/auditLegacyImageUrls.ts",
     "audit:products": "node -r ts-node/register scripts/auditProductDataQuality.ts",
