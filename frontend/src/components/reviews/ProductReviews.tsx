@@ -28,6 +28,7 @@ const ProductReviews = ({ productId }: ProductReviewsProps) => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [eligibility, setEligibility] = useState<{ canReview: boolean; orderId?: string; isVerifiedPurchase?: boolean; reason?: string } | null>(null);
   const [rating, setRating] = useState(5);
   const [body, setBody] = useState('');
@@ -35,13 +36,14 @@ const ProductReviews = ({ productId }: ProductReviewsProps) => {
 
   const load = async (nextPage = page) => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await fetchProductReviews(productId, { page: nextPage, limit: 20, sort });
       setSummary(data.summary);
       setReviews(data.reviews);
       setTotalPages(data.totalPages);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load reviews');
+      setLoadError(err instanceof Error ? err.message : 'Failed to load reviews');
     } finally {
       setLoading(false);
     }
@@ -123,6 +125,8 @@ const ProductReviews = ({ productId }: ProductReviewsProps) => {
                 ))}
               </div>
             </>
+          ) : loadError ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">Review summary is currently unavailable.</p>
           ) : (
             <div className="py-4 text-center">
               <MessageSquare size={28} className="mx-auto text-gold" />
@@ -153,7 +157,12 @@ const ProductReviews = ({ productId }: ProductReviewsProps) => {
           )}
 
           <div className="max-h-[360px] space-y-3 overflow-y-auto pr-1">
-            {loading ? (
+            {loadError ? (
+              <div role="alert" className="rounded-lg border border-border bg-card p-4 text-sm">
+                <p>{loadError}</p>
+                <button type="button" onClick={() => void load(page)} className="mt-3 rounded-lg border border-border px-3 py-2 font-semibold">Retry loading reviews</button>
+              </div>
+            ) : loading ? (
               <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
                 <RefreshCw size={16} className="mr-2 inline animate-spin" /> Loading reviews...
               </div>
@@ -178,7 +187,7 @@ const ProductReviews = ({ productId }: ProductReviewsProps) => {
             )}
           </div>
 
-          {totalPages > 1 && (
+          {!loadError && totalPages > 1 && (
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>Page {page} of {totalPages}</span>
               <div className="flex gap-2">

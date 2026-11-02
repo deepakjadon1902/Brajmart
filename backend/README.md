@@ -110,6 +110,15 @@ WhatsApp message is performed by the code change itself.
 
 ## API Endpoints
 
+Reviews and shipping-label print/sync requests use the existing database schema.
+They do not run `CREATE TABLE` or `ALTER TABLE`. Those statements are restricted
+to the explicit migration flow. If deployed requests report `Failed to load
+reviews` or `Runtime database DDL is disabled` despite the tables existing,
+deploy the backend fix that removes request-time schema creation. Review
+moderation, verified-purchase checks, label claims and one-time print handoffs
+continue through their normal data queries. Genuine database failures remain
+errors; review loading offers an inline retry in the storefront.
+
 ### Auth
 - `POST /api/auth/register` — Register user
 - `POST /api/auth/login` — Login

@@ -43,43 +43,7 @@ const publicName = (name: string, email: string) => {
   return local || 'BrajMart customer';
 };
 
-const ensureReviewsTable = async () => {
-  await dbExecute(`
-    CREATE TABLE IF NOT EXISTS reviews (
-      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-      product_id BIGINT UNSIGNED NOT NULL,
-      user_id BIGINT UNSIGNED NULL,
-      order_id BIGINT UNSIGNED NULL,
-      rating TINYINT UNSIGNED NOT NULL,
-      title VARCHAR(120) NOT NULL DEFAULT '',
-      body TEXT NOT NULL,
-      status ENUM('PENDING','APPROVED','REJECTED','HIDDEN') NOT NULL DEFAULT 'PENDING',
-      is_verified_purchase TINYINT(1) NOT NULL DEFAULT 0,
-      reviewer_type ENUM('USER','GUEST') NOT NULL DEFAULT 'USER',
-      guest_name VARCHAR(120) NULL,
-      guest_email VARCHAR(190) NULL,
-      helpful_count INT NOT NULL DEFAULT 0,
-      report_count INT NOT NULL DEFAULT 0,
-      approved_at DATETIME NULL,
-      rejected_at DATETIME NULL,
-      hidden_at DATETIME NULL,
-      rejection_reason VARCHAR(255) NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      UNIQUE KEY uq_reviews_user_product_order (user_id, product_id, order_id),
-      KEY idx_reviews_product_status_created (product_id, status, created_at),
-      KEY idx_reviews_user_product (user_id, product_id),
-      KEY idx_reviews_status_created (status, created_at),
-      KEY idx_reviews_order (order_id),
-      CONSTRAINT chk_reviews_rating CHECK (rating BETWEEN 1 AND 5),
-      CONSTRAINT fk_reviews_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
-      CONSTRAINT fk_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
-      CONSTRAINT fk_reviews_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE RESTRICT
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-  `);
-};
-
+// Review tables are provisioned through reviewed migrations, never by web requests.
 const mapPublicReview = (row: any) => ({
   id: String(row.id),
   productId: String(row.product_id),
@@ -199,7 +163,6 @@ const findEligibleOrder = async (user: NonNullable<AuthRequest['user']>, product
 router.get('/products/:productId', async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureReviewsTable();
     const productId = toPositiveId(req.params.productId);
     if (!productId) return res.status(400).json({ message: 'Invalid product' });
     const page = Math.max(1, Number(req.query.page || 1));
@@ -232,7 +195,6 @@ router.get('/products/:productId', async (req, res) => {
 router.get('/eligibility/:productId', optionalAuth, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureReviewsTable();
     const productId = toPositiveId(req.params.productId);
     if (!productId) return res.status(400).json({ message: 'Invalid product' });
     const product = await findReviewableProduct(productId);
@@ -256,7 +218,6 @@ router.get('/eligibility/:productId', optionalAuth, async (req: AuthRequest, res
 router.post('/', optionalAuth, reviewCreateLimiter, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureReviewsTable();
     const productId = toPositiveId(req.body?.productId);
     const orderId = toPositiveId(req.body?.orderId);
     const rating = Number(req.body?.rating);
@@ -343,7 +304,6 @@ router.post('/', optionalAuth, reviewCreateLimiter, async (req: AuthRequest, res
 router.get('/admin', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureReviewsTable();
     const page = Math.max(1, Number(req.query.page || 1));
     const limit = Math.min(100, Math.max(10, Number(req.query.limit || 25)));
     const status = cleanPlainText(req.query.status, 20).toUpperCase();
@@ -394,7 +354,6 @@ router.get('/admin', auth, adminOnly, async (req, res) => {
 router.patch('/admin/:id/status', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await ensureReviewsTable();
     const id = toPositiveId(req.params.id);
     const status = cleanPlainText(req.body?.status, 20).toUpperCase() as ReviewStatus;
     const reason = cleanPlainText(req.body?.reason || `Review marked ${status.toLowerCase()}`, 255);

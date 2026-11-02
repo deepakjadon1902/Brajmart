@@ -145,6 +145,7 @@ const labelsRequest = async <T>(path: string, init: RequestInit = {}, retryAuth 
   return body as T;
 };
 
+// Migration-only: normal print/sync operations must use the provisioned schema.
 export const ensureShippingLabelsSchema = () => {
   if (schemaReadyPromise) return schemaReadyPromise;
   schemaReadyPromise = (async () => {
@@ -289,7 +290,6 @@ const createPrintHandoff = async (labelId: string) => {
 };
 
 const prepareOrderShippingLabel = async (order: OrderForLabel, forTracking = false) => {
-  await ensureShippingLabelsSchema();
   const status = clean(order.status).toLowerCase();
   if (status === 'cancelled' || (!forTracking && ['delivered', 'rto'].includes(status))) {
     throw Object.assign(new Error(`Cannot create a label for an order with status ${order.status}`), { status: 409 });
@@ -484,7 +484,6 @@ const syncMappedLabel = async (mapping: any, forceRefresh = true) => {
 };
 
 export const syncShippingLabelForOrder = async (orderId: string | number) => {
-  await ensureShippingLabelsSchema();
   const orders = await dbQuery<OrderForLabel>(
     `SELECT * FROM orders WHERE id = ? AND ${merchantOrderWhereSql('orders')} LIMIT 1`,
     [orderId]
@@ -498,7 +497,6 @@ export const syncShippingLabelsBatch = async () => {
   if (!isShippingLabelsConfigured() || schedulerRunning) return { processed: 0, updated: 0, failed: 0 };
   schedulerRunning = true;
   try {
-    await ensureShippingLabelsSchema();
     const batchSize = Math.min(100, Math.max(1, Number(process.env.SHIPPING_LABELS_SYNC_BATCH_SIZE || 25)));
     const rows = await dbQuery<any>(
       `SELECT * FROM order_shipping_labels

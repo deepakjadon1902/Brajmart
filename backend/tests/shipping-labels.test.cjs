@@ -1,5 +1,8 @@
 const assert = require('node:assert/strict');
-const { after, beforeEach, test } = require('node:test');
+const { after, before, beforeEach, test } = require('node:test');
+const { once } = require('node:events');
+const express = require('express');
+const jwt = require('jsonwebtoken');
 const path = require('node:path');
 
 const originalFetch = global.fetch;
@@ -12,8 +15,10 @@ function stub(relative, exports) {
 }
 
 const db = require('../src/lib/db');
+db.isDbConnected = () => true;
 db.withDbTransaction = async (fn) => fn({});
 db.dbQuery = async (sql) => {
+  db.assertNoRuntimeDdl(sql);
   state.queries.push(sql);
   if (sql.includes("SHOW COLUMNS FROM orders LIKE 'status'")) {
     return [{ Type: "enum('pending_payment','confirmed','processing','shipped','out_for_delivery','delivered','rto','cancelled')" }];
@@ -26,6 +31,7 @@ db.dbQuery = async (sql) => {
   throw new Error(`Unexpected test query: ${sql}`);
 };
 db.dbExecute = async (sql, params = []) => {
+  db.assertNoRuntimeDdl(sql);
   state.writes.push({ sql, params });
   if (sql.includes('INSERT IGNORE INTO order_shipping_labels')) {
     if (state.mapping) return { affectedRows: 0 };
@@ -59,6 +65,18 @@ stub('lib/email', { sendShippingUpdate: async () => {} });
 stub('lib/inventory', { convertReservationToSale: async () => {} });
 
 const shipping = require('../src/lib/shippingLabels');
+const { getJwtSecret } = require('../src/middleware/auth');
+const app = express();
+app.use(express.json());
+app.use('/api/shipping-labels', require('../src/routes/shippingLabels').default);
+let server;
+let baseUrl;
+before(async () => {
+  server = app.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  baseUrl = `http://127.0.0.1:${server.address().port}/api/shipping-labels`;
+});
+after(async () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())));
 
 const order = () => ({
   id: 10339,
@@ -186,6 +204,35 @@ test('creates one remote label, stores its mapping, and reuses it on the next cl
   assert.equal(second.label.id, 'label-10339');
   assert.equal(state.labelPosts, 1, 'second print must not create a duplicate remote label');
   assert.equal(state.handoffPosts, 2, 'each print click must receive a fresh one-time handoff');
+  assert.ok(state.writes.every(({ sql }) => !/\b(?:CREATE|ALTER)\s+TABLE/i.test(sql)), 'printing uses the existing schema');
+});
+
+test('the authenticated print-label endpoint works with runtime DDL forbidden', async () => {
+  const token = jwt.sign({ id: '8', role: 'admin' }, getJwtSecret());
+  const request = () => originalFetch(`${baseUrl}/orders/10339/label`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+  const created = await request();
+  assert.equal(created.status, 201);
+  assert.equal((await created.json()).printUrl, state.handoffUrl);
+  const reopened = await request();
+  assert.equal(reopened.status, 200);
+  assert.equal((await reopened.json()).created, false);
+  assert.equal(state.labelPosts, 1);
+  assert.equal(state.handoffPosts, 2);
+});
+
+test('the print-label endpoint rejects unauthenticated and non-admin requests before external calls', async () => {
+  const anonymous = await originalFetch(`${baseUrl}/orders/10339/label`, { method: 'POST' });
+  assert.equal(anonymous.status, 401);
+  const token = jwt.sign({ id: '8', role: 'user' }, getJwtSecret());
+  const shopper = await originalFetch(`${baseUrl}/orders/10339/label`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(shopper.status, 403);
+  assert.equal(state.requests.length, 0);
+  assert.equal(state.writes.length, 0);
+});
+
+test('shipping schema creation remains blocked outside the explicit migration context', async () => {
+  await assert.rejects(shipping.ensureShippingLabelsSchema(), { name: 'RuntimeDdlForbiddenError' });
+  assert.equal(state.requests.length, 0);
 });
 
 test('rejects a print handoff URL outside the configured labels API origin', async () => {
