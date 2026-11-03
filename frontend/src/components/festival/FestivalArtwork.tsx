@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import type { FestivalTheme } from '@/store/settingsStore';
 
-export type FestivalMotif = 'diya' | 'candle' | 'rocket' | 'sparkler' | 'balloons' | 'pichkari' | 'gulal' | 'splash';
+export type FestivalMotif = 'diya' | 'candle' | 'rocket' | 'sparkler' | 'fountain' | 'balloons' | 'pichkari' | 'gulal' | 'splash';
 
 export function FestivalDefs({ prefix }: { prefix: string }) {
   return <defs>
@@ -9,6 +9,9 @@ export function FestivalDefs({ prefix }: { prefix: string }) {
     <linearGradient id={`${prefix}-flame`} x1="80" y1="15" x2="80" y2="88" gradientUnits="userSpaceOnUse"><stop stopColor="#fff0a0" /><stop offset=".5" stopColor="#ffb730" /><stop offset="1" stopColor="#d95b14" /></linearGradient>
     <radialGradient id={`${prefix}-glow`}><stop stopColor="#ffc34a" stopOpacity=".76" /><stop offset="1" stopColor="#ffb83e" stopOpacity="0" /></radialGradient>
     <linearGradient id={`${prefix}-wax`} x1="45" y1="70" x2="113" y2="115" gradientUnits="userSpaceOnUse"><stop stopColor="#fff3d3" /><stop offset=".5" stopColor="#e6bd74" /><stop offset="1" stopColor="#b77d35" /></linearGradient>
+    <linearGradient id={`${prefix}-clay`} x1="30" y1="98" x2="130" y2="146" gradientUnits="userSpaceOnUse"><stop stopColor="#e8a24e" /><stop offset=".3" stopColor="#b95627" /><stop offset=".7" stopColor="#8c351e" /><stop offset="1" stopColor="#d98639" /></linearGradient>
+    <radialGradient id={`${prefix}-oil`} cx=".47" cy=".3"><stop stopColor="#ffe8a0" /><stop offset=".4" stopColor="#da9b32" /><stop offset="1" stopColor="#92501c" /></radialGradient>
+    <linearGradient id={`${prefix}-ivory`} x1="52" y1="0" x2="108" y2="0" gradientUnits="userSpaceOnUse"><stop stopColor="#d5a15a" /><stop offset=".18" stopColor="#f6dfaa" /><stop offset=".43" stopColor="#fff6db" /><stop offset=".72" stopColor="#edc783" /><stop offset="1" stopColor="#b87936" /></linearGradient>
     <linearGradient id={`${prefix}-pink`} x1="30" y1="30" x2="105" y2="116" gradientUnits="userSpaceOnUse"><stop stopColor="#ff91b4" /><stop offset=".45" stopColor="#e94e87" /><stop offset="1" stopColor="#ad295e" /></linearGradient>
     <linearGradient id={`${prefix}-teal`} x1="20" y1="30" x2="115" y2="120" gradientUnits="userSpaceOnUse"><stop stopColor="#8ce6df" /><stop offset=".45" stopColor="#36b6b6" /><stop offset="1" stopColor="#158582" /></linearGradient>
     <linearGradient id={`${prefix}-orange`} x1="35" y1="30" x2="125" y2="130" gradientUnits="userSpaceOnUse"><stop stopColor="#ffe394" /><stop offset=".45" stopColor="#ffbc48" /><stop offset="1" stopColor="#e78326" /></linearGradient>
@@ -19,10 +22,11 @@ export function FestivalDefs({ prefix }: { prefix: string }) {
 
 function Flame({ x = 80, y = 45, scale = 1, prefix }: { x?: number; y?: number; scale?: number; prefix: string }) {
   return <g transform={`translate(${x - 80 * scale} ${y - 45 * scale}) scale(${scale})`}>
-    <circle cx="80" cy="50" r="40" fill={`url(#${prefix}-glow)`} />
+    <ellipse cx="80" cy="51" rx="44" ry="48" fill={`url(#${prefix}-glow)`} />
     <g className="festival-flame">
       <path d="M80 15C89 33 100 45 93 61C88 75 69 76 65 62C60 48 75 35 80 15Z" fill={`url(#${prefix}-flame)`} />
       <path d="M80 43C87 53 90 60 83 65C75 70 71 62 74 56Z" fill="#fffbe5" />
+      <path d="M79 57Q87 67 80 71Q74 67 79 57Z" fill="#fff" />
     </g>
   </g>;
 }
@@ -31,11 +35,13 @@ function Flame({ x = 80, y = 45, scale = 1, prefix }: { x?: number; y?: number; 
 export function FestivalGlyph({ motif, prefix }: { motif: FestivalMotif; prefix: string }) {
   switch (motif) {
     case 'diya': return <g data-motif="diya">
-      <ellipse cx="80" cy="138" rx="57" ry="8" fill="#6d3c23" opacity=".12" />
+      <ellipse cx="80" cy="142" rx="59" ry="7" fill="#6d3c23" opacity=".17" />
       <Flame prefix={prefix} />
-      <path d="M18 99Q35 142 80 142Q125 142 143 99Z" fill={`url(#${prefix}-brass)`} stroke="#af752f" strokeWidth="1.3" />
-      <ellipse cx="80" cy="99" rx="62" ry="14" fill="#f4d18b" stroke="#b58038" strokeWidth="1.5" />
-      <ellipse cx="80" cy="98" rx="53" ry="9" fill="#a7632b" /><ellipse cx="80" cy="97" rx="47" ry="6" fill="#d79d42" />
+      <path d="M18 99Q35 142 80 142Q125 142 143 99Z" fill={`url(#${prefix}-clay)`} stroke="#9e542b" strokeWidth="1.3" />
+      <path d="M29 109Q48 136 79 136" stroke="#efb963" strokeWidth="3" opacity=".45" fill="none" strokeLinecap="round" />
+      <ellipse cx="80" cy="99" rx="62" ry="14" fill={`url(#${prefix}-brass)`} stroke="#b58038" strokeWidth="1.5" />
+      <ellipse cx="80" cy="98" rx="54" ry="9.5" fill="#88471e" /><ellipse cx="80" cy="97" rx="49" ry="7" fill={`url(#${prefix}-oil)`} />
+      <path d="M41 97Q56 92 68 94M94 95Q109 95 117 99" stroke="#fff0b8" opacity=".72" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M35 113Q80 144 125 113M50 128Q80 141 111 128" stroke="#ffe1a1" strokeWidth="1.5" fill="none" opacity=".85" />
       {[45, 62, 80, 98, 115].map((x, i) => <path key={x} d={`M${x} ${115 + (2 - Math.abs(i - 2)) * 3}l2 3-2 3-2-3Z`} fill="#ffe3a9" />)}
       <path d="M80 97Q75 84 80 71" stroke="#4a3329" strokeWidth="3" fill="none" strokeLinecap="round" />
@@ -43,22 +49,37 @@ export function FestivalGlyph({ motif, prefix }: { motif: FestivalMotif; prefix:
     case 'candle': return <g data-motif="candle">
       <ellipse cx="80" cy="145" rx="44" ry="7" fill="#6d3c23" opacity=".12" />
       <path d="M43 132Q80 145 117 132L111 143Q80 153 49 143Z" fill={`url(#${prefix}-brass)`} />
-      <path d="M52 62H108V130Q80 143 52 130Z" fill={`url(#${prefix}-wax)`} stroke="#9d672d" strokeWidth="1.3" />
+      <path d="M52 62H108V130Q80 143 52 130Z" fill={`url(#${prefix}-ivory)`} stroke="#aa783e" strokeWidth="1" />
       <ellipse cx="80" cy="62" rx="28" ry="9" fill="#fff4d5" stroke="#e2c796" />
+      <ellipse cx="80" cy="61" rx="16" ry="4.5" fill="#e7bd73" /><ellipse cx="80" cy="60" rx="10" ry="2.5" fill="#ffe6ac" />
       <path d="M54 64C59 65 57 85 64 83C71 81 64 68 74 68C82 68 77 95 85 94C92 93 87 67 95 66" fill="none" stroke="#fff5db" strokeWidth="5" strokeLinecap="round" />
       <path d="M58 111Q80 118 102 111" stroke="#c49a58" strokeWidth="1.2" fill="none" />
+      <path d="M57 88V105M57 119V128" stroke="#fff8e5" strokeWidth="2" strokeLinecap="round" opacity=".65" />
       <path d="M80 112v14m-5-9 5-5 5 5m-5 9-5-5m5 5 5-5" stroke="#c49a58" fill="none" />
       <Flame prefix={prefix} x={80} y={27} scale={.63} /><path d="M80 62V43" stroke="#4a3329" strokeWidth="2" />
     </g>;
     case 'rocket': return <g data-motif="rocket" transform="rotate(-20 80 80)">
       <path d="M78 110V153" stroke="#c9995d" strokeWidth="5" strokeLinecap="round" />
       <rect x="58" y="48" width="44" height="74" rx="5" fill={`url(#${prefix}-red)`} stroke="#a54137" />
+      <path d="M63 52V117" stroke="#ffb085" strokeWidth="3" opacity=".65" />
       <path d="M51 49L80 13L109 49Z" fill={`url(#${prefix}-brass)`} stroke="#bc852e" />
       <path d="M64 48L80 22L94 48Z" fill="#f3ce7f" opacity=".7" />
       <path d="M59 64H101M59 104H101" stroke="#f4ce7a" strokeWidth="6" />
       <path d="M80 74l3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1Z" fill="#ffe6aa" />
       <path d="M101 115Q125 116 117 134" stroke="#ac8754" strokeWidth="2" fill="none" />
       <g stroke="#e9ac40" strokeWidth="2" strokeLinecap="round"><path d="M117 139v6m-7-10-5 2m19-2 5 2m-6 7 3 4m-13-4-3 4" /></g>
+    </g>;
+    case 'fountain': return <g data-motif="fountain">
+      <ellipse cx="80" cy="146" rx="43" ry="6" fill="#713b24" opacity=".16" />
+      <g className="festival-fountain-sparks" fill="none" strokeLinecap="round">
+        <path d="M79 84Q56 25 31 44M82 85Q108 14 133 40M80 83Q72 12 56 20M82 81Q92 5 106 17" stroke="#e99d23" strokeWidth="2" />
+        <path d="M79 76Q51 40 42 59M83 75Q107 34 119 52M81 68V17" stroke="#f3c458" strokeWidth="2.5" />
+        {[{ x: 26, y: 43 }, { x: 56, y: 14 }, { x: 82, y: 9 }, { x: 109, y: 12 }, { x: 137, y: 38 }].map(({ x, y }) => <path key={x} d={`M${x} ${y - 3}v6m-3-3h6`} stroke="#df8e22" strokeWidth="1.6" />)}
+      </g>
+      <path d="M80 75 119 139Q80 153 41 139Z" fill={`url(#${prefix}-red)`} stroke="#923f2a" strokeWidth="1.5" />
+      <path d="M79 77 66 139Q80 145 89 141Z" fill="#f5c36a" opacity=".6" />
+      <path d="M57 111Q80 120 104 111M47 132Q80 145 113 132" stroke="#f8d17b" strokeWidth="4" />
+      <path d="m81 92 2 5 5 1-4 3 1 5-4-3-4 3 1-5-4-3 5-1Z" fill="#fff0ba" />
     </g>;
     case 'sparkler': return <g data-motif="sparkler">
       <path d="M39 151L89 66" stroke="#b8a28b" strokeWidth="3.5" strokeLinecap="round" /><path d="M62 113L86 72" stroke="#726759" strokeWidth="4" strokeLinecap="round" />
@@ -110,6 +131,32 @@ export function FestivalIcon({ motif, className = '', idPrefix }: { motif: Festi
   const prefix = idPrefix || `festival-object-${unique}`;
   return <svg className={`festival-icon ${className}`} viewBox="0 0 160 160" fill="none" aria-hidden="true" focusable="false">
     <FestivalDefs prefix={prefix} /><FestivalGlyph motif={motif} prefix={prefix} />
+  </svg>;
+}
+
+/** A layered still life rather than enlarged floating icons. The asymmetric
+ * arrangements leave room for the storefront's floating contact button. */
+export function DiwaliLampCluster({ side }: { side: 'left' | 'right' }) {
+  const prefix = `diwali-lamps-${useId().replace(/:/g, '')}`;
+  const objects: { motif: FestivalMotif; x: number; y: number; scale: number }[] = side === 'left'
+    ? [{ motif: 'candle', x: 5, y: 0, scale: .96 }, { motif: 'candle', x: 69, y: 41, scale: .67 }, { motif: 'diya', x: 20, y: 79, scale: .93 }, { motif: 'diya', x: 143, y: 122, scale: .56 }]
+    : [{ motif: 'candle', x: 124, y: 0, scale: .88 }, { motif: 'fountain', x: -5, y: 20, scale: .74 }, { motif: 'diya', x: 86, y: 89, scale: .88 }, { motif: 'diya', x: 0, y: 133, scale: .48 }];
+  const compact: typeof objects = side === 'left'
+    ? [{ motif: 'candle', x: 0, y: 0, scale: .94 }, { motif: 'diya', x: -20, y: 85, scale: .97 }, { motif: 'diya', x: 70, y: 132, scale: .55 }]
+    : [{ motif: 'fountain', x: 10, y: 0, scale: .7 }, { motif: 'candle', x: 55, y: 17, scale: .78 }, { motif: 'diya', x: -15, y: 88, scale: .95 }, { motif: 'diya', x: 80, y: 153, scale: .4 }];
+  const drawObjects = (items: typeof objects) => items.map(({ motif, x, y, scale }, index) => <g key={index} transform={`translate(${x} ${y}) scale(${scale})`}><FestivalGlyph motif={motif} prefix={prefix} /></g>);
+  return <svg className="diwali-lamp-art" viewBox="0 0 260 220" fill="none" aria-hidden="true" focusable="false">
+    <FestivalDefs prefix={prefix} />
+    <g className="diwali-lamps-wide diwali-lamps-layout">
+      <ellipse cx="130" cy="199" rx="121" ry="17" fill={`url(#${prefix}-glow)`} opacity=".5" />
+      {drawObjects(objects)}
+    </g>
+    <svg className="diwali-lamps-compact" viewBox="0 0 160 240" width="260" height="220" preserveAspectRatio="xMinYMax meet" overflow="visible" focusable="false">
+      <g className="diwali-lamps-layout">
+        <ellipse cx="75" cy="216" rx="70" ry="13" fill={`url(#${prefix}-glow)`} opacity=".4" />
+        {drawObjects(compact)}
+      </g>
+    </svg>
   </svg>;
 }
 

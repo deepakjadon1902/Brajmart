@@ -3,6 +3,8 @@ import { useProductStore } from '@/store/productStore';
 import { DollarSign, ShoppingBag, Users, Package, TrendingUp, ArrowUpRight } from 'lucide-react';
 import { fetchOrders, fetchPayments, fetchUsers } from '@/lib/api';
 import { toast } from 'sonner';
+import { FestivalDecorations, FestivalToran } from '@/components/festival/FestivalDecor';
+import { useFestivalTheme } from '@/components/festival/festivalTheme';
 
 type AdminOrder = {
   id: string;
@@ -28,6 +30,7 @@ const errorMessage = (err: unknown, fallback: string) => err instanceof Error ? 
 const isCodOrder = (order: Pick<AdminOrder, 'paymentMethod'>) => /^cod$|cash\s*on\s*delivery/i.test(String(order.paymentMethod || ''));
 
 const AdminDashboard = () => {
+  const festivalTheme = useFestivalTheme('admin-dashboard');
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [payments, setPayments] = useState<AdminPayment[]>([]);
@@ -84,7 +87,8 @@ const AdminDashboard = () => {
   ];
 
   return (
-    <div className="admin-dashboard-page space-y-5">
+    <div className={`admin-dashboard-page space-y-5${festivalTheme !== 'none' ? ' admin-dashboard-festive' : ''}`}>
+      <FestivalToran surface="admin-dashboard" />
       <div className="admin-dashboard-header">
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
         <p className="text-slate-400 text-sm">Welcome back, Admin. Here's what's happening.</p>
@@ -171,6 +175,7 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
+      <FestivalDecorations surface="admin-dashboard" />
     </div>
   );
 };

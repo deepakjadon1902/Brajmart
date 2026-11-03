@@ -13,11 +13,16 @@
 .festival-edge-object-3 { bottom: 17px; left: 18px; width: 92px; height: 92px; }
 .festival-edge-object-4 { bottom: 18px; right: 87px; width: 65px; height: 65px; }
 .festival-edge-object-5 { top: 65%; right: -20px; width: 57px; height: 72px; transform: rotate(8deg); }
-.festival-diwali .festival-edge-object { filter: saturate(1.25) contrast(1.15) drop-shadow(0 3px 5px #6b390e45); }
-.festival-diwali:not(.festival-quiet) .festival-edge-object-2 { display: block; left: 0; top: 54%; width: 88px; height: 104px; }
-.festival-diwali .festival-edge-object-3 { width: 114px; height: 114px; left: 10px; bottom: 12px; }
-.festival-diwali .festival-edge-object-4 { width: 94px; height: 94px; right: 85px; bottom: 12px; }
-.festival-diwali:not(.festival-quiet) .festival-edge-object-5 { width: 80px; height: 100px; right: -4px; }
+.festival-diwali .festival-edge-object { filter: drop-shadow(0 3px 4px #6b390e35); }
+.festival-diwali .festival-edge-object-0, .festival-diwali .festival-edge-object-1 { width: 74px; height: 88px; }
+.diwali-lamp-cluster { position: absolute; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); width: clamp(170px, 17vw, 245px); }
+.diwali-lamp-cluster-left { left: -12px; }
+.diwali-lamp-cluster-right { right: 84px; width: clamp(155px, 15vw, 220px); }
+.diwali-lamp-art { display: block; width: 100%; height: auto; overflow: visible; filter: drop-shadow(0 3px 3px #6b390e28); }
+.diwali-lamps-compact { display: none; }
+.diwali-lamps-layout > g:nth-of-type(2) .festival-flame { animation-delay: -1.6s; }
+.festival-quiet .diwali-lamp-cluster { opacity: .5; }
+.festival-quiet .festival-fountain-sparks { display: none; }
 .festival-edge-light { position: absolute; width: 85px; top: 140px; bottom: 0; opacity: .34; }
 .festival-edge-light-left { left: 0; background: radial-gradient(ellipse at 0% 65%, #ebbc653d, transparent 67%); }
 .festival-edge-light-right { right: 0; background: radial-gradient(ellipse at 100% 70%, #ebbc653d, transparent 67%); }
@@ -34,50 +39,64 @@
 .festival-footer-ornaments.festival-diwali .festival-icon { width: 72px; height: 72px; filter: saturate(1.15) contrast(1.1); }
 .festival-flame { transform-origin: 80px 72px; animation: festival-candle 4s ease-in-out infinite; }
 .festival-sparkle { animation: festival-twinkle 4s ease-in-out infinite; }
+.festival-fountain-sparks { transform-box: fill-box; transform-origin: bottom center; animation: festival-fountain 1.6s ease-in-out infinite; }
 @keyframes festival-candle { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(.91) rotate(2deg); } }
 @keyframes festival-twinkle { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+@keyframes festival-fountain { 0%, 100% { opacity: .65; transform: scale(.94, .9); } 50% { opacity: 1; transform: scale(1.02, 1); } }
 
-/* A rising fuse, an expanding ring and falling sparks, staggered around the
-   page margins. Transform/opacity animations keep the particle budget small. */
+/* Six staggered rocket launches with two layers of falling embers. Phones use
+   three smaller bursts; all motion uses transforms and opacity, without JS frames. */
 .diwali-fireworks {
-  position: absolute; inset: clamp(150px, 22vh, 210px) 0 calc(90px + env(safe-area-inset-bottom, 0px));
+  position: absolute; inset: clamp(164px, 23vh, 220px) 0 calc(105px + env(safe-area-inset-bottom, 0px));
   pointer-events: none; overflow: hidden;
-  --firework-cycle: 12s; --firework-radius: clamp(94px, 12vw, 156px); --firework-fall: 40px;
+  --firework-cycle: 11s; --firework-radius: clamp(100px, 12vw, 168px); --firework-fall: 45px; --launch-height: 170px;
 }
 .diwali-fireworks * { pointer-events: none; }
-.diwali-firework { position: absolute; width: 0; height: 0; color: var(--firework-color); --firework-delay: .2s; --firework-color: #c98219; }
-.diwali-firework-0 { left: 15%; top: 23%; }
-.diwali-firework-1 { right: 16%; top: 48%; --firework-delay: 3.2s; --firework-color: #ca426e; }
-.diwali-firework-2 { left: 20%; top: 76%; --firework-delay: 6.2s; --firework-color: #168c98; }
-.diwali-firework-3 { right: 24%; top: 15%; --firework-delay: 9.2s; --firework-color: #d38b23; }
+.diwali-fireworks-page { mask-image: linear-gradient(90deg, #000 5%, #000b 18%, transparent 35%, transparent 65%, #000b 82%, #000 95%); -webkit-mask-image: linear-gradient(90deg, #000 5%, #000b 18%, transparent 35%, transparent 65%, #000b 82%, #000 95%); }
+.diwali-firework { position: absolute; width: 0; height: 0; color: var(--firework-color); --firework-delay: .2s; --firework-color: #c27a12; --launch-drift: -22px; }
+.diwali-firework-0 { left: 13%; top: 23%; }
+.diwali-firework-1 { right: 14%; top: 43%; --firework-delay: 2s; --firework-color: #c14373; --launch-drift: 22px; }
+.diwali-firework-2 { left: 20%; top: 74%; --firework-delay: 3.8s; --firework-color: #178a95; }
+.diwali-firework-3 { right: 24%; top: 15%; --firework-delay: 5.6s; --firework-color: #cc8520; --launch-drift: 22px; }
+.diwali-firework-4 { left: 6%; top: 52%; --firework-delay: 7.4s; --firework-color: #a45481; }
+.diwali-firework-5 { right: 8%; top: 77%; --firework-delay: 9.2s; --firework-color: #b77414; --launch-drift: 22px; }
 .diwali-firework-launch {
-  position: absolute; left: -1.5px; top: 0; width: 3px; height: 40px; border-radius: 50%; opacity: 0;
-  background: linear-gradient(transparent, currentColor 65%); box-shadow: 0 2px 6px currentColor;
+  position: absolute; left: -1.5px; top: -3px; width: 3px; height: 68px; border-radius: 50%; opacity: 0;
+  background: linear-gradient(#fff1b8, currentColor 30%, transparent); box-shadow: 0 -2px 7px #e6a13b;
   animation: diwali-firework-launch var(--firework-cycle) var(--firework-delay) linear infinite both;
 }
+.diwali-firework-rocket { position: absolute; width: 24px; height: 60px; left: -12px; top: -45px; opacity: 0; animation: diwali-firework-flight var(--firework-cycle) var(--firework-delay) linear infinite both; }
+.diwali-firework-rocket svg { width: 100%; height: 100%; overflow: visible; }
 .diwali-firework-bloom {
   position: absolute; width: 34px; height: 34px; left: -17px; top: -17px; opacity: 0; border-radius: 50%;
-  background: radial-gradient(circle, #ffb62e, #ed9e44a8 32%, transparent 72%);
+  background: radial-gradient(circle, #fff5bc, #ffbd45b8 32%, transparent 72%);
   animation: diwali-firework-bloom var(--firework-cycle) var(--firework-delay) ease-out infinite both;
 }
 .diwali-firework-ring {
   position: absolute; width: 52px; height: 52px; left: -26px; top: -26px; opacity: 0;
-  border: 1.5px solid currentColor; border-radius: 50%;
+  border: 1px solid currentColor; border-radius: 50%;
   animation: diwali-firework-ring var(--firework-cycle) var(--firework-delay) ease-out infinite both;
 }
 .diwali-firework-spark {
-  position: absolute; left: -1.5px; top: -8px; width: 3px; height: 17px; border-radius: 50%; opacity: 0;
-  background: linear-gradient(transparent, currentColor 35%); box-shadow: 0 0 6px currentColor;
+  position: absolute; left: -1.5px; top: -9px; width: 3px; height: 20px; border-radius: 50%; opacity: 0;
+  background: linear-gradient(transparent, currentColor 35%, #ffd784); box-shadow: 0 0 5px currentColor;
   animation: diwali-firework-spark var(--firework-cycle) var(--firework-delay) cubic-bezier(.12, .55, .3, 1) infinite both;
 }
 .diwali-firework-spark::after { content: ''; position: absolute; left: 0; top: 22px; width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .8; }
-.diwali-firework-spark:nth-child(3n) { height: 12px; }
+.diwali-firework-spark:nth-child(3n) { height: 14px; }
+.diwali-firework-ember { position: absolute; width: 2px; height: 9px; left: -1px; top: -4px; border-radius: 50%; background: #ce8b26; box-shadow: 0 0 4px #ffc760; opacity: 0; animation: diwali-firework-ember var(--firework-cycle) var(--firework-delay) ease-out infinite both; }
 .diwali-fireworks[data-paused="true"] * { animation-play-state: paused !important; }
 @keyframes diwali-firework-launch {
-  0% { opacity: 0; transform: translateY(130px) scaleY(.4); }
-  2% { opacity: .7; }
-  8% { opacity: .85; transform: translateY(0) scaleY(1); }
+  0% { opacity: 0; transform: translate(var(--launch-drift), var(--launch-height)) scaleY(.4); }
+  2% { opacity: .85; }
+  8% { opacity: 1; transform: translate(0, 0) scaleY(1); }
   9%, 100% { opacity: 0; transform: translateY(-6px) scaleY(.2); }
+}
+@keyframes diwali-firework-flight {
+  0% { opacity: 0; transform: translate(var(--launch-drift), var(--launch-height)) rotate(-8deg) scale(.85); }
+  2% { opacity: 1; }
+  8% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+  9%, 100% { opacity: 0; transform: translateY(-9px) scale(.5); }
 }
 @keyframes diwali-firework-bloom {
   0%, 8% { opacity: 0; transform: scale(.2); }
@@ -86,8 +105,8 @@
 }
 @keyframes diwali-firework-ring {
   0%, 9% { opacity: 0; transform: scale(.1); }
-  11% { opacity: .85; }
-  35%, 100% { opacity: 0; transform: scale(3); }
+  11% { opacity: .6; }
+  27%, 100% { opacity: 0; transform: scale(3.5); }
 }
 @keyframes diwali-firework-spark {
   0%, 9% { opacity: 0; transform: translate(0, 0) rotate(var(--spark-angle)) scale(.3); }
@@ -99,7 +118,14 @@
     transform: translate(calc(var(--spark-x) * var(--firework-radius)), calc(var(--spark-y) * var(--firework-radius) + var(--firework-fall))) rotate(var(--spark-angle)) scale(.65);
   }
 }
+@keyframes diwali-firework-ember {
+  0%, 13% { opacity: 0; transform: translate(0, 0) rotate(var(--spark-angle)); }
+  17% { opacity: 1; }
+  30% { opacity: .85; transform: translate(calc(var(--spark-x) * var(--firework-radius)), calc(var(--spark-y) * var(--firework-radius) + 16px)) rotate(var(--spark-angle)); }
+  47%, 100% { opacity: 0; transform: translate(calc(var(--spark-x) * var(--firework-radius) * 1.15), calc(var(--spark-y) * var(--firework-radius) + var(--firework-fall) * 1.6)) rotate(var(--spark-angle)) scale(.4); }
+}
 .diwali-fireworks-greeting { z-index: -1; inset: 58px 0 auto; height: 195px; --firework-radius: 53px; --firework-cycle: 10s; opacity: 1; }
+.diwali-fireworks-greeting .diwali-firework-rocket { display: none; }
 .diwali-fireworks-greeting .diwali-firework-0 { left: 12%; top: 36%; --firework-delay: .1s; }
 .diwali-fireworks-greeting .diwali-firework-1 { right: 12%; top: 24%; --firework-delay: 4.1s; --firework-color: #daa14b; }
 
@@ -172,6 +198,15 @@
 .festival-settings-error { color: #a12828 !important; font-size: 12px; margin-top: 12px; }
 @media (min-width: 1500px) { .festival-edge-object-0, .festival-edge-object-2 { left: 8px; } .festival-edge-object-1, .festival-edge-object-5 { right: 8px; } }
 @media (max-width: 1100px) { .festival-edge-object-2, .festival-edge-object-5 { display: none; } .festival-edge-object-0, .festival-edge-object-1 { width: 48px; height: 48px; } }
+@media (max-width: 767px) {
+  /* Clear the mobile navigation, safe area and floating WhatsApp control. */
+  .diwali-lamp-cluster { bottom: calc(75px + env(safe-area-inset-bottom, 0px)); }
+  .diwali-lamp-cluster-left { left: -8px; width: 150px; }
+  .diwali-lamp-cluster-right { right: -62px; width: 150px; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+  .diwali-lamps-wide { display: none; }
+  .diwali-lamps-compact { display: block; }
+  .diwali-fireworks-page { mask-image: linear-gradient(90deg, #000 18px, #0008 46px, transparent 100px, transparent calc(100% - 100px), #0008 calc(100% - 46px), #000 calc(100% - 18px)); -webkit-mask-image: linear-gradient(90deg, #000 18px, #0008 46px, transparent 100px, transparent calc(100% - 100px), #0008 calc(100% - 46px), #000 calc(100% - 18px)); }
+}
 @media (max-width: 600px) {
   .festival-toran { height: 23px; }
   .festival-toran svg { transform: scale(.8); transform-origin: top left; width: 125%; }
@@ -179,9 +214,8 @@
   .festival-edge-object-1 { right: -15px; top: 37%; width: 44px; height: 44px; opacity: .8; }
   .festival-edge-object-3 { left: -5px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); width: 55px; height: 55px; }
   .festival-edge-object-4 { right: 67px; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); width: 36px; height: 36px; opacity: .85; }
-  .festival-diwali:not(.festival-quiet) .festival-edge-object-2 { left: -8px; top: 54%; width: 70px; height: 86px; }
-  .festival-diwali .festival-edge-object-3 { left: -3px; bottom: calc(74px + env(safe-area-inset-bottom, 0px)); width: 76px; height: 76px; }
-  .festival-diwali .festival-edge-object-4 { right: 70px; bottom: calc(75px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; opacity: 1; }
+  .festival-diwali .festival-edge-object-0 { top: 34%; left: -14px; width: 55px; height: 65px; opacity: 1; }
+  .festival-diwali .festival-edge-object-1 { top: 41%; right: -15px; width: 58px; height: 70px; opacity: 1; }
   .festival-edge-light { width: 35px; }
   .festival-edge-sparks { opacity: .35; }
   .festival-welcome { padding: 31px 24px 27px; border-radius: 23px; max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
@@ -206,25 +240,57 @@
   .festival-option-check { width: 19px; height: 19px; }
   .festival-settings-bottom { align-items: flex-start; flex-direction: column; }
 }
-@media (max-width: 600px), (max-height: 500px) and (max-width: 1000px) {
-  .diwali-fireworks { --firework-radius: clamp(62px, 22vw, 88px); --firework-cycle: 14s; --firework-fall: 28px; }
-  .diwali-firework-0 { left: 23%; top: 24%; }
-  .diwali-firework-1 { right: 23%; top: 66%; --firework-delay: 7.2s; }
-  .diwali-fireworks-page .diwali-firework-2, .diwali-fireworks-page .diwali-firework-3,
+@media (max-width: 767px), (max-height: 500px) and (max-width: 1000px) {
+  .diwali-fireworks { --firework-radius: clamp(68px, 22vw, 92px); --firework-cycle: 12s; --firework-fall: 28px; --launch-height: 115px; }
+  .diwali-firework-0 { left: 9%; top: 24%; }
+  .diwali-firework-1 { right: 9%; top: 51%; --firework-delay: 4.2s; }
+  .diwali-firework-2 { left: 13%; top: 77%; --firework-delay: 8.2s; }
+  .diwali-fireworks-page .diwali-firework-3, .diwali-fireworks-page .diwali-firework-4, .diwali-fireworks-page .diwali-firework-5,
   .diwali-firework-spark:nth-child(3n) { display: none; }
-  .diwali-firework-spark { height: 13px; box-shadow: 0 0 5px currentColor; }
+  .diwali-firework-spark { height: 15px; box-shadow: 0 0 4px currentColor; }
   .diwali-firework-spark::after { display: none; }
+  .diwali-firework-ember:nth-child(2n) { display: none; }
+  .diwali-firework-rocket { width: 20px; height: 50px; left: -10px; top: -38px; }
   .diwali-fireworks-greeting { --firework-radius: 36px; --firework-cycle: 12s; height: 165px; }
 }
 @media (max-height: 500px) and (max-width: 1000px) {
-  .diwali-fireworks-page { --firework-radius: 44px; --firework-fall: 12px; }
+  .diwali-fireworks-page { inset: 110px 0 calc(66px + env(safe-area-inset-bottom, 0px)); --firework-radius: 46px; --firework-fall: 12px; --launch-height: 65px; }
   .diwali-fireworks-page .diwali-firework-ring { width: 30px; height: 30px; left: -15px; top: -15px; }
+  .diwali-lamp-cluster-left { width: 118px; }
+  .diwali-lamp-cluster-right { width: 104px; }
+  .festival-diwali .festival-edge-object { width: 45px; height: 52px; }
+}
+@media (max-height: 650px) and (max-width: 767px) {
+  .diwali-lamp-cluster-left { left: -12px; width: 112px; }
+  .diwali-lamp-cluster-right { right: -44px; width: 112px; bottom: calc(140px + env(safe-area-inset-bottom, 0px)); }
+  /* Keep the main lamp and candle legible on short phones without stacking
+     the taller right-hand objects over product copy and filter controls. */
+  .diwali-lamp-cluster-right .diwali-lamps-compact [data-motif="candle"],
+  .diwali-lamp-cluster-right .diwali-lamps-compact [data-motif="fountain"] { display: none; }
 }
 @media (max-height: 650px) { .festival-welcome-art { height: 140px; } .festival-welcome { padding-top: 25px; padding-bottom: 25px; } }
+/* Dashboard artwork stays inside the authenticated dashboard's scroll area.
+   A small decorative floor keeps the lamps clear of its tables and summaries. */
+.admin-dashboard-festive { position: relative; isolation: isolate; padding-bottom: 160px; }
+.festival-decorations.festival-admin-dashboard { position: absolute; inset: 0; z-index: 5; margin: 0 !important; }
+.festival-admin-dashboard .diwali-fireworks { inset: 64px 0 130px; --firework-radius: clamp(68px, 8vw, 115px); --launch-height: 110px; }
+.festival-admin-dashboard .festival-edge-object-0, .festival-admin-dashboard .festival-edge-object-1 { width: 52px; height: 62px; }
+.festival-admin-dashboard .diwali-lamp-cluster { bottom: 6px; }
+.festival-admin-dashboard .diwali-lamp-cluster-left { left: -7px; width: 180px; }
+.festival-admin-dashboard .diwali-lamp-cluster-right { right: -7px; width: 165px; }
+.festival-admin-dashboard .diwali-lamps-wide { display: block; }
+.festival-admin-dashboard .diwali-lamps-compact { display: none; }
+.festival-admin-dashboard .festival-edge-object-3, .festival-admin-dashboard .festival-edge-object-4 { bottom: 12px; }
+.festival-admin-dashboard .festival-edge-object-4 { right: 12px; }
+@media (max-width: 600px) {
+  .festival-admin-dashboard .diwali-lamp-cluster-left { width: 145px; }
+  .festival-admin-dashboard .diwali-lamp-cluster-right { width: 130px; }
+  .festival-admin-dashboard .diwali-fireworks { --firework-radius: 62px; --launch-height: 80px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .diwali-fireworks { display: none; }
   .diwali-fireworks * { animation: none !important; }
-  .festival-flame, .festival-sparkle, .festival-welcome, .festival-welcome-overlay, .festival-welcome-confetti i { animation: none !important; }
+  .festival-flame, .festival-sparkle, .festival-fountain-sparks, .festival-welcome, .festival-welcome-overlay, .festival-welcome-confetti i { animation: none !important; }
   .festival-option, .festival-welcome-continue { transition: none; }
 }
 @media print { .festival-decorations, .festival-toran, .festival-footer-ornaments, .festival-welcome, .festival-welcome-overlay { display: none !important; } }

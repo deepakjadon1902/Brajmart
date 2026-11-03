@@ -11,7 +11,7 @@ export default function FestivalSettings({ disabled = false }: { disabled?: bool
   const updateSettings = useSettingsStore(s => s.updateSettings);
   const [saving, setSaving] = useState<FestivalTheme | null>(null);
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('Choose a festival to apply its decorations to your storefront.');
+  const [message, setMessage] = useState('Choose a festival for your storefront and admin dashboard.');
   const busy = useRef(false);
 
   const selectTheme = async (next: FestivalTheme) => {
@@ -38,7 +38,7 @@ export default function FestivalSettings({ disabled = false }: { disabled?: bool
       <div>
         <p className="festival-settings-kicker">The festive edit</p>
         <h2 id="festival-settings-title">Dress your store for the occasion</h2>
-        <p className="festival-settings-summary">Decorate every storefront page with festive objects and a matching toran. Visitors receive a centred festival greeting on the homepage, once per visit or refresh.</p>
+        <p className="festival-settings-summary">Decorate every storefront page and your admin dashboard with festive objects and a matching toran. Visitors receive a centred festival greeting on the homepage, once per visit or refresh.</p>
       </div>
       <span className="festival-status"><span className="festival-status-dot" />{theme === 'none' ? 'Decorations off' : `${festivalCopy[theme].name} active`}</span>
     </div>

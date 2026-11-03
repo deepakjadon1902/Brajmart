@@ -14,9 +14,13 @@ export const festivalCopy = {
   },
 };
 
-export function useFestivalTheme(): FestivalTheme {
+export type FestivalSurface = 'storefront' | 'admin-dashboard';
+
+export function useFestivalTheme(surface: FestivalSurface = 'storefront'): FestivalTheme {
   const theme = useSettingsStore(s => s.settings.festivalTheme);
   const { pathname } = useLocation();
-  if (/^\/(admin|email)(\/|-|$)/.test(pathname)) return 'none';
+  if (surface === 'admin-dashboard') {
+    if (!/^\/admin\/dashboard\/?$/.test(pathname)) return 'none';
+  } else if (/^\/(admin|email)(\/|-|$)/.test(pathname)) return 'none';
   return theme === 'diwali' || theme === 'holi' ? theme : 'none';
 }
