@@ -13,8 +13,9 @@ db.dbQuery = async (sql, params = []) => {
   if (sql.includes('FROM orders')) {
     assert.match(sql, /FROM payments/);
     if (sql.includes('MAX(id)')) return [{ max_id: state.orders.at(-1)?.id, invoice_count: state.orders.length }];
-    if (sql.startsWith('SELECT id, customer_name, shipping_address FROM orders')) return state.orders;
+    if (sql.startsWith('SELECT id, customer_name, shipping_address, created_at FROM orders')) return state.orders;
     if (sql.includes('id > ?')) return state.orders.filter((row) => row.id > Number(params[0]) && row.id <= Number(params[1])).slice(0, 100);
+    if (!sql.includes('LIMIT 1')) return state.orders;
     return state.orders.filter((row) => String(row.id) === String(params[0]));
   }
   if (sql.includes('FROM payments')) { assert.match(sql, /status = 'paid'/); return state.payments; }
@@ -128,7 +129,7 @@ test('single invoice endpoint sends an actual PDF attachment using recorded paym
   const response = await request('/:id/invoice', { params: { id: String(fixture.id) }, query: { download: '1' } });
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers['content-type'], 'application/pdf');
-  assert.match(response.headers['content-disposition'], /attachment; filename="BrajMart-Invoice-10339.pdf"; filename\*=UTF-8''Bikram%20Paul%20-%20Invoice-10339.pdf/);
+  assert.match(response.headers['content-disposition'], /attachment; filename="BrajMart-Invoice-10339.pdf"; filename\*=UTF-8''Bikram%20Paul%20-%202026-10-14%20-%20Invoice-10339.pdf/);
   assert.equal(response.headers['access-control-expose-headers'], 'Content-Disposition');
   assert.equal(response.body.subarray(0, 5).toString(), '%PDF-');
   assert.match(response.body.toString('latin1'), /\/Count 1\b/);
@@ -153,15 +154,15 @@ test('invoice endpoints enforce admin authorization', async () => {
   assert.equal(state.queries.length, 0);
 });
 
-test('invoice manifest lists customer filenames for every visible order without table filters or PDF rendering', async () => {
+test('unfiltered invoice manifest lists dated customer filenames across all pages without PDF rendering', async () => {
   state.orders = Array.from({ length: 133 }, (_, index) => ({ ...fixture, id: 10000 + index }));
-  const response = await request('/admin/invoices', { query: { page: 2, search: 'does-not-match', status: 'shipped' } });
+  const response = await request('/admin/invoices', { query: { page: 2 } });
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers['cache-control'], 'private, no-store');
   const entries = JSON.parse(response.body.toString()).invoices;
   assert.equal(entries.length, 133);
-  assert.deepEqual(entries[0], { orderId: '10000', filename: 'Bikram Paul - Invoice-10000.pdf' });
-  assert.deepEqual(entries.at(-1), { orderId: '10132', filename: 'Bikram Paul - Invoice-10132.pdf' });
+  assert.deepEqual(entries[0], { orderId: '10000', filename: 'Bikram Paul - 2026-10-14 - Invoice-10000.pdf' });
+  assert.deepEqual(entries.at(-1), { orderId: '10132', filename: 'Bikram Paul - 2026-10-14 - Invoice-10132.pdf' });
   assert.equal(state.queries.length, 1);
   assert.match(state.queries[0].sql, /ORDER BY id ASC/);
 });
@@ -172,7 +173,41 @@ test('invoice manifest reports an empty list and database outages without creati
   state.connected = false;
   assert.equal((await request('/admin/invoices')).statusCode, 503);
 });
-test('all invoices ZIP spans database batches and ignores table pagination and filters', async () => {
+
+test('orders, invoice manifest and every ZIP batch share customer, status, search and date filters', async () => {
+  state.orders = Array.from({ length: 101 }, (_, index) => ({ ...fixture, id: 10000 + index }));
+  const payments = require('../src/routes/payments');
+  const reconcile = payments.triggerRecentRazorpayReconciliation;
+  const build = invoice.buildOrderInvoicePdf;
+  payments.triggerRecentRazorpayReconciliation = () => {};
+  invoice.buildOrderInvoicePdf = async (row) => Buffer.from(`%PDF-1.4\n${row.id}\n%%EOF`);
+  const query = { search: 'AWB', customer: 'Paul', status: 'confirmed,shipped', dateFrom: '2026-10-14', dateTo: '2026-10-14', page: '2' };
+  const expected = [...Array(8).fill('%awb%'), '%paul%', 'confirmed', 'shipped', new Date('2026-10-13T18:30:00Z'), new Date('2026-10-14T18:30:00Z')];
+  try {
+    for (const path of ['/', '/admin/invoices', '/admin/invoices.zip']) assert.equal((await request(path, { query })).statusCode, 200);
+    const queries = state.queries.filter(({ sql }) => sql.includes('FROM orders'));
+    assert.equal(queries.length, 6); // table, manifest, snapshot, two batches and final empty batch
+    for (const { sql, params } of queries) {
+      assert.match(sql, /status IN \(\?,\?\)/);
+      assert.match(sql, /created_at >= \? AND created_at < \?/);
+      assert.match(sql, /JSON_EXTRACT/);
+      assert.deepEqual(sql.includes('id > ?') ? params.slice(2) : params, expected);
+    }
+  } finally {
+    payments.triggerRecentRazorpayReconciliation = reconcile;
+    invoice.buildOrderInvoicePdf = build;
+  }
+});
+
+test('invoice endpoints reject reversed dates and unknown statuses before querying orders', async () => {
+  for (const path of ['/admin/invoices', '/admin/invoices.zip']) {
+    for (const query of [{ dateFrom: '2026-11-04', dateTo: '2026-11-01' }, { status: 'unknown' }]) {
+      assert.equal((await request(path, { query })).statusCode, 400);
+    }
+  }
+  assert.equal(state.queries.length, 0);
+});
+test('all invoices ZIP spans database batches and ignores table pagination', async () => {
   state.orders = Array.from({ length: 101 }, (_, index) => ({ ...fixture, id: 10000 + index, items: [{ ...fixture.items[0], sku: '', productId: '21' }] }));
   state.products = [{ id: 21, sku: 'TMK-21' }];
   const originalBuild = invoice.buildOrderInvoicePdf;
@@ -181,15 +216,15 @@ test('all invoices ZIP spans database batches and ignores table pagination and f
     return Buffer.from(`%PDF-1.4\nOrder ${row.id}\n%%EOF`);
   };
   try {
-    const response = await request('/admin/invoices.zip', { query: { page: 2, search: 'does-not-match', status: 'shipped' } });
+    const response = await request('/admin/invoices.zip', { query: { page: 2 } });
     assert.equal(response.statusCode, 200);
     assert.equal(response.headers['content-type'], 'application/zip');
     assert.equal(response.headers['x-invoice-count'], '101');
     assert.equal(response.body.subarray(0, 2).toString(), 'PK');
     const end = response.body.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
     assert.equal(response.body.readUInt16LE(end + 10), 101, 'ZIP central directory contains every invoice');
-    assert.ok(response.body.includes(Buffer.from('Bikram Paul - Invoice-10000.pdf')));
-    assert.ok(response.body.includes(Buffer.from('Bikram Paul - Invoice-10100.pdf')));
+    assert.ok(response.body.includes(Buffer.from('Bikram Paul - 2026-10-14 - Invoice-10000.pdf')));
+    assert.ok(response.body.includes(Buffer.from('Bikram Paul - 2026-10-14 - Invoice-10100.pdf')));
     const queries = state.queries.filter(({ sql }) => sql.includes('id > ?'));
     assert.deepEqual(queries.map(({ params }) => params[0]), ['0', '10099', '10100']);
   } finally { invoice.buildOrderInvoicePdf = originalBuild; }
@@ -202,8 +237,9 @@ test('an empty invoice export returns a useful error instead of an empty ZIP', a
 });
 
 test('invoice filenames preserve customer names safely and distinguish repeat customers by order', () => {
-  assert.equal(invoice.orderInvoiceFilename(10339, fixture), 'Bikram Paul - Invoice-10339.pdf');
-  assert.equal(invoice.orderInvoiceFilename(10340, fixture), 'Bikram Paul - Invoice-10340.pdf');
+  assert.equal(invoice.orderInvoiceFilename(10339, fixture), 'Bikram Paul - 2026-10-14 - Invoice-10339.pdf');
+  assert.equal(invoice.orderInvoiceFilename(10340, fixture), 'Bikram Paul - 2026-10-14 - Invoice-10340.pdf');
+  assert.equal(invoice.orderInvoiceFilename(10339, { ...fixture, created_at: '2026-10-14T20:00:00Z' }), 'Bikram Paul - 2026-10-15 - Invoice-10339.pdf');
   assert.equal(invoice.orderInvoiceFilename(1, { shipping_address: '{"fullName":"रेखा देवी"}', customer_name: 'Account Name' }), 'रेखा देवी - Invoice-1.pdf');
   assert.equal(invoice.orderInvoiceFilename(2, { customer_name: '  A/B:C*D?E"F<G>H|I\\J\nK  ' }), 'A B C D E F G H I J K - Invoice-2.pdf');
   assert.equal(invoice.orderInvoiceFilename(3, { customer_name: '../..' }), 'Customer - Invoice-3.pdf');

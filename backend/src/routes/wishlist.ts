@@ -2,6 +2,11 @@ import { Router, type Response } from 'express';
 import { auth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
+import { scheduleAccountSavedProductsReminder } from '../lib/savedProductReminders';
+
+const refreshReminder = (userId: string) => scheduleAccountSavedProductsReminder(userId).catch(() => {
+  console.error('Could not update saved-product reminder after wishlist change');
+});
 
 const router = Router();
 
@@ -38,6 +43,7 @@ router.put('/', auth, async (req: AuthRequest, res: Response) => {
       'INSERT INTO wishlists (user_id, items) VALUES (?, ?) ON DUPLICATE KEY UPDATE items = VALUES(items), updated_at = NOW()',
       [userId, JSON.stringify(items)]
     );
+    await refreshReminder(String(userId));
 
     const rows = await dbQuery<any>('SELECT * FROM wishlists WHERE user_id = ? LIMIT 1', [userId]);
     res.json(rows[0] ? mapWishlistRow(rows[0]) : { userId, items: [] });
@@ -53,6 +59,7 @@ router.delete('/', auth, async (req: AuthRequest, res: Response) => {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     await dbExecute('UPDATE wishlists SET items = ?, updated_at = NOW() WHERE user_id = ?', [JSON.stringify([]), userId]);
+    await refreshReminder(String(userId));
     const rows = await dbQuery<any>('SELECT * FROM wishlists WHERE user_id = ? LIMIT 1', [userId]);
     res.json(rows[0] ? mapWishlistRow(rows[0]) : { userId, items: [] });
   } catch (err: any) {

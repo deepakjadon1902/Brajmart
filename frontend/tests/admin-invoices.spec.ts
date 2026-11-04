@@ -10,10 +10,10 @@ const order = {
   createdAt: '2026-10-14T08:00:00Z', statusHistory: [],
 };
 const customerName = (id: string) => id === '10341' ? 'रेखा देवी' : 'Bikram Paul';
-const invoiceFilename = (id: string) => `${customerName(id)} - Invoice-${id}.pdf`;
+const invoiceFilename = (id: string) => `${customerName(id)} - 2026-10-14 - Invoice-${id}.pdf`;
 const entries = Array.from({ length: 133 }, (_, i) => ({ orderId: String(10339 + i), filename: invoiceFilename(String(10339 + i)) }));
 const pdf = (id: string) => `%PDF-1.4\nTest invoice ${id}\n%%EOF`;
-const batchButton = (page: Page) => page.getByRole('button', { name: /Save All Invoices to Folder|Download Invoice Folder/ });
+const batchButton = (page: Page) => page.getByRole('button', { name: /Save (?:All|Filtered) Invoices to Folder|Download (?:Invoice Folder|Filtered Invoices)/ });
 
 async function enableFolderPicker(page: Page) {
   await page.addInitScript(() => {
@@ -66,7 +66,7 @@ test('individual invoice downloads directly as a complete PDF without a print ta
   const requestEvent = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/orders/10339/invoice');
   await page.getByRole('button', { name: 'Download PDF invoice for order 10339' }).click();
   const [download, request] = await Promise.all([downloadEvent, requestEvent]);
-  expect(download.suggestedFilename()).toBe('Bikram Paul - Invoice-10339.pdf');
+  expect(download.suggestedFilename()).toBe('Bikram Paul - 2026-10-14 - Invoice-10339.pdf');
   expect(new URL(request.url()).searchParams.get('download')).toBe('1');
   expect(request.headers().authorization).toBe('Bearer test-admin-token');
   expect(await download.failure()).toBeNull();
@@ -74,16 +74,15 @@ test('individual invoice downloads directly as a complete PDF without a print ta
   await expect(page.getByText('Invoice PDF downloaded')).toBeVisible();
 });
 
-test('saves all 133 individual PDFs into one chosen folder, ignoring table filters', async ({ page }) => {
+test('saves all 133 individual PDFs into one chosen folder across all pages', async ({ page }) => {
   await enableFolderPicker(page);
   const requests: string[] = [];
   page.on('request', (request) => { if (request.url().includes('/invoice')) requests.push(request.url()); });
   await page.goto('/admin/orders');
-  await page.getByPlaceholder('Search by Order ID or Customer...').fill('no matching customer');
   const manifestRequest = page.waitForRequest((request) => new URL(request.url()).pathname === '/api/orders/admin/invoices');
   await batchButton(page).click();
   const request = await manifestRequest;
-  await expect(page.getByRole('status').filter({ hasText: '133 invoice PDFs saved in folder' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '133 invoice PDFs saved in folder' })).toBeVisible({ timeout: 15_000 });
   const files = await page.evaluate(() => (window as any).invoiceFiles);
   expect(Object.keys(files)).toHaveLength(133);
   for (const entry of entries) expect(files[entry.filename]).toBe(pdf(entry.orderId));
@@ -121,7 +120,7 @@ test('truncated or failed PDFs are not saved; order numbers and errors are repor
   await batchButton(page).click();
   await expect(page.getByRole('status').filter({ hasText: '1 of 3 PDFs saved' })).toBeVisible();
   const files = await page.evaluate(() => (window as any).invoiceFiles);
-  expect(Object.keys(files).sort()).toEqual(['Bikram Paul - Invoice-10339.pdf', 'Download-Report.txt']);
+  expect(Object.keys(files).sort()).toEqual(['Bikram Paul - 2026-10-14 - Invoice-10339.pdf', 'Download-Report.txt']);
   expect(files['Download-Report.txt']).toContain('Order 10340: Invoice 10340 is incomplete');
   expect(files['Download-Report.txt']).toContain('Order 10341: Please retry this invoice');
   await expect(batchButton(page)).toBeEnabled();
@@ -140,8 +139,8 @@ test('stopping a folder download preserves only the PDFs already completed', asy
   await page.getByRole('button', { name: 'Stop Download' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Stopped. 1 of 133 PDFs saved' })).toBeVisible();
   const files = await page.evaluate(() => (window as any).invoiceFiles);
-  expect(Object.keys(files).sort()).toEqual(['Bikram Paul - Invoice-10339.pdf', 'Download-Report.txt']);
-  expect(files['Bikram Paul - Invoice-10339.pdf']).toBe(pdf('10339'));
+  expect(Object.keys(files).sort()).toEqual(['Bikram Paul - 2026-10-14 - Invoice-10339.pdf', 'Download-Report.txt']);
+  expect(files['Bikram Paul - 2026-10-14 - Invoice-10339.pdf']).toBe(pdf('10339'));
 });
 
 test('manifest errors remain visible and the download can be retried', async ({ page }) => {
@@ -203,4 +202,92 @@ test('batch invoice button fits a narrow admin viewport', async ({ page }) => {
   expect(bounds).not.toBeNull();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+});
+
+for (const destination of ['folder', 'zip'] as const) {
+  test(`date, customer and multiple status filters apply to all pages, Excel and invoice ${destination}`, async ({ page }) => {
+    if (destination === 'folder') await enableFolderPicker(page);
+    const matching = Array.from({ length: 23 }, (_, index) => ({
+      ...order, _id: String(10339 + index), orderId: 10339 + index,
+      status: index % 2 ? 'delivered' : 'shipped', createdAt: '2026-11-02T08:00:00Z',
+    }));
+    const other = { ...order, _id: '20001', orderId: 20001, status: 'confirmed' };
+    const manifest = matching.map((row) => ({ orderId: row._id, filename: `Bikram Paul - 2026-11-02 - Invoice-${row._id}.pdf` }));
+    const expectedFilters = { customer: 'Bikram', status: 'shipped,delivered', dateFrom: '2026-11-01', dateTo: '2026-11-03' };
+    let latestTableFilters: Record<string, string> = {};
+    await page.route('**/api/orders?*', (route) => {
+      const params = Object.fromEntries(new URL(route.request().url()).searchParams);
+      latestTableFilters = params;
+      const final = Object.entries(expectedFilters).every(([key, value]) => params[key] === value);
+      return route.fulfill({ json: final ? matching : [...matching, other] });
+    });
+    await page.route('**/api/orders/admin/invoices?*', (route) => {
+      expect(Object.fromEntries(new URL(route.request().url()).searchParams)).toEqual(expectedFilters);
+      return route.fulfill({ json: { invoices: manifest } });
+    });
+    await page.goto('/admin/orders');
+    await page.getByLabel('Customer name', { exact: true }).fill('Bikram');
+    await page.getByLabel('From date', { exact: true }).fill('2026-11-01');
+    await page.getByLabel('To date', { exact: true }).fill('2026-11-03');
+    await page.getByRole('button', { name: 'Shipped', exact: true }).click();
+    await page.getByRole('button', { name: 'Delivered', exact: true }).click();
+    await expect(page.getByText('23 matching orders', { exact: true })).toBeVisible();
+    expect(latestTableFilters).toEqual(expectedFilters);
+    await expect(page.getByRole('row').filter({ hasText: '20001' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+
+    const excelEvent = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Excel', exact: true }).click();
+    const excel = await excelEvent;
+    const spreadsheet = await readFile((await excel.path())!, 'utf8');
+    expect(spreadsheet).toContain('Total rows: 23');
+    expect(spreadsheet).toContain('Bikram Paul');
+    expect(spreadsheet).toContain('Order Date (IST)');
+    expect(spreadsheet).toContain('10361');
+    expect(spreadsheet).not.toContain('20001');
+
+    if (destination === 'folder') {
+      await batchButton(page).click();
+      await expect(page.getByRole('status').filter({ hasText: '23 invoice PDFs saved' })).toBeVisible();
+      const files = await page.evaluate(() => (window as any).invoiceFiles);
+      expect(Object.keys(files).sort()).toEqual(manifest.map((entry) => entry.filename).sort());
+    } else {
+      const invoiceEvent = page.waitForEvent('download');
+      await batchButton(page).click();
+      const download = await invoiceEvent;
+      expect(download.suggestedFilename()).toBe('BrajMart-Filtered-Invoices.zip');
+      const files = unzipSync(await readFile((await download.path())!));
+      expect(Object.keys(files).sort()).toEqual(manifest.map((entry) => `BrajMart-Invoices/${entry.filename}`).sort());
+    }
+    await page.screenshot({ path: `test-results/admin-order-filters-${destination}.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Clear filters', exact: true }).click();
+    await expect(page.getByLabel('Customer name', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('From date', { exact: true })).toHaveValue('');
+    await expect(page.getByRole('button', { name: 'All statuses', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  });
+}
+
+test('reversed dates block exports, and empty filtered invoice lists show a useful message', async ({ page }) => {
+  await page.route('**/api/orders/admin/invoices?*', (route) => route.fulfill({ json: { invoices: [] } }));
+  await page.goto('/admin/orders');
+  await page.getByLabel('From date', { exact: true }).fill('2026-11-04');
+  await page.getByLabel('To date', { exact: true }).fill('2026-11-01');
+  await expect(page.getByRole('alert')).toHaveText('From date must be on or before To date.');
+  await expect(batchButton(page)).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Excel', exact: true })).toBeDisabled();
+  await page.getByLabel('To date', { exact: true }).fill('2026-11-04');
+  await batchButton(page).click();
+  await expect(page.getByRole('status').filter({ hasText: 'There are no order invoices matching these filters.' })).toBeVisible();
+});
+
+test('mobile filter controls and invoice actions stay within the viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/admin/orders');
+  for (const control of [page.getByRole('group', { name: 'Order and invoice filters', exact: true }), page.getByLabel('From date', { exact: true }), page.getByLabel('To date', { exact: true }), batchButton(page)]) {
+    await expect(control).toBeVisible();
+    const bounds = await control.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  }
+  await page.screenshot({ path: 'test-results/admin-order-filters-mobile.png', fullPage: true });
 });

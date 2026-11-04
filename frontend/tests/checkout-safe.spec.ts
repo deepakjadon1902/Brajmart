@@ -133,6 +133,75 @@ const seedCart = async (page: import('@playwright/test').Page) => {
   await expect(page).toHaveURL(/\/checkout$/);
 };
 
+test('cart and favorites share one reminder preference across storefront navigation', async ({ page }) => {
+  await mockCheckoutApis(page);
+  const captures: Record<string, any>[] = [];
+  await page.route('**/api/email-followups/capture', route => {
+    captures.push(route.request().postDataJSON());
+    return route.fulfill({ json: { saved: true, reminderScheduled: true } });
+  });
+  await page.goto('/products');
+  await page.getByRole('button', { name: 'Add Phase QA Tulsi Mala to wishlist', exact: true }).click();
+  await page.getByRole('button', { name: /buy now: phase qa tulsi mala/i }).click();
+  await page.goto('/cart');
+  const option = page.getByRole('checkbox', { name: /Email me a reminder about my cart and favorites/ });
+  await expect(option).not.toBeChecked();
+  await page.getByLabel('Reminder email').fill('saved@example.invalid');
+  await option.check();
+  await expect(page.getByText(/Reminder saved. We will check current prices/)).toBeVisible();
+  expect(captures).toHaveLength(1);
+  expect(captures[0]).toMatchObject({ reminderSource: 'saved_products', items: [{ productId: 'phase43-product-1', quantity: 1 }], favoriteItems: [{ productId: 'phase43-product-1', quantity: 1 }] });
+  await page.getByRole('link', { name: 'Wishlist', exact: true }).first().click();
+  await expect(page.getByRole('heading', { name: 'My Wishlist (1)' })).toBeVisible();
+  await expect(option).toBeChecked();
+  expect(captures).toHaveLength(1);
+  await option.uncheck();
+  await expect.poll(() => captures.length).toBe(2);
+  expect(captures[1]).toMatchObject({ revokeCartReminder: true, consent: { cartReminder: false } });
+});
+
+test('favorites-only reminder clears its queued snapshot when the last favorite is removed', async ({ page }) => {
+  await mockCheckoutApis(page);
+  const captures: Record<string, any>[] = [];
+  await page.route('**/api/email-followups/capture', route => {
+    captures.push(route.request().postDataJSON());
+    return route.fulfill({ json: { saved: true, reminderScheduled: true } });
+  });
+  await page.goto('/products');
+  await page.getByRole('button', { name: 'Add Phase QA Tulsi Mala to wishlist', exact: true }).click();
+  await page.goto('/wishlist');
+  await page.getByLabel('Reminder email').fill('favorites@example.invalid');
+  await page.getByRole('checkbox', { name: /Email me a reminder about my cart and favorites/ }).check();
+  await expect(page.getByText(/Reminder saved. We will check current prices/)).toBeVisible();
+  expect(captures[0].items).toEqual([]);
+  expect(captures[0].favoriteItems).toHaveLength(1);
+  await page.getByRole('button', { name: 'Remove Phase QA Tulsi Mala from wishlist', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Your Wishlist is Empty' })).toBeVisible();
+  await expect.poll(() => captures.length).toBe(2);
+  expect(captures[1].favoriteItems).toEqual([]);
+  expect(captures[1].items).toEqual([]);
+});
+
+test('saved-product reminder can retry a failed save on mobile', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockCheckoutApis(page);
+  let attempts = 0;
+  await page.route('**/api/email-followups/capture', route => {
+    attempts++;
+    return attempts === 1 ? route.fulfill({ status: 503, json: { message: 'Temporarily unavailable' } })
+      : route.fulfill({ json: { saved: true, reminderScheduled: true } });
+  });
+  await seedCart(page);
+  await page.goto('/cart');
+  await page.getByLabel('Reminder email').fill('retry@example.invalid');
+  await page.getByRole('checkbox', { name: /Email me a reminder about my cart and favorites/ }).check();
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.getByText(/Reminder saved. We will check current prices/)).toBeVisible();
+  expect(attempts).toBe(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('saved-reminder-mobile.png'), fullPage: true });
+});
+
 const fillShippingAddress = async (page: import('@playwright/test').Page) => {
   await page.getByLabel(/full name/i).fill('Phase Tester');
   await page.getByLabel(/house \/ flat \/ area/i).fill('Keshav Kunj, Raman Reti, Vrindavan');
@@ -142,6 +211,55 @@ const fillShippingAddress = async (page: import('@playwright/test').Page) => {
   await page.getByLabel(/mobile number/i).fill('9634359003');
   await page.getByLabel(/email address/i).fill('phase43@example.invalid');
 };
+
+test('cart reminder saves before the customer submits an address and withdraws when unchecked', async ({ page }) => {
+  await mockCheckoutApis(page);
+  const captures: Record<string, any>[] = [];
+  await page.route('**/api/email-followups/capture', (route) => {
+    const body = route.request().postDataJSON();
+    captures.push(body);
+    return route.fulfill({ json: { saved: true, reminderScheduled: body.consent.cartReminder } });
+  });
+  await seedCart(page);
+  await page.getByLabel(/email address/i).fill('cart-reminder@example.invalid');
+  const checkbox = page.getByRole('checkbox', { name: /send me one email reminder/i });
+  await checkbox.check();
+  await expect(page.getByText('Contact preferences saved.', { exact: true })).toBeVisible();
+  expect(captures).toHaveLength(1);
+  expect(captures[0].email).toBe('cart-reminder@example.invalid');
+  expect(captures[0].consent).toEqual({ cartReminder: true, offerEmail: false, whatsappFollowup: false });
+  expect(captures[0].items).toHaveLength(1);
+  await expect(page.getByText(/It will be sent after 3 hours/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /continue to payment/i })).toBeVisible();
+  await checkbox.uncheck();
+  await expect.poll(() => captures.length).toBe(2);
+  expect(captures[1].revokeCartReminder).toBe(true);
+  expect(captures[1].consent.cartReminder).toBe(false);
+  await page.screenshot({ path: '.test-results/email-followups/cart-reminder-checkout.png', fullPage: true });
+});
+
+test('cart reminder save failures can be retried and continuing to payment does not duplicate the saved job', async ({ page }) => {
+  await mockCheckoutApis(page);
+  let captures = 0;
+  let fail = true;
+  await page.route('**/api/email-followups/capture', (route) => {
+    captures++;
+    return fail
+      ? route.fulfill({ status: 503, json: { message: 'Could not save email preferences right now.' } })
+      : route.fulfill({ json: { saved: true, reminderScheduled: true } });
+  });
+  await seedCart(page);
+  await fillShippingAddress(page);
+  await page.getByRole('checkbox', { name: /send me one email reminder/i }).check();
+  await expect(page.getByText(/We could not save your contact preferences/)).toBeVisible();
+  fail = false;
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.getByText('Contact preferences saved.', { exact: true })).toBeVisible();
+  expect(captures).toBe(2);
+  await page.getByRole('button', { name: /continue to payment/i }).click();
+  await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible();
+  expect(captures).toBe(2);
+});
 
 test('checkout reaches verified payment step without starting live payment', async ({ page }) => {
   await mockCheckoutApis(page);

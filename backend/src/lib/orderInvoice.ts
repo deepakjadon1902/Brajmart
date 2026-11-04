@@ -87,7 +87,7 @@ export const buildOrderInvoiceModel = (row: any, payment: InvoicePayment = {}) =
   };
 };
 
-export const orderInvoiceFilename = (orderId: string | number, row: { shipping_address?: unknown; customer_name?: unknown } = {}) => {
+export const orderInvoiceFilename = (orderId: string | number, row: { shipping_address?: unknown; customer_name?: unknown; created_at?: string | number | Date } = {}) => {
   const shipping = parseJson<any>(row.shipping_address, {}) || {};
   const name = clean(shipping.fullName || shipping.name || row.customer_name)
     .normalize('NFC')
@@ -95,7 +95,10 @@ export const orderInvoiceFilename = (orderId: string | number, row: { shipping_a
     .replace(/\s+/gu, ' ')
     .replace(/^[. ]+|[. ]+$/gu, '');
   const customer = Array.from(name).slice(0, 80).join('').trim() || 'Customer';
-  return `${customer} - Invoice-${String(orderId).replace(/[^0-9]/g, '')}.pdf`;
+  const date = row.created_at ? new Date(row.created_at instanceof Date ? row.created_at.getTime() : row.created_at) : null;
+  const dated = date && Number.isFinite(date.getTime())
+    ? ` - ${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)}` : '';
+  return `${customer}${dated} - Invoice-${String(orderId).replace(/[^0-9]/g, '')}.pdf`;
 };
 
 export const buildOrderInvoicePdf = async (row: any, payment: InvoicePayment = {}): Promise<Buffer> => {

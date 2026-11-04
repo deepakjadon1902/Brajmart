@@ -6,7 +6,7 @@ import { captureEmailFollowup, FollowupValidationError, isValidCustomerEmail, no
 const router = Router();
 const captureLimiter = rateLimit('email-followup-capture', {
   windowMs: 60 * 60 * 1000,
-  max: 6,
+  max: 30,
   key: rateLimitKeyByIpAndEmail('email'),
   message: 'Too many email preference updates. Please try again later.',
 });
@@ -24,7 +24,8 @@ router.post('/capture', captureLimiter, optionalAuth, async (req: any, res) => {
       offerEmail: req.body?.consent?.offerEmail === true,
       whatsappFollowup: req.body?.consent?.whatsappFollowup === true,
     };
-    if (!consent.cartReminder && !consent.offerEmail && !consent.whatsappFollowup) {
+    const revokeCartReminder = req.body?.revokeCartReminder === true;
+    if (!consent.cartReminder && !consent.offerEmail && !consent.whatsappFollowup && !revokeCartReminder) {
       return res.status(400).json({ message: 'Select at least one optional contact preference' });
     }
 
@@ -34,6 +35,9 @@ router.post('/capture', captureLimiter, optionalAuth, async (req: any, res) => {
       userId: req.user?.id ? String(req.user.id) : null,
       items: Array.isArray(req.body?.items) ? req.body.items : [],
       consent,
+      revokeCartReminder,
+      reminderSource: req.body?.reminderSource === 'saved_products' ? 'saved_products' : 'checkout',
+      favoriteItems: Array.isArray(req.body?.favoriteItems) ? req.body.favoriteItems : [],
     });
     res.json({ saved: result.saved, reminderScheduled: result.reminderScheduled });
   } catch (error) {

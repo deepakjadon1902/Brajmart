@@ -3,6 +3,11 @@ import { auth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
 import { computeTotals, getCheckoutSettings } from '../lib/orderPricing';
+import { scheduleAccountSavedProductsReminder } from '../lib/savedProductReminders';
+
+const refreshReminder = (userId: string) => scheduleAccountSavedProductsReminder(userId).catch(() => {
+  console.error('Could not update saved-product reminder after cart change');
+});
 
 const router = Router();
 
@@ -38,6 +43,7 @@ router.put('/', auth, async (req: AuthRequest, res) => {
       'INSERT INTO carts (user_id, items) VALUES (?, ?) ON DUPLICATE KEY UPDATE items = VALUES(items), updated_at = NOW()',
       [userId, JSON.stringify(items)]
     );
+    await refreshReminder(String(userId));
     const rows = await dbQuery<any>('SELECT * FROM carts WHERE user_id = ? LIMIT 1', [userId]);
     res.json(rows[0] ? mapCartRow(rows[0]) : { userId, items: [] });
   } catch (err: any) {
@@ -51,6 +57,7 @@ router.delete('/', auth, async (req: AuthRequest, res) => {
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     await dbExecute('UPDATE carts SET items = ?, updated_at = NOW() WHERE user_id = ?', [JSON.stringify([]), userId]);
+    await refreshReminder(String(userId));
     const rows = await dbQuery<any>('SELECT * FROM carts WHERE user_id = ? LIMIT 1', [userId]);
     res.json(rows[0] ? mapCartRow(rows[0]) : { userId, items: [] });
   } catch (err: any) {

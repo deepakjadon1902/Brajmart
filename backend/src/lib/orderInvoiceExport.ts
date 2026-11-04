@@ -4,6 +4,7 @@ import { dbQuery } from './db';
 import { merchantOrderWhereSql } from './orderVisibility';
 import { buildOrderInvoicePdf, InvoicePayment, orderInvoiceFilename, storedInvoiceItemSku } from './orderInvoice';
 import { parseJson } from './dbHelpers';
+import { adminOrderFilterSql } from './adminOrderFilters';
 
 const text = (value: unknown) => String(value ?? '').trim();
 const productIdOf = (item: any) => text(item.productId ?? item.product_id ?? item.product?.id ?? item.product?._id ?? item.id ?? item._id);
@@ -52,8 +53,9 @@ export const resolveInvoiceOrderSkus = async (orders: any[]) => {
   }) }));
 };
 
-export const getOrderInvoiceManifest = async () => {
-  const rows = await dbQuery<{ id: string | number; customer_name: string; shipping_address: unknown }>(`SELECT id, customer_name, shipping_address FROM orders WHERE ${merchantOrderWhereSql('orders')} ORDER BY id ASC`);
+export const getOrderInvoiceManifest = async (query: Parameters<typeof adminOrderFilterSql>[0] = {}) => {
+  const filter = adminOrderFilterSql(query);
+  const rows = await dbQuery<{ id: string | number; customer_name: string; shipping_address: unknown; created_at: Date }>(`SELECT id, customer_name, shipping_address, created_at FROM orders WHERE ${merchantOrderWhereSql('orders')}${filter.sql} ORDER BY id ASC`, filter.params);
   return { invoices: rows.map((row) => ({ orderId: String(row.id), filename: orderInvoiceFilename(row.id, row) })) };
 };
 
@@ -76,8 +78,9 @@ export const loadInvoicePayments = async (orderIds: Array<string | number>) => {
 
 // Keyset pagination covers every order without keeping all generated PDFs in RAM.
 // The initial upper bound excludes orders created after this export started.
-export const streamAllOrderInvoices = async (res: Response) => {
-  const snapshot = await dbQuery<any>(`SELECT MAX(id) AS max_id, COUNT(*) AS invoice_count FROM orders WHERE ${merchantOrderWhereSql('orders')}`);
+export const streamAllOrderInvoices = async (res: Response, query: Parameters<typeof adminOrderFilterSql>[0] = {}) => {
+  const filter = adminOrderFilterSql(query);
+  const snapshot = await dbQuery<any>(`SELECT MAX(id) AS max_id, COUNT(*) AS invoice_count FROM orders WHERE ${merchantOrderWhereSql('orders')}${filter.sql}`, filter.params);
   const maxId = String(snapshot[0]?.max_id || '0');
   if (!Number(snapshot[0]?.invoice_count)) throw Object.assign(new Error('There are no order invoices to download'), { status: 404 });
   const archive = archiver('zip', { zlib: { level: 6 } });
@@ -90,8 +93,8 @@ export const streamAllOrderInvoices = async (res: Response) => {
   try {
     while (!res.destroyed) {
       const rows = await dbQuery<any>(`SELECT * FROM orders
-        WHERE id > ? AND id <= ? AND ${merchantOrderWhereSql('orders')}
-        ORDER BY id ASC LIMIT 100`, [cursor, maxId]);
+        WHERE id > ? AND id <= ? AND ${merchantOrderWhereSql('orders')}${filter.sql}
+        ORDER BY id ASC LIMIT 100`, [cursor, maxId, ...filter.params]);
       if (!rows.length) break;
       const payments = await loadInvoicePayments(rows.map((row) => row.id));
       for (const row of await resolveInvoiceOrderSkus(rows)) {

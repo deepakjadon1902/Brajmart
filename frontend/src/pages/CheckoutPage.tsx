@@ -13,10 +13,11 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, captureEmailFollowup, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
+import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
 import { getMetaAttributionContext, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { getGooglePurchaseContext } from '@/lib/googleAttribution';
 import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft';
+import { useCheckoutFollowups } from '@/hooks/useCheckoutFollowups';
 
 const steps = ['Address', 'Payment', 'Done'];
 const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
@@ -354,6 +355,13 @@ const CheckoutPage = () => {
     selectedPieces: i.product.selectedPieces,
     selectedAttributes: i.product.selectedAttributes,
   }));
+
+  const followups = useCheckoutFollowups({
+    email: effectiveEmail,
+    customerName: cleanText(effectiveShipping.fullName),
+    items: checkoutItemsPayload(),
+    consent: { cartReminder: cartReminderConsent, offerEmail: offerEmailConsent, whatsappFollowup: whatsappFollowupConsent },
+  }, items.length > 0 && step < 2 && !processing);
 
   const checkoutMetaParams = () => ({
     content_ids: items.map((i) => String(i.product.id || i.product.slug || i.product.name)),
@@ -745,21 +753,10 @@ const CheckoutPage = () => {
     }
     const cartIsCurrent = await runCheckoutValidation('submit');
     if (!cartIsCurrent) return;
-    if (cartReminderConsent || offerEmailConsent || whatsappFollowupConsent) {
-      try {
-        await captureEmailFollowup({
-          email: effectiveEmail,
-          customerName: cleanText(effectiveShipping.fullName),
-          items: checkoutItemsPayload(),
-          consent: {
-            cartReminder: cartReminderConsent,
-            offerEmail: offerEmailConsent,
-            whatsappFollowup: whatsappFollowupConsent,
-          },
-        });
-      } catch {
-        toast.info('Checkout can continue. We could not save your optional contact preferences this time.');
-      }
+    try {
+      await followups.save();
+    } catch {
+      toast.info('Checkout can continue. We could not save your optional contact preferences this time.');
     }
     setStep(1);
   };
@@ -769,6 +766,7 @@ const CheckoutPage = () => {
     if (!validateContactAndAddress()) return;
     setProcessing(true);
     try {
+      await followups.save().catch(() => {});
       const cartIsCurrent = await runCheckoutValidation('submit');
       if (!cartIsCurrent) {
         setProcessing(false);
@@ -935,6 +933,7 @@ const CheckoutPage = () => {
     if (wantsCodService) {
       setProcessing(true);
       try {
+        await followups.save().catch(() => {});
         const cleanShippingAddress = cleanAddressForOrder(effectiveShipping);
         const cleanBillingAddress = cleanAddressForOrder(billingAddress);
         const order = await createOrder({
@@ -1166,7 +1165,7 @@ const CheckoutPage = () => {
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Optional messages from BrajMart</p>
                       <label className="flex cursor-pointer items-start gap-3 text-sm text-foreground">
                         <input type="checkbox" checked={cartReminderConsent} onChange={(event) => setCartReminderConsent(event.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-saffron" />
-                        <span>Send me one email reminder about this cart if I leave checkout unfinished. It will be sent after 4 hours.</span>
+                        <span>Send me one email reminder about this cart if I leave checkout unfinished. It will be sent after 3 hours.</span>
                       </label>
                       <label className="flex cursor-pointer items-start gap-3 text-sm text-foreground">
                         <input type="checkbox" checked={offerEmailConsent} onChange={(event) => setOfferEmailConsent(event.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-saffron" />
@@ -1177,6 +1176,9 @@ const CheckoutPage = () => {
                         <span>Allow BrajMart&apos;s team to follow up with me manually on WhatsApp about products I leave in my cart or favorites.</span>
                       </label>
                       <p className="text-xs text-muted-foreground">These choices are optional and separate from order updates. You can opt out using the link in a BrajMart message.</p>
+                      {followups.state === 'saving' && <p role="status" className="text-xs text-muted-foreground">Saving contact preferences...</p>}
+                      {followups.state === 'saved' && <p role="status" className="text-xs text-muted-foreground">Contact preferences saved.</p>}
+                      {followups.state === 'error' && <p role="status" className="text-xs text-red-600">We could not save your contact preferences. <button type="button" onClick={() => { void followups.save().catch(() => {}); }} className="font-semibold underline">Try again</button></p>}
                     </div>
 
                     <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-muted/20 px-3.5 py-3 transition-colors hover:border-gold/40 sm:items-center sm:px-4">

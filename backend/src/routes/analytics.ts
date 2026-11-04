@@ -2,11 +2,10 @@ import { Router } from 'express';
 import { isDbConnected, dbQuery } from '../lib/db';
 import { auth, adminOnly } from '../middleware/auth';
 import { merchantOrderWhereSql } from '../lib/orderVisibility';
-import { toIsoString } from '../lib/dbHelpers';
+import { buildOrderAnalytics, collectedOrderPayments, type AnalyticsOrderRow, type AnalyticsPaymentRow } from '../lib/analyticsSummary';
+import { addPeriod, getPeriodStart, getBucketKey, getBucketLabel, getRangeLabel, inDateRange, type ReportPeriod } from '../lib/analyticsPeriods';
 
 const router = Router();
-
-type ReportPeriod = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
 type RevenueEntry = {
   date: Date;
@@ -38,69 +37,15 @@ const asPeriod = (value: unknown): ReportPeriod => {
   return reportPeriods.has(period) ? period : 'daily';
 };
 
-const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-const startOfWeek = (date: Date) => {
-  const d = startOfDay(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d;
-};
-
-const startOfQuarter = (date: Date) => new Date(date.getFullYear(), Math.floor(date.getMonth() / 3) * 3, 1);
-
-const addPeriod = (date: Date, period: ReportPeriod, amount: number) => {
-  const d = new Date(date);
-  if (period === 'daily') d.setDate(d.getDate() + amount);
-  if (period === 'weekly') d.setDate(d.getDate() + amount * 7);
-  if (period === 'monthly') d.setMonth(d.getMonth() + amount);
-  if (period === 'quarterly') d.setMonth(d.getMonth() + amount * 3);
-  if (period === 'yearly') d.setFullYear(d.getFullYear() + amount);
-  return d;
-};
-
-const getPeriodStart = (date: Date, period: ReportPeriod) => {
-  if (period === 'daily') return startOfDay(date);
-  if (period === 'weekly') return startOfWeek(date);
-  if (period === 'monthly') return new Date(date.getFullYear(), date.getMonth(), 1);
-  if (period === 'quarterly') return startOfQuarter(date);
-  return new Date(date.getFullYear(), 0, 1);
-};
-
-const getPeriodEnd = (start: Date, period: ReportPeriod) => new Date(addPeriod(start, period, 1).getTime() - 1);
-
-const getBucketKey = (date: Date, period: ReportPeriod) => {
-  const start = getPeriodStart(date, period);
-  if (period === 'daily' || period === 'weekly') return start.toISOString().slice(0, 10);
-  if (period === 'monthly') return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
-  if (period === 'quarterly') return `${start.getFullYear()}-Q${Math.floor(start.getMonth() / 3) + 1}`;
-  return String(start.getFullYear());
-};
-
-const getBucketLabel = (start: Date, period: ReportPeriod) => {
-  if (period === 'daily') return start.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-  if (period === 'weekly') return `Wk ${start.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`;
-  if (period === 'monthly') return start.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
-  if (period === 'quarterly') return `Q${Math.floor(start.getMonth() / 3) + 1} ${start.getFullYear()}`;
-  return String(start.getFullYear());
-};
-
-const getRangeLabel = (start: Date, end: Date, period: ReportPeriod) => {
-  if (period === 'yearly') return String(start.getFullYear());
-  if (period === 'monthly') return start.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-  return `${start.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} - ${end.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
-};
-
-const buildBuckets = (period: ReportPeriod, entries: RevenueEntry[]) => {
-  const currentStart = getPeriodStart(new Date(), period);
+const buildBuckets = (period: ReportPeriod, entries: RevenueEntry[], now: Date) => {
+  const currentStart = getPeriodStart(now, period);
   const buckets: Bucket[] = Array.from({ length: periodConfig[period].points }, (_, index) => {
     const start = addPeriod(currentStart, period, index - periodConfig[period].points + 1);
-    const end = getPeriodEnd(start, period);
+    const end = new Date(Math.min(addPeriod(start, period, 1).getTime() - 1, now.getTime()));
     return {
       key: getBucketKey(start, period),
       label: getBucketLabel(start, period),
-      rangeLabel: getRangeLabel(start, end, period),
+      rangeLabel: getRangeLabel(start, end),
       start,
       end,
       revenue: 0,
@@ -111,8 +56,8 @@ const buildBuckets = (period: ReportPeriod, entries: RevenueEntry[]) => {
 
   entries.forEach((entry) => {
     const bucket = byKey.get(getBucketKey(entry.date, period));
-    if (!bucket) return;
-    bucket.revenue += entry.amount;
+    if (!bucket || !inDateRange(entry.date, bucket.start, bucket.end)) return;
+    bucket.revenue = Math.round(bucket.revenue * 100 + entry.amount * 100) / 100;
     bucket.orders += 1;
   });
 
@@ -131,36 +76,21 @@ router.get('/', auth, adminOnly, async (req, res) => {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const period = asPeriod(req.query.period);
-    const [revenueRows, orderRows, categoryRows] = await Promise.all([
-      dbQuery<any>(
-        `SELECT source, created_at, amount FROM (
-           SELECT 'online' AS source, COALESCE(p.created_at, o.created_at) AS created_at, p.amount
-           FROM payments p
-           LEFT JOIN orders o ON o.id = p.order_id
-           WHERE p.status = 'paid'
-           UNION ALL
-           SELECT 'online' AS source, COALESCE(ps.created_at, o.created_at) AS created_at, COALESCE(ps.amount, o.total, 0) AS amount
-           FROM payment_status ps
-           LEFT JOIN orders o ON o.id = ps.order_id
-           WHERE ps.status = 'paid'
-             AND NOT EXISTS (
-               SELECT 1
-               FROM payments p
-               WHERE p.order_id = ps.order_id
-                  OR p.transaction_id = ps.token
-                  OR (ps.payment_id IS NOT NULL AND p.transaction_id = ps.payment_id)
-               LIMIT 1
-             )
-           UNION ALL
-           SELECT 'cod' AS source, o.created_at, o.total AS amount
-           FROM orders o
-           WHERE LOWER(o.payment_method) IN ('cod', 'cash on delivery')
-         ) revenue
-         WHERE created_at IS NOT NULL AND amount > 0
-         ORDER BY created_at ASC`
+    const now = new Date();
+    const [paymentRows, orderRows, categoryRows] = await Promise.all([
+      dbQuery<AnalyticsPaymentRow>(
+        `SELECT 'payment' AS origin, p.id AS record_id, p.order_id, p.amount, p.status, p.created_at, p.updated_at
+         FROM payments p
+         WHERE p.status IN ('paid', 'refunded') AND p.order_id IS NOT NULL
+         UNION ALL
+         SELECT 'status' AS origin, ps.token AS record_id, ps.order_id, COALESCE(ps.amount, o.total) AS amount, ps.status, ps.created_at, ps.updated_at
+         FROM payment_status ps
+         INNER JOIN orders o ON o.id = ps.order_id
+         WHERE ps.status IN ('paid', 'refunded')`
       ),
-      dbQuery<any>(
-        `SELECT id, total, status, payment_method, created_at
+      dbQuery<AnalyticsOrderRow>(
+        `SELECT id, total, status, payment_method, created_at, items, items_subtotal,
+                shipping_amount, packaging_amount, cod_amount, coupon_discount
          FROM orders o
          WHERE ${merchantOrderWhereSql('o')}
          ORDER BY created_at DESC`
@@ -173,22 +103,17 @@ router.get('/', auth, adminOnly, async (req, res) => {
       ),
     ]);
 
-    const entries: RevenueEntry[] = revenueRows
-      .map((row) => ({
-        date: new Date(row.created_at),
-        amount: Number(row.amount || 0),
-        source: String(row.source || '') === 'cod' ? 'cod' as const : 'online' as const,
-      }))
-      .filter((entry) => entry.amount > 0 && !Number.isNaN(entry.date.getTime()));
+    const ordersToDate = orderRows.filter((row) => inDateRange(row.created_at, new Date(0), now));
+    const collections = collectedOrderPayments(ordersToDate, paymentRows, now);
+    const entries = collections.entries;
+    const allTime = buildOrderAnalytics(ordersToDate, collections);
 
-    const buckets = buildBuckets(period, entries);
+    const buckets = buildBuckets(period, entries, now);
     const currentBucket = buckets[buckets.length - 1];
     const previousBucket = buckets[buckets.length - 2];
-    const currentOrders = orderRows.filter((row) => {
-      const date = new Date(row.created_at);
-      return currentBucket && !Number.isNaN(date.getTime()) && date >= currentBucket.start && date <= currentBucket.end;
-    });
-    const currentEntries = entries.filter((entry) => entry.date >= currentBucket.start && entry.date <= currentBucket.end);
+    const currentOrders = ordersToDate.filter((row) => inDateRange(row.created_at, currentBucket.start, now));
+    const currentEntries = entries.filter((entry) => inDateRange(entry.date, currentBucket.start, now));
+    const periodSummary = buildOrderAnalytics(currentOrders, collections, currentEntries);
 
     const periodRevenue = currentBucket.revenue;
     const previousRevenue = previousBucket?.revenue || 0;
@@ -196,13 +121,15 @@ router.get('/', auth, adminOnly, async (req, res) => {
     const deliveredOrders = currentOrders.filter((row) => String(row.status || '') === 'delivered').length;
     const cancelledOrders = currentOrders.filter((row) => String(row.status || '') === 'cancelled').length;
     const totalPeriodOrders = currentOrders.length;
-    const totalRevenue = entries.reduce((sum, entry) => sum + entry.amount, 0);
+    const totalRevenue = allTime.finances.collectedRevenue;
 
     res
       .setHeader('Cache-Control', 'no-store, max-age=0')
       .json({
         period,
-        generatedAt: new Date().toISOString(),
+        generatedAt: now.toISOString(),
+        allTime,
+        periodSummary,
         range: {
           label: currentBucket.rangeLabel,
           start: currentBucket.start.toISOString(),

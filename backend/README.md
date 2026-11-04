@@ -10,6 +10,50 @@ Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 4. Add ImageKit credentials to `.env` if you want permanent deployed image storage.
 5. Run `npm run dev` (development) or `npm start` (production)
 
+## Admin order and invoice filters
+
+`GET /api/orders`, `GET /api/orders/admin/invoices`, and
+`GET /api/orders/admin/invoices.zip` share optional query filters:
+`search`, `customer` (customer name), `status` (comma-separated order statuses),
+`dateFrom`, and `dateTo` (`YYYY-MM-DD`). Date bounds use India time
+(`Asia/Kolkata`), include the entire final day, and support either bound alone.
+Invalid dates, reversed ranges and unknown statuses return HTTP 400.
+
+The admin Orders page applies these filters to the table, Excel export and
+invoice folder/ZIP downloads across all pages. Clear filters to export all
+visible merchant orders. Each PDF filename includes the customer name, order
+date in India, and order ID, such as
+`Bikram Paul - 2026-10-14 - Invoice-10339.pdf`. No schema migration is needed.
+
+## Live admin analytics
+
+`GET /api/analytics?period=daily` (also `weekly`, `monthly`, `quarterly`,
+`yearly`) returns `periodSummary` for the selected period and retains `allTime`
+for the lifetime revenue card. The status and charges sections follow the
+Daily/Weekly/Monthly/Quarterly/Yearly buttons. Date ranges use India time
+(`Asia/Kolkata`): today, this week starting Monday, this calendar month,
+this calendar quarter, or this calendar year, from midnight through the latest
+refresh. Order counts, statuses, saved charges and outstanding COD use the
+order creation date. Collected revenue uses the recorded payment date, including
+payments received in the period for earlier orders. Charts use the same India
+calendar boundaries. The admin page refreshes the database report every
+15 seconds while visible, on returning to the page, and
+with the Refresh button. Failed refreshes retain the last report and display
+an error until a fresh request succeeds. Responses disable caching.
+
+Financial totals use saved order values, product subtotals, shipping charges,
+packaging charges, COD fees and discounts, including cancelled/RTO orders.
+These are customer order charges. Historical missing shipping/packaging/COD
+amounts are counted as missing, not estimated from current checkout settings.
+Legacy product subtotals can be recovered from saved item prices and quantities.
+
+Collected revenue includes one latest recorded paid payment per order. The
+`payments` ledger takes precedence over its `payment_status` mirror, avoiding
+duplicate collections and stale paid flags after a refund. Unpaid COD is
+excluded from revenue; COD awaiting collection excludes cancelled, RTO and
+refunded orders. Paid COD uses the existing admin **Mark collected** action.
+No schema migration is needed.
+
 ## Render production TypeScript builds
 
 This backend compiles during `postinstall`. With `NODE_ENV=production`, npm
@@ -161,12 +205,38 @@ database after verifying its identity and backup. Configure the existing email
 provider with `EMAIL_PROVIDER=resend`, a valid `RESEND_API_KEY`, a verified
 `EMAIL_FROM`, and the production `FRONTEND_URL`. Then set
 `EMAIL_FOLLOWUPS_WORKER_ENABLED=true` on the backend. The worker polls persistent
-database queues once per minute. Cart reminders become eligible four hours after
-the customer reaches checkout and explicitly opts in. Pending jobs survive
+database queues once per minute. Cart reminders become eligible three hours after
+the customer's last saved checkout activity with an explicit opt-in and valid
+email address. Preferences and cart details are saved while filling checkout,
+before the address or payment step is submitted. Continuing to payment reuses
+the saved request, so it does not enqueue a duplicate reminder. Unchecking the
+cart-reminder choice cancels its queued messages. Save failures display a retry
+action without blocking checkout. Unsent, unattempted jobs from the former
+four-hour schedule move to three hours on the next worker batch; existing retry
+backoff and uncertain outcomes remain unchanged. Pending jobs survive
 process restarts and are picked up afterward, but delivery can be delayed while
 a Render service is asleep or unavailable. A job interrupted during provider
 submission is marked uncertain and is not automatically resent, avoiding a
 possible duplicate at the cost of requiring manual review for that rare case.
+
+The cart and wishlist pages also offer an unchecked email reminder for saved
+products, without requiring checkout. This explicitly records the broader
+`saved-products-v1` preference; existing checkout-only consent does not enroll
+favorites. One combined email becomes eligible after three hours and includes
+separate cart/favorites summaries, current catalog names, options, quantities,
+prices and links to proceed with the order. Favorites already in the cart are
+omitted from the favorites section. Item subtotals exclude checkout charges.
+The worker removes unavailable products and reloads the latest account cart and
+wishlist before sending. For guests, it revalidates the saved browser snapshot;
+an email address and opt-in are required. Saved items remain tied to the same
+browser/account, and individual product links support returning on another device.
+
+After this opt-in, account cart and wishlist changes update the persistent
+three-hour reminder queue, including when a later browser session has no open
+reminder form. Identical account snapshots do not queue another email, and an
+active checkout/payment reminder takes precedence. Removing all saved products,
+withdrawing consent or completing an order cancels pending reminders. This uses
+the existing queue JSON and requires no additional schema migration.
 
 To diagnose a worker batch failure, run `npm run check:email-followups` from
 `backend` with the same environment as the server. This command reads schema
@@ -195,7 +265,9 @@ Checkout offers three separate, unchecked opt-ins: one cart reminder, occasional
 offer emails, and WhatsApp cart/favorite follow-up. Existing account emails and
 historical carts are not automatically subscribed. The backend reprices the
 cart before sending, links to the existing payment-status/retry page when a
-Razorpay payment is still pending, and suppresses a reminder after a confirmed order. A
+Razorpay payment is still pending, and suppresses a reminder after a paid order
+or a COD order. An unpaid online order's status label alone does not suppress
+its payment reminder. A
 Resend idempotency key protects repeated provider submissions; an ambiguous
 provider result is recorded as uncertain and is not blindly resent. Each email
 links to a confirmation page where the recipient can unsubscribe from all three

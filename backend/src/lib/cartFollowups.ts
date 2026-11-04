@@ -1,15 +1,17 @@
 import { createHash, randomBytes } from 'crypto';
 import { dbExecute, dbQuery, isDbConnected, withDbTransaction } from './db';
-import { EmailProviderResponseError, sendCartReminderEmail, sendCouponOfferEmail, sendPendingPaymentReminderEmail } from './email';
+import { EmailProviderResponseError, sendCartReminderEmail, sendCouponOfferEmail, sendPendingPaymentReminderEmail, sendSavedProductsReminderEmail } from './email';
 import { parseJson } from './dbHelpers';
 import { priceAndValidateOrderItems } from './orderPricing';
+import { merchantOrderWhereSql, paidOnlinePaymentExistsSql } from './orderVisibility';
 import { describeEmailFollowupFailure, EmailFollowupBatchError, EmailFollowupSchemaError, inspectEmailFollowupSchema } from './emailFollowupHealth';
+import { SAVED_PRODUCTS_CONSENT_VERSION, savedProductsSnapshot, resolveSavedProducts, loadAccountSavedProducts, type SavedProductsSnapshot } from './savedProductReminders';
 
 const MAX_ATTEMPTS = 3;
 const STALE_SEND_MINUTES = 15;
 const RUN_INTERVAL_MS = 60_000;
 const EMAIL_RETRY_MINUTES = 5;
-const CART_REMINDER_DELAY_HOURS = 4;
+const CART_REMINDER_DELAY_HOURS = 3;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 export class FollowupValidationError extends Error {
   constructor(message: string) {
@@ -63,24 +65,39 @@ export const captureEmailFollowup = async (input: {
   userId: string | null;
   items: any[];
   consent: FollowupConsent;
+  revokeCartReminder?: boolean;
+  reminderSource?: 'checkout' | 'saved_products';
+  favoriteItems?: any[];
 }) => {
   if (!isDbConnected()) throw new Error('Database unavailable');
   const email = normalizeCustomerEmail(input.email);
   if (!isValidCustomerEmail(email)) throw new FollowupValidationError('Enter a valid email address');
-  if (!input.consent.cartReminder && !input.consent.offerEmail && !input.consent.whatsappFollowup) {
+  if (input.revokeCartReminder && input.consent.cartReminder) throw new FollowupValidationError('Conflicting cart reminder preferences');
+  if (!input.consent.cartReminder && !input.consent.offerEmail && !input.consent.whatsappFollowup && !input.revokeCartReminder) {
     throw new FollowupValidationError('At least one contact preference must be selected');
   }
 
   let pricedItems: any[] = [];
   let itemsSubtotal = 0;
+  const isSavedProducts = input.reminderSource === 'saved_products';
+  let savedSnapshot: SavedProductsSnapshot | null = null;
   if (input.consent.cartReminder) {
-    if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 120) {
-      throw new FollowupValidationError('The cart is empty or contains too many items');
+    if (isSavedProducts) {
+      if (!Array.isArray(input.items) || !Array.isArray(input.favoriteItems) || input.items.length + input.favoriteItems.length > 120) throw new FollowupValidationError('Choose up to 120 saved products');
+      savedSnapshot = { source: 'saved_products', cartItems: input.items, favoriteItems: input.favoriteItems };
+      const resolved = await resolveSavedProducts(savedSnapshot);
+      savedSnapshot = resolved;
+      pricedItems = [...resolved.cartItems, ...resolved.favoriteItems];
+      itemsSubtotal = pricedItems.reduce((sum, item) => sum + Math.round(item.price * 100) * item.quantity, 0) / 100;
+    } else {
+      if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 120) {
+        throw new FollowupValidationError('The cart is empty or contains too many items');
+      }
+      const priced = await priceAndValidateOrderItems(input.items);
+      if (!priced.ok) throw new FollowupValidationError(priced.message || 'Cart could not be verified');
+      pricedItems = priced.items;
+      itemsSubtotal = priced.itemsSubtotal;
     }
-    const priced = await priceAndValidateOrderItems(input.items);
-    if (!priced.ok) throw new FollowupValidationError(priced.message || 'Cart could not be verified');
-    pricedItems = priced.items;
-    itemsSubtotal = priced.itemsSubtotal;
   }
 
   const customerName = String(input.customerName || '').trim().slice(0, 255);
@@ -92,16 +109,17 @@ export const captureEmailFollowup = async (input: {
       `INSERT INTO email_contact_preferences
         (email, user_id, customer_name, cart_reminder_consent, offer_email_consent, whatsapp_followup_consent,
          cart_reminder_consented_at, offer_email_consented_at, whatsapp_followup_consented_at, consent_source, consent_version)
-       VALUES (?, ?, ?, ?, ?, ?, IF(? = 1, NOW(), NULL), IF(? = 1, NOW(), NULL), IF(? = 1, NOW(), NULL), 'checkout', 'checkout-contact-v1')
+       VALUES (?, ?, ?, ?, ?, ?, IF(? = 1, NOW(), NULL), IF(? = 1, NOW(), NULL), IF(? = 1, NOW(), NULL), ?, ?)
        ON DUPLICATE KEY UPDATE
          user_id = COALESCE(VALUES(user_id), user_id),
          customer_name = IF(VALUES(customer_name) <> '', VALUES(customer_name), customer_name),
          cart_reminder_consented_at = IF(VALUES(cart_reminder_consent) = 1, NOW(), cart_reminder_consented_at),
          offer_email_consented_at = IF(VALUES(offer_email_consent) = 1, NOW(), offer_email_consented_at),
          whatsapp_followup_consented_at = IF(VALUES(whatsapp_followup_consent) = 1, NOW(), whatsapp_followup_consented_at),
-         consent_source = 'checkout',
-         consent_version = 'checkout-contact-v1',
-         cart_reminder_consent = GREATEST(cart_reminder_consent, VALUES(cart_reminder_consent)),
+         consent_source = VALUES(consent_source),
+         consent_version = IF(VALUES(cart_reminder_consent) = 1,
+           IF(cart_reminder_consent = 1 AND consent_version = 'saved-products-v1', consent_version, VALUES(consent_version)), consent_version),
+         cart_reminder_consent = IF(? = 1, 0, GREATEST(cart_reminder_consent, VALUES(cart_reminder_consent))),
          offer_email_consent = GREATEST(offer_email_consent, VALUES(offer_email_consent)),
          whatsapp_followup_consent = GREATEST(whatsapp_followup_consent, VALUES(whatsapp_followup_consent)),
          updated_at = NOW()`,
@@ -113,8 +131,18 @@ export const captureEmailFollowup = async (input: {
         input.consent.cartReminder ? 1 : 0,
         input.consent.offerEmail ? 1 : 0,
         input.consent.whatsappFollowup ? 1 : 0,
+        isSavedProducts ? 'cart-and-favorites' : 'checkout',
+        isSavedProducts ? SAVED_PRODUCTS_CONSENT_VERSION : 'checkout-contact-v1',
+        input.revokeCartReminder ? 1 : 0,
       ]
     );
+
+    if (input.revokeCartReminder) {
+      await connection.execute(
+        `UPDATE cart_reminder_jobs SET status = 'cancelled', last_error = 'Cart reminder consent withdrawn', updated_at = NOW()
+         WHERE email = ? AND status IN ('pending', 'sending')`, [email]
+      );
+    }
 
     if (input.consent.cartReminder) {
       await connection.execute(
@@ -122,16 +150,17 @@ export const captureEmailFollowup = async (input: {
          WHERE email = ? AND status = 'pending'`,
         [email]
       );
+      if (isSavedProducts && !pricedItems.length) return;
       await connection.execute(
         `INSERT INTO cart_reminder_jobs
           (email, user_id, customer_name, items, items_subtotal, activity_at, due_at, status, idempotency_key)
          VALUES (?, ?, ?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL ? HOUR), 'pending', ?)`,
-        [email, userId, customerName, JSON.stringify(pricedItems), itemsSubtotal, CART_REMINDER_DELAY_HOURS, idempotencyKey]
+        [email, userId, customerName, JSON.stringify(savedSnapshot || pricedItems), itemsSubtotal, CART_REMINDER_DELAY_HOURS, idempotencyKey]
       );
     }
   });
 
-  return { saved: true, reminderScheduled: input.consent.cartReminder };
+  return { saved: true, reminderScheduled: input.consent.cartReminder && pricedItems.length > 0 };
 };
 
 export const issueUnsubscribeUrl = async (email: string) => {
@@ -198,11 +227,9 @@ const hasCompletedOrderSinceActivity = async (job: any) => {
        FROM orders o
       WHERE LOWER(o.customer_email) = ?
         AND o.created_at >= ?
-        AND (
-          LOWER(COALESCE(o.status, '')) IN ('confirmed','processing','shipped','delivered')
-          OR EXISTS (SELECT 1 FROM payments p WHERE p.order_id = o.id AND LOWER(p.status) = 'paid')
-          OR EXISTS (SELECT 1 FROM payment_status ps WHERE ps.order_id = o.id AND LOWER(ps.status) = 'paid')
-        )
+        AND ${merchantOrderWhereSql('o')}
+        AND (LOWER(COALESCE(o.status, '')) NOT IN ('cancelled', 'failed', 'refunded', 'rto')
+             OR ${paidOnlinePaymentExistsSql('o')})
       LIMIT 1`,
     [normalizeCustomerEmail(job.email), job.activity_at]
   );
@@ -252,7 +279,15 @@ const processReminder = async (candidate: any) => {
 
     const pendingPayment = await findPendingPaymentOrder(job);
     let cartSummary: { items: any[]; subtotal: number } | null = null;
-    if (!pendingPayment) {
+    let savedSummary = savedProductsSnapshot(job.items);
+    if (!pendingPayment && savedSummary) {
+      if (job.user_id) savedSummary = await loadAccountSavedProducts(job.user_id, normalizeCustomerEmail(job.email)) || savedSummary;
+      savedSummary = await resolveSavedProducts(savedSummary);
+      if (!savedSummary.cartItems.length && !savedSummary.favoriteItems.length) {
+        await dbExecute("UPDATE cart_reminder_jobs SET status = 'cancelled', last_error = 'No saved products remain available' WHERE id = ? AND status = 'sending'", [job.id]);
+        return;
+      }
+    } else if (!pendingPayment) {
       const originalItems = parseJson<any[]>(job.items, []);
       const priced = await priceAndValidateOrderItems(originalItems);
       if (!priced.ok || !priced.items.length) {
@@ -271,11 +306,15 @@ const processReminder = async (candidate: any) => {
     // authorized here; the final gap to Resend is an external-system boundary.
     const authorized = await withDbTransaction(async (connection) => {
       const [preferenceRows] = await connection.execute(
-        'SELECT cart_reminder_consent FROM email_contact_preferences WHERE email = ? LIMIT 1 FOR UPDATE',
+        'SELECT cart_reminder_consent, consent_version FROM email_contact_preferences WHERE email = ? LIMIT 1 FOR UPDATE',
         [job.email]
       );
       if (!Number((preferenceRows as any[])[0]?.cart_reminder_consent)) {
         await connection.execute("UPDATE cart_reminder_jobs SET status = 'cancelled', last_error = 'Consent is not active' WHERE id = ?", [job.id]);
+        return false;
+      }
+      if (savedSummary && (preferenceRows as any[])[0]?.consent_version !== SAVED_PRODUCTS_CONSENT_VERSION) {
+        await connection.execute("UPDATE cart_reminder_jobs SET status = 'cancelled', last_error = 'Saved-product reminder consent is not active' WHERE id = ?", [job.id]);
         return false;
       }
       const [jobRows] = await connection.execute('SELECT status FROM cart_reminder_jobs WHERE id = ? FOR UPDATE', [job.id]);
@@ -302,6 +341,9 @@ const processReminder = async (candidate: any) => {
         idempotencyKey,
       });
       await dbExecute("UPDATE cart_reminder_jobs SET status = 'sent', last_error = NULL, updated_at = NOW() WHERE id = ? AND status = 'sending'", [job.id]);
+    } else if (savedSummary) {
+      await sendSavedProductsReminderEmail(job.email, { customerName: job.customer_name, cartItems: savedSummary.cartItems, favoriteItems: savedSummary.favoriteItems, unsubscribeUrl, idempotencyKey });
+      await dbExecute("UPDATE cart_reminder_jobs SET status = 'sent', items = ?, last_error = NULL, updated_at = NOW() WHERE id = ? AND status = 'sending'", [JSON.stringify(savedSummary), job.id]);
     } else if (cartSummary) {
       await sendCartReminderEmail(job.email, {
         customerName: job.customer_name,
@@ -415,6 +457,14 @@ export const runCartFollowupBatch = async () => {
   try {
     const issues = await inspectEmailFollowupSchema();
     if (issues.length) throw new EmailFollowupSchemaError(issues);
+    // Bring unsent jobs from the former four-hour schedule forward without
+    // changing retry backoff or retrying messages with an uncertain outcome.
+    stage = 'cart-reminder-schedule';
+    await dbExecute(
+      `UPDATE cart_reminder_jobs SET due_at = DATE_ADD(activity_at, INTERVAL ? HOUR), updated_at = NOW()
+       WHERE status = 'pending' AND attempts = 0 AND due_at > DATE_ADD(activity_at, INTERVAL ? HOUR)`,
+      [CART_REMINDER_DELAY_HOURS, CART_REMINDER_DELAY_HOURS]
+    );
     stage = 'cart-reminder-recovery';
     await dbExecute(
       `UPDATE cart_reminder_jobs

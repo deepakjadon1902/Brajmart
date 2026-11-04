@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { SavedProductsReminder } from '@/components/cart/SavedProductsReminder';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -182,6 +183,7 @@ const CartPage = () => {
           </div>
         </div>
 
+        <SavedProductsReminder />
         <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-6">
           <div className="min-w-0 space-y-4">
             {(validationError || validating || (validation?.changes?.length || 0) > 0) && (

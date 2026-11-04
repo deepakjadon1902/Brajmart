@@ -333,6 +333,50 @@ export const sendCartReminderEmail = async (to: string, payload: {
   });
 };
 
+type SavedReminderItem = OrderItem & {
+  productId?: string; slug?: string; sku?: string;
+  selectedSize?: string; selectedPieces?: string | number; selectedAttributes?: Record<string, string>;
+};
+
+export const sendSavedProductsReminderEmail = async (to: string, payload: {
+  customerName: string;
+  cartItems: SavedReminderItem[];
+  favoriteItems: SavedReminderItem[];
+  unsubscribeUrl: string;
+  idempotencyKey: string;
+}) => {
+  const storeUrl = getPublicStoreUrl();
+  const section = (title: string, items: SavedReminderItem[]) => {
+    if (!items.length) return '';
+    const subtotal = items.reduce((sum, item) => sum + Math.round(Number(item.price) * 100) * Number(item.quantity || 1), 0) / 100;
+    const rows = items.map((item) => {
+      const details = [item.sku ? `SKU: ${item.sku}` : '', item.selectedSize ? `Size: ${item.selectedSize}` : '',
+        item.selectedPieces ? `Pieces: ${item.selectedPieces}` : '',
+        ...Object.entries(item.selectedAttributes || {}).map(([name, value]) => `${name}: ${value}`)].filter(Boolean);
+      const url = `${storeUrl}/product/${encodeURIComponent(item.slug || item.productId || '')}`;
+      return `<tr><td style="padding:10px 6px;border-bottom:1px solid #efe6d6;">
+        <a href="${escapeHtml(url)}">${escapeHtml(item.name || 'Product')}</a>
+        ${details.length ? `<br><small>${escapeHtml(details.join(' · '))}</small>` : ''}</td>
+        <td style="padding:10px 6px;text-align:center;">${Number(item.quantity || 1)}</td>
+        <td style="padding:10px 6px;text-align:right;">${formatMoney(Number(item.price))}</td>
+        <td style="padding:10px 6px;text-align:right;">${formatMoney(Math.round(Number(item.price) * 100) * Number(item.quantity || 1) / 100)}</td></tr>`;
+    }).join('');
+    return `<h3>${title}</h3><table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr><th style="text-align:left;">Product</th><th>Qty</th><th>Current price</th><th>Subtotal</th></tr></thead><tbody>${rows}</tbody></table>
+      <p style="text-align:right;"><strong>${title === 'Your cart' ? 'Cart item subtotal' : 'Favorites value (1 each)'}: ${formatMoney(subtotal)}</strong></p>`;
+  };
+  const firstName = String(payload.customerName || '').trim().split(/\s+/)[0] || 'there';
+  const button = (path: string, label: string) => `<a href="${escapeHtml(`${storeUrl}${path}`)}" style="display:inline-block;margin:4px 8px 4px 0;padding:12px 18px;background:#c58f1f;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;">${label}</a>`;
+  const html = await brandWrapper('Your saved BrajMart products are waiting',
+    `<p>Namaste ${escapeHtml(firstName)},</p><p>You saved these products for later. Ready to make them yours? Return to your cart to proceed with your order, or move your favorites into the cart when you are ready.</p>
+    ${section('Your cart', payload.cartItems)}${section('Your favorites', payload.favoriteItems)}
+    <p>These are current item prices. Shipping, packaging, COD charges and any discounts are calculated at checkout. Prices and availability may change. Unavailable products have been left out of this reminder.</p>
+    <p>${payload.cartItems.length ? button('/cart', 'Proceed with your order') : ''}${payload.favoriteItems.length ? button('/wishlist', 'View your favorites') : ''}</p>
+    <p>Use the same account or browser to view your saved items. You can also open each product above to add it to your cart.</p>
+    <p style="margin-top:20px;font-size:12px;color:#74685a;">You requested a reminder about your cart and favorites. If you have already ordered, please disregard this note. <a href="${escapeHtml(payload.unsubscribeUrl)}">Stop optional BrajMart follow-ups</a>.</p>`);
+  await sendEmail(to, 'Ready to order your saved BrajMart products?', html, { idempotencyKey: payload.idempotencyKey, suppressRecipientLog: true });
+};
+
 export const sendPendingPaymentReminderEmail = async (to: string, payload: {
   customerName: string;
   orderId: string;

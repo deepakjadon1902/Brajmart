@@ -10,6 +10,7 @@ import { applyCouponToTotals, computeTotals, getCheckoutSettings, hasPrasadamIte
 import { upsertUserDefaultAddress } from '../lib/userAddress';
 import { checkDeliveryServicePincode, getAdminCodConfig, getCodEligibilityForItems, ensureDeliveryServiceSchema, trackDeliveryServiceShipment } from '../lib/deliveryService';
 import { merchantOrderWhereSql } from '../lib/orderVisibility';
+import { adminOrderFilterSql } from '../lib/adminOrderFilters';
 import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
 import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
@@ -125,32 +126,18 @@ router.get('/', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     triggerRecentRazorpayReconciliation(25);
-    const search = getSearchTerm(req.query.search);
-    const params: any[] = [];
-    const searchSql = search
-      ? `AND (
-          CAST(id AS CHAR) LIKE ?
-          OR LOWER(COALESCE(customer_name, '')) LIKE ?
-          OR LOWER(COALESCE(customer_email, '')) LIKE ?
-          OR LOWER(COALESCE(tracking_id, '')) LIKE ?
-          OR LOWER(COALESCE(payment_method, '')) LIKE ?
-          OR LOWER(CAST(shipping_address AS CHAR)) LIKE ?
-          OR LOWER(CAST(billing_address AS CHAR)) LIKE ?
-          OR LOWER(CAST(items AS CHAR)) LIKE ?
-        )`
-      : '';
-    if (search) params.push(...Array(8).fill(likeSearch(search)));
+    const filter = adminOrderFilterSql(req.query);
 
     const rows = await dbQuery<any>(
       `SELECT * FROM orders
        WHERE ${merchantOrderWhereSql('orders')}
-       ${searchSql}
+       ${filter.sql}
        ORDER BY created_at DESC`
-      , params
+      , filter.params
     );
     res.json(rows.map(mapOrderRow));
   } catch (err: any) {
-    res.status(500).json({ message: err.message });
+    res.status(Number(err.status) || 500).json({ message: err.message });
   }
 });
 
@@ -612,20 +599,20 @@ router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) =>
   }
 });
 
-router.get('/admin/invoices', auth, adminOnly, async (_req, res) => {
+router.get('/admin/invoices', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     res.setHeader('Cache-Control', 'private, no-store');
-    res.json(await getOrderInvoiceManifest());
+    res.json(await getOrderInvoiceManifest(req.query));
   } catch (err: any) {
-    res.status(500).json({ message: err.message || 'Failed to list invoices' });
+    res.status(Number(err.status) || 500).json({ message: err.message || 'Failed to list invoices' });
   }
 });
 
-router.get('/admin/invoices.zip', auth, adminOnly, async (_req, res) => {
+router.get('/admin/invoices.zip', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    await streamAllOrderInvoices(res);
+    await streamAllOrderInvoices(res, req.query);
   } catch (err: any) {
     if (res.headersSent) { res.destroy(err); return; }
     res.status(Number(err.status) || 500).json({ message: err.message || 'Failed to download invoices' });

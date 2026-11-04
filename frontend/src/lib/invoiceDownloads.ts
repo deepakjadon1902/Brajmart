@@ -31,7 +31,7 @@ const downloadInvoices = async (
   signal: AbortSignal,
   onProgress: (progress: InvoiceDownloadProgress) => void,
 ): Promise<InvoiceDownloadResult> => {
-  // Ignore table filters and pagination; each manifest entry gets one short request.
+  // The manifest already applies filters across all pages; fetch each PDF once.
   const unique = [...new Map(entries.map((entry) => [entry.orderId, entry])).values()];
   for (const entry of unique) {
     if (!/^\d+$/.test(entry.orderId) || !isInvoiceFilename(entry.filename, entry.orderId)) throw new Error('Invalid invoice filename received');

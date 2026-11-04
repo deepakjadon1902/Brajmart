@@ -21,6 +21,7 @@ import RouteSEO from "./components/seo/RouteSEO";
 import MobileBottomNav from "./components/layout/MobileBottomNav";
 import { loadCartDrawer } from "./components/cart/lazyCartDrawer";
 import CookieConsentBanner from "./components/layout/CookieConsentBanner";
+import { SavedProductsReminderProvider } from "./components/cart/SavedProductsReminder";
 import { hasCookieConsent } from "./lib/cookieConsent";
 
 const getQueryDefaults = () => ({
@@ -427,6 +428,7 @@ const App = () => {
         <RouteSEO />
         <FestivalDecorations />
         <FestivalWelcome />
+        <SavedProductsReminderProvider>
           <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={suspenseRoute(<LoginPage />)} />
@@ -495,6 +497,7 @@ const App = () => {
 
           <Route path="*" element={<NotFound />} />
           </Routes>
+        </SavedProductsReminderProvider>
           <NoIndexRoutes />
           <MobileBottomNav />
           <StorefrontCartDrawer />

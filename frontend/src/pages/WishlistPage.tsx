@@ -6,6 +6,7 @@ import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import ProductCard from '@/components/product/ProductCard';
+import { SavedProductsReminder } from '@/components/cart/SavedProductsReminder';
 
 const WishlistPage = () => {
   const { items } = useWishlistStore();
@@ -36,6 +37,7 @@ const WishlistPage = () => {
       <Navbar />
       <main className="mx-auto w-full max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
         <h1 className="mb-5 font-cinzel text-[1.65rem] font-bold leading-tight text-foreground sm:mb-6 sm:text-2xl">My Wishlist ({items.length})</h1>
+        <SavedProductsReminder />
         <div className="product-grid grid grid-cols-[repeat(2,minmax(0,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,218px)] sm:justify-center sm:gap-3 md:grid-cols-[repeat(auto-fill,236px)] md:gap-4 lg:grid-cols-[repeat(auto-fill,250px)]">
           {items.map((product, i) => (
             <motion.div

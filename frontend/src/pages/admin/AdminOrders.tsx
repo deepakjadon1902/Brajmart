@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { OrderStatus } from '@/store/orderStore';
 import { StatusBadge } from './AdminDashboard';
-import { Search, Eye, X, RefreshCw, MapPin, MessageCircle, FileText, Download, Printer } from 'lucide-react';
+import { Search, Eye, X, RefreshCw, MapPin, MessageCircle, FileText, Download, Printer, SlidersHorizontal, Check } from 'lucide-react';
 import { adminCheckDeliveryServicePincode, adminTrackDeliveryServiceOrder, createShippingLabel, fetchOrderInvoiceManifest, fetchOrderInvoice, fetchOrders, syncShippingLabel, updateOrderStatus as updateOrderStatusApi } from '@/lib/api';
 import { downloadInvoiceFolderZip, getInvoiceDirectoryPicker, invoiceFolderName, saveInvoicesToFolder, type InvoiceDownloadProgress } from '@/lib/invoiceDownloads';
 import { toast } from 'sonner';
 import AdminPagination, { ADMIN_PAGE_SIZE } from '@/components/admin/AdminPagination';
 import AdminExportActions from '@/components/admin/AdminExportActions';
 import type { ExportColumn } from '@/lib/adminExport';
+import { formatOrderDate, orderDateRange, type OrderDatePreset } from '@/lib/orderFilters';
 import {
   BRAJMART_CONTACT_PHONE_DISPLAY,
   buildDispatchedOrderWhatsAppMessage,
@@ -17,6 +18,7 @@ import {
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'rto', 'cancelled'];
 const shippingServices = ['DTDC', 'Delhivery', 'Shree Maruti', 'India Post', 'Ekart'];
+const statusLabel = (status: string) => status === 'rto' ? 'RTO' : status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 type OrderExportItem = {
   product?: { name?: string };
@@ -77,7 +79,14 @@ const AdminOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [customer, setCustomer] = useState('');
+  const [debouncedCustomer, setDebouncedCustomer] = useState('');
+  const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
+  const [datePreset, setDatePreset] = useState<OrderDatePreset>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [loadedFilterKey, setLoadedFilterKey] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [editingTrackingId, setEditingTrackingId] = useState<string>('');
   const [deliveryTracking, setDeliveryTracking] = useState<any | null>(null);
@@ -94,18 +103,34 @@ const AdminOrders = () => {
   const supportsInvoiceFolder = Boolean(getInvoiceDirectoryPicker());
   const [page, setPage] = useState(1);
   const previousSelectedOrder = useRef<string | null>(null);
+  const invalidDateRange = Boolean(dateFrom && dateTo && dateFrom > dateTo);
+  const filters = {
+    search: debouncedSearch, customer: debouncedCustomer, status: filterStatuses.join(','), dateFrom, dateTo,
+  };
+  const filterKey = JSON.stringify(filters);
+  const pendingText = search.trim() !== debouncedSearch || customer.trim() !== debouncedCustomer;
+  const loadingOrders = !invalidDateRange && (pendingText || loadedFilterKey !== filterKey);
+  const filtersReady = !invalidDateRange && !loadingOrders && !loadError;
+  const hasFilters = Boolean(search || customer || filterStatuses.length || dateFrom || dateTo);
 
   useEffect(() => () => invoiceDownloadController.current?.abort(), []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setDebouncedCustomer(customer.trim());
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [search, customer]);
 
   useEffect(() => {
+    if (invalidDateRange) return;
+    let active = true;
+    let latestRequest = 0;
     const load = async () => {
+      const request = ++latestRequest;
       try {
-        const data = await fetchOrders({ search: debouncedSearch });
+        const data = await fetchOrders(JSON.parse(filterKey));
         const normalizeOrder = (o: any) => ({
           ...o,
           id: o.orderId ? String(o.orderId) : o._id,
@@ -120,15 +145,22 @@ const AdminOrders = () => {
         });
 
         const mapped = (Array.isArray(data) ? data : []).map(normalizeOrder);
-        setOrders(mapped);
+        if (active && request === latestRequest) {
+          setOrders(mapped);
+          setLoadedFilterKey(filterKey);
+          setLoadError('');
+        }
       } catch (err: any) {
-        toast.error(err?.message || 'Failed to load orders');
+        if (active && request === latestRequest) {
+          setLoadError(err?.message || 'Failed to load orders');
+          setLoadedFilterKey(filterKey);
+        }
       }
     };
     load();
     const t = setInterval(() => load(), 2_000);
-    return () => clearInterval(t);
-  }, [debouncedSearch]);
+    return () => { active = false; clearInterval(t); };
+  }, [filterKey, invalidDateRange]);
 
   const normalizeOrder = (o: any) => ({
     ...o,
@@ -160,15 +192,7 @@ const AdminOrders = () => {
     setWhatsappNote('');
   }, [selectedOrder, orders]);
 
-  const filtered = orders.filter((o) => {
-    const query = search.toLowerCase();
-    const customer = String(o.shippingAddress?.fullName || o.customerName || '').toLowerCase();
-    const email = String(o.customerEmail || '').toLowerCase();
-    const awb = String(o.trackingId || '').toLowerCase();
-    const matchSearch = String(o.id || '').toLowerCase().includes(query) || customer.includes(query) || email.includes(query) || awb.includes(query);
-    const matchStatus = filterStatus === 'all' || o.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  const filtered = filtersReady ? orders : [];
   const paginatedOrders = filtered.slice((page - 1) * ADMIN_PAGE_SIZE, page * ADMIN_PAGE_SIZE);
   const orderExportColumns: ExportColumn<OrderExportRow>[] = [
     { header: 'Order ID', value: (o) => o.id },
@@ -191,13 +215,13 @@ const AdminOrders = () => {
     { header: 'Order Status', value: (o) => o.status || '-' },
     { header: 'Shipping Service', value: (o) => o.shippingService || '-' },
     { header: 'Tracking ID', value: (o) => o.trackingId || '-' },
-    { header: 'Created At', value: (o) => o.createdAt ? new Date(o.createdAt).toLocaleString('en-IN') : '-' },
+    { header: 'Order Date (IST)', value: (o) => o.createdAt ? new Date(o.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-' },
     { header: 'Status History', value: (o) => (o.statusHistory || []).map((h) => `${h.status} - ${h.note || ''} - ${h.date ? new Date(h.date).toLocaleString('en-IN') : ''}`).join('; ') },
   ];
 
   useEffect(() => {
     setPage(1);
-  }, [search, filterStatus]);
+  }, [search, customer, filterKey]);
 
   useEffect(() => {
     const totalPages = Math.max(1, Math.ceil(filtered.length / ADMIN_PAGE_SIZE));
@@ -324,7 +348,7 @@ const AdminOrders = () => {
   };
 
   const handleDownloadAllInvoices = async () => {
-    if (invoiceDownloadController.current) return;
+    if (invoiceDownloadController.current || !filtersReady) return;
     const controller = new AbortController();
     invoiceDownloadController.current = controller;
     setDownloadingAllInvoices(true);
@@ -335,9 +359,9 @@ const AdminOrders = () => {
       const picker = getInvoiceDirectoryPicker();
       const parent = picker ? await picker({ id: 'brajmart-invoices', mode: 'readwrite', startIn: 'downloads' }) : null;
       if (controller.signal.aborted) return;
-      const { invoices } = await fetchOrderInvoiceManifest(controller.signal);
+      const { invoices } = await fetchOrderInvoiceManifest(controller.signal, filters);
       if (!invoices.length) {
-        setInvoiceBatchMessage('There are no order invoices to download.');
+        setInvoiceBatchMessage('There are no order invoices matching these filters.');
         return;
       }
       let result;
@@ -348,7 +372,7 @@ const AdminOrders = () => {
         destination = `folder “${name}”`;
         result = await saveInvoicesToFolder(invoices, directory, controller.signal, setInvoiceProgress);
       } else {
-        destination = 'BrajMart-All-Invoices.zip';
+        destination = hasFilters ? 'BrajMart-Filtered-Invoices.zip' : 'BrajMart-All-Invoices.zip';
         const archive = await downloadInvoiceFolderZip(invoices, controller.signal, setInvoiceProgress);
         result = archive.result;
         if (archive.blob) {
@@ -440,39 +464,100 @@ const AdminOrders = () => {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Orders Management</h1>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by Order ID or Customer..." className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+      <fieldset disabled={downloadingAllInvoices} className="min-w-0 space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-4 sm:p-5 disabled:opacity-70" aria-label="Order and invoice filters">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-white">
+            <SlidersHorizontal size={18} className="text-amber-400" />
+            <h2 className="font-semibold">Filter orders &amp; invoices</h2>
+          </div>
+          <button type="button" disabled={!hasFilters} onClick={() => {
+            setSearch(''); setDebouncedSearch(''); setCustomer(''); setDebouncedCustomer('');
+            setFilterStatuses([]); setDateFrom(''); setDateTo(''); setDatePreset('all');
+          }} className="text-sm font-medium text-amber-400 hover:underline disabled:cursor-not-allowed disabled:opacity-40">Clear filters</button>
         </div>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none">
-          <option value="all">All Status</option>
-          {statusOptions.map((s) => <option key={s} value={s}>{s === 'rto' ? 'RTO' : s.replace(/_/g, ' ')}</option>)}
-        </select>
-        <AdminExportActions
-          title="BrajMart Orders"
-          fileName="brajmart-orders"
-          rows={filtered as OrderExportRow[]}
-          columns={orderExportColumns}
-        />
-        <button
-          type="button"
-          onClick={handleDownloadAllInvoices}
-          disabled={downloadingAllInvoices}
-          title="Download one PDF for every order across all pages, regardless of current filters"
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-200 hover:border-amber-500/50 hover:text-amber-300 disabled:cursor-wait disabled:opacity-60"
-        >
-          <Download size={16} />
-          {downloadingAllInvoices ? 'Saving invoices...' : supportsInvoiceFolder ? 'Save All Invoices to Folder' : 'Download Invoice Folder'}
-        </button>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <label htmlFor="order-search" className="mb-1.5 block text-xs font-medium text-slate-300">Search orders</label>
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input id="order-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by Order ID or Customer..." className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="order-customer" className="mb-1.5 block text-xs font-medium text-slate-300">Customer name</label>
+            <input id="order-customer" value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Enter customer name" className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label htmlFor="order-date-preset" className="mb-1.5 block text-xs font-medium text-slate-300">Order date range</label>
+            <select id="order-date-preset" value={datePreset} onChange={(e) => {
+              const preset = e.target.value as OrderDatePreset;
+              setDatePreset(preset);
+              if (preset !== 'custom') {
+                const range = orderDateRange(preset); setDateFrom(range.dateFrom); setDateTo(range.dateTo);
+              }
+            }} className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50">
+              <option value="all">All dates</option>
+              <option value="today">Today</option>
+              <option value="last7">Last 7 days</option>
+              <option value="last30">Last 30 days</option>
+              <option value="month">This month</option>
+              <option value="custom">Custom range</option>
+            </select>
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="order-date-from" className="mb-1.5 block text-xs font-medium text-slate-300">From date</label>
+            <input id="order-date-from" type="date" min="1000-01-01" max={dateTo || '9999-12-31'} value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setDatePreset('custom'); }} aria-invalid={invalidDateRange} aria-describedby={invalidDateRange ? 'order-date-error' : undefined} className="block min-w-0 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="order-date-to" className="mb-1.5 block text-xs font-medium text-slate-300">To date</label>
+            <input id="order-date-to" type="date" min={dateFrom || '1000-01-01'} max="9999-12-31" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setDatePreset('custom'); }} aria-invalid={invalidDateRange} aria-describedby={invalidDateRange ? 'order-date-error' : undefined} className="block min-w-0 w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+          </div>
+        </div>
+        {invalidDateRange && <p id="order-date-error" role="alert" className="text-sm text-red-400">From date must be on or before To date.</p>}
+        <div role="group" aria-label="Order statuses" className="space-y-2">
+          <p className="text-xs font-medium text-slate-300">Order status <span className="font-normal text-slate-400">(select one or more)</span></p>
+          <div className="flex flex-wrap gap-2">
+            {[{ value: '', label: 'All statuses' }, ...statusOptions.map((status) => ({ value: status, label: statusLabel(status) }))].map(({ value, label }) => {
+              const selected = value ? filterStatuses.includes(value) : !filterStatuses.length;
+              return <button key={value} type="button" aria-pressed={selected} onClick={() => setFilterStatuses((current) => !value ? [] : current.includes(value) ? current.filter((status) => status !== value) : [...current, value])} className={`admin-order-status inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${selected ? 'border-amber-500 bg-amber-500/10 text-amber-300' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}>{selected && <Check size={13} aria-hidden="true" />}{label}</button>;
+            })}
+          </div>
+        </div>
+        <p className="text-xs text-slate-400">Dates use India time (IST). Excel and invoice downloads use these filters across all pages.</p>
+      </fieldset>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <p role="status" aria-live="polite" className="text-sm text-slate-300">{invalidDateRange ? 'Choose a valid date range' : loadingOrders ? 'Loading matching orders...' : loadError ? 'Unable to load orders' : `${filtered.length.toLocaleString('en-IN')} matching order${filtered.length === 1 ? '' : 's'}`}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <AdminExportActions
+            title="BrajMart Orders"
+            fileName="brajmart-orders"
+            rows={filtered as OrderExportRow[]}
+            columns={orderExportColumns}
+          />
+          <button
+            type="button"
+            onClick={handleDownloadAllInvoices}
+            disabled={downloadingAllInvoices || !filtersReady}
+            title="Download one PDF for every order matching the filters across all pages"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-slate-200 hover:border-amber-500/50 hover:text-amber-300 disabled:cursor-wait disabled:opacity-60"
+          >
+            <Download size={16} />
+            {downloadingAllInvoices ? 'Saving invoices...' : supportsInvoiceFolder ? hasFilters ? 'Save Filtered Invoices to Folder' : 'Save All Invoices to Folder' : hasFilters ? 'Download Filtered Invoices' : 'Download Invoice Folder'}
+          </button>
+        </div>
       </div>
+
+      {loadError && !loadingOrders && <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">{loadError} Retrying automatically...</p>}
 
       {(downloadingAllInvoices || invoiceBatchMessage) && (
         <div role="status" aria-live="polite" className="space-y-2 rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-200">
           {downloadingAllInvoices ? (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>{invoiceProgress ? `${invoiceProgress.saved} of ${invoiceProgress.total} PDFs saved${invoiceProgress.failed ? ` · ${invoiceProgress.failed} failed` : ''}` : supportsInvoiceFolder ? 'Choose a folder, then wait while the invoice list loads...' : 'Loading all invoice details...'}</span>
+                <span>{invoiceProgress ? `${invoiceProgress.saved} of ${invoiceProgress.total} PDFs saved${invoiceProgress.failed ? ` · ${invoiceProgress.failed} failed` : ''}` : supportsInvoiceFolder ? 'Choose a folder, then wait while the invoice list loads...' : 'Loading matching invoice details...'}</span>
                 <button type="button" onClick={() => invoiceDownloadController.current?.abort()} className="rounded-lg border border-slate-600 px-3 py-1 hover:border-amber-500">Stop Download</button>
               </div>
               {invoiceProgress && <progress aria-label="Invoice download progress" value={invoiceProgress.completed} max={invoiceProgress.total || 1} className="h-2 w-full accent-amber-500" />}
@@ -512,7 +597,7 @@ const AdminOrders = () => {
                   </td>
                   <td className="px-5 py-3 text-slate-300 hidden sm:table-cell">{o.paymentMethod}</td>
                   <td className="px-5 py-3"><StatusBadge status={o.status} /></td>
-                  <td className="px-5 py-3 text-slate-400 text-xs hidden md:table-cell">{new Date(o.createdAt).toLocaleDateString('en-IN')}</td>
+                  <td className="px-5 py-3 text-slate-400 text-xs hidden md:table-cell">{formatOrderDate(o.createdAt)}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
                       <button
@@ -562,6 +647,7 @@ const AdminOrders = () => {
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && <tr><td colSpan={9} className="px-5 py-10 text-center text-sm text-slate-400">{loadingOrders ? 'Loading orders...' : invalidDateRange ? 'Adjust the date range to see orders.' : loadError ? 'Orders could not be loaded.' : 'No orders match these filters. Try another date, customer name or status.'}</td></tr>}
             </tbody>
           </table>
         </div>

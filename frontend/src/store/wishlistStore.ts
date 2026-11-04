@@ -23,6 +23,7 @@ const toApiItems = (items: Product[]) => items.map((item) => ({
   category: item.category,
   selectedSize: item.selectedSize,
   selectedPieces: item.selectedPieces,
+  selectedAttributes: item.selectedAttributes,
 }));
 
 type WishlistApiResponse = {
@@ -53,6 +54,7 @@ const fromApiItem = (item: PersistedProductInterestItem): Product => ({
   inStock: item.product?.inStock === undefined ? true : Boolean(item.product.inStock),
   selectedSize: item.selectedSize || stringField(item.product?.selectedSize) || undefined,
   selectedPieces: numberField(item.selectedPieces || item.product?.selectedPieces) || undefined,
+  selectedAttributes: item.selectedAttributes || item.product?.selectedAttributes as Product['selectedAttributes'],
 });
 
 export const useWishlistStore = create<WishlistStore>()(

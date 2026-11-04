@@ -489,7 +489,8 @@ const queryString = (params?: Record<string, string | number | boolean | undefin
 };
 
 // Orders
-export const fetchOrders = (opts?: { search?: string }) => getJson<any[]>(`/orders${queryString({ search: opts?.search })}`);
+export type AdminOrderFilters = { search?: string; customer?: string; status?: string; dateFrom?: string; dateTo?: string };
+export const fetchOrders = (opts: AdminOrderFilters = {}) => getJson<any[]>(`/orders${queryString(opts)}`);
 export const fetchPendingPaymentOrders = (opts?: { search?: string }) => getJson<Record<string, unknown>[]>(`/orders/admin/pending-payments${queryString({ search: opts?.search })}`);
 export const fetchMyOrders = () => getJson<any[]>('/orders/my');
 export const fetchOrderInvoice = async (id: string | number, opts?: { download?: boolean; print?: boolean; signal?: AbortSignal }) => {
@@ -521,9 +522,9 @@ export const fetchOrderInvoice = async (id: string | number, opts?: { download?:
   return Object.assign(blob, { filename });
 };
 export type InvoiceDownloadEntry = { orderId: string; filename: string };
-export const fetchOrderInvoiceManifest = (signal?: AbortSignal) => {
+export const fetchOrderInvoiceManifest = (signal?: AbortSignal, filters: AdminOrderFilters = {}) => {
   const token = getAuthToken();
-  return fetch(`${API_BASE}/orders/admin/invoices`, {
+  return fetch(`${API_BASE}/orders/admin/invoices${queryString(filters)}`, {
     signal, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
   }).then(async (res): Promise<{ invoices: InvoiceDownloadEntry[] }> => {
     const data = await res.json().catch(() => null);
@@ -586,9 +587,32 @@ export const createPayment = (payload: Record<string, unknown>) =>
 
 export type AnalyticsPeriod = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
+export type AnalyticsOrderSummary = {
+  totalOrders: number;
+  statuses: Record<string, number>;
+  finances: {
+    orderValue: number;
+    productValue: number;
+    shippingCharges: number;
+    packagingCharges: number;
+    codCharges: number;
+    serviceCharges: number;
+    discounts: number;
+    collectedRevenue: number;
+    onlineCollected: number;
+    codCollected: number;
+    codOutstanding: number;
+    collectedOrders: number;
+    codOutstandingOrders: number;
+    missingBreakdown: { productValue: number; shippingCharges: number; packagingCharges: number; codCharges: number };
+  };
+};
+
 export type AnalyticsReport = {
   period: AnalyticsPeriod;
   generatedAt: string;
+  allTime?: AnalyticsOrderSummary;
+  periodSummary?: AnalyticsOrderSummary;
   range: {
     label: string;
     start: string;
@@ -645,6 +669,9 @@ export const captureEmailFollowup = (payload: {
   customerName: string;
   items: PersistedProductInterestItem[];
   consent: { cartReminder: boolean; offerEmail: boolean; whatsappFollowup: boolean };
+  revokeCartReminder?: boolean;
+  reminderSource?: 'checkout' | 'saved_products';
+  favoriteItems?: PersistedProductInterestItem[];
 }) => getJson<{ saved: boolean; reminderScheduled: boolean }>('/email-followups/capture', { method: 'POST', body: payload });
 
 export const unsubscribeEmailFollowups = (token: string) =>
