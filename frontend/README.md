@@ -50,3 +50,16 @@ for fetch and catalog validation tests. After a production build, run
 `node --test scripts/prerender-pages.test.mjs` for every generated category and
 product page plus direct SSR checks, followed by `npm run verify:seo` and
 `npm run verify:vercel-routing`.
+
+## Page loading after deployments
+
+HTML documents revalidate on each visit, while hashed assets keep their immutable
+cache policy. If an open tab requests a page file removed by a newer deployment,
+the app reloads the current URL once for its loaded entry bundle. The guard
+prevents reload loops and permits recovery again after another deployment.
+Offline clients and browsers that block session storage show a reload button.
+Persistent failures show readable guidance with technical details collapsed.
+This covers lazy routes, cart-drawer loading, and prerendered page startup.
+
+Run `npm test -- moduleLoadRecovery ErrorBoundary main.test` and
+`npm run verify:vercel-routing` to check recovery and caching behavior.

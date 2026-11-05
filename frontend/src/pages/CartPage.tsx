@@ -183,7 +183,6 @@ const CartPage = () => {
           </div>
         </div>
 
-        <SavedProductsReminder />
         <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-6">
           <div className="min-w-0 space-y-4">
             {(validationError || validating || (validation?.changes?.length || 0) > 0) && (
@@ -213,17 +212,17 @@ const CartPage = () => {
               </div>
             )}
             <section className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm sm:p-5">
-              <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="font-cinzel text-lg font-bold text-foreground">Cart Items</h2>
-                  <p className="text-sm text-muted-foreground">Review quantity, price, and product details before payment.</p>
+              <div className="flex items-center justify-between gap-3 border-b border-border pb-2 sm:pb-3">
+                <div className="min-w-0">
+                  <h2 className="font-cinzel text-base font-bold text-foreground sm:text-lg">Cart Items</h2>
+                  <p className="hidden text-sm text-muted-foreground sm:block">Review quantity, price, and product details before payment.</p>
                 </div>
-                <button onClick={clearCart} className="inline-flex w-fit items-center gap-2 rounded-md border border-destructive/25 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10">
-                  <Trash2 size={15} /> Clear Cart
+                <button type="button" onClick={clearCart} className="inline-flex h-8 min-h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                  <Trash2 size={13} aria-hidden="true" /> Clear Cart
                 </button>
               </div>
 
-              <div className="mt-4 space-y-3">
+              <div className="mt-3 space-y-3 sm:mt-4">
                 <AnimatePresence>
                   {items.map(item => (
                     (() => {
@@ -380,6 +379,9 @@ const CartPage = () => {
               </div>
             </div>
           </aside>
+        </div>
+        <div className="mt-6">
+          <SavedProductsReminder />
         </div>
       </main>
       <Footer />

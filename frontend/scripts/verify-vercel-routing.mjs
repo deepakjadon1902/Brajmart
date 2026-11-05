@@ -15,6 +15,15 @@ for (const route of ['/admin', '/admin/(.*)', '/payment-status/(.*)', '/profile/
 }
 
 assert.ok(config.headers.some((entry) => entry.source === '/assets/(.*)'));
+const cacheHeader = (pathname) => config.headers
+  .filter((entry) => new RegExp(`^${entry.source}$`).test(pathname))
+  .flatMap((entry) => entry.headers)
+  .filter((header) => header.key.toLowerCase() === 'cache-control');
+for (const pathname of ['/', '/index.html', '/admin', '/admin/analytics', '/cart', '/product/test-product', '/product/test-product/index.html']) {
+  assert.ok(cacheHeader(pathname).some((header) => header.value.includes('no-cache')), `${pathname} must revalidate HTML after deployments`);
+}
+assert.deepEqual(cacheHeader('/assets/AdminAnalytics-build.js').map((header) => header.value), ['public, max-age=31536000, immutable']);
+assert.equal(cacheHeader('/api/products').length, 0, 'Document caching must not override API caching');
 assert.ok(config.headers.some((entry) => entry.source.includes('robots.txt') && entry.source.includes('sitemap.xml')));
 assert.ok(config.redirects.length > 0, 'Existing redirects must remain present');
 assert.ok(!config.rewrites.some((rule) => rule.source === '/(.*)' || rule.source === '/api/(.*)'));

@@ -99,6 +99,8 @@ export const getCourierTrackingUrl = (shippingService?: string, trackingId?: str
   }
   if (service === 'indiapost') return 'https://www.indiapost.gov.in/';
   if (service === 'ekart') return 'https://www.ekartlogistics.in/track-order';
+  if (service === 'shadowfax') return 'https://shadowfax.in/track';
+  if (service === 'amazonshipping') return 'https://track.amazon.in/';
 
   return awb
     ? `https://www.delhivery.com/track/package/${encodeURIComponent(awb)}`

@@ -4,7 +4,7 @@
 -- Step 1: Add new columns to orders table
 ALTER TABLE orders 
 ADD COLUMN tracking_id VARCHAR(255) UNIQUE NULL AFTER tracking_id,
-ADD COLUMN shipping_service ENUM('DTDC','Shree Maruti','Delhivery','India Post','Ekart') NULL AFTER tracking_id;
+ADD COLUMN shipping_service ENUM('DTDC','Shree Maruti','Delhivery','India Post','Ekart','Shadowfax','Amazon Shipping') NULL AFTER tracking_id;
 
 -- Step 2: Create index on tracking_id for faster lookups
 CREATE INDEX idx_orders_tracking_id ON orders(tracking_id);

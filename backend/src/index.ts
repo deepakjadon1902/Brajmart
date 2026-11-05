@@ -5,7 +5,7 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 dotenv.config();
 
 import app from './server';
-import { connectDb, describeDbTarget } from './lib/db';
+import { connectDb, describeDbTarget, startDbReconnectScheduler } from './lib/db';
 import { startShippingLabelsSyncScheduler } from './lib/shippingLabels';
 import { startCartReminderScheduler } from './lib/cartFollowups';
 import { inspectRazorpayConfiguration } from './lib/razorpayEnvironment';
@@ -65,6 +65,7 @@ const start = async () => {
   }
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    startDbReconnectScheduler();
     startShippingLabelsSyncScheduler();
     startCartReminderScheduler();
   });

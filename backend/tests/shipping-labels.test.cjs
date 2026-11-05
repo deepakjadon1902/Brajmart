@@ -192,6 +192,22 @@ test('rejects incomplete labels before any external request is made', () => {
   assert.equal(state.requests.length, 0);
 });
 
+test('Shadowfax sync creates a matching label and reuses it for printing', async () => {
+  state.order.shipping_service = 'Shadowfax';
+  state.order.tracking_id = 'SF10339';
+  const synced = await shipping.syncShippingLabelForOrder(10339);
+  assert.equal(synced.label.courier_name, 'Shadowfax');
+  assert.equal(synced.label.tracking_id, 'SF10339');
+  assert.equal(synced.orderStatus, 'shipped');
+  assert.equal(state.mapping.courier_name, 'Shadowfax');
+  assert.equal(state.refreshPosts, 1);
+  const printed = await shipping.createOrUpdateShippingLabel(state.order);
+  assert.equal(printed.created, false);
+  assert.equal(printed.label.courier_name, 'Shadowfax');
+  assert.equal(state.labelPosts, 1);
+  assert.equal(state.handoffPosts, 1);
+});
+
 test('creates one remote label, stores its mapping, and reuses it on the next click', async () => {
   const first = await shipping.createOrUpdateShippingLabel(order());
   assert.equal(first.created, true);
@@ -205,6 +221,20 @@ test('creates one remote label, stores its mapping, and reuses it on the next cl
   assert.equal(state.labelPosts, 1, 'second print must not create a duplicate remote label');
   assert.equal(state.handoffPosts, 2, 'each print click must receive a fresh one-time handoff');
   assert.ok(state.writes.every(({ sql }) => !/\b(?:CREATE|ALTER)\s+TABLE/i.test(sql)), 'printing uses the existing schema');
+});
+
+test('Amazon Shipping prints with the saved courier and AWB without creating duplicate labels', async () => {
+  const amazonOrder = { ...order(), shipping_service: 'Amazon Shipping', tracking_id: 'AMZ10339' };
+  const first = await shipping.createOrUpdateShippingLabel(amazonOrder);
+  assert.equal(first.created, true);
+  assert.equal(first.label.courier_name, 'Amazon Shipping');
+  assert.equal(first.label.tracking_id, 'AMZ10339');
+  assert.equal(state.mapping.courier_name, 'Amazon Shipping');
+  const second = await shipping.createOrUpdateShippingLabel(amazonOrder);
+  assert.equal(second.created, false);
+  assert.equal(second.label.id, first.label.id);
+  assert.equal(state.labelPosts, 1);
+  assert.equal(state.handoffPosts, 2);
 });
 
 test('the authenticated print-label endpoint works with runtime DDL forbidden', async () => {

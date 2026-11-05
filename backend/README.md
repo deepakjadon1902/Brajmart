@@ -25,6 +25,22 @@ visible merchant orders. Each PDF filename includes the customer name, order
 date in India, and order ID, such as
 `Bikram Paul - 2026-10-14 - Invoice-10339.pdf`. No schema migration is needed.
 
+## Shipping partners
+
+Admin Orders supports DTDC, Delhivery, Shree Maruti, India Post, Ekart,
+Shadowfax and Amazon Shipping. Existing databases need the reviewed
+`sql/add_shadowfax_shipping_service.sql` followed by
+`sql/add_amazon_shipping_service.sql` when their `orders.shipping_service` ENUM
+does not yet include these couriers. These changes append values and preserve
+the existing couriers and their ENUM indexes; they do not run automatically on
+requests or application startup. Do not rerun the older Shadowfax migration
+after applying the Amazon Shipping migration.
+
+Shipping labels preserve the selected courier and saved AWB. Dispatch messages
+link to the courier's official tracking page and include the AWB separately.
+The labels service supports Shadowfax status sync; Amazon Shipping live status
+sync requires an Amazon tracking adapter and credentials in that service.
+
 ## Live admin analytics
 
 `GET /api/analytics?period=daily` (also `weekly`, `monthly`, `quarterly`,
@@ -260,6 +276,11 @@ hostname must identify the same intended database; a longer timeout does not
 repair an unreachable IPv6 route. The current `npm run dev` command watches
 `.env` and restarts after configuration changes. If the server was started with
 the older command, enter `rs` in its nodemon terminal or restart it normally.
+
+The running backend rechecks a disconnected database every ten seconds and
+restores database-backed routes when connectivity returns. Checks share one
+connection attempt and reuse the existing pool. Recovery does not rerun failed
+transactions, apply schema changes, or submit emails.
 
 Checkout offers three separate, unchecked opt-ins: one cart reminder, occasional
 offer emails, and WhatsApp cart/favorite follow-up. Existing account emails and

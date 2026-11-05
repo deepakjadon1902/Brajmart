@@ -56,12 +56,73 @@ test('a connection timeout leaves the database disconnected', async () => {
   assert.equal(db.isDbConnected(), false);
 });
 
-test('a lost read connection reconnects once and retries the original query', async () => {
+test('a lost read connection rechecks the pool once and retries the original query', async () => {
   await db.connectDb();
   state.readError = Object.assign(new Error('Isolated reset'), { code: 'ECONNRESET' });
   assert.deepEqual(await db.dbQuery('SELECT healthy'), [{ healthy: 1 }]);
-  assert.equal(state.pools, 2);
+  assert.equal(state.pools, 1);
   assert.deepEqual(state.queries, ['SELECT 1', 'SELECT healthy', 'SELECT 1', 'SELECT healthy']);
+});
+
+test('simultaneous connection checks share a single attempt and pool', async () => {
+  const first = db.connectDb();
+  const second = db.connectDb();
+  assert.equal(first, second);
+  await Promise.all([first, second]);
+  assert.equal(state.pools, 1);
+  assert.deepEqual(state.queries, ['SELECT 1']);
+});
+
+test('background recovery restores connectivity after a failed reconnect without replaying writes', async () => {
+  await db.connectDb();
+  state.readError = Object.assign(new Error('Isolated reset'), { code: 'ECONNRESET' });
+  state.connectionError = Object.assign(new Error('Isolated outage'), { code: 'ETIMEDOUT' });
+  await assert.rejects(db.dbQuery('SELECT healthy'), error => error.code === 'ETIMEDOUT');
+  assert.equal(db.isDbConnected(), false);
+  const previousSetInterval = global.setInterval;
+  const timers = [];
+  global.setInterval = (callback, interval) => { timers.push({ callback, interval }); return { unref() {} }; };
+  try {
+    db.startDbReconnectScheduler();
+    db.startDbReconnectScheduler();
+    assert.equal(timers.length, 1);
+    assert.equal(timers[0].interval, 10000);
+    timers[0].callback();
+    await new Promise(setImmediate);
+    assert.equal(db.isDbConnected(), false);
+    state.connectionError = null;
+    timers[0].callback();
+    await new Promise(setImmediate);
+    assert.equal(db.isDbConnected(), true);
+    assert.equal(state.pools, 1);
+    assert.equal(state.queries.filter(sql => sql === 'SELECT healthy').length, 1);
+    assert.ok(state.queries.every(sql => sql.startsWith('SELECT')));
+    const checks = state.queries.length;
+    timers[0].callback();
+    await new Promise(setImmediate);
+    assert.equal(state.queries.length, checks);
+  } finally {
+    global.setInterval = previousSetInterval;
+  }
+});
+
+test('background recovery also reconnects a server that started without a database', async () => {
+  state.connectionError = Object.assign(new Error('Isolated startup outage'), { code: 'ETIMEDOUT' });
+  await assert.rejects(db.connectDb(), error => error.code === 'ETIMEDOUT');
+  const previousSetInterval = global.setInterval;
+  let tick;
+  global.setInterval = callback => { tick = callback; return { unref() {} }; };
+  try {
+    db.startDbReconnectScheduler();
+    state.connectionError = null;
+    tick();
+    await new Promise(setImmediate);
+    assert.equal(db.isDbConnected(), true);
+    assert.equal(state.pools, 1);
+    assert.deepEqual(state.queries, ['SELECT 1', 'SELECT 1']);
+  } finally {
+    global.setInterval = previousSetInterval;
+  }
 });
 
 test('ordinary query errors are propagated without reconnecting', async () => {

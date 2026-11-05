@@ -96,23 +96,31 @@ const preloadableRoute = <P extends object = Record<string, never>>(
     pending ||= load().then((module) => {
       loaded = module;
       return module;
+    }).catch((error) => {
+      pending = null;
+      throw error;
     });
     return pending;
   };
 
   const RouteComponent = ((props: P) => {
     const [module, setModule] = useState<RouteModule<P> | null>(loaded);
+    const [loadError, setLoadError] = useState<Error | null>(null);
 
     useEffect(() => {
       if (module) return undefined;
       let active = true;
       preload().then((nextModule) => {
         if (active) setModule(nextModule);
+      }).catch((error) => {
+        if (active) setLoadError(error instanceof Error ? error : new Error(String(error)));
       });
       return () => {
         active = false;
       };
     }, [module]);
+
+    if (loadError) throw loadError;
 
     if (module) {
       const LoadedComponent = module.default;

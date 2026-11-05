@@ -4,6 +4,8 @@ import { isLocalMigrationCliInvocation, resolveAutomaticMigrationDecision } from
 
 let pool: Pool | null = null;
 let connected = false;
+let connecting: Promise<void> | null = null;
+let reconnectTimer: ReturnType<typeof setInterval> | null = null;
 const migrationDdlPermit = new AsyncLocalStorage<boolean>();
 
 export class RuntimeDdlForbiddenError extends Error {
@@ -65,14 +67,14 @@ export const describeDbTarget = () => {
   return `${host || '<missing-host>'}:${port}/${database || '<missing-db>'}`;
 };
 
-export const connectDb = async () => {
+const connectDbAttempt = async () => {
   const { host, user, database, password, port, connectTimeout } = getConfig();
   if (!host || !user || !database) {
     connected = false;
     throw new Error('DB_HOST/DB_USER/DB_NAME is not set.');
   }
   try {
-    pool = mysql.createPool({
+    pool ??= mysql.createPool({
       host,
       user,
       database,
@@ -93,7 +95,26 @@ export const connectDb = async () => {
   }
 };
 
+// Share health checks and reuse the pool: mysql2 replaces broken connections.
+// Recreating a pool on every retry leaves the previous pool's connections open.
+export const connectDb = (): Promise<void> => {
+  if (!connecting) {
+    connecting = connectDbAttempt().finally(() => { connecting = null; });
+  }
+  return connecting;
+};
+
 export const isDbConnected = () => connected && !!pool;
+
+// Routes reject requests while disconnected, so request-level retries alone
+// cannot recover after a failed reconnect or a DB-less development startup.
+export const startDbReconnectScheduler = () => {
+  if (reconnectTimer) return;
+  reconnectTimer = setInterval(() => {
+    if (!isDbConnected()) void connectDb().catch(() => {});
+  }, 10_000);
+  reconnectTimer.unref();
+};
 
 const shouldReconnect = (err: any) => {
   const code = err?.code || err?.errno || '';

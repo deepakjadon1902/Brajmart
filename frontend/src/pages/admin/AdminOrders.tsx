@@ -17,7 +17,7 @@ import {
 } from '@/lib/whatsappTemplates';
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'rto', 'cancelled'];
-const shippingServices = ['DTDC', 'Delhivery', 'Shree Maruti', 'India Post', 'Ekart'];
+const shippingServices = ['DTDC', 'Delhivery', 'Shree Maruti', 'India Post', 'Ekart', 'Shadowfax', 'Amazon Shipping'];
 const statusLabel = (status: string) => status === 'rto' ? 'RTO' : status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 type OrderExportItem = {
