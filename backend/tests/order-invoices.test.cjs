@@ -58,6 +58,73 @@ test('invoice numbers use the order date in India and prices come from the order
   assert.deepEqual(model.billing, fixture.shipping_address);
 });
 
+const taxItem = (overrides = {}) => ({ name: 'Krishna Balaram Devotional Toys - Set of 2', sku: 'TOY-21', hsnCode: '9503', unit: 'SET', quantity: 1, price: 219, gstRate: 5, ...overrides });
+const taxOrder = (overrides = {}) => ({ ...fixture, items: [taxItem()], total: 268, shipping_amount: 49, packaging_amount: 0, shipping_address: { ...fixture.shipping_address, state: 'Madhya Pradesh' }, ...overrides });
+
+test('reference invoice extracts 5% IGST from INR 219 and does not add GST to the INR 268 total', () => {
+  const model = invoice.buildOrderInvoiceModel(taxOrder());
+  assert.deepEqual([model.items[0].price, model.items[0].taxable, model.items[0].igst, model.items[0].netTotal], [21900, 20857, 1043, 21900]);
+  assert.equal(model.taxMode, 'inter-state');
+  assert.equal(model.items[0].cgst, 0);
+  assert.equal(model.total, 26800);
+  assert.equal(model.totals.reduce((sum, line) => sum + line.amount, 0), model.total);
+  assert.deepEqual(model.taxSummary.map((line) => line.amount), [20857, 1043]);
+});
+
+test('same-state orders split the included tax into CGST and SGST and keep odd paise', () => {
+  const model = invoice.buildOrderInvoiceModel(taxOrder({ shipping_address: fixture.shipping_address }));
+  assert.equal(model.taxMode, 'intra-state');
+  assert.deepEqual([model.items[0].igst, model.items[0].cgst, model.items[0].sgst], [0, 521, 522]);
+  assert.equal(model.items[0].taxable + model.items[0].cgst + model.items[0].sgst, 21900);
+  assert.deepEqual(model.taxSummary.map((line) => line.amount), [20857, 521, 522]);
+});
+
+test('mixed rates, quantities and discounts reconcile in paise and preserve coupon eligibility', () => {
+  const model = invoice.buildOrderInvoiceModel(taxOrder({
+    items: [taxItem({ price: 105, quantity: 2 }), taxItem({ price: 118, gstRate: 18 }), taxItem({ price: 30, gstRate: 0 })],
+    coupon_discount: 69, coupon_details: { productDiscount: 20, freeShipping: 49, itemDiscounts: [2000, 0, 0] }, total: 338,
+  }));
+  assert.deepEqual(model.items.map((item) => item.netTotal), [19000, 11800, 3000]);
+  assert.deepEqual(model.items.map((item) => item.taxable), [18095, 10000, 3000]);
+  assert.deepEqual(model.items.map((item) => item.tax), [905, 1800, 0]);
+  assert.equal(model.items.reduce((sum, item) => sum + item.taxable + item.tax, 0), 33800);
+  assert.equal(model.totals.reduce((sum, line) => sum + line.amount, 0), model.total);
+  assert.equal(model.taxSummary[1].amount, 2705);
+});
+
+test('line totals multiply quantity before extracting GST, including paise-priced and free items', () => {
+  for (const price of [0, 0.01, 0.1, 219, 9999.99]) for (const quantity of [1, 2, 7]) for (const gstRate of [0, 5, 5.25, 18, 28, 40]) {
+    const item = invoice.buildOrderInvoiceModel(taxOrder({ items: [taxItem({ price, quantity, gstRate })], total: price * quantity + 49 })).items[0];
+    assert.equal(item.netTotal, Math.round(price * 100) * quantity);
+    assert.equal(item.taxable + item.tax, item.netTotal);
+    assert.equal(item.igst, item.tax);
+  }
+});
+
+test('legacy missing tax snapshots stay unavailable and explicit zero remains a configured rate', () => {
+  const legacy = invoice.buildOrderInvoiceModel(fixture);
+  assert.equal(legacy.items[0].gstRate, null);
+  assert.equal(legacy.items[0].taxable, null);
+  assert.equal(legacy.taxComplete, false);
+  assert.deepEqual(legacy.taxSummary, []);
+  const zero = invoice.buildOrderInvoiceModel(taxOrder({ items: [taxItem({ gstRate: 0 })] }));
+  assert.equal(zero.items[0].tax, 0);
+  assert.equal(zero.items[0].taxable, 21900);
+  assert.equal(zero.taxComplete, true);
+});
+
+test('invalid GST snapshots, discounts and unknown taxable destinations fail with clear validation', () => {
+  for (const gstRate of [-1, 101, 'bad', 5.123]) assert.throws(() => invoice.buildOrderInvoiceModel(taxOrder({ items: [taxItem({ gstRate })] })), /invalid GST rate/);
+  assert.throws(() => invoice.buildOrderInvoiceModel(taxOrder({ shipping_address: { state: 'Unknown' } })), /recognised delivery state/);
+  assert.throws(() => invoice.buildOrderInvoiceModel(taxOrder({ coupon_discount: 20, coupon_details: { productDiscount: 20, itemDiscounts: [1999] } })), /invalid saved item discounts/);
+});
+
+test('rendered PDFs include HSN, unit, quantity, rate, taxable, GST, IGST and line price', async () => {
+  const text = await renderedInvoiceText(taxOrder());
+  for (const label of ['HSN', 'Unit', 'Qty', 'Rate', 'Taxable', 'GST', 'IGST', 'Price', '9503', 'SET', '208.57', '10.43', '268.00']) assert.ok(text.includes(label), label);
+  assert.match(await renderedInvoiceText(taxOrder({ shipping_address: fixture.shipping_address })), /CGST\+SGST[\s\S]*CGST \(included\)[\s\S]*SGST \(included\)/);
+});
+
 async function renderedInvoiceText(row) {
   const PDFDocument = require('pdfkit');
   const originalText = PDFDocument.prototype.text;

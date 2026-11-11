@@ -9,7 +9,7 @@ const product = (id, categoryId = 1) => ({ id, name: `Product ${id}`, slug: `pro
 const selected = (id) => state.products.find((row) => String(row.id) === String(id));
 db.isDbConnected = () => true;
 db.dbQuery = async (sql, params = []) => {
-  if (sql.includes('INFORMATION_SCHEMA.COLUMNS')) return (params.length ? params : ['cod_enabled']).map((COLUMN_NAME) => ({ COLUMN_NAME }));
+  if (sql.includes('INFORMATION_SCHEMA.COLUMNS')) return (params.length ? params : ['cod_enabled']).filter((column) => !state.missingTaxColumns || !['hsn_code', 'unit', 'gst_rate'].includes(column)).map((COLUMN_NAME) => ({ COLUMN_NAME }));
   if (sql.includes('FROM categories WHERE name')) return [{ id: params[0] === 'Books' ? 2 : 1 }];
   if (sql.includes('FROM products')) {
     if (sql.includes('WHERE id = ?') || sql.includes('WHERE p.id = ?')) return selected(params[0]) ? [{ ...selected(params[0]), category_name: category(selected(params[0]).category_id) }] : [];
@@ -66,6 +66,29 @@ async function request(method, path, body = {}, { id = '8', role = 'admin' } = {
   return response;
 }
 beforeEach(() => { state = { products: [...Array.from({ length: 8 }, (_, i) => product(i + 1)), product(9, 2)], transactions: 0, sql: [], failWrite: false }; });
+
+test('admin creates and edits product tax fields with durable zero rates and leading HSN zeroes', async () => {
+  const created = await request('post', '/', { name: 'Tax Product', slug: 'tax-product', price: 219, image: '/logo.png', categoryId: 1, category: 'Prasadam', hsnCode: '0401', unit: ' kg ', gstRate: '5.25' });
+  assert.equal(created.statusCode, 201);
+  assert.deepEqual([created.body.hsnCode, created.body.unit, created.body.gstRate], ['0401', 'KG', 5.25]);
+  const updated = await request('put', '/:id', { hsnCode: '9503', unit: 'SET', gstRate: 0 });
+  assert.equal(updated.statusCode, 200);
+  assert.equal(selected(8).gst_rate, 0);
+  assert.deepEqual([updated.body.hsnCode, updated.body.unit, updated.body.gstRate], ['9503', 'SET', 0]);
+  const cleared = await request('put', '/:id', { gstRate: null });
+  assert.equal(cleared.statusCode, 200);
+  assert.equal(cleared.body.gstRate, null);
+});
+
+test('invalid tax settings and missing tax schema fail before mutating products', async () => {
+  for (const body of [{ gstRate: -1 }, { gstRate: true }, { gstRate: 5.123 }, { hsnCode: 'abc' }, { unit: '<script>' }]) assert.equal((await request('put', '/:id', body)).statusCode, 400);
+  state.missingTaxColumns = true;
+  const response = await request('put', '/:id', { gstRate: 5 });
+  assert.equal(response.statusCode, 400);
+  assert.match(response.body.message, /migrate_products_invoice_tax.sql/);
+  assert.equal(state.transactions, 0);
+  assert.equal((await request('put', '/:id', { gstRate: 5 }, { role: 'customer' })).statusCode, 403);
+});
 
 test('admin saves a numbered home position, replaces its previous selection only in that category, and list/detail responses preserve it', async () => {
   selected(2).home_position = 3; selected(2).show_on_home = 1;

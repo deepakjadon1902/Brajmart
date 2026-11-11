@@ -27,6 +27,9 @@ export interface Product {
   reservedQuantity?: number;
   lowStockThreshold?: number;
   sku?: string;
+  hsnCode?: string | null;
+  unit?: string | null;
+  gstRate?: number | null;
   soldCount?: number;
   sizes?: string[];
   sizePricing?: Array<{ size: string; price: number }>;

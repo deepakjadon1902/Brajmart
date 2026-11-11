@@ -10,6 +10,48 @@ Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 4. Add ImageKit credentials to `.env` if you want permanent deployed image storage.
 5. Run `npm run dev` (development) or `npm start` (production)
 
+## Product GST and invoice breakdown
+
+Apply the reviewed `sql/migrate_products_invoice_tax.sql` to an existing
+database before using the new admin tax fields. It adds nullable `hsn_code`,
+`unit`, and `gst_rate` columns, preserves existing data, and can be rerun.
+Application startup and requests do not execute the migration. New databases
+include these columns in `sql/hostinger_schema.sql`.
+
+In **Admin > Products > Add/Edit > Invoice & GST**, enter each product's HSN
+(4, 6 or 8 digits), unit (for example PCS, SET or KG), and GST percentage.
+Rates are entered manually, accept up to two decimal places, and are not
+inferred from HSN. An explicit 0 is a zero rate; blank means not configured.
+Selling prices already include GST, so this feature does not add tax to the
+customer's checkout total or reuse the global packaging percentage as GST.
+
+Both COD and Razorpay checkout snapshot these fields from the database,
+ignoring client-supplied tax values. New product edits affect future orders.
+Existing order invoices retain their saved values; historical missing HSN,
+unit or GST appears as unavailable rather than using today's catalog rates.
+
+Single and bulk PDFs show Product (with SKU/variants), HSN, Unit, Qty, Rate,
+Taxable, GST %, IGST or CGST+SGST, and Price. Rate is the GST-inclusive unit
+price; Price is the line amount after any product discount. Taxable value is
+the discounted line amount divided by `(1 + GST / 100)`, rounded to paise;
+included tax is the remainder. A saved coupon allocation preserves product or
+category eligibility and distributes rounding paise deterministically.
+Free shipping/packaging coupon benefits do not reduce product taxable value.
+Shipping, packaging and COD retain their saved charges separately; the GST
+breakdown shown is for products, without inventing tax rates for these fees.
+
+The existing seller GSTIN starts with 09 (Uttar Pradesh). Delivery to Uttar
+Pradesh uses CGST/SGST, split to paise; other recognised Indian delivery states
+use IGST. The delivery state and code appear as Place of Supply. A taxable
+invoice with an unrecognised delivery state returns a validation error instead
+of guessing the tax type. Partial legacy GST information is shown on the lines
+without presenting an incomplete tax summary as a complete one.
+
+For example, a GST-inclusive rate of INR 219 at 5% gives INR 208.57 taxable
+value and INR 10.43 included GST; with INR 49 shipping the total remains
+INR 268. Reference: [CBIC Rule 35, inclusive tax valuation](https://cbic-gst.gov.in/pdf/01062021-CGST-Rules-2017-Part-A-Rules.pdf)
+and [CBIC, interstate and intrastate supplies](https://cbic-gst.gov.in/pdf/e-version-igst-fliers/eflier-IGST-23062017.pdf).
+
 ## Admin order and invoice filters
 
 `GET /api/orders`, `GET /api/orders/admin/invoices`, and

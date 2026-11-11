@@ -112,6 +112,9 @@ const AdminProducts = () => {
     { header: 'Name', value: (p) => p.name },
     { header: 'Slug', value: (p) => p.slug },
     { header: 'SKU', value: (p) => p.sku || '-' },
+    { header: 'HSN', value: (p) => p.hsnCode || '-' },
+    { header: 'Unit', value: (p) => p.unit || '-' },
+    { header: 'GST (%)', value: (p) => p.gstRate ?? 'Not set' },
     { header: 'Category', value: (p) => p.category || '-' },
     { header: 'Subcategory', value: (p) => p.subcategory || '-' },
     { header: 'Sale Price', value: (p) => p.price },
@@ -232,6 +235,14 @@ const AdminProducts = () => {
         toast.error('Price must be greater than 0');
         return;
       }
+      if (product.gstRate != null && (!Number.isFinite(product.gstRate) || product.gstRate < 0 || product.gstRate > 100 || Math.abs(product.gstRate * 100 - Math.round(product.gstRate * 100)) > 0.000001)) {
+        toast.error('GST rate must be between 0 and 100 with up to 2 decimal places');
+        return;
+      }
+      if (product.hsnCode?.trim() && !/^(\d{4}|\d{6}|\d{8})$/.test(product.hsnCode.trim())) {
+        toast.error('HSN must be 4, 6 or 8 digits');
+        return;
+      }
       const originalPrice = (() => {
         const mrp = (product as any).originalPrice;
         if (mrp === undefined || mrp === null || mrp === '') return undefined;
@@ -297,6 +308,9 @@ const AdminProducts = () => {
       const normalized = {
         ...product,
         sku: product.sku?.trim() || '',
+        hsnCode: product.hsnCode?.trim() || null,
+        unit: product.unit?.trim().toUpperCase() || null,
+        gstRate: product.gstRate ?? null,
         metaTitle: product.metaTitle?.trim() || deriveProductMetaTitle(product.name, product.category),
         metaDescription: product.metaDescription?.trim() || deriveProductMetaDescription(product.description || '', product.name),
         price,
@@ -370,6 +384,9 @@ const AdminProducts = () => {
               name: '',
               slug: '',
               sku: '',
+              hsnCode: '',
+              unit: 'PCS',
+              gstRate: null,
               price: 0,
               originalPrice: undefined,
               image: '',
@@ -489,6 +506,7 @@ const AdminProducts = () => {
               <th className="text-left px-5 py-3 font-medium">Product</th>
               <th className="text-left px-5 py-3 font-medium hidden sm:table-cell">Category</th>
               <th className="text-left px-5 py-3 font-medium">Price</th>
+              <th className="text-left px-5 py-3 font-medium">GST</th>
               <th className="text-left px-5 py-3 font-medium hidden md:table-cell">MRP</th>
               <th className="text-left px-5 py-3 font-medium hidden md:table-cell">Rating</th>
               <th className="text-left px-5 py-3 font-medium">Stock</th>
@@ -507,6 +525,10 @@ const AdminProducts = () => {
                   </td>
                   <td className="px-5 py-3 text-slate-300 hidden sm:table-cell">{p.category}</td>
                   <td className="px-5 py-3 text-white font-medium">INR {p.price}</td>
+                  <td className="px-5 py-3 text-slate-300 whitespace-nowrap">
+                    <span className={p.gstRate == null ? 'text-amber-300' : ''}>{p.gstRate == null ? 'Not set' : `${p.gstRate}%`}</span>
+                    <span className="block text-xs text-slate-500">HSN: {p.hsnCode || '-'} / {p.unit || '-'}</span>
+                  </td>
                   <td className="px-5 py-3 text-slate-400 line-through hidden md:table-cell">INR {p.originalPrice || p.price}</td>
                   <td className="px-5 py-3 text-amber-400 hidden md:table-cell">* {p.rating}</td>
                   <td className="px-5 py-3"><span className={`text-xs font-medium ${p.inStock ? 'text-emerald-400' : 'text-red-400'}`}>{p.inStock ? 'In Stock' : 'Out'}</span></td>
@@ -545,6 +567,7 @@ const ProductModal = ({ product, products, categories, isCreating, saving, onClo
     metaDescription: product.metaDescription || deriveProductMetaDescription(product.description || '', product.name),
   }));
   const [imageError, setImageError] = useState('');
+  const [gstRateText, setGstRateText] = useState(product.gstRate == null ? '' : String(product.gstRate));
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [colorUploadKey, setColorUploadKey] = useState<string>('');
   const [newColorName, setNewColorName] = useState('');
@@ -808,6 +831,20 @@ const ProductModal = ({ product, products, categories, isCreating, saving, onClo
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Price (INR)" value={String(form.price)} onChange={(v) => update('price', Number(v))} type="number" />
             <Field label="MRP (INR)" value={String(form.originalPrice || '')} onChange={(v) => update('originalPrice', Number(v))} type="number" />
+          </div>
+          <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+            <p className="text-sm font-semibold text-white">Invoice & GST</p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="HSN Code" value={form.hsnCode || ''} onChange={(v) => update('hsnCode', v)} />
+              <Field label="Unit (PCS, SET, KG...)" value={form.unit || ''} onChange={(v) => update('unit', v)} />
+              <Field label="GST Rate (%)" value={gstRateText} onChange={(v) => { setGstRateText(v); update('gstRate', v === '' ? null : Number(v)); }} type="number" />
+            </div>
+            <p className="text-xs text-slate-400">Selling prices include GST. Set this product's rate manually (0 means 0%; blank means not configured). Taxable value and IGST or CGST/SGST are calculated automatically on invoices.</p>
+            {form.gstRate != null && Number.isFinite(form.gstRate) && form.gstRate >= 0 && form.gstRate <= 100 && form.price > 0 && (() => {
+              const gross = Math.round(form.price * 100);
+              const taxable = Math.round(gross * 10000 / (10000 + Math.round(form.gstRate * 100)));
+              return <p className="text-xs text-emerald-300">Per unit: INR {(taxable / 100).toFixed(2)} taxable + INR {((gross - taxable) / 100).toFixed(2)} GST = INR {(gross / 100).toFixed(2)}</p>;
+            })()}
           </div>
           <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-4 sm:grid-cols-2">
             <Field
@@ -1567,6 +1604,7 @@ const Field = ({
     <label className="block text-sm text-slate-300 mb-1">{label}</label>
     {type === 'textarea' ? (
       <textarea
+        aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={4}
@@ -1574,6 +1612,7 @@ const Field = ({
       />
     ) : (
       <input
+        aria-label={label}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}

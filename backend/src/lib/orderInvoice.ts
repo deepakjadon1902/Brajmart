@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import path from 'node:path';
 import { parseJson } from './dbHelpers';
+import { allocatePaise, invoiceStateCode } from './productTax';
 
 const ASSETS = path.resolve(__dirname, '../../assets/invoice');
 const clean = (value: unknown) => String(value ?? '').trim();
@@ -33,7 +34,7 @@ export const buildOrderInvoiceModel = (row: any, payment: InvoicePayment = {}) =
   if (!/^\d+$/.test(orderId)) return fail('Cannot generate invoice: invalid order number');
   const rawItems = parseJson<any[]>(row.items, []);
   if (!Array.isArray(rawItems) || !rawItems.length) return fail(`Order ${orderId} has no invoice items`);
-  const items = rawItems.map((item, index) => {
+  const baseItems = rawItems.map((item, index) => {
     const quantity = Number(item.quantity ?? 1);
     if (!Number.isInteger(quantity) || quantity <= 0) return fail(`Order ${orderId}: invalid quantity for item ${index + 1}`);
     const price = cents(item.price, `price for item ${index + 1}`);
@@ -41,20 +42,53 @@ export const buildOrderInvoiceModel = (row: any, payment: InvoicePayment = {}) =
     if (item.selectedSize && !selections.Size && !selections.size) selections.Size = item.selectedSize;
     if (item.selectedPieces && !selections.Pieces && !selections.pieces) selections.Pieces = item.selectedPieces;
     const variants = Object.entries(selections).filter(([, value]) => clean(value)).map(([key, value]) => `${key}: ${clean(value)}`);
+    const gstRate = item.gstRate == null || item.gstRate === '' ? null : Number(item.gstRate);
+    if (gstRate !== null && (!Number.isFinite(gstRate) || gstRate < 0 || gstRate > 100 || Math.abs(gstRate * 100 - Math.round(gstRate * 100)) > 0.000001)) return fail(`Order ${orderId}: invalid GST rate for item ${index + 1}`);
     return {
       name: clean(item.name || item.product?.name) || 'Item',
       variants: variants.join(', '),
       sku: storedInvoiceItemSku(item),
+      hsnCode: clean(item.hsnCode), unit: clean(item.unit), gstRate,
       quantity, price,
     };
   });
   const shipping = parseJson<any>(row.shipping_address, {}) || {};
   const storedBilling = parseJson<any>(row.billing_address, {}) || {};
   const billing = addressPresent(storedBilling) ? storedBilling : shipping;
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = baseItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = cents(row.total, 'order total');
   const coupon = parseJson<any>(row.coupon_details, {}) || {};
   const discount = cents(row.coupon_discount ?? coupon.discountAmount ?? 0, 'discount');
+  const productDiscount = cents(coupon.productDiscount ?? Math.min(subtotal / 100, Math.max(0, discount / 100 - Number(coupon.freeShipping || 0) - Number(coupon.freePackaging || 0))), 'product discount');
+  if (productDiscount > subtotal || productDiscount > discount) return fail(`Order ${orderId}: product discount exceeds the recorded amounts`);
+  let itemDiscounts: number[];
+  if (coupon.itemDiscounts != null) {
+    if (!Array.isArray(coupon.itemDiscounts) || coupon.itemDiscounts.length !== baseItems.length || coupon.itemDiscounts.some((amount: any, index: number) => !Number.isSafeInteger(amount) || amount < 0 || amount > baseItems[index].price * baseItems[index].quantity) || coupon.itemDiscounts.reduce((sum: number, amount: number) => sum + amount, 0) !== productDiscount) return fail(`Order ${orderId}: invalid saved item discounts`);
+    itemDiscounts = coupon.itemDiscounts;
+  } else itemDiscounts = allocatePaise(productDiscount, baseItems.map((item) => item.price * item.quantity));
+  const placeOfSupply = clean(shipping.state || billing.state);
+  const supplyStateCode = invoiceStateCode(placeOfSupply);
+  const taxMode = supplyStateCode === '09' ? 'intra-state' : supplyStateCode ? 'inter-state' : 'unknown';
+  if (taxMode === 'unknown' && baseItems.some((item) => item.gstRate !== null && item.gstRate > 0)) return fail(`Order ${orderId}: a recognised delivery state is required to calculate IGST or CGST/SGST`);
+  const items = baseItems.map((item, index) => {
+    const lineTotal = item.price * item.quantity;
+    const netTotal = lineTotal - itemDiscounts[index];
+    const taxable = item.gstRate === null ? null : Math.round(netTotal * 10000 / (10000 + Math.round(item.gstRate * 100)));
+    const tax = taxable === null ? null : netTotal - taxable;
+    // Assign any odd paise to SGST so the two components reconcile exactly.
+    const cgst = tax === null ? null : taxMode === 'intra-state' ? Math.floor(tax / 2) : 0;
+    return { ...item, lineTotal, discount: itemDiscounts[index], netTotal, taxable, tax,
+      igst: tax === null ? null : taxMode === 'inter-state' ? tax : 0,
+      cgst, sgst: tax === null ? null : taxMode === 'intra-state' ? tax - (cgst || 0) : 0 };
+  });
+  const taxComplete = items.every((item) => item.gstRate !== null);
+  const taxSummary = taxComplete ? [
+    { label: 'Taxable Value (products)', amount: items.reduce((sum, item) => sum + (item.taxable || 0), 0) },
+    ...(taxMode === 'intra-state' ? [
+      { label: 'CGST (included)', amount: items.reduce((sum, item) => sum + (item.cgst || 0), 0) },
+      { label: 'SGST (included)', amount: items.reduce((sum, item) => sum + (item.sgst || 0), 0) },
+    ] : [{ label: 'IGST (included)', amount: items.reduce((sum, item) => sum + (item.igst || 0), 0) }]),
+  ] : [];
   const totals: { label: string; amount: number }[] = [{ label: 'Subtotal', amount: subtotal }];
   const hasBreakdown = ['shipping_amount', 'packaging_amount', 'cod_amount'].some((key) => row[key] != null);
   if (hasBreakdown) {
@@ -83,7 +117,7 @@ export const buildOrderInvoiceModel = (row: any, payment: InvoicePayment = {}) =
     customerEmail: clean(row.customer_email),
     paymentMethod: clean(payment.method || row.payment_method),
     paymentId: clean(payment.transactionId),
-    items, totals, total,
+    items, totals, total, taxSummary, taxComplete, taxMode, placeOfSupply, supplyStateCode,
   };
 };
 
@@ -183,21 +217,28 @@ export const buildOrderInvoicePdf = async (row: any, payment: InvoicePayment = {
   const billingEnd = addressBlock('Billing Details', model.billing, 34, model.showShippingAddress ? 170 : 300, true);
   const shippingEnd = model.showShippingAddress ? addressBlock('Shipping Details', model.shipping, 219, 128, false) : 0;
   let metadataEnd = 178;
-  for (const [label, value] of [['Invoice Number:', model.invoiceNumber], ['Order Number:', model.orderId], ['Order Date:', model.orderDate], ['Payment Method:', model.paymentMethod], ['Payment ID:', model.paymentId]]) {
+  for (const [label, value] of [['Invoice Number:', model.invoiceNumber], ['Order Number:', model.orderId], ['Order Date:', model.orderDate], ['Payment Method:', model.paymentMethod], ['Payment ID:', model.paymentId], ['Place of Supply:', model.placeOfSupply ? `${model.placeOfSupply}${model.supplyStateCode ? ` (${model.supplyStateCode})` : ''}` : '-']]) {
     const end = text(value || '-', 441, metadataEnd, 130, { size: 8.5 });
     text(label, 350, metadataEnd, 80, { bold: true, size: 8.5, align: 'right' });
     metadataEnd = Math.max(end, metadataEnd + 13);
   }
   let y = Math.max(275, billingEnd + 10, shippingEnd + 10, metadataEnd + 10);
   if (y > 650) return fail(`Order ${model.orderId}: address details are too long for the invoice header`);
+  const columns = [
+    { label: 'Product', width: 195, align: 'left' as const },
+    { label: 'HSN', width: 37, align: 'center' as const },
+    { label: 'Unit', width: 28, align: 'center' as const },
+    { label: 'Qty', width: 25, align: 'center' as const },
+    { label: 'Rate', width: 53, align: 'right' as const },
+    { label: 'Taxable', width: 60, align: 'right' as const },
+    { label: 'GST', width: 34, align: 'right' as const },
+    { label: model.taxMode === 'intra-state' ? 'CGST+SGST' : 'IGST', width: 61, align: 'right' as const },
+    { label: 'Price', width: 67, align: 'right' as const },
+  ].map((column, index, all) => ({ ...column, x: 15 + all.slice(0, index).reduce((sum, entry) => sum + entry.width, 0) }));
   const tableHeader = () => {
-    doc.rect(15, y, 560, 15).fill('#000000');
-    text('S.No.', 22, y + 1, 43, { bold: true, color: '#ffffff', align: 'center' });
-    text('Product', 75, y + 1, 255, { bold: true, color: '#ffffff' });
-    text('SKU', 345, y + 1, 75, { bold: true, color: '#ffffff', align: 'center' });
-    text('Quantity', 435, y + 1, 55, { bold: true, color: '#ffffff', align: 'center' });
-    text('Price', 495, y + 1, 70, { bold: true, color: '#ffffff', align: 'right' });
-    y += 15;
+    doc.rect(15, y, 560, 20).fill('#000000');
+    columns.forEach((column) => text(column.label, column.x + 4, y + 4, column.width - 8, { bold: true, size: 7, color: '#ffffff', align: column.align }));
+    y += 20;
   };
   const continuation = () => {
     doc.addPage(); heading();
@@ -206,33 +247,37 @@ export const buildOrderInvoicePdf = async (row: any, payment: InvoicePayment = {
   };
   tableHeader();
   model.items.forEach((item, index) => {
-    const productHeight = height(item.name, 255) + (item.variants ? height(item.variants, 255, 8) + 2 : 0);
-    const sku = item.sku || 'Not assigned';
-    const skuSize = Math.max(7.5, Math.min(9, 9 * 75 / Math.max(75, widthOf(sku, 9, false))));
-    const rowHeight = Math.max(23, productHeight + 10, height(sku, 75, skuSize) + 10);
+    const productWidth = columns[0].width - 8;
+    const details = [item.variants, item.sku ? `SKU: ${item.sku}` : '', item.discount ? `Discount: ${money(item.discount)}` : ''].filter(Boolean);
+    const productHeight = height(item.name, productWidth, 8) + details.reduce((sum, detail) => sum + height(detail, productWidth, 7) + 2, 0);
+    const values = [item.name, item.hsnCode || '-', item.unit || '-', String(item.quantity), money(item.price), item.taxable === null ? '-' : money(item.taxable), item.gstRate === null ? '-' : `${item.gstRate}%`, item.tax === null ? '-' : money(item.tax), money(item.netTotal)];
+    const rowHeight = Math.max(25, productHeight + 12, ...columns.slice(1).map((column, i) => height(values[i + 1], column.width - 8, 7) + 12));
     if (rowHeight > 640) return fail(`Order ${model.orderId}: item ${index + 1} is too long for an invoice page`);
     if (y + rowHeight > 740) continuation();
-    text(`${index + 1}.`, 22, y + 5, 43, { align: 'center' });
-    const productEnd = text(item.name, 75, y + 5, 255);
-    if (item.variants) text(item.variants, 75, productEnd + 2, 255, { size: 8, color: '#444444' });
-    text(sku, 345, y + 5, 75, { align: 'center', size: skuSize });
-    text(item.quantity, 435, y + 5, 55, { align: 'center' });
-    text(money(item.price), 495, y + 5, 70, { align: 'right' });
+    let productEnd = text(item.name, 19, y + 6, productWidth, { size: 8 });
+    for (const detail of details) productEnd = text(detail, 19, productEnd + 2, productWidth, { size: 7, color: '#444444' });
+    columns.slice(1).forEach((column, i) => text(values[i + 1], column.x + 4, y + 6, column.width - 8, { size: 7, align: column.align }));
     y += rowHeight; line(15, y, 575);
   });
-  const totalsHeight = model.totals.reduce((sum, entry) => sum + Math.max(14, height(entry.label, 125, 8.5, true)), 0) + 55;
+  const summaryRows = [...model.totals, ...model.taxSummary];
+  const notes = [
+    model.taxComplete ? 'Prices are inclusive of applicable GST. Tax shown above is included in product prices.' : 'GST breakdown unavailable for items without a saved GST rate. Missing HSN/unit shown as -.',
+    model.items.some((item) => item.discount) ? 'Price is after product discount; taxable value and GST use the discounted amount.' : '',
+  ].filter(Boolean).join('\n');
+  const totalsHeight = summaryRows.reduce((sum, entry) => sum + Math.max(14, height(entry.label, 145, 8, true)), 0) + 48 + height(notes, 540, 7);
   if (y + totalsHeight > 750) continuation();
   y += 9;
-  for (const entry of model.totals) {
-    const end = text(entry.label, 385, y, 125, { bold: true, size: 8.5 });
-    const amountEnd = text(`${entry.amount < 0 ? '-' : ''}${money(Math.abs(entry.amount))}`, 510, y, 55, { size: 8.5, align: 'right' });
+  for (const entry of summaryRows) {
+    const label = entry.label === 'Subtotal' && model.items.some((item) => item.discount) ? 'Subtotal (before discount)' : entry.label;
+    const end = text(label, 340, y, 145, { bold: true, size: 8 });
+    const amountEnd = text(`${entry.amount < 0 ? '-' : ''}${money(Math.abs(entry.amount))}`, 490, y, 75, { size: 8, align: 'right' });
     y = Math.max(y + 12.5, end, amountEnd);
   }
-  line(381, y + 3, 571, '#222222');
+  line(336, y + 3, 571, '#222222');
   text('Total', 393, y + 7, 70, { bold: true });
   text(money(model.total), 465, y + 5, 100, { bold: true, size: 11, align: 'right' });
-  line(381, y + 24, 571, '#222222');
-  text('*All prices are inclusive of applicable GST.', 380, y + 28, 185, { size: 6.2, align: 'right', italic: true });
+  line(336, y + 24, 571, '#222222');
+  text(notes, 25, y + 32, 540, { size: 7, align: 'right', italic: true });
   const pages = doc.bufferedPageRange();
   for (let page = pages.start; page < pages.start + pages.count; page++) {
     doc.switchToPage(page);

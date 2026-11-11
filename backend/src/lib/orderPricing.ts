@@ -1,5 +1,6 @@
 import { dbExecute, dbQuery } from './db';
 import { boolFromDb } from './dbHelpers';
+import { allocatePaise, productTaxFromRow, ProductTax } from './productTax';
 
 export type RawOrderItem = {
   productId?: string | number;
@@ -12,7 +13,7 @@ export type RawOrderItem = {
   selections?: Record<string, string>;
 };
 
-export type PricedOrderItem = {
+export type PricedOrderItem = Partial<ProductTax> & {
   productId: string;
   sku: string;
   slug: string;
@@ -180,10 +181,14 @@ export const applyCouponToTotals = async (
 
   const maxDiscount = Number(coupon.max_discount || 0);
   if (maxDiscount > 0) productDiscount = Math.min(productDiscount, maxDiscount);
+  productDiscount = Math.min(productDiscount, eligibleSubtotal);
 
   const freeShipping = Boolean(Number(coupon.free_shipping)) ? totals.shipping : 0;
   const freePackaging = Boolean(Number(coupon.free_packaging)) ? totals.packaging : 0;
   const discountAmount = Math.min(totals.total, productDiscount + freeShipping + freePackaging);
+  // Save coupon eligibility with the order; later edits to a coupon must not
+  // move its discount between products with different GST rates.
+  const itemDiscounts = allocatePaise(Math.round(productDiscount * 100), items.map((item) => eligibleItems.includes(item) ? Math.round(item.price * 100) * item.quantity : 0));
   const nextTotals = {
     ...totals,
     couponDiscount: discountAmount,
@@ -204,6 +209,7 @@ export const applyCouponToTotals = async (
       code,
       discountAmount,
       productDiscount,
+      itemDiscounts,
       freeShipping,
       freePackaging,
       description: description || 'Coupon benefit applied',
@@ -226,7 +232,7 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
   const uniqueIds = Array.from(new Set(ids));
   const placeholders = uniqueIds.map(() => '?').join(',');
   const rows = await dbQuery<any>(
-    `SELECT id, sku, name, slug, price, image, category, category_id, in_stock, stock_quantity, reserved_quantity
+    `SELECT id, sku, products.*
      FROM products
      WHERE id IN (${placeholders}) AND archived_at IS NULL`,
     uniqueIds
@@ -264,6 +270,7 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
     subtotal += quantity * price;
 
     pricedItems.push({
+      ...productTaxFromRow(product),
       productId,
       sku: String(product.sku || '').trim(),
       slug: String(product.slug || ''),

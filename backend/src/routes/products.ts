@@ -7,6 +7,7 @@ import { actorFromRequest, insertAdminAuditLog } from '../lib/adminAudit';
 import { approvedReviewAggregateSql } from '../lib/reviewAggregates';
 import { normalizeHomePlacement, lockHomeCategories, claimHomePosition } from '../lib/productHomePlacement';
 import { publishCatalogUpdate, streamCatalogUpdates } from '../lib/catalogEvents';
+import { normalizeProductTaxFields, productTaxFromRow } from '../lib/productTax';
 
 const router = Router();
 
@@ -143,6 +144,15 @@ const getMissingProductColumns = async (cols: string[]) => {
   return missing;
 };
 
+const checkTaxFields = async (data: any) => {
+  const error = normalizeProductTaxFields(data);
+  if (error) return error;
+  if (!['hsnCode', 'unit', 'gstRate'].some((key) => data[key] !== undefined)) return null;
+  const missing = await getMissingProductColumns(['hsn_code', 'unit', 'gst_rate']);
+  if (Object.values(missing).some(Boolean)) return 'Database schema missing product tax columns. Run backend/sql/migrate_products_invoice_tax.sql and restart the backend.';
+  return null;
+};
+
 // Catalog requests rely on reviewed migrations; they must never modify schema or backfill data.
 const variantFieldsProvided = (data: any) =>
   data?.sizes !== undefined ||
@@ -162,6 +172,7 @@ const variantSchemaErrorMessage = (missing: Record<string, boolean>) => {
 };
 
 export const mapProductRow = (row: any) => ({
+  ...productTaxFromRow(row),
   id: String(row.id),
   _id: String(row.id),
   name: row.name,
@@ -286,6 +297,9 @@ const buildUpdate = (data: any) => {
   if (data.reservedQuantity !== undefined) set('reserved_quantity', Math.max(0, Math.floor(Number(data.reservedQuantity) || 0)));
   if (data.lowStockThreshold !== undefined) set('low_stock_threshold', Math.max(0, Math.floor(Number(data.lowStockThreshold) || 0)));
   if (data.sku !== undefined) set('sku', data.sku);
+  if (data.hsnCode !== undefined) set('hsn_code', data.hsnCode);
+  if (data.unit !== undefined) set('unit', data.unit);
+  if (data.gstRate !== undefined) set('gst_rate', data.gstRate);
   if (data.soldCount !== undefined) set('sold_count', data.soldCount);
   if (data.description !== undefined) set('description', data.description);
   if (data.metaTitle !== undefined) set('meta_title', data.metaTitle);
@@ -353,7 +367,7 @@ router.get('/schema', auth, adminOnly, async (_req, res) => {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     const dbRow = await dbQuery<any>('SELECT DATABASE() AS db');
     const database = dbRow?.[0]?.db ?? null;
-    const cols = ['meta_title', 'meta_description', 'cod_enabled', 'show_on_home', 'home_position', 'sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants'];
+    const cols = ['meta_title', 'meta_description', 'cod_enabled', 'show_on_home', 'home_position', 'hsn_code', 'unit', 'gst_rate', 'sizes', 'size_pricing', 'piece_pricing', 'attributes', 'variant_pricing', 'color_variants'];
     const missing = await getMissingProductColumns(cols);
     res.json({
       database,
@@ -414,6 +428,8 @@ router.post('/', auth, adminOnly, async (req, res) => {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const data = req.body || {};
+    const taxError = await checkTaxFields(data);
+    if (taxError) return res.status(400).json({ message: taxError });
     normalizeHomePlacement(data);
     if (data.sku !== undefined) {
       data.sku = normalizeSku(data.sku);
@@ -570,6 +586,8 @@ router.post('/', auth, adminOnly, async (req, res) => {
       replacedHomeProductIds = await claimHomePosition(connection, data, categoryIdToSave);
       const execute: typeof dbExecute = async (sql, params = []) => (await connection.execute(sql, params))[0];
       const created = await insertProduct(execute);
+      const taxUpdate = buildUpdate({ hsnCode: data.hsnCode, unit: data.unit, gstRate: data.gstRate });
+      if (taxUpdate) await execute(`UPDATE products SET ${taxUpdate.sql} WHERE id = ?`, [...taxUpdate.values, created.insertId]);
       await execute('UPDATE products SET home_position = ? WHERE id = ?', [data.homePosition ?? null, created.insertId]);
       return created;
     });
@@ -604,6 +622,8 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
 
     const body = req.body || {};
+    const taxError = await checkTaxFields(body);
+    if (taxError) return res.status(400).json({ message: taxError });
     normalizeHomePlacement(body);
     if (body.sku !== undefined) {
       body.sku = normalizeSku(body.sku);
