@@ -9,6 +9,8 @@ import { markCouponUsed } from '../lib/orderPricing';
 import { sendVerifiedPurchaseForOrder } from '../lib/purchaseTracking';
 import { isCapturedRazorpayPayment, verifyCapturedRazorpayPayment } from '../lib/razorpayVerification';
 import { resolveRazorpayCredentials } from '../lib/razorpayEnvironment';
+import { verifyPayUTransaction } from '../lib/payu';
+import { updateOrderForPayment } from './razorpay';
 
 const router = Router();
 
@@ -375,7 +377,23 @@ export const reconcileRazorpayToken = async (token: string) => {
   return current;
 };
 
-export const reconcileRecentRazorpayPayments = async (limit = 50) => {
+export const reconcilePayUToken = async (token: string) => {
+  if (!token || !isDbConnected()) return null;
+  const rows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
+  const current = rows[0];
+  if (!current || String(current.status) === 'paid' || String(current.method || '').toLowerCase() !== 'payu') return current || null;
+  const verified = await verifyPayUTransaction(token, Number(current.amount));
+  if (!verified.captured) return current;
+  return updateOrderForPayment({
+    token,
+    paymentId: verified.paymentId || String(current.payment_id || token),
+    status: 'paid',
+    note: 'Payment reconciled through PayU Verify Payment API',
+    provider: 'PayU',
+  });
+};
+
+export const reconcileRecentGatewayPayments = async (limit = 50) => {
   if (!isDbConnected()) return 0;
   let reconciled = 0;
   const safeLimit = Math.max(1, Math.min(100, Math.round(Number(limit) || 50)));
@@ -400,17 +418,38 @@ export const reconcileRecentRazorpayPayments = async (limit = 50) => {
       // Keep admin pages responsive even if one gateway lookup fails.
     }
   }
+
+  const payuRows = await dbQuery<any>(
+    `SELECT token, status
+       FROM payment_status
+      WHERE status IN ('pending', 'failed')
+        AND method = 'PayU'
+      ORDER BY updated_at DESC
+      LIMIT ${safeLimit}`
+  );
+  for (const row of payuRows) {
+    const token = String(row?.token || '').trim();
+    if (!token) continue;
+    try {
+      const beforeRows = await dbQuery<any>('SELECT status FROM payment_status WHERE token = ? LIMIT 1', [token]);
+      const before = String(beforeRows?.[0]?.status || '');
+      const after = await reconcilePayUToken(token);
+      if (before !== String(after?.status || '')) reconciled += 1;
+    } catch {
+      // Leave the stored status unchanged if PayU is temporarily unreachable.
+    }
+  }
   return reconciled;
 };
 
 let backgroundReconcilePromise: Promise<number> | null = null;
 let lastBackgroundReconcileAt = 0;
 
-export const triggerRecentRazorpayReconciliation = (limit = 50) => {
+export const triggerRecentGatewayReconciliation = (limit = 50) => {
   const now = Date.now();
   if (backgroundReconcilePromise || now - lastBackgroundReconcileAt < 15_000) return;
   lastBackgroundReconcileAt = now;
-  backgroundReconcilePromise = reconcileRecentRazorpayPayments(limit)
+  backgroundReconcilePromise = reconcileRecentGatewayPayments(limit)
     .catch(() => 0)
     .finally(() => {
       backgroundReconcilePromise = null;
@@ -420,7 +459,7 @@ export const triggerRecentRazorpayReconciliation = (limit = 50) => {
 router.get('/', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    triggerRecentRazorpayReconciliation(50);
+    triggerRecentGatewayReconciliation(50);
     res.json(await getAdminPaymentRows());
   } catch (err: any) {
     res.status(500).json({ message: err.message });
@@ -430,7 +469,7 @@ router.get('/', auth, adminOnly, async (_req, res) => {
 router.post('/reconcile', auth, adminOnly, async (_req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    const reconciled = await reconcileRecentRazorpayPayments();
+    const reconciled = await reconcileRecentGatewayPayments();
     return res.json({ ok: true, reconciled });
   } catch (err: any) {
     return res.status(500).json({ message: err?.message || 'Failed to reconcile payments' });
@@ -455,9 +494,9 @@ router.post('/admin/confirm-pending/:orderId', auth, adminOnly, async (req, res)
       [orderId]
     );
     const statusRow = statusRows[0];
-    if (String(orderRow.payment_method || '').toLowerCase() === 'razorpay'
-      || String(statusRow?.method || '').toLowerCase() === 'razorpay') {
-      return res.status(400).json({ message: 'Razorpay orders can only be confirmed by verified gateway payment.' });
+    if (['razorpay', 'payu'].includes(String(orderRow.payment_method || '').toLowerCase())
+      || ['razorpay', 'payu'].includes(String(statusRow?.method || '').toLowerCase())) {
+      return res.status(400).json({ message: 'Gateway orders can only be confirmed by verified payment.' });
     }
     if (statusRow && String(statusRow.status || '') === 'paid') {
       return res.json({ ok: true, orderId, status: 'paid', alreadyConfirmed: true });
@@ -610,8 +649,19 @@ router.get('/status/:token', async (req, res) => {
     const rows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
     if (!rows[0]) return res.status(404).json({ message: 'Payment not found' });
 
-    // Auto-reconcile Razorpay payments while the customer views the status page.
+    // Reconcile supported gateways while the customer views the payment status page.
     const current = rows[0];
+    if ((String(current.status) === 'pending' || String(current.status) === 'failed') && String(current.method || '').toLowerCase() === 'payu') {
+      try {
+        const reconciled = await reconcilePayUToken(token);
+        if (reconciled && String(reconciled.status) !== String(current.status)) {
+          const reconciledRows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [token]);
+          return res.json(await mapPaymentStatusForClient(reconciledRows[0] || current));
+        }
+      } catch {
+        // Keep displaying the current status if PayU is temporarily unreachable.
+      }
+    }
     if ((String(current.status) === 'pending' || String(current.status) === 'failed') && String(current.method || '') === 'Razorpay') {
       try {
         const reconciled = await reconcileRazorpayToken(token);

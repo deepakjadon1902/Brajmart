@@ -169,7 +169,9 @@ export const ensureShippingLabelsSchema = () => {
 
     const columns = await dbQuery<any>("SHOW COLUMNS FROM orders LIKE 'status'");
     const statusType = String(columns[0]?.Type || '').toLowerCase();
-    if (statusType.startsWith('enum(') && !statusType.includes("'rto'")) {
+    const hasPendingPaymentStatus = statusType.includes("'pending_payment'");
+    const hasRtoStatus = statusType.includes("'rto'");
+    if (statusType.startsWith('enum(') && (!hasPendingPaymentStatus || !hasRtoStatus)) {
       await dbExecute(`
         ALTER TABLE orders MODIFY COLUMN status
         ENUM('pending_payment','confirmed','processing','shipped','out_for_delivery','delivered','rto','cancelled')

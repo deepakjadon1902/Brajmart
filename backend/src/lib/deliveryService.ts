@@ -245,7 +245,6 @@ export const checkDeliveryServicePincode = async (params: { desPincode: string }
     }
   }
 
-  await ensureDeliveryServiceSchema();
   const rows = await dbQuery<any>(
     'SELECT * FROM delivery_pincode_rules WHERE pincode = ? LIMIT 1',
     [desPincode]

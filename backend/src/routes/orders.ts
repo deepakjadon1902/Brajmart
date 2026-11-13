@@ -16,7 +16,7 @@ import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimi
 import { convertReservationToSale, releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
 import { insertAdminAuditLog } from '../lib/adminAudit';
 import { cancelCartRemindersForOrder } from '../lib/cartFollowups';
-import { triggerRecentRazorpayReconciliation } from './payments';
+import { triggerRecentGatewayReconciliation } from './payments';
 import { capturePurchaseOrderContext } from '../lib/purchaseTracking';
 
 const router = Router();
@@ -125,7 +125,7 @@ router.get('/my', auth, async (req: AuthRequest, res) => {
 router.get('/', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    triggerRecentRazorpayReconciliation(25);
+    triggerRecentGatewayReconciliation(25);
     const filter = adminOrderFilterSql(req.query);
 
     const rows = await dbQuery<any>(
@@ -144,7 +144,7 @@ router.get('/', auth, adminOnly, async (req, res) => {
 router.get('/admin/pending-payments', auth, adminOnly, async (req, res) => {
   try {
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    triggerRecentRazorpayReconciliation(50);
+    triggerRecentGatewayReconciliation(50);
     const search = getSearchTerm(req.query.search);
     const params: any[] = [];
     const searchSql = search

@@ -17,6 +17,12 @@ DB_PASSWORD=your_db_password
 DB_NAME=your_db_name
 ```
 
+For an existing database, first verify that its checkout columns and tables
+match `backend/sql/migrate_checkout_readiness.sql`. Apply that migration in
+Hostinger/phpMyAdmin only if anything is missing; review any custom
+`orders.status` values before applying its status-enum update. The backend
+intentionally does not apply schema changes automatically in production.
+
 ## 2) Backend Environment
 
 Required:
@@ -32,6 +38,10 @@ Optional (Payments + Email):
 RAZORPAY_PLATFORM_KEY_ID=your_key_id
 RAZORPAY_PLATFORM_KEY_SECRET=your_key_secret
 RAZORPAY_PLATFORM_WEBHOOK_SECRET=your_webhook_secret
+PAYU_KEY=your_payu_merchant_key
+PAYU_SALT=your_payu_merchant_salt
+PAYU_ENV=test
+PAYU_CALLBACK_URL=https://your-public-api.example.com/api/payu/callback
 
 SMTP_HOST=your_smtp_host
 SMTP_PORT=587
@@ -155,6 +165,6 @@ npm run dev
 
 ## 8) Notes
 
-- Online payments use Razorpay and require valid Razorpay credentials.
+- Online checkout uses PayU's hosted payment page. Add PayU merchant credentials and a public callback URL to the backend environment before accepting payments. Razorpay is temporarily unavailable in checkout.
 - Email notifications will only work if SMTP credentials are correct.
 - DB is required. Backend will not run without a valid database connection.

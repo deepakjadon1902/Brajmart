@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
+import { fetchPublicSettings, createOrder, createPayUOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
 import { getMetaAttributionContext, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { getGooglePurchaseContext } from '@/lib/googleAttribution';
 import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft';
@@ -166,6 +166,12 @@ const RazorpayLogo = () => (
   </div>
 );
 
+const PayULogo = () => (
+  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#1d6fbc]/25 bg-[#1d6fbc]/10 text-[#1d6fbc]">
+    <span className="text-[15px] font-extrabold tracking-tight">PayU</span>
+  </div>
+);
+
 const CodLogo = () => (
   <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-tulsi/25 bg-tulsi/10 text-tulsi">
     <Truck size={23} />
@@ -192,7 +198,7 @@ const CheckoutPage = () => {
   const defaultAddress = getDefaultAddress(user);
 
   const [step, setStep] = useState(() => initialCheckoutDraft?.step && initialCheckoutDraft.step > 0 ? initialCheckoutDraft.step : 0);
-  const [paymentMethod, setPaymentMethod] = useState(initialCheckoutDraft?.paymentMethod || 'razorpay');
+  const [paymentMethod, setPaymentMethod] = useState(initialCheckoutDraft?.paymentMethod === 'cod' ? 'cod' : 'payu');
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(initialCheckoutDraft?.billingSameAsShipping ?? true);
   const [processing, setProcessing] = useState(false);
   const [customerEmail, setCustomerEmail] = useState(initialCheckoutDraft?.customerEmail || user?.email || '');
@@ -319,7 +325,7 @@ const CheckoutPage = () => {
     if (serviceability && serviceability.pincode !== effectivePincode) {
       setServiceability(null);
       setWantsCodService(false);
-      if (paymentMethod === 'cod') setPaymentMethod('razorpay');
+      if (paymentMethod === 'cod') setPaymentMethod('payu');
     }
   }, [effectivePincode, paymentMethod, serviceability]);
 
@@ -327,7 +333,7 @@ const CheckoutPage = () => {
     if (paymentMethod === 'cod') {
       if (canUseCodService) setWantsCodService(true);
       else {
-        setPaymentMethod('razorpay');
+        setPaymentMethod('payu');
         setWantsCodService(false);
       }
       return;
@@ -808,6 +814,10 @@ const CheckoutPage = () => {
         amount: grandTotal,
         idempotencyKey: getCheckoutIdempotencyKey({
           email: effectiveEmail,
+          customerName: cleanBillingAddress.fullName,
+          customerPhone: cleanBillingAddress.mobile,
+          shippingAddress: cleanShippingAddress,
+          billingAddress: cleanBillingAddress,
           couponCode: appliedCoupon?.code || '',
           codFee,
           items: items.map((item) => ({
@@ -907,6 +917,86 @@ const CheckoutPage = () => {
     }
   };
 
+  const startPayUPayment = async () => {
+    if (processing || checkoutValidating) return;
+    if (!validateContactAndAddress()) return;
+    setProcessing(true);
+    try {
+      await followups.save().catch(() => {});
+      const cartIsCurrent = await runCheckoutValidation('submit');
+      if (!cartIsCurrent) {
+        setProcessing(false);
+        return;
+      }
+      const cleanShippingAddress = cleanAddressForOrder(effectiveShipping);
+      const cleanBillingAddress = cleanAddressForOrder(billingAddress);
+      const orderPayload = {
+        userId: isAuthenticated ? user?.id : undefined,
+        items: items.map((i) => ({
+          productId: i.product.id,
+          name: i.product.name,
+          image: i.product.image,
+          quantity: i.quantity,
+          price: i.product.price,
+          selectedSize: i.product.selectedSize,
+          selectedPieces: i.product.selectedPieces,
+          selectedAttributes: i.product.selectedAttributes,
+        })),
+        total: grandTotal,
+        status: 'pending_payment',
+        customerName: cleanBillingAddress.fullName,
+        customerEmail: effectiveEmail,
+        shippingAddress: cleanShippingAddress,
+        billingAddress: cleanBillingAddress,
+        paymentMethod: 'PayU',
+        codRequested: false,
+        codAmount: 0,
+        couponCode: appliedCoupon?.code || undefined,
+      };
+      const purchaseContext = { ...checkoutMetaContext(), googleAnalytics: await getGooglePurchaseContext() };
+      const result = await createPayUOrder({
+        amount: grandTotal,
+        idempotencyKey: getCheckoutIdempotencyKey({
+          email: effectiveEmail,
+          customerName: cleanBillingAddress.fullName,
+          customerPhone: cleanBillingAddress.mobile,
+          shippingAddress: cleanShippingAddress,
+          billingAddress: cleanBillingAddress,
+          couponCode: appliedCoupon?.code || '',
+          codFee,
+          items: items.map((item) => ({
+            id: item.product.id,
+            quantity: item.quantity,
+            selectedSize: item.product.selectedSize || '',
+            selectedPieces: item.product.selectedPieces || '',
+            selectedAttributes: item.product.selectedAttributes || {},
+          })),
+        }),
+        metaContext: purchaseContext,
+        order: orderPayload,
+        customer: { name: cleanBillingAddress.fullName, email: effectiveEmail, phone: cleanBillingAddress.mobile },
+      });
+
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = result.actionUrl;
+      form.style.display = 'none';
+      Object.entries(result.fields).forEach(([name, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = String(value ?? '');
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '';
+      toast.error(message || 'Unable to start PayU checkout. Please try again.');
+      setProcessing(false);
+    }
+  };
+
   const handlePlaceOrder = async () => {
     if (processing || checkoutValidating) return;
     if (!validateContactAndAddress()) return;
@@ -993,7 +1083,9 @@ const CheckoutPage = () => {
       return;
     }
 
-    if (paymentMethod === 'razorpay') {
+    if (paymentMethod === 'payu') {
+      startPayUPayment();
+    } else if (paymentMethod === 'razorpay') {
       startRazorpayPayment();
     }
   };
@@ -1011,14 +1103,24 @@ const CheckoutPage = () => {
 
   const paymentOptions = [
     {
+      value: 'payu',
+      title: 'PayU',
+      subtitle: 'UPI, cards, net banking, wallets, and more',
+      logo: PayULogo,
+      pills: ['UPI', 'Cards', 'NetBanking'],
+      badge: 'Recommended',
+      brandColor: 'text-[#1d6fbc]',
+      disabled: false,
+    },
+    {
       value: 'razorpay',
       title: 'Razorpay',
-      subtitle: 'UPI, cards, netbanking, wallets, and EMI',
+      subtitle: 'Temporarily unavailable. Please use PayU for online payment.',
       logo: RazorpayLogo,
-      pills: ['UPI', 'Cards', 'NetBanking'],
-      badge: 'Primary',
-      brandColor: 'text-[#0b72e7]',
-      disabled: false,
+      pills: ['Temporarily unavailable'],
+      badge: 'Unavailable',
+      brandColor: 'text-muted-foreground',
+      disabled: true,
     },
     ...(!hasPrasadamItems && codEligibleItems ? [{
       value: 'cod',
@@ -1257,6 +1359,10 @@ const CheckoutPage = () => {
                           Change
                         </button>
                       </div>
+                    </div>
+
+                    <div role="status" aria-live="polite" className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                      Razorpay is temporarily unavailable due to a technical issue. Please use PayU for your online payment.
                     </div>
 
                     {paymentOptions.length === 0 ? (

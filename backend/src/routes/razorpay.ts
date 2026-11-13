@@ -292,51 +292,55 @@ const hasPaidSettlement = async (orderId: any) => {
   return rows.length > 0;
 };
 
-const updateOrderForPayment = async (params: {
-  razorpayOrderId: string;
-  razorpayPaymentId?: string;
+export const updateOrderForPayment = async (params: {
+  token: string;
+  paymentId?: string;
   status: 'paid' | 'failed';
   note: string;
+  provider?: 'Razorpay' | 'PayU';
   metaContext?: unknown;
   request?: any;
 }) => {
-  const statusRows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [params.razorpayOrderId]);
+  const provider = params.provider || 'Razorpay';
+  const statusRows = await dbQuery<any>('SELECT * FROM payment_status WHERE token = ? LIMIT 1', [params.token]);
   const statusRow = statusRows[0];
   if (!statusRow) return null;
   if (params.status === 'paid') {
     const orderRows = await dbQuery<any>('SELECT total, payment_method FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
-    if (String(statusRow.method || '').toLowerCase() !== 'razorpay'
-      || String(orderRows[0]?.payment_method || '').toLowerCase() !== 'razorpay') {
-      throw new Error('Payment must belong to a Razorpay checkout');
+    if (String(statusRow.method || '').toLowerCase() !== provider.toLowerCase()
+      || String(orderRows[0]?.payment_method || '').toLowerCase() !== provider.toLowerCase()) {
+      throw new Error(`Payment must belong to a ${provider} checkout`);
     }
     const total = Number(orderRows[0]?.total);
     if (!Number.isFinite(total) || Math.round(total * 100) !== Math.round(Number(statusRow.amount) * 100)) {
-      throw new Error('Razorpay payment amount does not match the stored order total');
+      throw new Error(`${provider} payment amount does not match the stored order total`);
     }
-    await verifyCapturedRazorpayPayment({ orderId: params.razorpayOrderId, paymentId: params.razorpayPaymentId || '', amount: total });
+    if (provider === 'Razorpay') {
+      await verifyCapturedRazorpayPayment({ orderId: params.token, paymentId: params.paymentId || '', amount: total });
+    }
   }
   if (String(statusRow.status || '') === 'paid' && params.status === 'failed') {
-    return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
+    return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.paymentId || params.token, status: 'paid' };
   }
 
   if (params.status === 'failed' && await hasPaidSettlement(statusRow.order_id)) {
     await dbExecute(
       'UPDATE payment_status SET status = ?, updated_at = NOW() WHERE token = ?',
-      ['paid', params.razorpayOrderId]
+      ['paid', params.token]
     );
-    return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.razorpayPaymentId || params.razorpayOrderId, status: 'paid' };
+    return { orderId: statusRow.order_id, paymentId: statusRow.payment_id || params.paymentId || params.token, status: 'paid' };
   }
 
   const alreadyFinal = String(statusRow.status || '') === params.status;
   if (alreadyFinal) {
-    if (params.razorpayPaymentId && String(statusRow.payment_id || '') !== params.razorpayPaymentId) {
+    if (params.paymentId && String(statusRow.payment_id || '') !== params.paymentId) {
       await dbExecute(
         'UPDATE payment_status SET payment_id = ?, updated_at = NOW() WHERE token = ?',
-        [params.razorpayPaymentId, params.razorpayOrderId]
+        [params.paymentId, params.token]
       );
       await dbExecute(
         'UPDATE payments SET transaction_id = ?, updated_at = NOW() WHERE order_id = ? ORDER BY id DESC LIMIT 1',
-        [params.razorpayPaymentId, statusRow.order_id]
+        [params.paymentId, statusRow.order_id]
       );
     }
     if (params.status === 'paid') {
@@ -345,9 +349,9 @@ const updateOrderForPayment = async (params: {
       if (params.metaContext || params.request) await capturePurchaseOrderContext(statusRow.order_id, params.metaContext, params.request);
       // A duplicate signed callback is also a safe retry after a provider outage.
       // Each provider reserves the stable order ID before sending again.
-      void sendVerifiedPurchaseForOrder(statusRow.order_id, params.razorpayPaymentId || statusRow.payment_id, params.razorpayOrderId);
+      void sendVerifiedPurchaseForOrder(statusRow.order_id, params.paymentId || statusRow.payment_id, params.token);
     }
-    return { orderId: statusRow.order_id, paymentId: params.razorpayPaymentId || statusRow.payment_id || params.razorpayOrderId, status: params.status };
+    return { orderId: statusRow.order_id, paymentId: params.paymentId || statusRow.payment_id || params.token, status: params.status };
   }
 
   const orderRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [statusRow.order_id]);
@@ -368,7 +372,7 @@ const updateOrderForPayment = async (params: {
 
   const paymentRows = await dbQuery<any>('SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1', [statusRow.order_id]);
   const paymentRow = paymentRows[0];
-  const transactionId = params.razorpayPaymentId || paymentRow?.transaction_id || params.razorpayOrderId;
+  const transactionId = params.paymentId || paymentRow?.transaction_id || params.token;
 
   if (paymentRow) {
     await dbExecute(
@@ -378,13 +382,13 @@ const updateOrderForPayment = async (params: {
   } else {
     await dbExecute(
       'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [statusRow.order_id, orderRow.customer_name || '', orderRow.customer_email || '', statusRow.method || 'Razorpay', Number(statusRow.amount || orderRow.total || 0), params.status, transactionId]
+      [statusRow.order_id, orderRow.customer_name || '', orderRow.customer_email || '', statusRow.method || provider, Number(statusRow.amount || orderRow.total || 0), params.status, transactionId]
     );
   }
 
   await dbExecute(
     'INSERT INTO payment_status (token, status, order_id, amount, method, payment_id) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), order_id = VALUES(order_id), amount = VALUES(amount), method = VALUES(method), payment_id = VALUES(payment_id), updated_at = NOW()',
-    [params.razorpayOrderId, params.status, statusRow.order_id, Number(statusRow.amount || orderRow.total || 0), statusRow.method || 'Razorpay', transactionId]
+    [params.token, params.status, statusRow.order_id, Number(statusRow.amount || orderRow.total || 0), statusRow.method || provider, transactionId]
   );
 
   if (params.status === 'paid') await cancelCartRemindersForOrder(orderRow.customer_email).catch(() => {});
@@ -392,10 +396,10 @@ const updateOrderForPayment = async (params: {
   const orderItems = parseJson(orderRow.items, []);
   if (params.status === 'paid') {
     await withDbTransaction((connection) => convertReservationToSale(connection, Number(statusRow.order_id), orderItems));
-    await markCheckoutSessionStatus(params.razorpayOrderId, 'paid').catch(() => {});
+    await markCheckoutSessionStatus(params.token, 'paid').catch(() => {});
   } else {
     await withDbTransaction((connection) => releaseInventoryForOrder(connection, Number(statusRow.order_id), orderItems));
-    await markCheckoutSessionStatus(params.razorpayOrderId, 'failed').catch(() => {});
+    await markCheckoutSessionStatus(params.token, 'failed').catch(() => {});
   }
 
   if (params.status === 'paid' && orderRow.coupon_code) {
@@ -439,7 +443,7 @@ const updateOrderForPayment = async (params: {
     orderId: String(statusRow.order_id),
     amount: Number(statusRow.amount || orderRow.total || 0),
     paymentId: transactionId,
-    method: statusRow.method || 'Razorpay',
+    method: statusRow.method || provider,
     customerEmail: orderRow.customer_email,
   }).catch(() => {});
 
@@ -447,7 +451,7 @@ const updateOrderForPayment = async (params: {
     if (params.metaContext || params.request) {
       await capturePurchaseOrderContext(statusRow.order_id, params.metaContext, params.request).catch(() => {});
     }
-    sendVerifiedPurchaseForOrder(statusRow.order_id, transactionId, params.razorpayOrderId).catch((err) => {
+    sendVerifiedPurchaseForOrder(statusRow.order_id, transactionId, params.token).catch((err) => {
       console.error('Meta verified Purchase event failed:', err);
     });
   }
@@ -653,8 +657,8 @@ router.post('/retry-order', razorpayCreateLimiter, async (req, res) => {
     const capturedPayment = await findCapturedRazorpayPayment(previousToken).catch(() => null);
     if (capturedPayment) {
       const result = await updateOrderForPayment({
-        razorpayOrderId: previousToken,
-        razorpayPaymentId: String(capturedPayment.id),
+        token: previousToken,
+        paymentId: String(capturedPayment.id),
         status: 'paid',
         note: 'Payment corrected before retry from Razorpay captured status',
       });
@@ -742,8 +746,8 @@ router.post('/verify', razorpayReportLimiter, async (req, res) => {
     await assertRazorpayPaymentCaptured(String(razorpay_order_id), String(razorpay_payment_id));
 
     const result = await updateOrderForPayment({
-      razorpayOrderId: String(razorpay_order_id),
-      razorpayPaymentId: String(razorpay_payment_id),
+      token: String(razorpay_order_id),
+      paymentId: String(razorpay_payment_id),
       status: 'paid',
       note: 'Payment verified via Razorpay checkout signature',
       metaContext: req.body?.metaContext,
@@ -789,8 +793,8 @@ router.post('/failed', razorpayReportLimiter, async (req, res) => {
     const capturedPayment = await findCapturedRazorpayPayment(razorpayOrderId, razorpay_payment_id ? String(razorpay_payment_id) : undefined).catch(() => null);
     if (capturedPayment) {
       const result = await updateOrderForPayment({
-        razorpayOrderId,
-        razorpayPaymentId: String(capturedPayment.id),
+        token: razorpayOrderId,
+        paymentId: String(capturedPayment.id),
         status: 'paid',
         note: 'Payment corrected from Razorpay captured status',
         metaContext: req.body?.metaContext,
@@ -802,8 +806,8 @@ router.post('/failed', razorpayReportLimiter, async (req, res) => {
 
     const noteReason = String(reason || '').trim();
     const result = await updateOrderForPayment({
-      razorpayOrderId,
-      razorpayPaymentId: razorpay_payment_id ? String(razorpay_payment_id) : undefined,
+      token: razorpayOrderId,
+      paymentId: razorpay_payment_id ? String(razorpay_payment_id) : undefined,
       status: 'failed',
       note: noteReason ? `Payment failed via Razorpay checkout: ${noteReason}` : 'Payment failed via Razorpay checkout',
     });
@@ -839,8 +843,8 @@ router.post('/webhook', async (req: any, res) => {
 
     if (event === 'payment.captured' || event === 'order.paid') {
       await updateOrderForPayment({
-        razorpayOrderId,
-        razorpayPaymentId,
+        token: razorpayOrderId,
+        paymentId: razorpayPaymentId,
         status: 'paid',
         note: 'Payment confirmed via Razorpay webhook',
       });
@@ -848,16 +852,16 @@ router.post('/webhook', async (req: any, res) => {
       const capturedPayment = await findCapturedRazorpayPayment(razorpayOrderId, razorpayPaymentId).catch(() => null);
       if (capturedPayment) {
         await updateOrderForPayment({
-          razorpayOrderId,
-          razorpayPaymentId: String(capturedPayment.id),
+          token: razorpayOrderId,
+          paymentId: String(capturedPayment.id),
           status: 'paid',
           note: 'Payment corrected from Razorpay captured status',
         });
         return res.json({ ok: true });
       }
       await updateOrderForPayment({
-        razorpayOrderId,
-        razorpayPaymentId,
+        token: razorpayOrderId,
+        paymentId: razorpayPaymentId,
         status: 'failed',
         note: 'Payment failed via Razorpay webhook',
       });

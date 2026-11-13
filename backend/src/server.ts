@@ -13,6 +13,7 @@ import categoryRoutes from './routes/categories';
 import orderRoutes from './routes/orders';
 import shippingLabelRoutes from './routes/shippingLabels';
 import paymentRoutes from './routes/payments';
+import payuRoutes from './routes/payu';
 import settingsRoutes from './routes/settings';
 import uploadRoutes from './routes/upload';
 import razorpayRoutes from './routes/razorpay';
@@ -103,7 +104,16 @@ const corsOptions: CorsOptionsDelegate<Request> = (req: Request, callback: (err:
   if (!allowed) return callback(Object.assign(new Error(`CORS blocked origin: ${origin}`), { status: 403 }));
   callback(null, { origin: true, credentials: true });
 };
-app.use(cors(corsOptions));
+const corsMiddleware = cors(corsOptions);
+app.use((req: Request, res: Response, next: NextFunction) => {
+  // PayU returns to this endpoint with a signed form POST from its own domain.
+  // It is a top-level browser navigation, so CORS does not apply. Skip the
+  // global origin rejection here; the callback route verifies PayU's SHA-512
+  // signature before it updates the order or redirects the customer.
+  const requestPath = String(req.path || '').replace(/\/+$/, '').toLowerCase();
+  if (requestPath === '/api/payu/callback') return next();
+  return corsMiddleware(req, res, next);
+});
 
 type RawBodyRequest = IncomingMessage & { originalUrl?: string; rawBody?: string };
 app.use(express.json({
@@ -176,6 +186,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/shipping-labels', shippingLabelRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/payu', payuRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/razorpay', razorpayRoutes);

@@ -25,7 +25,7 @@ inferred from HSN. An explicit 0 is a zero rate; blank means not configured.
 Selling prices already include GST, so this feature does not add tax to the
 customer's checkout total or reuse the global packaging percentage as GST.
 
-Both COD and Razorpay checkout snapshot these fields from the database,
+COD, Razorpay, and PayU checkout snapshot these fields from the database,
 ignoring client-supplied tax values. New product edits affect future orders.
 Existing order invoices retain their saved values; historical missing HSN,
 unit or GST appears as unavailable rather than using today's catalog rates.
@@ -192,6 +192,36 @@ and only `RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET`, and
 credentials into the staging or development credential namespace.
 
 Reference: [Razorpay API keys and Test/Live modes](https://razorpay.com/docs/payments/dashboard/account-settings/api-keys).
+
+## PayU hosted checkout
+
+The online checkout uses PayU's hosted payment page, so PayU collects payment
+details and card or UPI secrets stay on PayU. The backend creates the SHA-512
+request hash, receives PayU's form-post callback, validates its reverse hash,
+then confirms a successful payment against PayU's Verify Payment API before
+marking the order paid.
+
+Configure these backend environment variables with the merchant credentials
+from PayU:
+
+```env
+PAYU_KEY=your_merchant_key
+PAYU_SALT=your_merchant_salt
+PAYU_ENV=test
+PAYU_CALLBACK_URL=https://your-public-api.example.com/api/payu/callback
+```
+
+Use `PAYU_ENV=test` for development/staging and `PAYU_ENV=live` for production.
+If left empty, the backend infers live only when both `APP_ENV` and `NODE_ENV`
+are `production`; otherwise it uses test mode. The callback URL must be public
+and reachable by PayU. `BACKEND_URL` can provide the backend origin instead of
+`PAYU_CALLBACK_URL`. Restart/redeploy the backend after setting the credentials.
+Do not expose the merchant salt in the frontend or include it in the hosted
+checkout form.
+
+References: [PayU Hosted Checkout](https://docs.payu.in/docs/prebuilt-checkout-page-integration),
+[PayU request and response hashing](https://docs.payu.in/docs/hashing-request-and-response),
+and [PayU Verify Payment API](https://docs.payu.in/reference/verify_payment_api).
 
 ## Vercel frontend CORS on Render
 
@@ -537,17 +567,20 @@ homepage Purchase rule and additional Facebook tags found in public Meta/GTM
 configuration. Those account settings require cleanup as well as deploying the
 local tracking fixes.
 
-Meta `Purchase` is sent only by the backend after a live-mode Razorpay API check.
-The payment must be captured, unrefunded, linked to the stored Razorpay order,
-and match the stored order total exactly in paise with currency `INR`. Both
-payment records must agree on the paid payment ID and amount. A database
-`paid` flag or a Razorpay-looking identifier alone is insufficient.
+Meta `Purchase` is sent only after the backend verifies a captured payment with
+the selected gateway. Razorpay payments must be captured, unrefunded, linked to
+the stored Razorpay order, and match the stored order total exactly in paise
+with currency `INR`. PayU payments must be confirmed as captured by PayU's
+Verify Payment API and match the stored transaction ID and amount. A database
+`paid` flag or a gateway-looking identifier alone is insufficient.
 
-Checkout confirmation verifies the signature using the stored gateway order ID.
-Webhooks verify a full SHA-256 signature against the exact raw request body.
-Every gateway path that marks an order paid checks Razorpay before writing.
+Razorpay checkout confirmation verifies the signature using the stored gateway
+order ID, and webhooks verify a full SHA-256 signature against the exact raw
+request body. PayU callbacks validate PayU's SHA-512 response hash and reconcile
+against PayU's Verify Payment API. Every gateway path verifies the provider
+before writing a paid status.
 Reconciliation never matches payments by amount, time or customer notes alone.
-Admin manual confirmation cannot convert a Razorpay checkout into a paid order.
+Admin manual confirmation cannot convert a Razorpay or PayU checkout into a paid order.
 COD and legacy manual payments do not send Meta `Purchase`.
 
 The public `/api/meta/conversions` endpoint rejects `Purchase`. Browser tracking

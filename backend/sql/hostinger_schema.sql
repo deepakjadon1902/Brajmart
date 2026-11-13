@@ -36,7 +36,11 @@ CREATE TABLE IF NOT EXISTS categories (
   icon VARCHAR(255) NOT NULL,
   color VARCHAR(50) NOT NULL DEFAULT '#f59e0b',
   product_count INT NOT NULL DEFAULT 0,
+  cod_enabled TINYINT(1) NOT NULL DEFAULT 0,
   display_order INT NOT NULL DEFAULT 0,
+  archived_at DATETIME NULL,
+  archived_by VARCHAR(120) NULL,
+  archive_reason VARCHAR(255) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -45,6 +49,7 @@ CREATE TABLE IF NOT EXISTS products (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   slug VARCHAR(255) NOT NULL UNIQUE,
+  sku VARCHAR(120) NULL,
   price DECIMAL(10,2) NOT NULL,
   original_price DECIMAL(10,2) NULL,
   hsn_code VARCHAR(8) NULL,
@@ -63,6 +68,13 @@ CREATE TABLE IF NOT EXISTS products (
   sizes JSON NULL,
   size_pricing JSON NULL,
   piece_pricing JSON NULL,
+  cod_enabled TINYINT(1) NULL,
+  stock_quantity INT NULL,
+  reserved_quantity INT NOT NULL DEFAULT 0,
+  low_stock_threshold INT NOT NULL DEFAULT 3,
+  archived_at DATETIME NULL,
+  archived_by VARCHAR(120) NULL,
+  archive_reason VARCHAR(255) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -97,8 +109,11 @@ CREATE TABLE IF NOT EXISTS orders (
   cod_available TINYINT(1) NULL,
   cod_pincode VARCHAR(10) NULL,
   cod_message TEXT NULL,
+  coupon_code VARCHAR(80) NULL,
+  coupon_discount DECIMAL(10,2) NULL,
+  coupon_details JSON NULL,
   total DECIMAL(10,2) NOT NULL,
-  status ENUM('confirmed','processing','shipped','out_for_delivery','delivered','cancelled') NOT NULL DEFAULT 'confirmed',
+  status ENUM('pending_payment','confirmed','processing','shipped','out_for_delivery','delivered','rto','cancelled') NOT NULL DEFAULT 'confirmed',
   customer_name VARCHAR(255) NULL,
   customer_email VARCHAR(255) NULL,
   shipping_address JSON NOT NULL,
@@ -113,6 +128,26 @@ CREATE TABLE IF NOT EXISTS orders (
   INDEX idx_orders_user_id (user_id),
   INDEX idx_orders_tracking_id (tracking_id),
   CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS inventory_transactions (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  product_id BIGINT UNSIGNED NOT NULL,
+  order_id BIGINT UNSIGNED NULL,
+  type ENUM('RESTOCK','RESERVE','RELEASE','SALE','ADJUSTMENT','CANCELLATION','RETURN') NOT NULL,
+  quantity INT NOT NULL,
+  previous_quantity INT NULL,
+  new_quantity INT NULL,
+  previous_reserved INT NULL,
+  new_reserved INT NULL,
+  reason VARCHAR(255) NOT NULL DEFAULT '',
+  created_by VARCHAR(120) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_inventory_transactions_product (product_id),
+  KEY idx_inventory_transactions_order (order_id),
+  CONSTRAINT fk_inventory_transactions_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  CONSTRAINT fk_inventory_transactions_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Start order IDs from 10000 (optional, matches previous Mongo counter style)
@@ -146,6 +181,70 @@ CREATE TABLE IF NOT EXISTS payment_status (
   INDEX idx_payment_status_order (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS checkout_sessions (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  idempotency_key VARCHAR(120) NOT NULL,
+  user_id BIGINT UNSIGNED NULL,
+  customer_email VARCHAR(255) NOT NULL DEFAULT '',
+  cart_hash VARCHAR(64) NOT NULL,
+  order_id BIGINT UNSIGNED NULL,
+  payment_token VARCHAR(255) NULL,
+  amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  status ENUM('active','paid','failed','cancelled','expired') NOT NULL DEFAULT 'active',
+  expires_at DATETIME NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_checkout_sessions_key (idempotency_key),
+  KEY idx_checkout_sessions_order (order_id),
+  KEY idx_checkout_sessions_token (payment_token),
+  KEY idx_checkout_sessions_status_expires (status, expires_at),
+  CONSTRAINT fk_checkout_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_checkout_sessions_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS coupons (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  code VARCHAR(80) NOT NULL,
+  title VARCHAR(255) NULL,
+  discount_type ENUM('amount','percent') NOT NULL DEFAULT 'amount',
+  discount_value DECIMAL(10,2) NOT NULL DEFAULT 0,
+  max_discount DECIMAL(10,2) NULL,
+  free_shipping TINYINT(1) NOT NULL DEFAULT 0,
+  free_packaging TINYINT(1) NOT NULL DEFAULT 0,
+  scope_type ENUM('all','product','category') NOT NULL DEFAULT 'all',
+  scope_value VARCHAR(255) NULL,
+  min_order_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  usage_limit INT NULL,
+  used_count INT NOT NULL DEFAULT 0,
+  starts_at DATETIME NULL,
+  ends_at DATETIME NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  archived_at DATETIME NULL,
+  archived_by VARCHAR(120) NULL,
+  archive_reason VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_coupons_code (code),
+  KEY idx_coupons_active_code (is_active, code),
+  KEY idx_coupons_archived_active (archived_at, is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS delivery_pincode_rules (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  pincode VARCHAR(6) NOT NULL,
+  delivery_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  cod_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  partner_name VARCHAR(120) NOT NULL DEFAULT 'Delivery Service Partner',
+  note VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_delivery_pincode_rules_pincode (pincode),
+  KEY idx_delivery_pincode_rules_cod (cod_enabled, delivery_enabled)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS settings (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   store_name VARCHAR(255) NOT NULL DEFAULT 'BrajMart',
@@ -163,6 +262,7 @@ CREATE TABLE IF NOT EXISTS settings (
   delivery_eta_min_days INT NOT NULL DEFAULT 3,
   delivery_eta_max_days INT NOT NULL DEFAULT 7,
   cod_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  cod_fee DECIMAL(10,2) NOT NULL DEFAULT 40,
   upi_enabled TINYINT(1) NOT NULL DEFAULT 1,
   card_enabled TINYINT(1) NOT NULL DEFAULT 1,
   maintenance_mode TINYINT(1) NOT NULL DEFAULT 0,

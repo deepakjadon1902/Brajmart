@@ -159,6 +159,24 @@ export const createRazorpayOrder = (payload: {
     prefill: { name: string; email: string; contact?: string };
   }>('/razorpay/create-order', { method: 'POST', body: payload });
 
+export type PayUCheckoutResponse = {
+  actionUrl: string;
+  fields: Record<string, string>;
+  statusToken: string;
+  orderId: number | string;
+};
+
+export const createPayUOrder = (payload: {
+  amount: number;
+  idempotencyKey?: string;
+  metaContext?: Record<string, unknown>;
+  order: Record<string, unknown>;
+  customer: { name: string; email: string; phone?: string };
+}) => getJson<PayUCheckoutResponse>('/payu/create-order', { method: 'POST', body: payload });
+
+export const retryPayUPayment = (token: string) =>
+  getJson<PayUCheckoutResponse>('/payu/retry', { method: 'POST', body: { token } });
+
 export const retryRazorpayOrder = (token: string, metaContext?: Record<string, unknown>) =>
   getJson<{
     keyId: string;
