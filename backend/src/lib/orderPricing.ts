@@ -1,6 +1,7 @@
 import { dbExecute, dbQuery } from './db';
 import { boolFromDb } from './dbHelpers';
 import { allocatePaise, productTaxFromRow, ProductTax } from './productTax';
+import { resolveProductSelection } from './productSelection';
 
 export type RawOrderItem = {
   productId?: string | number;
@@ -8,7 +9,7 @@ export type RawOrderItem = {
   _id?: string | number;
   quantity?: number | string;
   selectedSize?: string;
-  selectedPieces?: string;
+  selectedPieces?: string | number;
   selectedAttributes?: Record<string, string>;
   selections?: Record<string, string>;
 };
@@ -24,7 +25,7 @@ export type PricedOrderItem = Partial<ProductTax> & {
   quantity: number;
   price: number;
   selectedSize?: string;
-  selectedPieces?: string;
+  selectedPieces?: string | number;
   selectedAttributes?: Record<string, string>;
   selections?: Record<string, string>;
 };
@@ -45,12 +46,6 @@ const asInt = (value: any) => {
   if (!Number.isFinite(n)) return null;
   const i = Math.floor(n);
   return i;
-};
-
-const asMoney = (value: any) => {
-  const n = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(n)) return null;
-  return n;
 };
 
 export const getCheckoutSettings = async () => {
@@ -240,6 +235,7 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
   const byId = new Map<string, any>((rows || []).map((r) => [String(r.id), r]));
 
   const pricedItems: PricedOrderItem[] = [];
+  const requestedByProduct = new Map<string, number>();
   let subtotal = 0;
 
   for (const raw of list as RawOrderItem[]) {
@@ -253,16 +249,23 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
     const quantity = asInt(raw.quantity ?? 1);
     if (!quantity || quantity <= 0) return { ok: false as const, message: `Invalid quantity for ${product.name}` };
 
-    const price = asMoney(product.price);
-    if (price === null || price <= 0) return { ok: false as const, message: `${product.name} has an invalid price. Please contact support.` };
+    const selection = resolveProductSelection(product, {
+      selectedSize: raw.selectedSize,
+      selectedPieces: raw.selectedPieces,
+      selectedAttributes: raw.selectedAttributes || raw.selections,
+    });
+    if (!selection.ok) return { ok: false as const, message: `${product.name}: ${selection.message}` };
+    const price = selection.price;
 
     const inStock = boolFromDb(product.in_stock);
     if (!inStock) return { ok: false as const, message: `${product.name} is out of stock` };
+    const requestedQuantity = (requestedByProduct.get(productId) || 0) + quantity;
+    requestedByProduct.set(productId, requestedQuantity);
     if (product.stock_quantity !== null && product.stock_quantity !== undefined) {
       const stockQuantity = asInt(product.stock_quantity);
       const reservedQuantity = asInt(product.reserved_quantity ?? 0) || 0;
       const availableStock = Math.max(0, (stockQuantity || 0) - reservedQuantity);
-      if (availableStock < quantity) {
+      if (availableStock < requestedQuantity) {
         return { ok: false as const, message: `Only ${availableStock} available for ${product.name}` };
       }
     }
@@ -272,7 +275,7 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
     pricedItems.push({
       ...productTaxFromRow(product),
       productId,
-      sku: String(product.sku || '').trim(),
+      sku: selection.sku,
       slug: String(product.slug || ''),
       name: String(product.name || ''),
       image: String(product.image || ''),
@@ -280,9 +283,9 @@ export const priceAndValidateOrderItems = async (items: any[]) => {
       categoryId: product.category_id == null ? null : Number(product.category_id),
       quantity,
       price,
-      selectedSize: raw.selectedSize,
-      selectedPieces: raw.selectedPieces,
-      selectedAttributes: raw.selectedAttributes,
+      selectedSize: selection.selectedSize,
+      selectedPieces: selection.selectedPieces,
+      selectedAttributes: selection.selectedAttributes,
       selections: raw.selections,
     });
   }

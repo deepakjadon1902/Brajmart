@@ -3,6 +3,7 @@ import { auth, AuthRequest } from '../middleware/auth';
 import { isDbConnected, dbQuery, dbExecute } from '../lib/db';
 import { parseJson, toIsoString } from '../lib/dbHelpers';
 import { computeTotals, getCheckoutSettings } from '../lib/orderPricing';
+import { resolveProductSelection } from '../lib/productSelection';
 import { scheduleAccountSavedProductsReminder } from '../lib/savedProductReminders';
 
 const refreshReminder = (userId: string) => scheduleAccountSavedProductsReminder(userId).catch(() => {
@@ -112,6 +113,7 @@ router.post('/validate', async (req, res) => {
     const changes: any[] = [];
     const unavailableItems: any[] = [];
     const validatedItems: any[] = [];
+    const allocatedByProduct = new Map<string, number>();
     let subtotal = 0;
     let discount = 0;
 
@@ -124,7 +126,17 @@ router.post('/validate', async (req, res) => {
         continue;
       }
 
-      const currentPrice = Number(product.price || 0);
+      const selected = resolveProductSelection(product, {
+        selectedSize: item.raw?.selectedSize ?? snapshot.selectedSize,
+        selectedPieces: item.raw?.selectedPieces ?? snapshot.selectedPieces,
+        selectedAttributes: item.raw?.selectedAttributes ?? item.raw?.selections ?? snapshot.selectedAttributes ?? snapshot.selections,
+      });
+      if (!selected.ok) {
+        unavailableItems.push({ productId: item.productId, name: product.name, reason: 'invalid_selection', message: selected.message });
+        changes.push({ productId: item.productId, type: 'unavailable', message: selected.message });
+        continue;
+      }
+      const currentPrice = selected.price;
       const originalPrice = product.original_price === null || product.original_price === undefined ? null : Number(product.original_price);
       const snapshotPrice = Number(snapshot.price || item.raw?.price || 0);
       const inStock = Boolean(Number(product.in_stock));
@@ -132,7 +144,8 @@ router.post('/validate', async (req, res) => {
         ? null
         : Math.max(0, Number(product.stock_quantity || 0) - Number(product.reserved_quantity || 0));
       const requestedQuantity = settings.maxOrderQuantity > 0 ? Math.min(item.quantity, settings.maxOrderQuantity) : item.quantity;
-      const availableQuantity = available === null ? requestedQuantity : Math.min(requestedQuantity, available);
+      const remaining = available === null ? null : Math.max(0, available - (allocatedByProduct.get(item.productId) || 0));
+      const availableQuantity = remaining === null ? requestedQuantity : Math.min(requestedQuantity, remaining);
 
       if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
         unavailableItems.push({ productId: item.productId, name: product.name, reason: 'invalid_price', message: `${product.name} cannot be purchased right now.` });
@@ -146,7 +159,7 @@ router.post('/validate', async (req, res) => {
         continue;
       }
 
-      if (snapshotPrice > 0 && snapshotPrice !== currentPrice) {
+      if (snapshotPrice > 0 && Math.round(snapshotPrice * 100) !== Math.round(currentPrice * 100)) {
         changes.push({
           productId: item.productId,
           type: 'price',
@@ -175,6 +188,7 @@ router.post('/validate', async (req, res) => {
       }
 
       subtotal += currentPrice * availableQuantity;
+      allocatedByProduct.set(item.productId, (allocatedByProduct.get(item.productId) || 0) + availableQuantity);
       if (originalPrice && originalPrice > currentPrice) discount += (originalPrice - currentPrice) * availableQuantity;
       validatedItems.push({
         productId: String(product.id),
@@ -191,9 +205,9 @@ router.post('/validate', async (req, res) => {
         inStock,
         codEnabled: product.cod_enabled === null || product.cod_enabled === undefined ? null : Boolean(Number(product.cod_enabled)),
         categoryCodEnabled: Boolean(Number(product.category_cod_enabled || 0)),
-        selectedSize: snapshot.selectedSize || item.raw.selectedSize,
-        selectedPieces: snapshot.selectedPieces || item.raw.selectedPieces,
-        selectedAttributes: snapshot.selectedAttributes || item.raw.selectedAttributes,
+        selectedSize: selected.selectedSize,
+        selectedPieces: selected.selectedPieces,
+        selectedAttributes: selected.selectedAttributes,
       });
     }
 
