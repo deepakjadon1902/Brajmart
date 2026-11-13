@@ -309,7 +309,8 @@ const applyRazorpayStatus = async (params: {
             ...details,
           }).catch(() => {});
         }
-        sendPaymentReceipt(customerEmail, { orderId: String(orderId), amount, paymentId: transactionId, eta: etaText, details }).catch(() => {});
+        sendPaymentReceipt(customerEmail, { orderId: String(orderId), amount, paymentId: transactionId, eta: etaText, details })
+          .catch((err) => console.error('Payment invoice email failed', { orderId: String(orderId), message: err?.message || err }));
       } else {
         sendPaymentFailed(customerEmail, { orderId: String(orderId), amount, paymentId: transactionId, eta: etaText, details }).catch(() => {});
       }
@@ -555,7 +556,7 @@ router.post('/admin/confirm-pending/:orderId', auth, adminOnly, async (req, res)
         paymentId: transactionId,
         eta: etaText,
         details: { ...orderData.details, paymentMethod: method },
-      }).catch(() => {});
+      }).catch((err) => console.error('Payment invoice email failed', { orderId: String(orderId), message: err?.message || err }));
     }
     sendAdminPaymentNotice({
       status: 'paid',
@@ -728,7 +729,8 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
     if (payment && (payment.status === 'paid' || payment.status === 'failed')) {
       if (payment.customerEmail) {
         if (payment.status === 'paid') {
-          sendPaymentReceipt(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText, details: orderDetails }).catch(() => {});
+          sendPaymentReceipt(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText, details: orderDetails })
+            .catch((err) => console.error('Payment invoice email failed', { orderId: String(payment.orderId), message: err?.message || err }));
         } else {
           sendPaymentFailed(payment.customerEmail, { orderId: String(payment.orderId), amount: payment.amount, paymentId: payment.transactionId, eta: etaText, details: orderDetails }).catch(() => {});
         }

@@ -426,7 +426,7 @@ export const updateOrderForPayment = async (params: {
         paymentId: transactionId,
         eta: etaText,
         details,
-      }).catch(() => {});
+      }).catch((err) => console.error('Payment invoice email failed', { orderId: String(statusRow.order_id), message: err?.message || err }));
     } else {
       sendPaymentFailed(orderRow.customer_email, {
         orderId: String(statusRow.order_id),

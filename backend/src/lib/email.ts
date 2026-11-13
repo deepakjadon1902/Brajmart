@@ -1,5 +1,7 @@
 import nodemailer from 'nodemailer';
 import { dbQuery, isDbConnected } from './db';
+import { buildOrderInvoicePdf, orderInvoiceFilename } from './orderInvoice';
+import { loadInvoicePayments, resolveInvoiceOrderSkus } from './orderInvoiceExport';
 
 let cachedTransporter: nodemailer.Transporter | null = null;
 let verifiedOnce = false;
@@ -68,6 +70,7 @@ const getTransporter = () => {
 export type SendEmailOptions = {
   idempotencyKey?: string;
   suppressRecipientLog?: boolean;
+  attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
 };
 
 export class EmailProviderResponseError extends Error {
@@ -77,7 +80,7 @@ export class EmailProviderResponseError extends Error {
   }
 }
 
-const sendViaResend = async (to: string, subject: string, html: string, idempotencyKey?: string) => {
+const sendViaResend = async (to: string, subject: string, html: string, idempotencyKey?: string, attachments?: SendEmailOptions['attachments']) => {
   const { apiKey, from } = getResendConfig();
   if (!apiKey) throw new Error('Resend not configured');
 
@@ -95,6 +98,10 @@ const sendViaResend = async (to: string, subject: string, html: string, idempote
       to,
       subject,
       html,
+      attachments: attachments?.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content.toString('base64'),
+      })),
     }),
   });
 
@@ -112,7 +119,7 @@ export const sendEmail = async (to: string, subject: string, html: string, optio
   // Prefer HTTPS-based email providers in production since many hosts block outbound SMTP ports.
   const preferProvider = String(process.env.EMAIL_PROVIDER || '').toLowerCase();
   if (preferProvider === 'resend' || process.env.RESEND_API_KEY) {
-    await sendViaResend(to, subject, html, options.idempotencyKey);
+    await sendViaResend(to, subject, html, options.idempotencyKey, options.attachments);
     console.log('Email sent (resend)', options.suppressRecipientLog ? { subject } : { to, subject });
     return;
   }
@@ -130,7 +137,10 @@ export const sendEmail = async (to: string, subject: string, html: string, optio
       await transporter.verify();
       verifiedOnce = true;
     }
-    await transporter.sendMail({ from, to, subject, html });
+    await transporter.sendMail({
+      from, to, subject, html,
+      attachments: options.attachments?.map(({ filename, content, contentType }) => ({ filename, content, contentType })),
+    });
     console.log('Email sent', { to, subject });
   } catch (err) {
     // Render/Cloud hosts often block port 465; if it times out, retry on 587 automatically.
@@ -143,7 +153,10 @@ export const sendEmail = async (to: string, subject: string, html: string, optio
         const altPort = port === 465 ? 587 : 465;
         const alt = createTransporter({ host, port: altPort, user, pass });
         await alt.verify();
-        await alt.sendMail({ from, to, subject, html });
+        await alt.sendMail({
+          from, to, subject, html,
+          attachments: options.attachments?.map(({ filename, content, contentType }) => ({ filename, content, contentType })),
+        });
         cachedTransporter = alt;
         verifiedOnce = true;
         console.log('Email sent (retry)', { to, subject, port: altPort });
@@ -581,7 +594,21 @@ export const buildPaymentReceiptHtml = async (payload: { orderId: string; amount
 export const sendPaymentReceipt = async (to: string, payload: { orderId: string; amount: number; paymentId: string; invoiceNumber?: number | string; orderDate?: string; paidAt?: string; eta?: string; details?: ({ items?: OrderItem[]; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } & OrderPriceBreakdown) }) => {
   const invoiceNumber = payload.invoiceNumber ? String(payload.invoiceNumber) : payload.orderId;
   const html = await buildPaymentReceiptHtml(payload);
-  await sendEmail(to, `BrajMart Invoice #${invoiceNumber}`, html);
+  if (!isDbConnected()) throw new Error('Cannot attach order invoice while the database is unavailable');
+  const orderRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [payload.orderId]);
+  const orderRow = orderRows[0];
+  if (!orderRow) throw new Error(`Cannot attach invoice: order ${payload.orderId} was not found`);
+  const [invoiceOrder] = await resolveInvoiceOrderSkus([orderRow]);
+  const invoicePayments = await loadInvoicePayments([orderRow.id]);
+  const savedPayment = invoicePayments.get(String(orderRow.id));
+  const invoicePdf = await buildOrderInvoicePdf(invoiceOrder, {
+    transactionId: savedPayment?.transactionId || payload.paymentId,
+    method: savedPayment?.method || payload.details?.paymentMethod || orderRow.payment_method,
+  });
+  const filename = orderInvoiceFilename(orderRow.id, orderRow);
+  await sendEmail(to, `BrajMart Invoice #${invoiceNumber}`, html, {
+    attachments: [{ filename, content: invoicePdf, contentType: 'application/pdf' }],
+  });
 };
 
 export const sendPaymentFailed = async (to: string, payload: { orderId: string; amount: number; paymentId?: string; eta?: string; details?: ({ items?: OrderItem[]; paymentMethod?: string; transactionId?: string; shippingAddress?: OrderAddress; billingAddress?: OrderAddress } & OrderPriceBreakdown) }) => {
