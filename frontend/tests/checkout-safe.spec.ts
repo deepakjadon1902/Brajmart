@@ -1,37 +1,25 @@
 import { expect, test } from '../playwright-fixture';
 
-type RazorpayFixtureOptions = {
-  key: string; amount: number; currency: string; order_id: string;
-  handler: (response: Record<string, string>) => Promise<void>;
-};
-type RazorpayFixtureWindow = {
-  Razorpay: unknown;
-  __razorpayFixture: { opened: boolean; options: RazorpayFixtureOptions | null };
+const cashfreeOrder = {
+  mode: 'sandbox',
+  paymentSessionId: 'session_BrowserFixture',
+  statusToken: 'cf_browser_fixture',
+  orderId: 42,
 };
 
-const installRazorpayFixture = (page: import('@playwright/test').Page) => page.addInitScript(() => {
-  const scope = window as unknown as RazorpayFixtureWindow;
-  scope.__razorpayFixture = { opened: false, options: null };
-  scope.Razorpay = class {
-    constructor(options: RazorpayFixtureOptions) { scope.__razorpayFixture.options = options; }
-    open() { scope.__razorpayFixture.opened = true; }
-    close() { scope.__razorpayFixture.opened = false; }
-    on() { /* All gateway events stay inside this isolated browser fixture. */ }
+const mockCashfreeSdk = (page: import('@playwright/test').Page, redirect = false) => page.addInitScript(({ redirect, statusToken }) => {
+  const scope = window as unknown as {
+    Cashfree: (options: { mode: string }) => {
+      checkout: (checkoutOptions: { paymentSessionId: string; redirectTarget: string }) => Promise<void>;
+    };
   };
-});
-
-const fixtureGatewayOrder = {
-  keyId: 'rzp_live_IsolatedBrowser', orderId: 'order_BrowserFixture', statusToken: 'order_BrowserFixture',
-  amount: 24800, currency: 'INR', name: 'BrajMart', description: 'Isolated browser fixture', prefill: {},
-};
-
-const expectRazorpayOpened = async (page: import('@playwright/test').Page) => {
-  await expect.poll(() => page.evaluate(() => (window as unknown as RazorpayFixtureWindow).__razorpayFixture.opened)).toBe(true);
-  return page.evaluate(() => {
-    const options = (window as unknown as RazorpayFixtureWindow).__razorpayFixture.options!;
-    return { key: options.key, amount: options.amount, currency: options.currency, orderId: options.order_id };
+  scope.Cashfree = ({ mode }) => ({
+    async checkout(options) {
+      sessionStorage.setItem('cashfree-fixture-call', JSON.stringify({ mode, ...options }));
+      if (redirect) location.assign('/payment-status/' + statusToken);
+    },
   });
-};
+}, { redirect, statusToken: cashfreeOrder.statusToken });
 
 const cartState = {
   state: {
@@ -84,6 +72,7 @@ const mockCheckoutApis = async (page: import('@playwright/test').Page, validatio
       codFee: 40,
       upiEnabled: true,
       cardEnabled: true,
+      cashfreeEnabled: true,
     }),
   }));
   await page.route('**/api/orders/delivery-service/pincode', async (route) => route.fulfill({
@@ -307,108 +296,61 @@ test('checkout blocks payment when backend validation reports cart changes', asy
   await expect(page.getByRole('heading', { name: 'Payment', exact: true })).not.toBeVisible();
 });
 
-test('Pay Now opens Razorpay with server-owned values and verifies its callback before confirmation', async ({ page }) => {
-  await installRazorpayFixture(page);
+test('PayU is the selected primary gateway and submits its server-generated form', async ({ page }) => {
   await mockCheckoutApis(page);
-  const creates: Record<string, unknown>[] = [];
-  const verifications: Record<string, unknown>[] = [];
-  await page.route('**/api/razorpay/create-order', route => {
-    creates.push(route.request().postDataJSON());
-    return route.fulfill({ json: fixtureGatewayOrder });
+  await page.route('**/api/payu/create-order', route => {
+    expect(route.request().postDataJSON()).toMatchObject({ amount: 248, order: { paymentMethod: 'PayU' } });
+    return route.fulfill({ json: { actionUrl: 'https://test.payu.in/_payment', fields: { txnid: 'payu_mock', hash: 'fixture_hash' }, statusToken: 'payu_mock', orderId: 42 } });
   });
-  await page.route('**/api/razorpay/verify', route => {
-    verifications.push(route.request().postDataJSON());
-    return route.fulfill({ json: { ok: true, orderId: 42, status: 'paid' } });
+  await page.route('https://test.payu.in/_payment', (route) => route.fulfill({ body: 'PayU form received' }));
+  await seedCart(page);
+  await fillShippingAddress(page);
+  await page.getByRole('button', { name: /continue to payment/i }).click();
+  await expect(page.getByRole('radio', { name: /^PayU/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('radio', { name: /Razorpay/i })).toHaveCount(0);
+  const gatewayRequest = page.waitForRequest('https://test.payu.in/_payment');
+  await page.getByRole('button', { name: /^Pay Now/ }).click();
+  expect((await gatewayRequest).postData()).toBe('txnid=payu_mock&hash=fixture_hash');
+});
+
+test('Cashfree opens the server-issued session and waits for confirmed payment status', async ({ page }) => {
+  await mockCashfreeSdk(page, true);
+  await mockCheckoutApis(page);
+  let paid = false;
+  await page.route('**/api/cashfree/create-order', route => {
+    expect(route.request().postDataJSON()).toMatchObject({ amount: 248, order: { paymentMethod: 'Cashfree' } });
+    return route.fulfill({ json: cashfreeOrder });
   });
-  await page.route('**/api/payments/status/order_BrowserFixture', route => route.fulfill({ json: {
-    token: fixtureGatewayOrder.orderId, status: verifications.length ? 'paid' : 'pending',
-    method: 'Razorpay', amount: 248, orderId: 42, paymentId: 'pay_BrowserFixture',
+  await page.route('**/api/payments/status/cf_browser_fixture', route => route.fulfill({ json: {
+    status: paid ? 'paid' : 'pending', method: 'Cashfree', amount: 248, orderId: 42, paymentId: '998877',
     items: [{ name: 'Phase QA Tulsi Mala', quantity: 1 }],
   } }));
   await seedCart(page);
   await fillShippingAddress(page);
   await page.getByRole('button', { name: /continue to payment/i }).click();
+  await page.getByRole('radio', { name: /^Cashfree/ }).click();
   await page.getByRole('button', { name: /^Pay Now/ }).click();
-  expect(await expectRazorpayOpened(page)).toEqual({
-    key: fixtureGatewayOrder.keyId, amount: 24800, currency: 'INR', orderId: fixtureGatewayOrder.orderId,
+  await expect(page).toHaveURL('/payment-status/cf_browser_fixture');
+  await expect(page.getByRole('heading', { name: 'Payment Pending' })).toBeVisible();
+  expect(JSON.parse((await page.evaluate(() => sessionStorage.getItem('cashfree-fixture-call'))) || '{}')).toEqual({
+    mode: 'sandbox', paymentSessionId: cashfreeOrder.paymentSessionId, redirectTarget: '_self',
   });
-  expect(creates).toHaveLength(1);
-  expect(creates[0].amount).toBe(248);
-  expect(creates[0].idempotencyKey).toBeTruthy();
-  expect(verifications).toHaveLength(0);
-  await expect(page).toHaveURL(/\/checkout$/);
-  await page.evaluate(async () => {
-    await (window as unknown as RazorpayFixtureWindow).__razorpayFixture.options!.handler({
-      razorpay_order_id: 'order_BrowserFixture', razorpay_payment_id: 'pay_BrowserFixture', razorpay_signature: 'a'.repeat(64),
-    });
-  });
+  paid = true;
   await expect(page.getByText('Payment verified and order confirmed', { exact: true })).toBeVisible();
-  expect(verifications).toHaveLength(1);
-  expect(verifications[0]).toMatchObject({
-    razorpay_order_id: fixtureGatewayOrder.orderId, razorpay_payment_id: 'pay_BrowserFixture', razorpay_signature: 'a'.repeat(64),
-  });
 });
 
-test('a configuration outage can recover on Pay Now without losing the cart or changing the idempotency key', async ({ page }) => {
-  await installRazorpayFixture(page);
-  await mockCheckoutApis(page);
-  let unavailable = true;
-  const idempotencyKeys: string[] = [];
-  await page.route('**/api/razorpay/create-order', route => {
-    idempotencyKeys.push(route.request().postDataJSON().idempotencyKey);
-    return unavailable
-      ? route.fulfill({ status: 503, json: { code: 'PAYMENT_UNAVAILABLE', message: 'Online payment is temporarily unavailable. Please try again shortly or contact support.' } })
-      : route.fulfill({ json: fixtureGatewayOrder });
-  });
-  await seedCart(page);
-  await fillShippingAddress(page);
-  await page.getByRole('button', { name: /continue to payment/i }).click();
-  await page.getByRole('button', { name: /^Pay Now/ }).click();
-  await expect(page.getByText('Online payment is temporarily unavailable. Please try again shortly or contact support.')).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Pay Now/ })).toBeEnabled();
-  expect(await page.evaluate(() => (window as unknown as RazorpayFixtureWindow).__razorpayFixture.opened)).toBe(false);
-  await expect(page.getByText('Phase QA Tulsi Mala', { exact: true }).first()).toBeVisible();
-  unavailable = false;
-  await page.getByRole('button', { name: /^Pay Now/ }).click();
-  await expectRazorpayOpened(page);
-  expect(idempotencyKeys).toHaveLength(2);
-  expect(idempotencyKeys[0]).toBeTruthy();
-  expect(idempotencyKeys[1]).toBe(idempotencyKeys[0]);
-});
-
-test('payment retry opens the new server order and verifies its signed callback', async ({ page }) => {
-  await installRazorpayFixture(page);
-  await mockCheckoutApis(page);
-  let retries = 0;
-  let verified = false;
-  await page.route('**/api/payments/status/order_PreviousFixture', route => route.fulfill({ json: {
-    status: 'failed', orderId: 42, amount: 248, method: 'Razorpay',
+test('Cashfree resumes an eligible checkout using the original order token', async ({ page }) => {
+  await mockCashfreeSdk(page);
+  await page.route('**/api/payments/status/cf_browser_fixture', route => route.fulfill({ json: {
+    status: 'pending', method: 'Cashfree', canResume: true, amount: 248, orderId: 42,
   } }));
-  await page.route('**/api/razorpay/retry-order', route => {
-    expect(route.request().postDataJSON().token).toBe('order_PreviousFixture');
-    retries++;
-    return route.fulfill({ json: fixtureGatewayOrder });
+  await page.route('**/api/cashfree/resume', route => {
+    expect(route.request().postDataJSON()).toEqual({ token: cashfreeOrder.statusToken });
+    return route.fulfill({ json: cashfreeOrder });
   });
-  await page.route('**/api/razorpay/verify', route => {
-    expect(route.request().postDataJSON()).toMatchObject({ razorpay_order_id: fixtureGatewayOrder.orderId, razorpay_payment_id: 'pay_RetryFixture' });
-    verified = true;
-    return route.fulfill({ json: { ok: true, orderId: 42, status: 'paid' } });
-  });
-  await page.route('**/api/payments/status/order_BrowserFixture', route => route.fulfill({ json: {
-    status: verified ? 'paid' : 'pending', orderId: 42, amount: 248, method: 'Razorpay', items: [{ name: 'Phase QA Tulsi Mala', quantity: 1 }],
-  } }));
-  await page.goto('/payment-status/order_PreviousFixture');
-  await page.getByRole('button', { name: 'Pay Again', exact: true }).click();
-  expect((await expectRazorpayOpened(page)).orderId).toBe(fixtureGatewayOrder.orderId);
-  expect(retries).toBe(1);
-  expect(verified).toBe(false);
-  await page.evaluate(async () => {
-    await (window as unknown as RazorpayFixtureWindow).__razorpayFixture.options!.handler({
-      razorpay_order_id: 'order_BrowserFixture', razorpay_payment_id: 'pay_RetryFixture', razorpay_signature: 'b'.repeat(64),
-    });
-  });
-  await expect(page.getByText('Payment verified and order confirmed', { exact: true })).toBeVisible();
-  expect(verified).toBe(true);
+  await page.goto('/payment-status/cf_browser_fixture');
+  await page.getByRole('button', { name: 'Continue with Cashfree' }).click();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('cashfree-fixture-call'))).toContain(cashfreeOrder.paymentSessionId);
 });
 
 [

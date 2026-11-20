@@ -2,7 +2,6 @@ import * as React from "react";
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, CreditCard, CheckCircle2, ShieldCheck, Check, Minus, Plus, Trash2, Truck, Tag, X } from 'lucide-react';
-import { SiRazorpay } from 'react-icons/si';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCartLineKey, useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
@@ -13,10 +12,11 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createOrder, createPayUOrder, createRazorpayOrder, verifyRazorpayPayment, reportRazorpayPaymentFailed, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
+import { fetchPublicSettings, createOrder, createPayUOrder, createCashfreeOrder, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
 import { getMetaAttributionContext, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { getGooglePurchaseContext } from '@/lib/googleAttribution';
 import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft';
+import { loadCashfree, launchCashfree, submitPayUCheckout } from '@/lib/onlinePayment';
 import { useCheckoutFollowups } from '@/hooks/useCheckoutFollowups';
 
 const steps = ['Address', 'Payment', 'Done'];
@@ -75,47 +75,6 @@ const isValidPincode = (value?: string) => {
 const normalizeStateName = (value: string) =>
   cleanText(value).toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
 
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => {
-      open: () => void;
-      close?: () => void;
-      on: (event: string, handler: (response: unknown) => void) => void;
-    };
-  }
-}
-
-let razorpayCheckoutLoadPromise: Promise<boolean> | null = null;
-
-const loadRazorpayCheckout = () =>
-  razorpayCheckoutLoadPromise ||= new Promise<boolean>((resolve) => {
-    if (typeof window === 'undefined') return resolve(false);
-    if (window.Razorpay) return resolve(true);
-    const existingScript = document.querySelector<HTMLScriptElement>('script[data-brajmart-razorpay-checkout="true"]');
-    if (existingScript && window.Razorpay) return resolve(true);
-
-    let settled = false;
-    const finish = (loaded: boolean) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timeoutId);
-      if (!loaded) razorpayCheckoutLoadPromise = null;
-      resolve(loaded);
-    };
-
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
-    script.dataset.brajmartRazorpayCheckout = 'true';
-    script.onload = () => finish(Boolean(window.Razorpay));
-    script.onerror = () => finish(false);
-    const timeoutId = window.setTimeout(() => finish(false), 12000);
-    document.body.appendChild(script);
-  });
-
-const isTransientRazorpayFailure = (reason: string) =>
-  /too many requests|rate limit|payment processing|request timed out|timeout|upi request/i.test(reason);
-
 const INDIA_STATES = [
   'Andhra Pradesh',
   'Arunachal Pradesh',
@@ -160,9 +119,9 @@ const matchIndianState = (value?: string) => {
   return INDIA_STATES.find((state) => normalizeStateName(state) === normalized) || '';
 };
 
-const RazorpayLogo = () => (
-  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#0b72e7]/25 bg-[#0b72e7]/10 text-[#0b72e7]">
-    <SiRazorpay size={24} />
+const CashfreeLogo = () => (
+  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#603fc5]/25 bg-[#603fc5]/10 text-[#603fc5]">
+    <CreditCard size={22} />
   </div>
 );
 
@@ -198,6 +157,7 @@ const CheckoutPage = () => {
   const defaultAddress = getDefaultAddress(user);
 
   const [step, setStep] = useState(() => initialCheckoutDraft?.step && initialCheckoutDraft.step > 0 ? initialCheckoutDraft.step : 0);
+  const [cashfreeEnabled, setCashfreeEnabled] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(initialCheckoutDraft?.paymentMethod === 'cod' ? 'cod' : 'payu');
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(initialCheckoutDraft?.billingSameAsShipping ?? true);
   const [processing, setProcessing] = useState(false);
@@ -289,6 +249,7 @@ const CheckoutPage = () => {
       try {
         const data = await fetchPublicSettings({ fresh: true });
         if (!active || !data) return;
+        setCashfreeEnabled(data.cashfreeEnabled === true);
         updateSettings({
           storeName: data.storeName,
           tagline: data.tagline,
@@ -767,157 +728,7 @@ const CheckoutPage = () => {
     setStep(1);
   };
 
-  const startRazorpayPayment = async () => {
-    if (processing || checkoutValidating) return;
-    if (!validateContactAndAddress()) return;
-    setProcessing(true);
-    try {
-      await followups.save().catch(() => {});
-      const cartIsCurrent = await runCheckoutValidation('submit');
-      if (!cartIsCurrent) {
-        setProcessing(false);
-        return;
-      }
-      const cleanShippingAddress = cleanAddressForOrder(effectiveShipping);
-      const cleanBillingAddress = cleanAddressForOrder(billingAddress);
-      const loaded = await loadRazorpayCheckout();
-      if (!loaded || !window.Razorpay) {
-        throw new Error('Unable to load Razorpay checkout. Please disable browser shields/ad blockers for this payment page and try again.');
-      }
-
-      const orderPayload = {
-        userId: isAuthenticated ? user?.id : undefined,
-        items: items.map((i) => ({
-          productId: i.product.id,
-          name: i.product.name,
-          image: i.product.image,
-          quantity: i.quantity,
-          price: i.product.price,
-          selectedSize: i.product.selectedSize,
-          selectedPieces: i.product.selectedPieces,
-          selectedAttributes: i.product.selectedAttributes,
-        })),
-        total: grandTotal,
-        status: 'confirmed',
-        customerName: cleanBillingAddress.fullName,
-        customerEmail: effectiveEmail,
-        shippingAddress: cleanShippingAddress,
-        billingAddress: cleanBillingAddress,
-        paymentMethod: 'Razorpay',
-        codRequested: false,
-        codAmount: 0,
-        couponCode: appliedCoupon?.code || undefined,
-      };
-
-      const purchaseContext = { ...checkoutMetaContext(), googleAnalytics: await getGooglePurchaseContext() };
-      const result = await createRazorpayOrder({
-        amount: grandTotal,
-        idempotencyKey: getCheckoutIdempotencyKey({
-          email: effectiveEmail,
-          customerName: cleanBillingAddress.fullName,
-          customerPhone: cleanBillingAddress.mobile,
-          shippingAddress: cleanShippingAddress,
-          billingAddress: cleanBillingAddress,
-          couponCode: appliedCoupon?.code || '',
-          codFee,
-          items: items.map((item) => ({
-            id: item.product.id,
-            quantity: item.quantity,
-            selectedSize: item.product.selectedSize || '',
-            selectedPieces: item.product.selectedPieces || '',
-            selectedAttributes: item.product.selectedAttributes || {},
-          })),
-        }),
-        metaContext: purchaseContext,
-        order: orderPayload,
-        customer: { name: cleanBillingAddress.fullName, email: effectiveEmail, phone: cleanBillingAddress.mobile },
-      });
-
-      const checkout = new window.Razorpay({
-        key: result.keyId,
-        amount: result.amount,
-        currency: result.currency,
-        name: result.name,
-        description: result.description,
-        image: settings.storeLogo || '/logo.png',
-        order_id: result.orderId,
-        prefill: result.prefill,
-        notes: {
-          source: 'brajmart_checkout',
-        },
-        theme: {
-          color: '#E8680A',
-        },
-        modal: {
-          ondismiss: () => setProcessing(false),
-        },
-        handler: async (response: unknown) => {
-          const payment = response as {
-            razorpay_order_id?: string;
-            razorpay_payment_id?: string;
-            razorpay_signature?: string;
-          };
-          try {
-            await verifyRazorpayPayment({
-              razorpay_order_id: payment.razorpay_order_id || result.orderId,
-              razorpay_payment_id: payment.razorpay_payment_id || '',
-              razorpay_signature: payment.razorpay_signature || '',
-              metaContext: purchaseContext,
-            });
-            navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`);
-          } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : '';
-            toast.error(message || 'Payment completed, but verification failed. We will verify it automatically.');
-            navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`);
-          } finally {
-            setProcessing(false);
-          }
-        },
-      });
-
-      checkout.on('payment.failed', async (response: unknown) => {
-        const failure = response as {
-          error?: {
-            description?: string;
-            reason?: string;
-            metadata?: {
-              order_id?: string;
-              payment_id?: string;
-            };
-          };
-        };
-        const reason = failure?.error?.description || failure?.error?.reason || 'Payment failed';
-        const isTransientFailure = isTransientRazorpayFailure(reason);
-        if (!isTransientFailure) {
-          try {
-            await reportRazorpayPaymentFailed({
-              razorpay_order_id: failure?.error?.metadata?.order_id || result.orderId,
-              razorpay_payment_id: failure?.error?.metadata?.payment_id,
-              customer_email: effectiveEmail,
-              reason,
-            });
-          } catch {
-            // Webhooks may still reconcile this. Keep the user moving to the status page.
-          }
-        }
-        checkout.close?.();
-        toast[isTransientFailure ? 'info' : 'error'](
-          isTransientFailure
-            ? 'Payment is being verified. Please wait on the status page.'
-            : 'Razorpay payment failed. Please try again.'
-        );
-        setProcessing(false);
-        navigate(`/payment-status/${encodeURIComponent(result.statusToken)}`);
-      });
-      checkout.open();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : '';
-      toast.error(message || 'Unable to start Razorpay payment. Please try again.');
-      setProcessing(false);
-    }
-  };
-
-  const startPayUPayment = async () => {
+  const startOnlinePayment = async (method: 'payu' | 'cashfree') => {
     if (processing || checkoutValidating) return;
     if (!validateContactAndAddress()) return;
     setProcessing(true);
@@ -948,13 +759,13 @@ const CheckoutPage = () => {
         customerEmail: effectiveEmail,
         shippingAddress: cleanShippingAddress,
         billingAddress: cleanBillingAddress,
-        paymentMethod: 'PayU',
+        paymentMethod: method === 'payu' ? 'PayU' : 'Cashfree',
         codRequested: false,
         codAmount: 0,
         couponCode: appliedCoupon?.code || undefined,
       };
       const purchaseContext = { ...checkoutMetaContext(), googleAnalytics: await getGooglePurchaseContext() };
-      const result = await createPayUOrder({
+      const payload = {
         amount: grandTotal,
         idempotencyKey: getCheckoutIdempotencyKey({
           email: effectiveEmail,
@@ -975,24 +786,27 @@ const CheckoutPage = () => {
         metaContext: purchaseContext,
         order: orderPayload,
         customer: { name: cleanBillingAddress.fullName, email: effectiveEmail, phone: cleanBillingAddress.mobile },
-      });
+      };
 
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = result.actionUrl;
-      form.style.display = 'none';
-      Object.entries(result.fields).forEach(([name, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = name;
-        input.value = String(value ?? '');
-        form.appendChild(input);
-      });
-      document.body.appendChild(form);
-      form.submit();
+      if (method === 'cashfree') {
+        await loadCashfree();
+        const result = await createCashfreeOrder(payload);
+        if ('showStatus' in result) {
+          navigate('/payment-status/' + encodeURIComponent(result.statusToken));
+          return;
+        }
+        await launchCashfree(result);
+      } else {
+        const result = await createPayUOrder(payload);
+        if ('completed' in result) {
+          navigate('/payment-status/' + encodeURIComponent(result.statusToken));
+          return;
+        }
+        submitPayUCheckout(result);
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
-      toast.error(message || 'Unable to start PayU checkout. Please try again.');
+      toast.error(message || (method === 'payu' ? 'Unable to open PayU checkout.' : 'Unable to open Cashfree checkout.'));
       setProcessing(false);
     }
   };
@@ -1083,10 +897,8 @@ const CheckoutPage = () => {
       return;
     }
 
-    if (paymentMethod === 'payu') {
-      startPayUPayment();
-    } else if (paymentMethod === 'razorpay') {
-      startRazorpayPayment();
+    if (paymentMethod === 'payu' || (paymentMethod === 'cashfree' && cashfreeEnabled)) {
+      await startOnlinePayment(paymentMethod);
     }
   };
 
@@ -1113,14 +925,14 @@ const CheckoutPage = () => {
       disabled: false,
     },
     {
-      value: 'razorpay',
-      title: 'Razorpay',
-      subtitle: 'Temporarily unavailable. Please use PayU for online payment.',
-      logo: RazorpayLogo,
-      pills: ['Temporarily unavailable'],
-      badge: 'Unavailable',
-      brandColor: 'text-muted-foreground',
-      disabled: true,
+      value: 'cashfree',
+      title: 'Cashfree',
+      subtitle: cashfreeEnabled ? 'UPI, cards, and net banking' : 'Cashfree is currently unavailable.',
+      logo: CashfreeLogo,
+      pills: cashfreeEnabled ? ['UPI', 'Cards', 'NetBanking'] : [],
+      badge: cashfreeEnabled ? 'Alternative' : 'Unavailable',
+      brandColor: cashfreeEnabled ? 'text-[#603fc5]' : 'text-muted-foreground',
+      disabled: !cashfreeEnabled,
     },
     ...(!hasPrasadamItems && codEligibleItems ? [{
       value: 'cod',
@@ -1359,10 +1171,6 @@ const CheckoutPage = () => {
                           Change
                         </button>
                       </div>
-                    </div>
-
-                    <div role="status" aria-live="polite" className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-                      Razorpay is temporarily unavailable due to a technical issue. Please use PayU for your online payment.
                     </div>
 
                     {paymentOptions.length === 0 ? (

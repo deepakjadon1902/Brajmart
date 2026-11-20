@@ -4,6 +4,7 @@ import { auth, adminOnly, AuthRequest } from '../middleware/auth';
 import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 import { sendEmail } from '../lib/email';
 import { insertAdminAuditLog } from '../lib/adminAudit';
+import { resolveCashfreeConfig } from '../lib/cashfree';
 
 const router = Router();
 
@@ -12,6 +13,9 @@ const SETTINGS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=600'
 let settingsCache: { at: number; data: any } | null = null;
 
 const festivalThemes = ['none', 'diwali', 'holi'];
+const isCashfreeAvailable = () => {
+  try { resolveCashfreeConfig(); return true; } catch { return false; }
+};
 // Keep presentation preferences in the existing JSON column. No runtime DDL or
 // database migration is needed, and announcement visibility is independent.
 const readAnnouncement = (row: any): Record<string, any> => {
@@ -39,6 +43,7 @@ const mapSettingsRow = (row: any) => ({
   codFee: Number(row.cod_fee ?? 40),
   upiEnabled: boolFromDb(row.upi_enabled),
   cardEnabled: boolFromDb(row.card_enabled),
+  cashfreeEnabled: isCashfreeAvailable(),
   maintenanceMode: boolFromDb(row.maintenance_mode),
   metaTitle: row.meta_title,
   metaDescription: row.meta_description,

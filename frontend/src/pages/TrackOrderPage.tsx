@@ -8,6 +8,7 @@ import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { Search, Package, CheckCircle2, Truck, MapPin, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { trackDeliveryServiceOrder, trackOrder, trackOrderById } from '@/lib/api';
+import { getCourierTrackingUrl } from '@/lib/whatsappTemplates';
 
 const steps = [
   { key: 'confirmed', label: 'Order Placed', icon: Package },
@@ -154,6 +155,11 @@ const TrackOrderPage = () => {
                     </div>
                   )}
                 </div>
+                {order.shippingService === 'Blue Dart' && order.trackingId && (
+                  <a href={getCourierTrackingUrl(order.shippingService, order.trackingId)} target="_blank" rel="noreferrer" className="mb-4 inline-block text-sm font-medium text-saffron underline">
+                    Track Blue Dart shipment
+                  </a>
+                )}
                 {String(order.shippingService || '').toLowerCase().includes('delhivery') && (
                   <div className="mb-6 rounded-xl border border-border bg-muted/30 p-4">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

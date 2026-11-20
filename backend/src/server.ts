@@ -14,6 +14,7 @@ import orderRoutes from './routes/orders';
 import shippingLabelRoutes from './routes/shippingLabels';
 import paymentRoutes from './routes/payments';
 import payuRoutes from './routes/payu';
+import cashfreeRoutes from './routes/cashfree';
 import settingsRoutes from './routes/settings';
 import uploadRoutes from './routes/upload';
 import razorpayRoutes from './routes/razorpay';
@@ -119,7 +120,8 @@ type RawBodyRequest = IncomingMessage & { originalUrl?: string; rawBody?: string
 app.use(express.json({
   limit: '50mb',
   verify: (req: RawBodyRequest, _res: ServerResponse, buf: Buffer) => {
-    if (req.originalUrl === '/api/razorpay/webhook') {
+    const pathname = req.originalUrl?.split('?')[0].replace(/\/+$/, '').toLowerCase();
+    if (pathname === '/api/razorpay/webhook' || pathname === '/api/cashfree/webhook') {
       req.rawBody = buf.toString('utf8');
     }
   },
@@ -187,6 +189,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/shipping-labels', shippingLabelRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/payu', payuRoutes);
+app.use('/api/cashfree', cashfreeRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/razorpay', razorpayRoutes);

@@ -101,6 +101,9 @@ export const getCourierTrackingUrl = (shippingService?: string, trackingId?: str
   if (service === 'ekart') return 'https://www.ekartlogistics.in/track-order';
   if (service === 'shadowfax') return 'https://shadowfax.in/track';
   if (service === 'amazonshipping') return 'https://track.amazon.in/';
+  if (service === 'bluedart') return awb
+    ? `https://www.bluedart.com/web/guest/trackdartresult?trackFor=awb&awb=${encodeURIComponent(awb)}`
+    : 'https://www.bluedart.com/how-to-track';
 
   return awb
     ? `https://www.delhivery.com/track/package/${encodeURIComponent(awb)}`

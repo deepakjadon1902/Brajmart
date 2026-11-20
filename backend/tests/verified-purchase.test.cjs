@@ -511,14 +511,14 @@ test('missing production mode flags stop every Razorpay write path with safe dia
   const originalError = console.error;
   console.error = (...args) => logs.push(args);
   try {
-    for (const path of ['/create-order', '/retry-order', '/verify', '/failed', '/webhook']) {
+    for (const path of ['/verify', '/failed', '/webhook']) {
       const response = await route(razorpay, path, { token: 'order_Real42', razorpay_order_id: 'order_Real42' });
       assert.equal(response.statusCode, 503, path);
       assert.equal(response.data.code, 'PAYMENT_UNAVAILABLE');
       assert.equal(JSON.stringify(response.data).includes('NODE_ENV'), false);
     }
   } finally { console.error = originalError; }
-  assert.equal(logs.length, 5);
+  assert.equal(logs.length, 3);
   assert.deepEqual(logs[0][1].issues.map(issue => issue.setting), ['NODE_ENV', 'RAZORPAY_MODE']);
   assert.equal(JSON.stringify(logs).includes('isolated-test-secret'), false);
   assert.equal(state.queries.length, 0);
@@ -526,35 +526,11 @@ test('missing production mode flags stop every Razorpay write path with safe dia
   assert.equal(state.gatewayCalls.length, 0);
 });
 
-test('a correctly configured live checkout creates a gateway order with the server key and total', async () => {
-  const address = { fullName: 'Checkout Customer', mobile: '9876543210', street: 'House 42, Temple Road', city: 'Vrindavan', state: 'Uttar Pradesh', pincode: '281121' };
-  const response = await route(razorpay, '/create-order', {
-    amount: 199.99,
-    order: { customerName: 'Checkout Customer', items: [{ productId: '101', quantity: 1 }], shippingAddress: address, billingAddress: address },
-    customer: { name: 'Checkout Customer', email: 'checkout@example.invalid', phone: address.mobile },
-  });
-  assert.equal(response.statusCode, 200, JSON.stringify(response.data));
-  assert.equal(response.data.keyId, 'rzp_live_IsolatedTest');
-  assert.equal(response.data.orderId, 'order_Real42');
-  assert.equal(response.data.amount, 19999);
-  assert.equal(response.data.currency, 'INR');
-  assert.equal(JSON.stringify(response.data).includes('isolated-test-secret'), false);
-  const request = state.gatewayRequests.find(({ options }) => options.method === 'POST');
-  assert.equal(request.options.headers.Authorization, `Basic ${Buffer.from('rzp_live_IsolatedTest:isolated-test-secret').toString('base64')}`);
-  assert.equal(JSON.parse(request.options.body).amount, 19999);
-  assert.ok(state.writes.some(({ sql }) => sql.includes('INSERT INTO orders')));
-  assert.ok(state.writes.some(({ sql }) => sql.includes('INSERT INTO payment_status')));
-});
-
-test('a configured live retry still reconciles the old payment before creating another gateway order', async () => {
-  state.paidRows = [];
-  const response = await route(razorpay, '/retry-order', { token: 'order_Real42' });
-  assert.equal(response.statusCode, 200, JSON.stringify(response.data));
-  assert.equal(response.data.keyId, 'rzp_live_IsolatedTest');
-  assert.equal(response.data.amount, 19999);
-  const reconciliation = state.gatewayRequests.findIndex(({ url }) => url.endsWith('/orders/order_Real42/payments'));
-  const creation = state.gatewayRequests.findIndex(({ options }) => options.method === 'POST');
-  assert.ok(reconciliation >= 0 && creation > reconciliation);
+test('Razorpay can verify historical payments but no longer starts or retries checkout', () => {
+  const paths = razorpay.stack.map(({ route }) => route?.path);
+  assert.ok(paths.includes('/webhook'));
+  assert.ok(!paths.includes('/create-order'));
+  assert.ok(!paths.includes('/retry-order'));
 });
 
 test('BLOB-encoded saved items still produce a correct verified Purchase', async () => {

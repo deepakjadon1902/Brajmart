@@ -130,6 +130,18 @@ test('Shree Maruti orders show courier tracking and open the recovered label fro
   await expect(page.getByText('Shipping label created and ready to print')).toBeVisible();
 });
 
+test('Blue Dart is selectable and links to the saved waybill', async ({ page }) => {
+  await page.route(/\/api\/orders(?:\?|$)/, (route) => route.fulfill({
+    json: [{ ...verifiedOrder, shippingService: 'Blue Dart', trackingId: '79034111122' }],
+  }));
+  await page.goto('/admin/orders');
+  await page.getByRole('button', { name: 'View order 10339' }).click();
+  const dropdown = page.locator('select').filter({ has: page.getByRole('option', { name: 'Blue Dart', exact: true }) });
+  await expect(dropdown).toHaveValue('Blue Dart');
+  await expect(page.getByRole('link', { name: 'Open Blue Dart tracking page' })).toHaveAttribute('href', /trackFor=awb&awb=79034111122$/);
+  await expect(page.getByRole('button', { name: 'Sync Label Status' })).toBeEnabled();
+});
+
 test('admin syncs a DTDC order directly without printing first or opening another tab', async ({ page }) => {
   let synced = false;
   const labelRequests: string[] = [];

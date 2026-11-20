@@ -141,75 +141,35 @@ export const requestPasswordResetOtp = (payload: { email: string }) =>
 export const verifyPasswordResetOtp = (payload: { email: string; otp: string }) =>
   getJson('/auth/forgot-password/verify', { method: 'POST', body: payload });
 
-export const createRazorpayOrder = (payload: {
+type OnlineCheckoutPayload = {
   amount: number;
   idempotencyKey?: string;
   metaContext?: Record<string, unknown>;
   order: Record<string, unknown>;
   customer: { name: string; email: string; phone?: string };
-}) =>
-  getJson<{
-    keyId: string;
-    orderId: string;
-    statusToken: string;
-    amount: number;
-    currency: string;
-    name: string;
-    description: string;
-    prefill: { name: string; email: string; contact?: string };
-  }>('/razorpay/create-order', { method: 'POST', body: payload });
-
-export type PayUCheckoutResponse = {
-  actionUrl: string;
-  fields: Record<string, string>;
-  statusToken: string;
-  orderId: number | string;
 };
 
-export const createPayUOrder = (payload: {
-  amount: number;
-  idempotencyKey?: string;
-  metaContext?: Record<string, unknown>;
-  order: Record<string, unknown>;
-  customer: { name: string; email: string; phone?: string };
-}) => getJson<PayUCheckoutResponse>('/payu/create-order', { method: 'POST', body: payload });
+type CheckoutReference = { statusToken: string; orderId: number | string };
+export type PayUCheckoutResponse = CheckoutReference & {
+  actionUrl: string;
+  fields: Record<string, string>;
+};
+export type CashfreeCheckoutSession = {
+  mode: 'sandbox' | 'production';
+  paymentSessionId: string;
+};
+
+export const createPayUOrder = (payload: OnlineCheckoutPayload) =>
+  getJson<PayUCheckoutResponse | (CheckoutReference & { completed: true })>('/payu/create-order', { method: 'POST', body: payload });
+
+export const createCashfreeOrder = (payload: OnlineCheckoutPayload) =>
+  getJson<CheckoutReference & (CashfreeCheckoutSession | { showStatus: true })>('/cashfree/create-order', { method: 'POST', body: payload });
+
+export const resumeCashfreeCheckout = (token: string) =>
+  getJson<CashfreeCheckoutSession>('/cashfree/resume', { method: 'POST', body: { token } });
 
 export const retryPayUPayment = (token: string) =>
   getJson<PayUCheckoutResponse>('/payu/retry', { method: 'POST', body: { token } });
-
-export const retryRazorpayOrder = (token: string, metaContext?: Record<string, unknown>) =>
-  getJson<{
-    keyId: string;
-    orderId: string;
-    statusToken: string;
-    amount: number;
-    currency: string;
-    name: string;
-    description: string;
-    prefill: { name: string; email: string; contact?: string };
-  }>('/razorpay/retry-order', { method: 'POST', body: { token, metaContext } });
-
-export const verifyRazorpayPayment = (payload: {
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
-  metaContext?: Record<string, unknown>;
-}) =>
-  getJson<{ ok: boolean; orderId: number; paymentId: string; status: string }>('/razorpay/verify', {
-    method: 'POST',
-    body: payload,
-  });
-
-export const reportRazorpayPaymentFailed = (payload: {
-  razorpay_order_id: string;
-  razorpay_payment_id?: string;
-  customer_email?: string;
-  reason?: string;
-}) =>
-  getJson<{ ok: boolean; orderId: number; paymentId: string; status: string }>('/razorpay/failed', {
-    method: 'POST',
-    body: payload,
-  });
 
 export const fetchPaymentStatus = (token: string) =>
   getJson(`/payments/status/${encodeURIComponent(token)}`, { cache: 'no-store' });

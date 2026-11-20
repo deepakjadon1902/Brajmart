@@ -94,19 +94,17 @@ test('a missing live webhook secret is reported separately from checkout readine
   assert.deepEqual(report.issues.map(issue => issue.setting), ['RAZORPAY_PLATFORM_WEBHOOK_SECRET']);
 });
 
-test('the example production configuration includes the mandatory environment flags', () => {
+test('the storefront environment template provisions Cashfree and omits Razorpay credentials', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const dotenv = require('dotenv');
   const example = dotenv.parse(fs.readFileSync(path.resolve(__dirname, '../.env.example')));
   assert.equal(example.APP_ENV, 'production');
   assert.equal(example.NODE_ENV, 'production');
-  assert.equal(example.RAZORPAY_MODE, 'live');
-  // Supply isolated fixtures only: the example must never contain real keys.
-  assert.equal(example.RAZORPAY_PLATFORM_KEY_ID, '');
-  const report = inspectRazorpayConfiguration({ ...example, ...Object.fromEntries(Object.entries(liveEnv()).filter(([key]) => key.startsWith('RAZORPAY_PLATFORM_'))) });
-  assert.equal(report.checkoutReady, true);
-  assert.equal(report.webhookReady, true);
+  assert.equal(example.CASHFREE_ENV, 'production');
+  assert.equal(example.CASHFREE_APP_ID, '');
+  assert.equal(example.CASHFREE_SECRET_KEY, '');
+  assert.ok(Object.keys(example).every((key) => !key.startsWith('RAZORPAY_')));
 });
 
 test('unknown environments, unknown mode, and runtime/environment mismatch fail closed', () => {

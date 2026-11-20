@@ -10,7 +10,8 @@ import { sendVerifiedPurchaseForOrder } from '../lib/purchaseTracking';
 import { isCapturedRazorpayPayment, verifyCapturedRazorpayPayment } from '../lib/razorpayVerification';
 import { resolveRazorpayCredentials } from '../lib/razorpayEnvironment';
 import { verifyPayUTransaction } from '../lib/payu';
-import { updateOrderForPayment } from './razorpay';
+import { updateOrderForPayment } from '../lib/paymentSettlement';
+import { reconcileCashfreeToken } from '../lib/cashfreeSettlement';
 
 const router = Router();
 
@@ -420,24 +421,22 @@ export const reconcileRecentGatewayPayments = async (limit = 50) => {
     }
   }
 
-  const payuRows = await dbQuery<any>(
-    `SELECT token, status
-       FROM payment_status
-      WHERE status IN ('pending', 'failed')
-        AND method = 'PayU'
-      ORDER BY updated_at DESC
-      LIMIT ${safeLimit}`
-  );
-  for (const row of payuRows) {
-    const token = String(row?.token || '').trim();
-    if (!token) continue;
-    try {
-      const beforeRows = await dbQuery<any>('SELECT status FROM payment_status WHERE token = ? LIMIT 1', [token]);
-      const before = String(beforeRows?.[0]?.status || '');
-      const after = await reconcilePayUToken(token);
-      if (before !== String(after?.status || '')) reconciled += 1;
-    } catch {
-      // Leave the stored status unchanged if PayU is temporarily unreachable.
+  for (const [method, reconcile] of [
+    ['PayU', reconcilePayUToken],
+    ['Cashfree', async (token: string) => (await reconcileCashfreeToken(token)).row],
+  ] as const) {
+    const rows = await dbQuery<any>(
+      `SELECT token, status FROM payment_status
+        WHERE status IN ('pending', 'failed') AND method = ?
+        ORDER BY updated_at DESC LIMIT ${safeLimit}`, [method]
+    );
+    for (const row of rows) {
+      try {
+        const after = await reconcile(String(row.token));
+        if (after && row.status !== after.status) reconciled += 1;
+      } catch {
+        // Leave the stored status unchanged if the gateway is unreachable.
+      }
     }
   }
   return reconciled;
@@ -495,8 +494,8 @@ router.post('/admin/confirm-pending/:orderId', auth, adminOnly, async (req, res)
       [orderId]
     );
     const statusRow = statusRows[0];
-    if (['razorpay', 'payu'].includes(String(orderRow.payment_method || '').toLowerCase())
-      || ['razorpay', 'payu'].includes(String(statusRow?.method || '').toLowerCase())) {
+    if (['razorpay', 'payu', 'cashfree'].includes(String(orderRow.payment_method || '').toLowerCase())
+      || ['razorpay', 'payu', 'cashfree'].includes(String(statusRow?.method || '').toLowerCase())) {
       return res.status(400).json({ message: 'Gateway orders can only be confirmed by verified payment.' });
     }
     if (statusRow && String(statusRow.status || '') === 'paid') {
@@ -652,6 +651,14 @@ router.get('/status/:token', async (req, res) => {
 
     // Reconcile supported gateways while the customer views the payment status page.
     const current = rows[0];
+    if (current.status === 'pending' && current.method === 'Cashfree') {
+      try {
+        const { row, session } = await reconcileCashfreeToken(token);
+        return res.json({ ...await mapPaymentStatusForClient(row || current), canResume: Boolean(session) });
+      } catch {
+        return res.json(await mapPaymentStatusForClient(current));
+      }
+    }
     if ((String(current.status) === 'pending' || String(current.status) === 'failed') && String(current.method || '').toLowerCase() === 'payu') {
       try {
         const reconciled = await reconcilePayUToken(token);
@@ -692,8 +699,11 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
     const { min, max } = await getEtaConfig();
     const etaText = getEtaText(min, max);
 
-    await dbExecute('UPDATE payments SET status = ?, updated_at = NOW() WHERE id = ?', [req.body.status, req.params.id]);
+    await dbExecute("UPDATE payments SET status = ?, updated_at = NOW() WHERE id = ? AND LOWER(method) <> 'cashfree'", [req.body.status, req.params.id]);
     const rows = await dbQuery<any>('SELECT * FROM payments WHERE id = ? LIMIT 1', [req.params.id]);
+    if (String(rows[0]?.method || '').toLowerCase() === 'cashfree') {
+      return res.status(400).json({ message: 'Cashfree payment status is updated by gateway verification.' });
+    }
     const payment = rows[0] ? mapPaymentRow(rows[0]) : null;
 
     if (payment) {

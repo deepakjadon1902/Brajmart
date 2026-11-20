@@ -25,7 +25,7 @@ inferred from HSN. An explicit 0 is a zero rate; blank means not configured.
 Selling prices already include GST, so this feature does not add tax to the
 customer's checkout total or reuse the global packaging percentage as GST.
 
-COD, Razorpay, and PayU checkout snapshot these fields from the database,
+COD, PayU, and Cashfree checkout snapshot these fields from the database,
 ignoring client-supplied tax values. New product edits affect future orders.
 Existing order invoices retain their saved values; historical missing HSN,
 unit or GST appears as unavailable rather than using today's catalog rates.
@@ -70,13 +70,15 @@ date in India, and order ID, such as
 ## Shipping partners
 
 Admin Orders supports DTDC, Delhivery, Shree Maruti, India Post, Ekart,
-Shadowfax and Amazon Shipping. Existing databases need the reviewed
+Shadowfax, Amazon Shipping, and Blue Dart. Existing databases need the reviewed
 `sql/add_shadowfax_shipping_service.sql` followed by
 `sql/add_amazon_shipping_service.sql` when their `orders.shipping_service` ENUM
 does not yet include these couriers. These changes append values and preserve
 the existing couriers and their ENUM indexes; they do not run automatically on
 requests or application startup. Do not rerun the older Shadowfax migration
-after applying the Amazon Shipping migration.
+after applying the Amazon Shipping migration. Apply
+`sql/add_blue_dart_shipping_service.sql` before selecting Blue Dart. The labels
+service uses its TrackCourier.io adapter for Blue Dart status sync.
 
 Shipping labels preserve the selected courier and saved AWB. Dispatch messages
 link to the courier's official tracking page and include the AWB separately.
@@ -146,52 +148,31 @@ tests use loopback HTTP servers and in-memory persistence doubles. The older
 `phase*Smoke.ts` scripts insert/delete database records and must not be pointed
 at production as part of build verification.
 
-## Razorpay checkout environment on Render
+## Cashfree hosted checkout
 
-`Razorpay production environment mismatch` originates in this backend before
-it contacts Razorpay. For the live storefront, configure **all three** settings
-in **Render → Brajmart-1 → Environment**:
+PayU is the default online gateway. Customers can select Cashfree as the secondary gateway.
+
+Set the following on the backend service. Use sandbox credentials with
+`CASHFREE_ENV=sandbox` for staging or local testing.
 
 ```env
-APP_ENV=production
-NODE_ENV=production
-RAZORPAY_MODE=live
+CASHFREE_ENV=production
+CASHFREE_APP_ID=
+CASHFREE_SECRET_KEY=
+FRONTEND_URL=https://www.brajmart.com
+BACKEND_URL=https://your-backend-host
 ```
 
-Keep the existing `RAZORPAY_PLATFORM_KEY_ID` (a live `rzp_live_` ID), its paired
-`RAZORPAY_PLATFORM_KEY_SECRET`, and `RAZORPAY_PLATFORM_WEBHOOK_SECRET` on that
-backend service. Remove or empty every `RAZORPAY_TEST_*` variable there.
-Production rejects missing mode flags, test credentials and a mixed environment;
-these checks must remain enabled. A local `.env` edit or Vercel frontend setting
-does not update Render. After reviewing these changes, apply the matching Render
-environment settings and restart/deploy the backend through the normal release
-process.
+Whitelist the storefront domain in Cashfree and subscribe to payment success
+webhooks at `/api/cashfree/webhook` on the backend. The backend verifies
+the webhook signature and checks the order ID, currency, amount, and captured
+payment with Cashfree.
 
-Run `npm run check:razorpay` in the backend directory (or Render Shell) to list
-the exact settings that need attention. It only inspects configuration: no
-database access, gateway requests, orders, payments or emails. It logs setting
-names and fixed instructions, never key IDs or secrets; it does not authenticate
-the keys with Razorpay. Exit code 0 means both checkout and webhook configuration
-are complete. Startup also reports configuration problems before customers
-attempt payment. Checkout returns a customer-safe HTTP 503 while misconfigured,
-without creating an order or reserving inventory.
+Historical Razorpay records can reconcile through their existing credentials
+and signed webhook. New orders and retries use the active gateways.
 
-If this check passes but an already-running local checkout returns
-`PAYMENT_UNAVAILABLE`, restart the backend or enter `rs` in its nodemon terminal.
-The check is a new process; an older server retains the settings it read at
-startup. The development command watches both `src` and `.env`, so subsequent
-environment edits restart the API automatically. A server started with an older
-development command needs one restart to adopt the updated watch list. Successful
-startup logs `Razorpay environment checks passed` with the mode and webhook
-readiness only; this validates configuration, not provider authentication.
-
-For staging use `APP_ENV=staging`, `NODE_ENV=production`, `RAZORPAY_MODE=test`,
-and only `RAZORPAY_TEST_KEY_ID`, `RAZORPAY_TEST_KEY_SECRET`, and
-`RAZORPAY_TEST_WEBHOOK_SECRET`. Local test payments use `APP_ENV=development`,
-`NODE_ENV=development`, and the same dedicated test variables. Never copy live
-credentials into the staging or development credential namespace.
-
-Reference: [Razorpay API keys and Test/Live modes](https://razorpay.com/docs/payments/dashboard/account-settings/api-keys).
+[Cashfree web checkout and domain setup](https://www.cashfree.com/docs/payments/online/web/redirect)
+[Cashfree webhook signature verification](https://www.cashfree.com/docs/payments/online/webhooks/signature-verification)
 
 ## PayU hosted checkout
 
@@ -454,7 +435,7 @@ and remove it when upgrading to an upstream release containing the fix.
 
 Prices, quantities, variants, charges, discounts and totals come from stored
 order snapshots, never current catalog prices. Payment IDs come only from paid
-payment records. New COD and Razorpay orders snapshot the product SKU on the
+payment records. New COD and online orders snapshot the product SKU on the
 server. Older invoices recover missing SKUs from the matching product ID, or a
 unique exact slug/name for legacy items without IDs, including archived products.
 Stored SKUs take precedence; deleted or ambiguous products show `Not assigned`.
@@ -580,7 +561,7 @@ request body. PayU callbacks validate PayU's SHA-512 response hash and reconcile
 against PayU's Verify Payment API. Every gateway path verifies the provider
 before writing a paid status.
 Reconciliation never matches payments by amount, time or customer notes alone.
-Admin manual confirmation cannot convert a Razorpay or PayU checkout into a paid order.
+Gateway orders can be marked paid through provider verification.
 COD and legacy manual payments do not send Meta `Purchase`.
 
 The public `/api/meta/conversions` endpoint rejects `Purchase`. Browser tracking

@@ -1,3 +1,4 @@
+import type { PoolConnection, ResultSetHeader } from 'mysql2/promise';
 import { dbExecute, dbQuery } from './db';
 import { boolFromDb } from './dbHelpers';
 import { allocatePaise, productTaxFromRow, ProductTax } from './productTax';
@@ -103,13 +104,11 @@ const couponDateTime = (value: unknown) => {
   return `${match[1]} ${match[2]}:${match[3] || '00'}`;
 };
 
-export const markCouponUsed = async (rawCode: unknown) => {
+export const markCouponUsed = async (rawCode: unknown, connection?: PoolConnection) => {
   const code = normalizeCouponCode(rawCode);
   if (!code) return false;
-  const result = await dbExecute(
-    'UPDATE coupons SET used_count = used_count + 1, updated_at = NOW() WHERE code = ? AND (usage_limit IS NULL OR used_count < usage_limit)',
-    [code]
-  );
+  const sql = 'UPDATE coupons SET used_count = used_count + 1, updated_at = NOW() WHERE code = ? AND (usage_limit IS NULL OR used_count < usage_limit)';
+  const result = connection ? (await connection.execute<ResultSetHeader>(sql, [code]))[0] : await dbExecute(sql, [code]);
   return Number(result?.affectedRows || 0) > 0;
 };
 

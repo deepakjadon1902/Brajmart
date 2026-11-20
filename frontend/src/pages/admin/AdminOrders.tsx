@@ -13,11 +13,12 @@ import {
   BRAJMART_CONTACT_PHONE_DISPLAY,
   buildDispatchedOrderWhatsAppMessage,
   buildWhatsAppWebUrl,
+  getCourierTrackingUrl,
   getOrderWhatsAppPhone,
 } from '@/lib/whatsappTemplates';
 
 const statusOptions: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'rto', 'cancelled'];
-const shippingServices = ['DTDC', 'Delhivery', 'Shree Maruti', 'India Post', 'Ekart', 'Shadowfax', 'Amazon Shipping'];
+const shippingServices = ['DTDC', 'Delhivery', 'Shree Maruti', 'India Post', 'Ekart', 'Shadowfax', 'Amazon Shipping', 'Blue Dart'];
 const statusLabel = (status: string) => status === 'rto' ? 'RTO' : status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 type OrderExportItem = {
@@ -809,6 +810,11 @@ const AdminOrders = () => {
                         </div>
                       )}
                     </div>
+                  )}
+                  {detail.shippingService === 'Blue Dart' && detail.trackingId && (
+                    <a href={getCourierTrackingUrl('Blue Dart', detail.trackingId)} target="_blank" rel="noreferrer" className="mb-2 inline-block text-xs font-medium text-amber-300 hover:text-amber-200">
+                      Open Blue Dart tracking page
+                    </a>
                   )}
                   {isDelhivery && deliveryTracking ? (
                     <div>

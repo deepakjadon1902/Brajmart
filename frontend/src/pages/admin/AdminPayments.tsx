@@ -142,6 +142,7 @@ const AdminPayments = () => {
   const icons: Record<string, LucideIcon> = {
     UPI: Wallet,
     Card: CreditCard,
+    Cashfree: CreditCard,
     Razorpay: CreditCard,
     COD: Wallet,
   };

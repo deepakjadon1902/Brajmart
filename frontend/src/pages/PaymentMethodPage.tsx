@@ -5,7 +5,7 @@ import { CreditCard, Smartphone, Building2, Wallet, Shield } from 'lucide-react'
 
 const methods = [
   { icon: CreditCard, title: 'PayU Hosted Checkout', desc: 'Pay securely with UPI, credit and debit cards, net banking, wallets, and other methods on PayU’s hosted payment page.', tag: 'Available' },
-  { icon: CreditCard, title: 'Razorpay Checkout', desc: 'Razorpay is temporarily unavailable due to a technical issue. Please use PayU for online payment.', tag: 'Unavailable' },
+  { icon: CreditCard, title: 'Cashfree Checkout', desc: 'An alternative online checkout for UPI, cards, and net banking.', tag: 'Alternative' },
   { icon: Smartphone, title: 'UPI', desc: 'Pay instantly using Google Pay, PhonePe, Paytm, BHIM, or any UPI app.', tag: '' },
   { icon: CreditCard, title: 'Credit & Debit Cards', desc: 'We accept Visa, Mastercard, RuPay, and American Express. All transactions are 3D Secure protected.', tag: '' },
   { icon: Building2, title: 'Net Banking', desc: 'Pay directly from your bank account. All major Indian banks are supported including SBI, HDFC, ICICI, and more.', tag: '' },

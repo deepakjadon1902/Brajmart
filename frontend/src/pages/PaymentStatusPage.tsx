@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CreditCard, XCircle, Loader2 } from 'lucide-react';
-import { fetchPaymentStatus, retryPayUPayment, trackOrder } from '@/lib/api';
+import { fetchPaymentStatus, resumeCashfreeCheckout, retryPayUPayment, trackOrder } from '@/lib/api';
+import { launchCashfree, submitPayUCheckout } from '@/lib/onlinePayment';
 import { clearCheckoutDraft } from '@/lib/checkoutDraft';
 import { useCartStore } from '@/store/cartStore';
 import { formatPrice } from '@/utils/formatPrice';
@@ -11,6 +12,7 @@ import Footer from '@/components/layout/Footer';
 import OrderSuccessCard from '@/components/orders/OrderSuccessCard';
 
 type PaymentStatusResponse = {
+  canResume?: boolean;
   status?: 'paid' | 'pending' | 'failed' | null;
   orderId?: number | null;
   amount?: number | string | null;
@@ -41,6 +43,7 @@ const PaymentStatusPage = () => {
   const { token } = useParams();
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(false);
+  const [canResume, setCanResume] = useState(false);
   const [status, setStatus] = useState<'paid' | 'pending' | 'failed' | null>(null);
   const [orderId, setOrderId] = useState<number | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
@@ -51,12 +54,13 @@ const PaymentStatusPage = () => {
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [estimatedDelivery, setEstimatedDelivery] = useState<string | null>(null);
   const clearCart = useCartStore((state) => state.clearCart);
-  const isRazorpayPayment = String(method || '').toLowerCase() === 'razorpay';
+  const isCashfreePayment = String(method || '').toLowerCase() === 'cashfree';
   const isPayUPayment = String(method || '').toLowerCase() === 'payu';
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setCanResume(false);
     setStatus(null);
     setOrderId(null);
     setOrderItems(null);
@@ -72,6 +76,7 @@ const PaymentStatusPage = () => {
         const data = await fetchPaymentStatus(token) as PaymentStatusResponse;
         if (!active) return;
         setStatus(data.status || null);
+        setCanResume(data.canResume === true);
         setOrderId(data.orderId || null);
         setAmount(data.amount === null || data.amount === undefined ? null : Number(data.amount));
         setMethod(data.method || null);
@@ -96,6 +101,7 @@ const PaymentStatusPage = () => {
         const data = await fetchPaymentStatus(token) as PaymentStatusResponse;
         if (!active) return;
         setStatus(data.status || null);
+        setCanResume(data.canResume === true);
         setOrderId(data.orderId || null);
         setAmount(data.amount === null || data.amount === undefined ? null : Number(data.amount));
         setMethod(data.method || null);
@@ -143,23 +149,14 @@ const PaymentStatusPage = () => {
     if (!token || retrying || status === 'paid') return;
     setRetrying(true);
     try {
-      const result = await retryPayUPayment(token);
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = result.actionUrl;
-      form.style.display = 'none';
-      Object.entries(result.fields).forEach(([name, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = name;
-        input.value = String(value ?? '');
-        form.appendChild(input);
-      });
-      document.body.appendChild(form);
-      form.submit();
+      if (isCashfreePayment) {
+        await launchCashfree(await resumeCashfreeCheckout(token));
+      } else {
+        submitPayUCheckout(await retryPayUPayment(token));
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
-      toast.error(message || 'Unable to retry payment with PayU. Please try again.');
+      toast.error(message || 'Unable to continue payment. Please try again.');
       setRetrying(false);
     }
   };
@@ -172,7 +169,7 @@ const PaymentStatusPage = () => {
           <OrderSuccessCard
             orderId={orderId}
             amount={amount}
-            method={method || 'Razorpay'}
+            method={method || 'Online payment'}
             paymentId={paymentId}
             trackingId={trackingId}
             estimatedDelivery={estimatedDelivery}
@@ -201,8 +198,8 @@ const PaymentStatusPage = () => {
                 <Loader2 size={56} className="mx-auto text-saffron animate-spin mb-4" />
                 <h1 className="mb-2 font-cinzel text-[1.65rem] font-bold leading-tight sm:text-2xl">Payment Pending</h1>
                 <p className="text-muted-foreground text-sm">
-                  {isRazorpayPayment
-                    ? 'Razorpay is temporarily unavailable. If money was debited, contact support before making another payment.'
+                  {canResume
+                    ? 'You can continue the same Cashfree checkout.'
                     : 'We are verifying your payment. This may take a few minutes.'}
                 </p>
               </>
@@ -211,11 +208,9 @@ const PaymentStatusPage = () => {
                 <XCircle size={56} className="mx-auto text-red-500 mb-4" />
                 <h1 className="mb-2 font-cinzel text-[1.65rem] font-bold leading-tight sm:text-2xl">Payment Failed</h1>
                 <p className="text-muted-foreground text-sm">
-                  {isRazorpayPayment
-                    ? 'Razorpay is temporarily unavailable. If money was debited, contact support before making another payment.'
-                    : isPayUPayment
-                      ? 'The payment was not completed. You can retry securely with PayU.'
-                    : 'We could not verify the payment. Please try again.'}
+                  {isPayUPayment
+                    ? 'The payment was not completed. You can retry securely with PayU.'
+                    : 'The payment was not completed. If money was debited, contact support before trying again.'}
                 </p>
               </>
             )}
@@ -245,7 +240,7 @@ const PaymentStatusPage = () => {
               <Link to="/track-orders" className="flex min-h-11 items-center justify-center rounded-xl border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted">
                 Track Order
               </Link>
-              {status === 'failed' && isPayUPayment ? (
+              {(status === 'failed' && isPayUPayment) || (status === 'pending' && canResume) ? (
                 <button
                   type="button"
                   onClick={handleRetryPayment}
@@ -253,7 +248,7 @@ const PaymentStatusPage = () => {
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gold-gradient px-5 py-2.5 text-sm font-bold text-maroon-dark shimmer disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {retrying ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                  {retrying ? 'Opening PayU...' : 'Pay Again with PayU'}
+                  {retrying ? 'Opening checkout...' : isCashfreePayment ? 'Continue with Cashfree' : 'Pay Again with PayU'}
                 </button>
               ) : (
                 <Link to={status === 'pending' ? '/' : '/checkout'} className="flex min-h-11 items-center justify-center rounded-xl bg-gold-gradient px-5 py-2.5 text-sm font-bold text-maroon-dark shimmer">

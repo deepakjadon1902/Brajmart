@@ -1,18 +1,13 @@
 import { Router, type Response } from 'express';
 import crypto from 'crypto';
-import { optionalAuth, AuthRequest } from '../middleware/auth';
+import { optionalAuth } from '../middleware/auth';
 import { rateLimit, rateLimitKeyByIpAndOrderEmail } from '../middleware/rateLimit';
 import { isDbConnected, dbQuery, dbExecute, withDbTransaction } from '../lib/db';
-import { getEtaConfig, getEstimatedDeliveryDate } from '../lib/eta';
-import { capturePurchaseOrderContext } from '../lib/purchaseTracking';
 import { resolvePayUConfig, PayUConfigurationError, createPayURequestHash, verifyPayUResponseHash, verifyPayUTransaction } from '../lib/payu';
-import { applyCouponToTotals, computeTotals, getCheckoutSettings, hasPrasadamItems, priceAndValidateOrderItems } from '../lib/orderPricing';
-import { upsertUserDefaultAddress } from '../lib/userAddress';
-import { resolveCodHandleFee } from '../lib/cod';
-import { validateCheckoutOrderContact } from '../lib/checkoutValidation';
-import { releaseInventoryForOrder, reserveInventoryForOrder } from '../lib/inventory';
+import { reserveInventoryForOrder } from '../lib/inventory';
+import { createOnlineCheckout } from '../lib/onlineCheckout';
 import { parseJson } from '../lib/dbHelpers';
-import { updateOrderForPayment } from './razorpay';
+import { updateOrderForPayment } from '../lib/paymentSettlement';
 
 const router = Router();
 const payuCreateLimiter = rateLimit('payu-create-checkout', {
@@ -35,13 +30,11 @@ const respondToPayUConfigurationFailure = (res: Response, error: unknown) => {
   console.error('PayU configuration needs attention:', error.message);
   res.status(503).json({
     code: 'PAYMENT_UNAVAILABLE',
-    message: 'PayU online payment is temporarily unavailable. Please use Cash on Delivery if available or contact support.',
+    message: 'PayU online payment is temporarily unavailable. Choose Cashfree at checkout if available.',
   });
   return true;
 };
 
-const normalizeIdempotencyKey = (value: unknown) => String(value || '').trim().slice(0, 112);
-const buildCartHash = (input: unknown) => crypto.createHash('sha256').update(JSON.stringify(input || null)).digest('hex');
 const getFrontendUrl = () => {
   const value = String(process.env.FRONTEND_URL || process.env.SITE_URL || 'https://www.brajmart.com').trim().replace(/\/$/, '');
   try { return new URL(value).origin; } catch { return 'https://www.brajmart.com'; }
@@ -87,61 +80,6 @@ const payuFieldsFor = (params: {
 const makeTransactionId = (orderId: string | number) =>
   `BM${String(orderId).replace(/\D/g, '').slice(-8)}${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`.slice(0, 25);
 
-const saveCheckoutSession = async (input: {
-  idempotencyKey: string;
-  userId: number | null;
-  customerEmail: string;
-  cartHash: string;
-  orderId: number;
-  paymentToken: string;
-  amount: number;
-}) => {
-  if (!input.idempotencyKey) return;
-  await dbExecute(
-    `INSERT INTO checkout_sessions
-      (idempotency_key, user_id, customer_email, cart_hash, order_id, payment_token, amount, status, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', DATE_ADD(NOW(), INTERVAL 45 MINUTE))
-     ON DUPLICATE KEY UPDATE
-      user_id = VALUES(user_id), customer_email = VALUES(customer_email), cart_hash = VALUES(cart_hash),
-      order_id = VALUES(order_id), payment_token = VALUES(payment_token), amount = VALUES(amount),
-      status = 'active', expires_at = VALUES(expires_at), updated_at = NOW()`,
-    [input.idempotencyKey, input.userId, input.customerEmail, input.cartHash, input.orderId, input.paymentToken, input.amount]
-  );
-};
-
-const findReusableCheckout = async (idempotencyKey: string, cartHash: string) => {
-  if (!idempotencyKey) return null;
-  const rows = await dbQuery<any>(
-    `SELECT * FROM checkout_sessions
-      WHERE idempotency_key = ? AND status = 'active' AND expires_at > NOW()
-      LIMIT 1`,
-    [idempotencyKey]
-  );
-  const session = rows[0];
-  if (!session) return null;
-  if (String(session.cart_hash || '') !== cartHash) throw new Error('Checkout session changed. Please refresh your cart and try again.');
-  const paymentRows = await dbQuery<any>('SELECT method, status FROM payment_status WHERE token = ? LIMIT 1', [String(session.payment_token || '')]);
-  if (String(paymentRows[0]?.method || '').toLowerCase() !== 'payu' || String(paymentRows[0]?.status || '') !== 'pending') return null;
-  return { orderId: Number(session.order_id), token: String(session.payment_token), amount: Number(session.amount) };
-};
-
-const createOrderRow = async (orderData: any, estimatedDelivery: Date) => {
-  const history = [{ status: 'pending_payment', date: new Date().toISOString(), note: 'PayU payment initiated, waiting for payment confirmation' }];
-  const result: any = await dbExecute(
-    'INSERT INTO orders (user_id, items, items_subtotal, packaging_amount, packaging_rate, shipping_amount, cod_amount, cod_available, cod_pincode, cod_message, coupon_code, coupon_discount, coupon_details, total, status, customer_name, customer_email, shipping_address, billing_address, payment_method, tracking_id, estimated_delivery, status_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [
-      orderData.userId || null, JSON.stringify(orderData.items || []), orderData.itemsSubtotal, orderData.packagingAmount,
-      orderData.packagingRate, orderData.shippingAmount, 0, orderData.codAvailable, orderData.codPincode || null,
-      orderData.codMessage || null, orderData.couponCode || null, orderData.couponDiscount || 0,
-      orderData.couponDetails ? JSON.stringify(orderData.couponDetails) : null, orderData.total, 'pending_payment',
-      orderData.customerName || null, orderData.customerEmail || null, JSON.stringify(orderData.shippingAddress || {}),
-      JSON.stringify(orderData.billingAddress || {}), 'PayU', null, estimatedDelivery, JSON.stringify(history),
-    ]
-  );
-  const rows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [result.insertId]);
-  return rows[0];
-};
-
 const recordPaymentAttempt = async (orderRow: any, customerName: string, customerEmail: string, amount: number, token: string) => {
   await dbExecute(
     'INSERT INTO payments (order_id, customer_name, customer_email, method, amount, status, transaction_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -165,114 +103,15 @@ const hasPaidSettlement = async (orderId: number | string) => {
 const redirectToPaymentStatus = (res: Response, token: string) =>
   res.redirect(303, `${getFrontendUrl()}/payment-status/${encodeURIComponent(token)}`);
 
-router.post('/create-order', payuCreateLimiter, optionalAuth, async (req: AuthRequest, res) => {
-  let orderRow: any = null;
-  let reservedItems: any[] = [];
-  try {
+router.post('/create-order', payuCreateLimiter, optionalAuth, createOnlineCheckout({
+  method: 'PayU',
+  prepare: () => {
     resolvePayUConfig();
-    if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
-    const { amount, order, customer } = req.body || {};
-    if (!order || !customer?.email || !customer?.name) return res.status(400).json({ message: 'Missing order details' });
-    const customerEmail = String(customer.email || '').trim().toLowerCase();
-    const contact = validateCheckoutOrderContact(order, customerEmail);
-    if (!contact.ok) return res.status(400).json({ message: contact.message });
-
-    const priced = await priceAndValidateOrderItems(order.items || []);
-    if (!priced.ok) return res.status(400).json({ message: priced.message });
-    if ((Boolean(order?.codRequested) || Number(order?.codAmount || 0) > 0) && hasPrasadamItems(priced.items)) {
-      return res.status(400).json({ message: 'COD is not available for Prasadam products. Please use online payment for Prasadam orders.' });
-    }
-
-    const settings = await getCheckoutSettings();
-    const baseTotals = computeTotals(priced.itemsSubtotal, settings);
-    const cod = await resolveCodHandleFee({ ...order, items: priced.items }, settings);
-    const totalsBeforeCoupon = { ...baseTotals, cod: cod.amount, total: baseTotals.total + cod.amount };
-    let totals = totalsBeforeCoupon;
-    let couponDetails: any = null;
-    if (order?.couponCode) {
-      const couponResult = await applyCouponToTotals(order.couponCode, priced.items, totalsBeforeCoupon);
-      if (!couponResult.valid) return res.status(400).json({ message: couponResult.message });
-      totals = { ...totalsBeforeCoupon, total: couponResult.totals.total };
-      couponDetails = couponResult.coupon;
-    }
-    if (settings.minOrderAmount && totals.total < settings.minOrderAmount) return res.status(400).json({ message: `Minimum order amount is ${settings.minOrderAmount}` });
-    if (settings.maxOrderQuantity) {
-      const totalQty = priced.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-      if (totalQty > settings.maxOrderQuantity) return res.status(400).json({ message: `Maximum order quantity is ${settings.maxOrderQuantity}` });
-    }
-    if (amount !== undefined && Number.isFinite(Number(amount)) && Math.abs(Number(amount) - totals.total) > 0.01) {
-      return res.status(400).json({ message: 'Cart total changed. Please refresh and try again.' });
-    }
-
-    const cartHash = buildCartHash({
-      customerEmail,
-      customerName: customer.name,
-      customerPhone: customer.phone || '',
-      shippingAddress: contact.shippingAddress,
-      billingAddress: contact.billingAddress,
-      items: priced.items.map((item) => ({ productId: item.productId, quantity: item.quantity, selectedSize: item.selectedSize || '', selectedPieces: item.selectedPieces || '', selectedAttributes: item.selectedAttributes || {}, price: item.price })),
-      totals,
-      couponCode: couponDetails?.code || '',
-      codAmount: cod.amount,
-    });
-    const rawIdempotencyKey = normalizeIdempotencyKey(req.body?.idempotencyKey || req.headers['idempotency-key']);
-    const idempotencyKey = rawIdempotencyKey ? `payu:${rawIdempotencyKey}` : '';
-    const reusable = await findReusableCheckout(idempotencyKey, cartHash);
-    if (reusable) {
-      const orderRows = await dbQuery<any>('SELECT * FROM orders WHERE id = ? LIMIT 1', [reusable.orderId]);
-      const savedOrder = orderRows[0];
-      if (savedOrder) {
-        const billing = parseJson(savedOrder.billing_address, {});
-        const checkout = payuFieldsFor({ token: reusable.token, amount: reusable.amount, orderId: reusable.orderId, customerName: customer.name, customerEmail, customerPhone: customer.phone || '', billingAddress: billing });
-        return res.json({ ...checkout, statusToken: reusable.token, orderId: reusable.orderId });
-      }
-    }
-
-    const { max } = await getEtaConfig();
-    const rawUserId = req.user?.id;
-    const numericUserId = rawUserId && Number.isFinite(Number(rawUserId)) ? Number(rawUserId) : null;
-    orderRow = await createOrderRow({
-      ...order,
-      userId: numericUserId,
-      items: priced.items,
-      itemsSubtotal: totals.itemsSubtotal,
-      packagingAmount: totals.packaging,
-      packagingRate: settings.packagingRate,
-      shippingAmount: totals.shipping,
-      codAvailable: cod.available,
-      codPincode: cod.pincode,
-      codMessage: cod.message,
-      couponCode: couponDetails?.code || null,
-      couponDiscount: couponDetails?.discountAmount || 0,
-      couponDetails,
-      total: totals.total,
-      customerName: customer.name,
-      customerEmail,
-      shippingAddress: contact.shippingAddress,
-      billingAddress: contact.billingAddress,
-    }, getEstimatedDeliveryDate(max));
-
-    capturePurchaseOrderContext(orderRow.id, {
-      ...(req.body?.metaContext && typeof req.body.metaContext === 'object' ? req.body.metaContext : {}),
-      externalId: numericUserId ? `user:${numericUserId}` : customerEmail,
-    }, req).catch(() => {});
-    if (numericUserId) upsertUserDefaultAddress(numericUserId, contact.shippingAddress || contact.billingAddress).catch(() => {});
-
-    reservedItems = priced.items;
-    await withDbTransaction((connection) => reserveInventoryForOrder(connection, Number(orderRow.id), priced.items));
-    const token = makeTransactionId(orderRow.id);
-    await recordPaymentAttempt(orderRow, customer.name, customerEmail, Number(totals.total), token);
-    await saveCheckoutSession({ idempotencyKey, userId: numericUserId, customerEmail, cartHash, orderId: Number(orderRow.id), paymentToken: token, amount: Number(totals.total) });
-    const checkout = payuFieldsFor({ token, amount: Number(totals.total), orderId: orderRow.id, customerName: customer.name, customerEmail, customerPhone: customer.phone || '', billingAddress: contact.billingAddress });
-    return res.json({ ...checkout, statusToken: token, orderId: orderRow.id });
-  } catch (err: any) {
-    if (orderRow && reservedItems.length) {
-      await withDbTransaction((connection) => releaseInventoryForOrder(connection, Number(orderRow.id), reservedItems)).catch(() => {});
-    }
-    if (respondToPayUConfigurationFailure(res, err)) return;
-    return res.status(500).json({ message: err?.message || 'Failed to start PayU checkout' });
-  }
-});
+    return (checkout) => checkout.alreadyPaid ? { completed: true } : payuFieldsFor(checkout);
+  },
+  createToken: makeTransactionId,
+  respondToFailure: respondToPayUConfigurationFailure,
+}));
 
 router.post('/retry', payuCreateLimiter, async (req, res) => {
   try {

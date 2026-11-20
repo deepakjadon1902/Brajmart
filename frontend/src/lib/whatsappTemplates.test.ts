@@ -4,6 +4,7 @@ import { buildDispatchedOrderWhatsAppMessage, getCourierTrackingUrl } from './wh
 describe.each([
   { courier: 'Shadowfax', awb: 'SF12345', url: 'https://shadowfax.in/track' },
   { courier: 'Amazon Shipping', awb: 'AMZ12345', url: 'https://track.amazon.in/' },
+  { courier: 'Blue Dart', awb: '79034111122', url: 'https://www.bluedart.com/web/guest/trackdartresult?trackFor=awb&awb=79034111122' },
 ])('$courier dispatch details', ({ courier, awb, url }) => {
   it('links to the official tracking page and preserves the saved courier and AWB', () => {
     const message = buildDispatchedOrderWhatsAppMessage({
@@ -17,6 +18,6 @@ describe.each([
 
   it('recognizes the courier regardless of case or surrounding whitespace', () => {
     expect(getCourierTrackingUrl(` ${courier.toLowerCase()} `, awb)).toBe(url);
-    expect(getCourierTrackingUrl(courier.toUpperCase())).toBe(url);
+    expect(getCourierTrackingUrl(courier.toUpperCase(), awb)).toBe(url);
   });
 });
