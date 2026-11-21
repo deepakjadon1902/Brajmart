@@ -511,7 +511,7 @@ export const fetchOrderInvoiceManifest = (signal?: AbortSignal, filters: AdminOr
     return data;
   });
 };
-export const updateOrderStatus = (id: string, payload: { status: string; note?: string; shippingService?: string; trackingId?: string | null }) =>
+export const updateOrderStatus = (id: string, payload: { status?: string; note?: string; shippingService?: string; trackingId?: string | null }) =>
   getJson<Record<string, any>>(`/orders/${id}/status`, { method: 'PUT', body: payload });
 export const createOrder = (payload: Record<string, unknown>) =>
   getJson('/orders', { method: 'POST', body: payload });

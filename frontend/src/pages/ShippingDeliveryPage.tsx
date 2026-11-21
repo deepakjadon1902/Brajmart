@@ -2,18 +2,29 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { ScrollReveal } from '@/components/ui/ScrollReveal';
 import { Truck, Clock, MapPin, Package, IndianRupee, Shield } from 'lucide-react';
+import { useSettingsStore } from '@/store/settingsStore';
+import { formatPrice } from '@/utils/formatPrice';
 
-const policies = [
-  { icon: Truck, title: 'Standard Delivery', desc: '5-7 business days across India. Free on orders above ₹299.' },
+const getPolicies = (shippingFee: number, freeShippingThreshold: number) => [
+  { icon: Truck, title: 'Standard Delivery', desc: '5-7 business days across India.' },
   { icon: Clock, title: 'Express Delivery', desc: '2-3 business days in select metro cities. ₹99 flat fee.' },
   { icon: Package, title: 'Prasadam Priority', desc: 'All Prasadam orders are dispatched within 24 hours for freshness.' },
   { icon: MapPin, title: 'Pan-India Coverage', desc: 'We deliver to 25,000+ pin codes across all Indian states and UTs.' },
-  { icon: IndianRupee, title: 'Shipping Charges', desc: 'Free above ₹299. ₹49 flat rate for orders below ₹299.' },
+  {
+    icon: IndianRupee,
+    title: 'Shipping Charges',
+    desc: shippingFee === 0
+      ? 'Standard shipping is free on all orders.'
+      : `${formatPrice(shippingFee)} flat rate below ${formatPrice(freeShippingThreshold)}. Free standard shipping on orders of ${formatPrice(freeShippingThreshold)} or more.`,
+  },
   { icon: Shield, title: 'Safe Packaging', desc: 'All items are packed with care — fragile products get extra cushioning.' },
 ];
 
-const ShippingDeliveryPage = () => (
-  <div className="min-h-screen bg-background">
+const ShippingDeliveryPage = () => {
+  const { shippingFee, freeShippingThreshold } = useSettingsStore((state) => state.settings);
+  const policies = getPolicies(shippingFee, freeShippingThreshold);
+
+  return <div className="min-h-screen bg-background">
     <Navbar />
 
     <section className="relative bg-maroon-dark text-primary-foreground py-8 md:py-12">
@@ -77,7 +88,7 @@ const ShippingDeliveryPage = () => (
     </section>
 
     <Footer />
-  </div>
-);
+  </div>;
+};
 
 export default ShippingDeliveryPage;

@@ -21,7 +21,6 @@ import { useCheckoutFollowups } from '@/hooks/useCheckoutFollowups';
 
 const steps = ['Address', 'Payment', 'Done'];
 const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
-const DEFAULT_SHIPPING_FEE = 49;
 const CHECKOUT_IDEMPOTENCY_STORAGE_KEY = 'brajmart-checkout-idempotency';
 const INITIATE_CHECKOUT_TRACKING_STORAGE_KEY = 'brajmart-initiate-checkout-tracked';
 type ServiceabilityState = { pincode: string; serviceable: boolean; codAvailable: boolean; manualReview?: boolean; message?: string };
@@ -36,6 +35,7 @@ type PincodeLookupResponse = Array<{
   }>;
 }>;
 type CreatedOrderResponse = { orderId?: string | number; _id?: string | number; id?: string | number };
+type PaymentMethod = 'cashfree' | 'payu' | 'cod';
 type AddressValidationResult = { valid: true } | { valid: false; message: string };
 type BundleSnapshot = {
   name: string;
@@ -158,7 +158,14 @@ const CheckoutPage = () => {
 
   const [step, setStep] = useState(() => initialCheckoutDraft?.step && initialCheckoutDraft.step > 0 ? initialCheckoutDraft.step : 0);
   const [cashfreeEnabled, setCashfreeEnabled] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState(initialCheckoutDraft?.paymentMethod === 'cod' ? 'cod' : 'payu');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(() => {
+    const savedMethod = initialCheckoutDraft?.paymentMethod;
+    return savedMethod === 'cashfree' || savedMethod === 'payu' || savedMethod === 'cod' ? savedMethod : null;
+  });
+  const defaultOnlineMethod = cashfreeEnabled ? 'cashfree' : 'payu';
+  const paymentMethod = selectedPaymentMethod === 'cashfree' && !cashfreeEnabled
+    ? defaultOnlineMethod
+    : selectedPaymentMethod ?? defaultOnlineMethod;
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(initialCheckoutDraft?.billingSameAsShipping ?? true);
   const [processing, setProcessing] = useState(false);
   const [customerEmail, setCustomerEmail] = useState(initialCheckoutDraft?.customerEmail || user?.email || '');
@@ -177,7 +184,7 @@ const CheckoutPage = () => {
   const [whatsappFollowupConsent, setWhatsappFollowupConsent] = useState(false);
 
   const freeShippingThreshold = Number(settings.freeShippingThreshold) > 0 ? Number(settings.freeShippingThreshold) : DEFAULT_FREE_SHIPPING_THRESHOLD;
-  const shippingFee = Number(settings.shippingFee) > 0 ? Number(settings.shippingFee) : DEFAULT_SHIPPING_FEE;
+  const { shippingFee } = settings;
   const localSubtotal = totalPrice();
   const shipping = localSubtotal >= freeShippingThreshold ? 0 : shippingFee;
   const packagingRate = Math.max(0, Number(settings.packagingRate) || 0);
@@ -286,7 +293,7 @@ const CheckoutPage = () => {
     if (serviceability && serviceability.pincode !== effectivePincode) {
       setServiceability(null);
       setWantsCodService(false);
-      if (paymentMethod === 'cod') setPaymentMethod('payu');
+      if (paymentMethod === 'cod') setSelectedPaymentMethod(null);
     }
   }, [effectivePincode, paymentMethod, serviceability]);
 
@@ -294,7 +301,7 @@ const CheckoutPage = () => {
     if (paymentMethod === 'cod') {
       if (canUseCodService) setWantsCodService(true);
       else {
-        setPaymentMethod('payu');
+        setSelectedPaymentMethod(null);
         setWantsCodService(false);
       }
       return;
@@ -415,7 +422,7 @@ const CheckoutPage = () => {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [couponItemSignature]);
+  }, [couponItemSignature, shippingFee, freeShippingThreshold]);
 
   const applyCheckoutUpdates = () => {
     if (!checkoutValidation) return;
@@ -564,7 +571,7 @@ const CheckoutPage = () => {
     if (!items.length || step >= 2) return;
     saveCheckoutDraft({
       step,
-      paymentMethod,
+      paymentMethod: selectedPaymentMethod ?? undefined,
       billingSameAsShipping,
       customerEmail,
       shippingAddress,
@@ -573,7 +580,7 @@ const CheckoutPage = () => {
       appliedCoupon,
       wantsCodService,
     }, user?.id);
-  }, [appliedCoupon, billingAddress, billingSameAsShipping, couponCode, customerEmail, items.length, paymentMethod, shippingAddress, step, user?.id, wantsCodService]);
+  }, [appliedCoupon, billingAddress, billingSameAsShipping, couponCode, customerEmail, items.length, selectedPaymentMethod, shippingAddress, step, user?.id, wantsCodService]);
 
   const shouldRedirectToCart = items.length === 0 && step < 2;
   useEffect(() => {
@@ -704,6 +711,7 @@ const CheckoutPage = () => {
     if (!canDeliver) return;
     try {
       const data = await fetchPublicSettings({ fresh: true });
+      setCashfreeEnabled(data.cashfreeEnabled === true);
       updateSettings({
         freeShippingThreshold: data.freeShippingThreshold,
         shippingFee: data.shippingFee,
@@ -915,27 +923,26 @@ const CheckoutPage = () => {
 
   const paymentOptions = [
     {
-      value: 'payu',
-      title: 'PayU',
-      subtitle: 'UPI, cards, net banking, wallets, and more',
-      logo: PayULogo,
-      pills: ['UPI', 'Cards', 'NetBanking'],
-      badge: 'Recommended',
-      brandColor: 'text-[#1d6fbc]',
-      disabled: false,
-    },
-    {
-      value: 'cashfree',
+      value: 'cashfree' as const,
       title: 'Cashfree',
       subtitle: cashfreeEnabled ? 'UPI, cards, and net banking' : 'Cashfree is currently unavailable.',
       logo: CashfreeLogo,
       pills: cashfreeEnabled ? ['UPI', 'Cards', 'NetBanking'] : [],
-      badge: cashfreeEnabled ? 'Alternative' : 'Unavailable',
+      badge: cashfreeEnabled ? undefined : 'Unavailable',
       brandColor: cashfreeEnabled ? 'text-[#603fc5]' : 'text-muted-foreground',
       disabled: !cashfreeEnabled,
     },
+    {
+      value: 'payu' as const,
+      title: 'PayU',
+      subtitle: 'UPI, cards, net banking, wallets, and more',
+      logo: PayULogo,
+      pills: ['UPI', 'Cards', 'NetBanking'],
+      brandColor: 'text-[#1d6fbc]',
+      disabled: false,
+    },
     ...(!hasPrasadamItems && codEligibleItems ? [{
-      value: 'cod',
+      value: 'cod' as const,
       title: 'Cash on Delivery',
       subtitle: canUseCodService
         ? `Pay at delivery. COD fee ${formatPrice(validatedCodFee)} applies.`
@@ -1191,14 +1198,14 @@ const CheckoutPage = () => {
                               tabIndex={m.disabled ? -1 : 0}
                               onClick={() => {
                                 if (m.disabled) return;
-                                setPaymentMethod(m.value);
+                                setSelectedPaymentMethod(m.value);
                                 setWantsCodService(m.value === 'cod');
                               }}
                               onKeyDown={(event) => {
                                 if (event.key === 'Enter' || event.key === ' ') {
                                   event.preventDefault();
                                   if (m.disabled) return;
-                                  setPaymentMethod(m.value);
+                                  setSelectedPaymentMethod(m.value);
                                   setWantsCodService(m.value === 'cod');
                                 }
                               }}
@@ -1212,7 +1219,7 @@ const CheckoutPage = () => {
                                 disabled={m.disabled}
                                 onChange={() => {
                                   if (m.disabled) return;
-                                  setPaymentMethod(m.value);
+                                  setSelectedPaymentMethod(m.value);
                                   setWantsCodService(m.value === 'cod');
                                 }}
                                 className="sr-only"
@@ -1223,9 +1230,11 @@ const CheckoutPage = () => {
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className={`text-sm font-semibold ${m.brandColor}`}>{m.title}</span>
-                                  <span className={`rounded-full border bg-background px-2 py-0.5 text-[11px] ${selected ? 'border-gold text-gold' : 'border-border text-muted-foreground'}`}>
-                                    {m.badge}
-                                  </span>
+                                  {m.badge && (
+                                    <span className={`rounded-full border bg-background px-2 py-0.5 text-[11px] ${selected ? 'border-gold text-gold' : 'border-border text-muted-foreground'}`}>
+                                      {m.badge}
+                                    </span>
+                                  )}
                                   {selected && (
                                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-tulsi">
                                       <CheckCircle2 size={12} />

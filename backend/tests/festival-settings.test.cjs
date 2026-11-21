@@ -5,6 +5,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const db = require('../src/lib/db');
 const { getJwtSecret } = require('../src/middleware/auth');
+const { computeTotals, getCheckoutSettings } = require('../src/lib/orderPricing');
 let state;
 db.isDbConnected = () => true;
 db.dbQuery = async sql => {
@@ -85,5 +86,29 @@ test('only authenticated administrators may change the storefront festival', asy
 test('database failures do not report a successful theme change', async () => {
   state.fail = true;
   assert.equal((await save({ festivalTheme: 'diwali' })).status, 500);
+  assert.equal(state.writes, 0);
+});
+
+test('the public shipping fee and checkout pricing use the same saved rate', async () => {
+  assert.equal((await (await fresh()).json()).shippingFee, 69);
+  assert.equal(computeTotals(199, await getCheckoutSettings()).shipping, 69);
+
+  for (const shippingFee of [85.5, 0]) {
+    const response = await save({ shippingFee });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).shippingFee, shippingFee);
+    assert.equal((await (await fresh()).json()).shippingFee, shippingFee);
+
+    const settings = await getCheckoutSettings();
+    assert.equal(computeTotals(199, settings).shipping, shippingFee);
+    assert.equal(computeTotals(299, settings).shipping, 0);
+  }
+});
+
+test('the settings API rejects invalid and non-admin shipping fee changes', async () => {
+  for (const shippingFee of [-1, 2.005, 100_000_000, null, '', true, 'invalid']) {
+    assert.equal((await save({ shippingFee })).status, 400);
+  }
+  assert.equal((await save({ shippingFee: 85 }, 'user')).status, 403);
   assert.equal(state.writes, 0);
 });

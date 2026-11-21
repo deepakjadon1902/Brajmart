@@ -251,7 +251,7 @@ CREATE TABLE IF NOT EXISTS settings (
   tagline VARCHAR(255) NOT NULL DEFAULT 'From Braj, With Love',
   currency VARCHAR(10) NOT NULL DEFAULT 'INR',
   free_shipping_threshold DECIMAL(10,2) NOT NULL DEFAULT 299,
-  shipping_fee DECIMAL(10,2) NOT NULL DEFAULT 49,
+  shipping_fee DECIMAL(10,2) NOT NULL DEFAULT 69,
   store_email VARCHAR(255) NOT NULL DEFAULT 'support@brajmart.com',
   store_phone VARCHAR(50) NOT NULL DEFAULT '+91 9876543210',
   store_address VARCHAR(255) NOT NULL DEFAULT 'Vrindavan, Mathura, UP 281121, India',

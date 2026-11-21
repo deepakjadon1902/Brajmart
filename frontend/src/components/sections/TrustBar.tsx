@@ -1,6 +1,8 @@
 import { BadgeCheck, RefreshCcw, ShieldCheck, Truck } from 'lucide-react';
+import { useSettingsStore } from '@/store/settingsStore';
+import { formatPrice } from '@/utils/formatPrice';
 
-const trustItems = [
+const getTrustItems = (shippingTitle: string) => [
   {
     icon: ShieldCheck,
     title: 'Vrindavan Authentic',
@@ -8,7 +10,7 @@ const trustItems = [
   },
   {
     icon: Truck,
-    title: 'Free Shipping Rs. 299+',
+    title: shippingTitle,
     subtitle: 'Fast delivery across India',
     titleClassName: 'text-tulsi',
   },
@@ -25,11 +27,14 @@ const trustItems = [
 ];
 
 const TrustBar = () => {
+  const { shippingFee, freeShippingThreshold } = useSettingsStore((state) => state.settings);
+  const shippingTitle = shippingFee === 0 ? 'Free Shipping' : `Free Shipping ${formatPrice(freeShippingThreshold)}+`;
+
   return (
     <section className="hidden bg-brand-soft border-y border-border md:block" aria-label="Why shop with Brajmart">
       <div className="container mx-auto px-1.5 py-1 sm:px-4 md:py-2.5">
         <div className="grid grid-cols-2 gap-0.5 sm:gap-1.5 md:flex md:flex-wrap md:justify-between md:gap-3">
-          {trustItems.map((item) => {
+          {getTrustItems(shippingTitle).map((item) => {
             const Icon = item.icon;
             return (
               <div

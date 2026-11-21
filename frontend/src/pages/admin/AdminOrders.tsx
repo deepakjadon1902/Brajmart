@@ -90,6 +90,7 @@ const AdminOrders = () => {
   const [loadError, setLoadError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [editingTrackingId, setEditingTrackingId] = useState<string>('');
+  const [savingShippingService, setSavingShippingService] = useState(false);
   const [deliveryTracking, setDeliveryTracking] = useState<any | null>(null);
   const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [pincodeResult, setPincodeResult] = useState<any | null>(null);
@@ -125,7 +126,7 @@ const AdminOrders = () => {
   }, [search, customer]);
 
   useEffect(() => {
-    if (invalidDateRange) return;
+    if (invalidDateRange || savingShippingService) return;
     let active = true;
     let latestRequest = 0;
     const load = async () => {
@@ -161,7 +162,7 @@ const AdminOrders = () => {
     load();
     const t = setInterval(() => load(), 2_000);
     return () => { active = false; clearInterval(t); };
-  }, [filterKey, invalidDateRange]);
+  }, [filterKey, invalidDateRange, savingShippingService]);
 
   const normalizeOrder = (o: any) => ({
     ...o,
@@ -240,27 +241,39 @@ const AdminOrders = () => {
     }
     try {
       const cleaned = editingTrackingId.trim();
-      const updated: any = await updateOrderStatusApi(orderId, {
-        status: detail.status,
+      const updated = await updateOrderStatusApi(orderId, {
         trackingId: cleaned,
-        shippingService: detail.shippingService || 'DTDC',
         note: `Tracking ID updated to ${cleaned}`,
       });
-      const normalized = normalizeOrder(updated);
-      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...normalized } : o)));
+      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, trackingId: updated.trackingId, statusHistory: updated.statusHistory } : o)));
       toast.success('Tracking ID updated');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update tracking ID');
     }
   };
 
-  const handleStatusUpdate = async (orderId: string, status: OrderStatus, shippingService?: string) => {
+  const handleShippingServiceUpdate = async (orderId: string, shippingService: string) => {
+    setSavingShippingService(true);
     try {
-      const payload: any = { status, note: `Status updated to ${status}` };
-      if (shippingService !== undefined) payload.shippingService = shippingService;
-      const updated: any = await updateOrderStatusApi(orderId, payload);
-      const normalized = normalizeOrder(updated);
-      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, ...normalized } : o)));
+      const updated = await updateOrderStatusApi(orderId, {
+        shippingService,
+        note: shippingService ? `Shipping service updated to ${shippingService}` : 'Shipping service cleared',
+      });
+      const savedService = updated.shippingService || '';
+      if (savedService !== shippingService) throw new Error('The order database did not save the selected shipping service.');
+      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, shippingService: savedService } : o)));
+      toast.success(shippingService ? 'Shipping service saved' : 'Shipping service cleared');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save shipping service');
+    } finally {
+      setSavingShippingService(false);
+    }
+  };
+
+  const handleStatusUpdate = async (orderId: string, status: OrderStatus) => {
+    try {
+      const updated = await updateOrderStatusApi(orderId, { status, note: `Status updated to ${status}` });
+      setOrders((s) => s.map((o) => (o._id === orderId ? { ...o, status: updated.status, statusHistory: updated.statusHistory } : o)));
       toast.success('Order updated');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update order');
@@ -747,7 +760,8 @@ const AdminOrders = () => {
                   />
                   <button
                     onClick={() => handleUpdateTrackingId(detail._id)}
-                    className="px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-sm font-medium"
+                    disabled={savingShippingService}
+                    className="px-4 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30 text-sm font-medium disabled:opacity-60"
                   >
                     Update
                   </button>
@@ -860,15 +874,18 @@ const AdminOrders = () => {
                 <h3 className="text-sm font-medium text-slate-400 mb-2">Update Status</h3>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs text-slate-400 mb-1">Shipping Service</label>
+                    <label htmlFor="order-shipping-service" className="block text-xs text-slate-400 mb-1">Shipping Service</label>
                     <select
+                      id="order-shipping-service"
                       value={detail.shippingService || ''}
-                      onChange={(e) => handleStatusUpdate(detail._id, detail.status, e.target.value)}
+                      onChange={(e) => handleShippingServiceUpdate(detail._id, e.target.value)}
+                      disabled={savingShippingService}
                       className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                     >
                       <option value="">Select Service</option>
                       {shippingServices.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    {savingShippingService && <p role="status" className="mt-1 text-xs text-slate-400">Saving shipping service…</p>}
                   </div>
                   <div>
                     <label className="block text-xs text-slate-400 mb-1">Order Status</label>

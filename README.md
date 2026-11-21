@@ -165,6 +165,6 @@ npm run dev
 
 ## 8) Notes
 
-- Online checkout uses PayU's hosted payment page. Add PayU merchant credentials and a public callback URL to the backend environment before accepting payments. Razorpay is temporarily unavailable in checkout.
+- Online checkout lists Cashfree first and PayU next. Configure credentials and callback URLs in the backend environment before accepting payments. Razorpay is temporarily unavailable in checkout.
 - Email notifications will only work if SMTP credentials are correct.
 - DB is required. Backend will not run without a valid database connection.

@@ -509,7 +509,7 @@ const ProductDetailPage = () => {
       .filter(Boolean);
     const schemaDescription = cleanText(product.description) || `${product.name} from ${settings.storeName || 'BrajMart'}`;
     const price = toSchemaPrice(computedPrice || product.price);
-    const shippingFee = positiveNumber(settings.shippingFee, 49);
+    const { shippingFee } = settings;
     const freeShippingThreshold = positiveNumber(settings.freeShippingThreshold, 299);
     const schemaShippingFee = freeShippingThreshold > 0 && computedPrice >= freeShippingThreshold ? 0 : shippingFee;
     const minDeliveryDays = Math.max(1, positiveNumber(settings.deliveryEtaMinDays, 3));
@@ -631,11 +631,14 @@ const ProductDetailPage = () => {
   const metaDescription = useMemo(() => {
     if (!product) return '';
     const shortDescription = cleanText(product.metaDescription || product.description || `${product.category || 'devotional product'} from Vrindavan.`);
+    const shippingDescription = settings.shippingFee === 0
+      ? 'Free standard shipping.'
+      : `Free shipping on orders of ${formatPrice(settings.freeShippingThreshold)} or more.`;
     return truncateMeta(
-      `Buy authentic ${product.name} from Vrindavan. ${shortDescription}. Free shipping above ₹299. 100% genuine temple-sourced product. Order now at Brajmart.`,
+      `Buy authentic ${product.name} from Vrindavan. ${shortDescription}. ${shippingDescription} 100% genuine temple-sourced product. Order now at Brajmart.`,
       180
     );
-  }, [deliveryMax, deliveryMin, product]);
+  }, [product, settings.freeShippingThreshold, settings.shippingFee]);
 
   const truthfulMetaDescription = useMemo(() => {
     if (!product) return '';

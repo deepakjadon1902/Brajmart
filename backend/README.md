@@ -10,6 +10,16 @@ Node.js + Express + MySQL backend for BrajMart e-commerce platform.
 4. Add ImageKit credentials to `.env` if you want permanent deployed image storage.
 5. Run `npm run dev` (development) or `npm start` (production)
 
+## Standard shipping fee
+
+Apply `sql/migrate_standard_shipping_fee.sql` to an existing database to update
+the ₹49 rate to ₹69. The migration preserves other saved rates. New databases
+use ₹69 from `sql/hostinger_schema.sql`.
+
+To change the rate later, open **Admin → Settings → Shipping & Orders**, edit
+**Shipping Fee (INR)**, and click **Save Settings**. The fee applies to orders
+below the free-shipping threshold. Enter ₹0 to make standard shipping free.
+
 ## Product GST and invoice breakdown
 
 Apply the reviewed `sql/migrate_products_invoice_tax.sql` to an existing
@@ -48,8 +58,8 @@ of guessing the tax type. Partial legacy GST information is shown on the lines
 without presenting an incomplete tax summary as a complete one.
 
 For example, a GST-inclusive rate of INR 219 at 5% gives INR 208.57 taxable
-value and INR 10.43 included GST; with INR 49 shipping the total remains
-INR 268. Reference: [CBIC Rule 35, inclusive tax valuation](https://cbic-gst.gov.in/pdf/01062021-CGST-Rules-2017-Part-A-Rules.pdf)
+value and INR 10.43 included GST. With INR 69 shipping, the order total is
+INR 288. [CBIC Rule 35, inclusive tax valuation](https://cbic-gst.gov.in/pdf/01062021-CGST-Rules-2017-Part-A-Rules.pdf)
 and [CBIC, interstate and intrastate supplies](https://cbic-gst.gov.in/pdf/e-version-igst-fliers/eflier-IGST-23062017.pdf).
 
 ## Admin order and invoice filters
@@ -150,7 +160,7 @@ at production as part of build verification.
 
 ## Cashfree hosted checkout
 
-PayU is the default online gateway. Customers can select Cashfree as the secondary gateway.
+Checkout lists Cashfree first and selects it when available. Customers can also choose PayU.
 
 Set the following on the backend service. Use sandbox credentials with
 `CASHFREE_ENV=sandbox` for staging or local testing.
@@ -176,7 +186,7 @@ and signed webhook. New orders and retries use the active gateways.
 
 ## PayU hosted checkout
 
-The online checkout uses PayU's hosted payment page, so PayU collects payment
+When a customer chooses PayU, its hosted payment page collects payment
 details and card or UPI secrets stay on PayU. The backend creates the SHA-512
 request hash, receives PayU's form-post callback, validates its reverse hash,
 then confirms a successful payment against PayU's Verify Payment API before

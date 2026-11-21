@@ -5,6 +5,7 @@ import { parseJson, toIsoString, boolFromDb } from '../lib/dbHelpers';
 import { sendEmail } from '../lib/email';
 import { insertAdminAuditLog } from '../lib/adminAudit';
 import { resolveCashfreeConfig } from '../lib/cashfree';
+import { getShippingFee, parseShippingFee } from '../lib/shippingFee';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ const mapSettingsRow = (row: any) => ({
   tagline: row.tagline,
   currency: row.currency,
   freeShippingThreshold: Number(row.free_shipping_threshold ?? 299),
-  shippingFee: Number(row.shipping_fee ?? 49),
+  shippingFee: getShippingFee(row.shipping_fee),
   storeEmail: row.store_email,
   storePhone: row.store_phone,
   storeAddress: row.store_address,
@@ -134,8 +135,16 @@ router.get('/', async (req, res) => {
 
 router.put('/', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
-    if (req.body?.festivalTheme !== undefined && !festivalThemes.includes(req.body.festivalTheme)) {
+    const data = req.body || {};
+    if (data.festivalTheme !== undefined && !festivalThemes.includes(data.festivalTheme)) {
       return res.status(400).json({ message: 'Festival theme must be none, diwali, or holi.' });
+    }
+    if (data.shippingFee !== undefined) {
+      const amount = parseShippingFee(data.shippingFee);
+      if (amount === undefined) {
+        return res.status(400).json({ message: 'Enter a shipping fee from ₹0 to ₹9,99,99,999.99 with up to two decimal places.' });
+      }
+      data.shippingFee = amount;
     }
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
     let rows = await dbQuery<any>('SELECT * FROM settings LIMIT 1');
@@ -143,7 +152,7 @@ router.put('/', auth, adminOnly, async (req: AuthRequest, res) => {
       await dbExecute('INSERT INTO settings () VALUES ()');
       rows = await dbQuery<any>('SELECT * FROM settings LIMIT 1');
     }
-    const update = buildUpdate(req.body || {}, rows[0]);
+    const update = buildUpdate(data, rows[0]);
     if (update) {
       await dbExecute(`UPDATE settings SET ${update.sql} WHERE id = ?`, [...update.values, rows[0].id]);
     }

@@ -48,7 +48,7 @@ const cartState = {
   version: 0,
 };
 
-const mockCheckoutApis = async (page: import('@playwright/test').Page, validationOverride = {}) => {
+const mockCheckoutApis = async (page: import('@playwright/test').Page, validationOverride = {}, settingsOverride = {}) => {
   const product = cartState.state.items[0].product;
   await page.route('**/api/products**', async (route) => route.fulfill({
     contentType: 'application/json',
@@ -64,7 +64,7 @@ const mockCheckoutApis = async (page: import('@playwright/test').Page, validatio
       storeName: 'BrajMart',
       currency: 'INR',
       freeShippingThreshold: 299,
-      shippingFee: 49,
+      shippingFee: 69,
       packagingRate: 0,
       minOrderAmount: 0,
       maxOrderQuantity: 10,
@@ -73,6 +73,7 @@ const mockCheckoutApis = async (page: import('@playwright/test').Page, validatio
       upiEnabled: true,
       cardEnabled: true,
       cashfreeEnabled: true,
+      ...settingsOverride,
     }),
   }));
   await page.route('**/api/orders/delivery-service/pincode', async (route) => route.fulfill({
@@ -102,10 +103,10 @@ const mockCheckoutApis = async (page: import('@playwright/test').Page, validatio
       }],
       subtotal: 199,
       discount: 0,
-      shipping: 49,
+      shipping: 69,
       packaging: 0,
       codFee: 40,
-      grandTotal: 248,
+      grandTotal: 268,
       currency: 'INR',
       changes: [],
       unavailableItems: [],
@@ -121,6 +122,45 @@ const seedCart = async (page: import('@playwright/test').Page) => {
   await page.getByRole('button', { name: /buy now: phase qa tulsi mala/i }).click();
   await expect(page).toHaveURL(/\/checkout$/);
 };
+
+test('admins can save a shipping fee and the storefront displays the saved rate', async ({ page }) => {
+  const settings = { storeName: 'BrajMart', currency: 'INR', shippingFee: 69, freeShippingThreshold: 299 };
+  await page.addInitScript(() => {
+    localStorage.setItem('brajmart-admin', JSON.stringify({
+      state: { isAdminAuthenticated: true, adminEmail: 'admin@example.invalid', token: 'shipping-test-token' },
+      version: 0,
+    }));
+  });
+  await page.route('**/api/settings**', async (route) => {
+    if (route.request().method() === 'PUT') Object.assign(settings, route.request().postDataJSON());
+    await route.fulfill({ json: settings });
+  });
+
+  const openShippingSettings = async () => {
+    await page.goto('/admin/settings');
+    await page.getByRole('button', { name: 'Shipping & Orders' }).click();
+  };
+  await openShippingSettings();
+  const shippingFee = page.getByLabel('Shipping Fee (INR)');
+  await expect(shippingFee).toHaveValue('69');
+  await shippingFee.fill('82.5');
+  await page.getByRole('button', { name: 'Save Settings' }).click();
+  await expect(page.getByText('Settings updated', { exact: true })).toBeVisible();
+  expect(settings.shippingFee).toBe(82.5);
+
+  await page.goto('/shipping-delivery');
+  await expect(page.getByText(/₹82\.5 flat rate below ₹299/)).toBeVisible();
+
+  await openShippingSettings();
+  await expect(shippingFee).toHaveValue('82.5');
+  await shippingFee.fill('0');
+  await page.getByRole('button', { name: 'Save Settings' }).click();
+  await expect(page.getByText('Settings updated', { exact: true })).toBeVisible();
+  expect(settings.shippingFee).toBe(0);
+
+  await page.goto('/shipping-delivery');
+  await expect(page.getByText('Standard shipping is free on all orders.')).toBeVisible();
+});
 
 test('cart and favorites share one reminder preference across storefront navigation', async ({ page }) => {
   await mockCheckoutApis(page);
@@ -259,7 +299,7 @@ test('checkout reaches verified payment step without starting live payment', asy
 
   await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible();
   await expect(page.getByText('Verified', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Pay Now - ₹248', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pay Now - ₹268', exact: true })).toBeVisible();
 });
 
 test('add to cart path reaches checkout without starting live payment', async ({ page }) => {
@@ -296,39 +336,48 @@ test('checkout blocks payment when backend validation reports cart changes', asy
   await expect(page.getByRole('heading', { name: 'Payment', exact: true })).not.toBeVisible();
 });
 
-test('PayU is the selected primary gateway and submits its server-generated form', async ({ page }) => {
+test('selecting PayU submits its server-generated form', async ({ page }) => {
   await mockCheckoutApis(page);
   await page.route('**/api/payu/create-order', route => {
-    expect(route.request().postDataJSON()).toMatchObject({ amount: 248, order: { paymentMethod: 'PayU' } });
+    expect(route.request().postDataJSON()).toMatchObject({ amount: 268, order: { paymentMethod: 'PayU' } });
     return route.fulfill({ json: { actionUrl: 'https://test.payu.in/_payment', fields: { txnid: 'payu_mock', hash: 'fixture_hash' }, statusToken: 'payu_mock', orderId: 42 } });
   });
   await page.route('https://test.payu.in/_payment', (route) => route.fulfill({ body: 'PayU form received' }));
   await seedCart(page);
   await fillShippingAddress(page);
   await page.getByRole('button', { name: /continue to payment/i }).click();
-  await expect(page.getByRole('radio', { name: /^PayU/ })).toHaveAttribute('aria-checked', 'true');
+  const payu = page.getByRole('radio', { name: /^PayU/ });
+  await payu.click();
+  await expect(payu).toHaveAttribute('aria-checked', 'true');
+  await page.reload();
+  await expect(payu).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByRole('radio', { name: /Razorpay/i })).toHaveCount(0);
   const gatewayRequest = page.waitForRequest('https://test.payu.in/_payment');
   await page.getByRole('button', { name: /^Pay Now/ }).click();
   expect((await gatewayRequest).postData()).toBe('txnid=payu_mock&hash=fixture_hash');
 });
 
-test('Cashfree opens the server-issued session and waits for confirmed payment status', async ({ page }) => {
+test('Cashfree appears first, opens by default, and waits for confirmed payment status', async ({ page }) => {
   await mockCashfreeSdk(page, true);
   await mockCheckoutApis(page);
   let paid = false;
   await page.route('**/api/cashfree/create-order', route => {
-    expect(route.request().postDataJSON()).toMatchObject({ amount: 248, order: { paymentMethod: 'Cashfree' } });
+    expect(route.request().postDataJSON()).toMatchObject({ amount: 268, order: { paymentMethod: 'Cashfree' } });
     return route.fulfill({ json: cashfreeOrder });
   });
   await page.route('**/api/payments/status/cf_browser_fixture', route => route.fulfill({ json: {
-    status: paid ? 'paid' : 'pending', method: 'Cashfree', amount: 248, orderId: 42, paymentId: '998877',
+    status: paid ? 'paid' : 'pending', method: 'Cashfree', amount: 268, orderId: 42, paymentId: '998877',
     items: [{ name: 'Phase QA Tulsi Mala', quantity: 1 }],
   } }));
   await seedCart(page);
   await fillShippingAddress(page);
   await page.getByRole('button', { name: /continue to payment/i }).click();
-  await page.getByRole('radio', { name: /^Cashfree/ }).click();
+  const gateways = page.getByRole('radio', { name: /^(Cashfree|PayU)/ });
+  await expect(gateways).toHaveCount(2);
+  await expect(gateways.first()).toHaveAccessibleName(/^Cashfree/);
+  await expect(gateways.first()).toHaveAttribute('aria-checked', 'true');
+  await expect(gateways.last()).toHaveAccessibleName(/^PayU/);
+  await expect(gateways.filter({ hasText: /primary|secondary|optional|recommended|alternative/i })).toHaveCount(0);
   await page.getByRole('button', { name: /^Pay Now/ }).click();
   await expect(page).toHaveURL('/payment-status/cf_browser_fixture');
   await expect(page.getByRole('heading', { name: 'Payment Pending' })).toBeVisible();
@@ -339,10 +388,19 @@ test('Cashfree opens the server-issued session and waits for confirmed payment s
   await expect(page.getByText('Payment verified and order confirmed', { exact: true })).toBeVisible();
 });
 
+test('PayU is selected when Cashfree is unavailable', async ({ page }) => {
+  await mockCheckoutApis(page, {}, { cashfreeEnabled: false });
+  await seedCart(page);
+  await fillShippingAddress(page);
+  await page.getByRole('button', { name: /continue to payment/i }).click();
+  await expect(page.getByRole('radio', { name: /^Cashfree/ })).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByRole('radio', { name: /^PayU/ })).toHaveAttribute('aria-checked', 'true');
+});
+
 test('Cashfree resumes an eligible checkout using the original order token', async ({ page }) => {
   await mockCashfreeSdk(page);
   await page.route('**/api/payments/status/cf_browser_fixture', route => route.fulfill({ json: {
-    status: 'pending', method: 'Cashfree', canResume: true, amount: 248, orderId: 42,
+    status: 'pending', method: 'Cashfree', canResume: true, amount: 268, orderId: 42,
   } }));
   await page.route('**/api/cashfree/resume', route => {
     expect(route.request().postDataJSON()).toEqual({ token: cashfreeOrder.statusToken });

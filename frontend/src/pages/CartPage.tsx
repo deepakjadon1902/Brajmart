@@ -27,7 +27,6 @@ import { useProductStore } from '@/store/productStore';
 import { getValidMrp, getValidSavings, isProductPurchasable } from '@/utils/productPresentation';
 
 const DEFAULT_FREE_SHIPPING_THRESHOLD = 299;
-const DEFAULT_SHIPPING_FEE = 49;
 
 const CartPage = () => {
   const { items, removeItem, updateQuantity, clearCart, totalPrice, totalSavings, reconcileValidatedItems } = useCartStore();
@@ -37,7 +36,7 @@ const CartPage = () => {
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState('');
   const freeShippingThreshold = Number(settings.freeShippingThreshold) > 0 ? Number(settings.freeShippingThreshold) : DEFAULT_FREE_SHIPPING_THRESHOLD;
-  const shippingFee = Number(settings.shippingFee) > 0 ? Number(settings.shippingFee) : DEFAULT_SHIPPING_FEE;
+  const { shippingFee } = settings;
   const packagingRate = Math.max(0, Number(settings.packagingRate) || 0);
   const subtotal = totalPrice();
   const packagingCost = Math.round(subtotal * packagingRate / 100);
@@ -117,7 +116,7 @@ const CartPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [items]);
+  }, [items, shippingFee, freeShippingThreshold]);
 
   const applyCartUpdates = () => {
     if (!validation) return;
@@ -301,7 +300,7 @@ const CartPage = () => {
               <div className="rounded-lg border border-border bg-card p-4">
                 <ShieldCheck size={18} className="mb-2 text-[#2E7D32]" />
                 <p className="text-sm font-bold text-foreground">Protected Payment</p>
-                <p className="mt-1 text-xs text-muted-foreground">Online checkout through PayU and Cashfree. COD where available.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Online checkout through Cashfree and PayU. COD where available.</p>
               </div>
               <div className="rounded-lg border border-border bg-card p-4">
                 <Truck size={18} className="mb-2 text-saffron" />
@@ -340,7 +339,7 @@ const CartPage = () => {
                 </div>
               </div>
               <div className="space-y-5 p-5">
-                <FreeShippingProgress cartTotal={serverSubtotal} threshold={freeShippingThreshold} />
+                {shippingFee > 0 && <FreeShippingProgress cartTotal={serverSubtotal} threshold={freeShippingThreshold} />}
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between gap-4"><span className="text-muted-foreground">Product subtotal</span><span className="font-semibold">{formatPrice(serverSubtotal)}</span></div>
                   {serverSavings > 0 && (
@@ -349,7 +348,7 @@ const CartPage = () => {
                   <div className="flex justify-between gap-4"><span className="text-muted-foreground">Packaging cost</span><span className="font-semibold">{formatPrice(serverPackaging)}</span></div>
                   <div className="flex justify-between gap-4"><span className="text-muted-foreground">Shipping charge</span><span className="font-semibold">{serverShipping === 0 ? <span className="text-tulsi">FREE</span> : formatPrice(serverShipping)}</span></div>
                   <div className="flex items-start justify-between gap-4"><span className="text-muted-foreground">COD fee</span><span className="max-w-[52%] text-right font-semibold">Shown after payment choice</span></div>
-                  {serverShipping > 0 && <p className="rounded-md bg-brand-raised px-3 py-2 text-xs text-muted-foreground">Free shipping applies on orders above {formatPrice(freeShippingThreshold)}.</p>}
+                  {serverShipping > 0 && <p className="rounded-md bg-brand-raised px-3 py-2 text-xs text-muted-foreground">Free shipping applies on orders of {formatPrice(freeShippingThreshold)} or more.</p>}
                   <div className="border-t border-border pt-4">
                     <div className="flex justify-between gap-4 font-bold text-base">
                       <span>Payable Total</span><span className="font-playfair text-xl text-saffron">{formatPrice(serverTotal)}</span>

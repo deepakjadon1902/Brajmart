@@ -72,7 +72,7 @@ export const useSettingsStore = create<SettingsStore>()(
         tagline: '',
         currency: 'INR',
         freeShippingThreshold: 299,
-        shippingFee: 49,
+        shippingFee: 69,
         notifications: { orders: true, users: true, payments: true, stock: false },
         storeEmail: '',
         storePhone: '',
@@ -138,11 +138,20 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: 'brajmart-settings', skipHydration: true,
-      // The server snapshot owns this shared preference; an old browser cache
-      // must not override a freshly prerendered festival selection.
+      // Keep server-rendered values for settings that affect the shared storefront.
       merge: (persisted, current) => {
         const saved = persisted as Partial<SettingsStore> | undefined;
-        return { ...current, ...saved, settings: { ...current.settings, ...saved?.settings, festivalTheme: current.settings.festivalTheme } };
+        return {
+          ...current,
+          ...saved,
+          settings: {
+            ...current.settings,
+            ...saved?.settings,
+            festivalTheme: current.settings.festivalTheme,
+            shippingFee: current.settings.shippingFee,
+            freeShippingThreshold: current.settings.freeShippingThreshold,
+          },
+        };
       },
     }
   )

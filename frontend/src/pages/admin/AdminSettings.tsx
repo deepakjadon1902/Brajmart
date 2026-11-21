@@ -57,7 +57,8 @@ const AdminSettings = () => {
   const [storePhone, setStorePhone] = useState(settings.storePhone);
   const [storeAddress, setStoreAddress] = useState(settings.storeAddress);
   const [freeShippingThreshold, setFreeShippingThreshold] = useState(settings.freeShippingThreshold);
-  const [shippingFee, setShippingFee] = useState(settings.shippingFee);
+  const [shippingFee, setShippingFee] = useState(String(settings.shippingFee));
+  const savedShippingFee = useRef(settings.shippingFee);
   const [packagingRate, setPackagingRate] = useState(settings.packagingRate);
   const [minOrderAmount, setMinOrderAmount] = useState(settings.minOrderAmount);
   const [maxOrderQuantity, setMaxOrderQuantity] = useState(settings.maxOrderQuantity);
@@ -100,7 +101,8 @@ const AdminSettings = () => {
         setStorePhone(data.storePhone);
         setStoreAddress(data.storeAddress);
         setFreeShippingThreshold(data.freeShippingThreshold);
-        setShippingFee(data.shippingFee);
+        savedShippingFee.current = data.shippingFee;
+        setShippingFee(String(data.shippingFee));
         setPackagingRate(data.packagingRate ?? data.taxRate ?? 0);
         setMinOrderAmount(data.minOrderAmount);
         setMaxOrderQuantity(data.maxOrderQuantity);
@@ -145,11 +147,17 @@ const AdminSettings = () => {
   }, [activeTab, loadFromApi]);
 
   const handleSave = async () => {
+    if (!shippingFee.trim()) {
+      toast.error('Enter a shipping fee. Use 0 for free standard shipping.');
+      return;
+    }
+    const shippingFeeAmount = Number(shippingFee);
     setLoading(true);
     try {
       const payload = {
         storeName, tagline, currency, storeEmail, storePhone, storeAddress,
-        freeShippingThreshold, shippingFee, packagingRate, taxRate: packagingRate, minOrderAmount, maxOrderQuantity,
+        freeShippingThreshold, packagingRate, taxRate: packagingRate, minOrderAmount, maxOrderQuantity,
+        ...(shippingFeeAmount !== savedShippingFee.current ? { shippingFee: shippingFeeAmount } : {}),
         deliveryEtaMinDays, deliveryEtaMaxDays,
         codEnabled, codFee, maintenanceMode,
         metaTitle, metaDescription, storeLogo,
@@ -160,6 +168,8 @@ const AdminSettings = () => {
       };
       const updated = await updatePublicSettings(payload);
       updateSettings(updated);
+      savedShippingFee.current = updated.shippingFee;
+      setShippingFee(String(updated.shippingFee));
       setCodEnabled(Boolean(updated.codEnabled));
       updateAnnouncementMessages(updated.announcementBar?.messages || announcementMessages);
       Object.entries(updated.socialLinks || socialLinks).forEach(([k, v]) => updateSocialLinks(k, v as string));
@@ -421,8 +431,11 @@ const AdminSettings = () => {
         <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><Truck size={18} /> Shipping & Order Settings</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <InputField label="Free Shipping Above (INR)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
-            <InputField label="Shipping Fee (INR)" value={String(shippingFee)} onChange={(v) => setShippingFee(Number(v))} type="number" />
+            <InputField label="Free Shipping From (INR)" value={String(freeShippingThreshold)} onChange={(v) => setFreeShippingThreshold(Number(v))} type="number" />
+            <div>
+              <InputField label="Shipping Fee (INR)" value={shippingFee} onChange={setShippingFee} type="number" min={0} step={0.01} disabled={loading} />
+              <p className="mt-1 text-xs text-slate-400">Applies below the free-shipping threshold. Enter 0 for free standard shipping.</p>
+            </div>
             <InputField label="Packaging Cost (%)" value={String(packagingRate)} onChange={(v) => setPackagingRate(Math.max(0, Number(v)))} type="number" />
             <InputField label="Min Order Amount (INR)" value={String(minOrderAmount)} onChange={(v) => setMinOrderAmount(Number(v))} type="number" />
             <InputField label="Max Quantity Per Item" value={String(maxOrderQuantity)} onChange={(v) => setMaxOrderQuantity(Number(v))} type="number" />
@@ -436,13 +449,13 @@ const AdminSettings = () => {
       {activeTab === 'payments' && (
         <div className="admin-settings-panel space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2"><CreditCard size={18} /> Payment Methods</h2>
-          <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
-            <p className="text-sm font-medium text-white">PayU Checkout</p>
-            <p className="text-xs text-slate-400">Primary gateway. Configure PAYU_KEY and PAYU_SALT on the backend.</p>
-          </div>
           <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-4">
             <p className="text-sm font-medium text-white">Cashfree Checkout</p>
-            <p className="text-xs text-slate-400">Secondary gateway. Configure CASHFREE_APP_ID and CASHFREE_SECRET_KEY on the backend.</p>
+            <p className="text-xs text-slate-400">Configure CASHFREE_APP_ID and CASHFREE_SECRET_KEY on the backend.</p>
+          </div>
+          <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+            <p className="text-sm font-medium text-white">PayU Checkout</p>
+            <p className="text-xs text-slate-400">Configure PAYU_KEY and PAYU_SALT on the backend.</p>
           </div>
           <div className={`flex items-center justify-between rounded-xl border p-4 ${codEnabled ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
             <div>
@@ -774,16 +787,19 @@ const AdminSettings = () => {
   );
 };
 
-const InputField = ({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) => (
-  <div>
-    <label className="block text-sm text-slate-300 mb-1">{label}</label>
+const InputField = ({ label, value, onChange, type = 'text', min, step, disabled }: { label: string; value: string; onChange: (v: string) => void; type?: string; min?: number; step?: number; disabled?: boolean }) => (
+  <label className="block">
+    <span className="block text-sm text-slate-300 mb-1">{label}</span>
     <input
       type={type}
+      min={min}
+      step={step}
+      disabled={disabled}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none"
     />
-  </div>
+  </label>
 );
 
 export default AdminSettings;

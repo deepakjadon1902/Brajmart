@@ -130,13 +130,31 @@ test('Shree Maruti orders show courier tracking and open the recovered label fro
   await expect(page.getByText('Shipping label created and ready to print')).toBeVisible();
 });
 
-test('Blue Dart is selectable and links to the saved waybill', async ({ page }) => {
+test('admin saves Blue Dart, updates its waybill, and sees the saved courier after reload', async ({ page }) => {
+  const savedOrder = { ...verifiedOrder };
   await page.route(/\/api\/orders(?:\?|$)/, (route) => route.fulfill({
-    json: [{ ...verifiedOrder, shippingService: 'Blue Dart', trackingId: '79034111122' }],
+    json: [savedOrder],
   }));
+  await page.route('**/api/orders/10339/status', (route) => {
+    const payload = route.request().postDataJSON();
+    if (payload.trackingId) {
+      expect(payload).not.toHaveProperty('shippingService');
+    }
+    Object.assign(savedOrder, payload);
+    return route.fulfill({ json: savedOrder });
+  });
   await page.goto('/admin/orders');
   await page.getByRole('button', { name: 'View order 10339' }).click();
-  const dropdown = page.locator('select').filter({ has: page.getByRole('option', { name: 'Blue Dart', exact: true }) });
+  const dropdown = page.getByLabel('Shipping Service', { exact: true });
+  await dropdown.selectOption('Blue Dart');
+  await expect(page.getByText('Shipping service saved', { exact: true })).toBeVisible();
+  await expect(dropdown).toHaveValue('Blue Dart');
+  await page.getByPlaceholder('Enter courier AWB / tracking ID').fill('79034111122');
+  await page.getByRole('button', { name: 'Update', exact: true }).click();
+  await expect(page.getByText('Tracking ID updated', { exact: true })).toBeVisible();
+
+  await page.reload();
+  await page.getByRole('button', { name: 'View order 10339' }).click();
   await expect(dropdown).toHaveValue('Blue Dart');
   await expect(page.getByRole('link', { name: 'Open Blue Dart tracking page' })).toHaveAttribute('href', /trackFor=awb&awb=79034111122$/);
   await expect(page.getByRole('button', { name: 'Sync Label Status' })).toBeEnabled();

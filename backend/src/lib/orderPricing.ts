@@ -3,6 +3,7 @@ import { dbExecute, dbQuery } from './db';
 import { boolFromDb } from './dbHelpers';
 import { allocatePaise, productTaxFromRow, ProductTax } from './productTax';
 import { resolveProductSelection } from './productSelection';
+import { getShippingFee } from './shippingFee';
 
 export type RawOrderItem = {
   productId?: string | number;
@@ -54,7 +55,7 @@ export const getCheckoutSettings = async () => {
   const row = rows?.[0] || ({} as SettingsRow);
   return {
     freeShippingThreshold: Number(row.free_shipping_threshold ?? 299) || 299,
-    shippingFee: Number(row.shipping_fee ?? 49) || 49,
+    shippingFee: getShippingFee(row.shipping_fee),
     // tax_rate remains the rollout-compatible source while older backend instances exist.
     packagingRate: Number(row.tax_rate ?? row.packaging_rate ?? 0) || 0,
     minOrderAmount: Number(row.min_order_amount ?? 0) || 0,

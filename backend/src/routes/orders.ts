@@ -651,6 +651,9 @@ router.put('/:id/status', auth, adminOnly, async (req: AuthRequest, res) => {
   try {
     const { status, note, shippingService, trackingId } = req.body;
     if (!isDbConnected()) return res.status(503).json({ message: 'Database unavailable' });
+    if (shippingService != null && typeof shippingService !== 'string') {
+      return res.status(400).json({ message: 'Shipping service must be a courier name.' });
+    }
 
     const rows = await dbQuery<any>(
       `SELECT * FROM orders
@@ -662,20 +665,29 @@ router.put('/:id/status', auth, adminOnly, async (req: AuthRequest, res) => {
     const row = rows[0];
     if (!row) return res.status(404).json({ message: 'Order not found' });
 
-    const history = parseJson<Array<{ status: string; date: string; note?: string }>>(row.status_history, []);
-
     const nextStatus = status || row.status;
-    const nextShippingService = (shippingService !== undefined ? shippingService : row.shipping_service) ?? null;
-
-    let nextTrackingId: string | null | undefined = undefined;
-    if (trackingId !== undefined) {
-      const cleaned = String(trackingId).trim();
-      if (!cleaned) {
-        nextTrackingId = null;
-      } else {
-        nextTrackingId = cleaned;
+    let nextShippingService: string | null | undefined;
+    if (shippingService !== undefined) {
+      nextShippingService = shippingService?.trim() || null;
+      const [column] = await dbQuery<{ Type: string }>("SHOW COLUMNS FROM orders WHERE Field = 'shipping_service'");
+      if (!column) {
+        return res.status(409).json({ message: 'Apply the orders schema migration before saving a shipping service.' });
+      }
+      if (nextShippingService && /^enum\(/i.test(column.Type)) {
+        const requestedCourier = nextShippingService.toLowerCase();
+        const courier = Array.from(column.Type.matchAll(/'([^']*)'/g), ([, name]) => name)
+          .find((name) => name.toLowerCase() === requestedCourier);
+        if (!courier) {
+          const message = requestedCourier === 'blue dart'
+            ? 'Apply the Blue Dart shipping service migration to the order database, then save again.'
+            : `The order database does not support ${nextShippingService} as a shipping service.`;
+          return res.status(409).json({ message });
+        }
+        nextShippingService = courier;
       }
     }
+
+    const nextTrackingId = trackingId === undefined ? undefined : String(trackingId ?? '').trim() || null;
 
     if (nextTrackingId) {
       const duplicateRows = await dbQuery<any>(
@@ -690,48 +702,27 @@ router.put('/:id/status', auth, adminOnly, async (req: AuthRequest, res) => {
     const trackingChanged = nextTrackingId !== undefined && (row.tracking_id ?? null) !== nextTrackingId;
     const statusChanged = nextStatus !== row.status;
 
+    const fields = ['updated_at = NOW()'];
+    const values: Array<string | null> = [];
+    if (status) {
+      fields.push('status = ?');
+      values.push(nextStatus);
+    }
+    if (nextTrackingId !== undefined) {
+      fields.push('tracking_id = ?');
+      values.push(nextTrackingId);
+    }
+    if (nextShippingService !== undefined) {
+      fields.push('shipping_service = ?');
+      values.push(nextShippingService);
+    }
     if (statusChanged || trackingChanged) {
+      const history = parseJson<Array<{ status: string; date: string; note?: string }>>(row.status_history, []);
       history.push({ status: nextStatus, date: new Date().toISOString(), note });
+      fields.push('status_history = ?');
+      values.push(JSON.stringify(history));
     }
-
-    const updateWithShippingService = async () => {
-      if (nextTrackingId === undefined) {
-        await dbExecute(
-          'UPDATE orders SET status = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
-          [nextStatus, nextShippingService, JSON.stringify(history), req.params.id]
-        );
-      } else {
-        await dbExecute(
-          'UPDATE orders SET status = ?, tracking_id = ?, shipping_service = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
-          [nextStatus, nextTrackingId, nextShippingService, JSON.stringify(history), req.params.id]
-        );
-      }
-    };
-
-    const updateWithoutShippingService = async () => {
-      if (nextTrackingId === undefined) {
-        await dbExecute(
-          'UPDATE orders SET status = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
-          [nextStatus, JSON.stringify(history), req.params.id]
-        );
-      } else {
-        await dbExecute(
-          'UPDATE orders SET status = ?, tracking_id = ?, status_history = ?, updated_at = NOW() WHERE id = ?',
-          [nextStatus, nextTrackingId, JSON.stringify(history), req.params.id]
-        );
-      }
-    };
-
-    try {
-      await updateWithShippingService();
-    } catch (err: any) {
-      const message = String(err?.message || '');
-      if (message.includes("Unknown column 'shipping_service'")) {
-        await updateWithoutShippingService();
-      } else {
-        throw err;
-      }
-    }
+    await dbExecute(`UPDATE orders SET ${fields.join(', ')} WHERE id = ?`, [...values, req.params.id]);
 
     if (statusChanged) {
       const orderItems = parseJson(row.items, []);

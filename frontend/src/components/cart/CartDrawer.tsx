@@ -147,7 +147,7 @@ const CartDrawer = () => {
             </div>
 
             <div className="space-y-3 border-t border-border p-4">
-              <FreeShippingProgress cartTotal={subtotal} threshold={threshold} />
+              {settings.shippingFee > 0 && <FreeShippingProgress cartTotal={subtotal} threshold={threshold} />}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="font-playfair text-xl font-bold text-foreground">{formatPrice(subtotal)}</span>
