@@ -29,5 +29,30 @@ export const productTrustFaqs = [
     answer:
       'Cart, stock, pricing, COD availability and payment choices remain visible before order placement so you can choose confidently.',
   },
+  {
+    question: 'How do I choose the right poshak size for Laddu Gopal?',
+    answer:
+      'Match the size number on the product page to the size of your Laddu Gopal idol. If you are unsure, share the height and width of your idol with BrajMart support before ordering.',
+  },
+  {
+    question: 'What is the difference between a Tulsi japa mala and a Tulsi kanthi mala?',
+    answer:
+      'A japa mala helps you count mantras while chanting. A kanthi mala is worn around the neck. Check the product name and description to see which type you are ordering.',
+  },
+  {
+    question: 'How do I check what comes in a puja kit or poshak combo?',
+    answer:
+      'Read the product description for the list of items or the number of pieces. If the product has pack sizes or other options, review your selection before adding it to your cart.',
+  },
+  {
+    question: 'How do I check if BrajMart delivers to my PIN code?',
+    answer:
+      'Enter your six-digit PIN code in the delivery address at checkout. BrajMart checks delivery availability before you move to payment.',
+  },
+  {
+    question: 'Can I pay cash on delivery for Prasadam?',
+    answer:
+      'Orders that include Prasadam require online payment. For other orders, checkout shows whether cash on delivery is available for your items and PIN code.',
+  },
 ] as const;
 
