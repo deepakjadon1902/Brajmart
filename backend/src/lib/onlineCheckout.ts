@@ -25,7 +25,7 @@ type Checkout = {
 };
 
 type CheckoutGateway = {
-  method: 'PayU' | 'Cashfree';
+  method: 'Cashfree';
   minimumAmount?: number;
   prepare: () => (checkout: Checkout) => Promise<object> | object;
   createToken: (orderId: number) => string;
@@ -136,7 +136,7 @@ export const createOnlineCheckout = (gateway: CheckoutGateway) => async (req: Au
         );
         const status = payments[0]?.method === gateway.method ? payments[0]?.status : null;
         const expiresAt = Number(session.expires_epoch) * 1000;
-        if (status === 'paid' || (status === 'pending' && (gateway.method === 'Cashfree' || expiresAt > Date.now()))) {
+        if (status === 'paid' || status === 'pending') {
           return {
             orderId: Number(session.order_id), token: String(session.payment_token), amount: Number(session.amount),
             expiresAt, alreadyPaid: status === 'paid', created: false,

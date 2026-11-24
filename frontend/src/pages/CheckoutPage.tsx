@@ -12,11 +12,11 @@ import { toast } from 'sonner';
 import AnnouncementBar from '@/components/layout/AnnouncementBar';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import { fetchPublicSettings, createOrder, createPayUOrder, createCashfreeOrder, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
+import { fetchPublicSettings, createOrder, createCashfreeOrder, checkDeliveryServicePincode, validateCoupon, validateCart, type CartValidationResponse, type PersistedProductInterestItem } from '@/lib/api';
 import { getMetaAttributionContext, trackMetaPixelEvent } from '@/lib/metaPixel';
 import { getGooglePurchaseContext } from '@/lib/googleAttribution';
 import { clearCheckoutDraft, readCheckoutDraft, saveCheckoutDraft } from '@/lib/checkoutDraft';
-import { loadCashfree, launchCashfree, submitPayUCheckout } from '@/lib/onlinePayment';
+import { loadCashfree, launchCashfree } from '@/lib/onlinePayment';
 import { useCheckoutFollowups } from '@/hooks/useCheckoutFollowups';
 
 const steps = ['Address', 'Payment', 'Done'];
@@ -35,7 +35,7 @@ type PincodeLookupResponse = Array<{
   }>;
 }>;
 type CreatedOrderResponse = { orderId?: string | number; _id?: string | number; id?: string | number };
-type PaymentMethod = 'cashfree' | 'payu' | 'cod';
+type PaymentMethod = 'cashfree' | 'cod';
 type AddressValidationResult = { valid: true } | { valid: false; message: string };
 type BundleSnapshot = {
   name: string;
@@ -125,12 +125,6 @@ const CashfreeLogo = () => (
   </div>
 );
 
-const PayULogo = () => (
-  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#1d6fbc]/25 bg-[#1d6fbc]/10 text-[#1d6fbc]">
-    <span className="text-[15px] font-extrabold tracking-tight">PayU</span>
-  </div>
-);
-
 const CodLogo = () => (
   <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-tulsi/25 bg-tulsi/10 text-tulsi">
     <Truck size={23} />
@@ -160,12 +154,9 @@ const CheckoutPage = () => {
   const [cashfreeEnabled, setCashfreeEnabled] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(() => {
     const savedMethod = initialCheckoutDraft?.paymentMethod;
-    return savedMethod === 'cashfree' || savedMethod === 'payu' || savedMethod === 'cod' ? savedMethod : null;
+    return savedMethod === 'cashfree' || savedMethod === 'cod' ? savedMethod : null;
   });
-  const defaultOnlineMethod = cashfreeEnabled ? 'cashfree' : 'payu';
-  const paymentMethod = selectedPaymentMethod === 'cashfree' && !cashfreeEnabled
-    ? defaultOnlineMethod
-    : selectedPaymentMethod ?? defaultOnlineMethod;
+  const paymentMethod = selectedPaymentMethod === 'cod' ? 'cod' : cashfreeEnabled ? 'cashfree' : null;
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(initialCheckoutDraft?.billingSameAsShipping ?? true);
   const [processing, setProcessing] = useState(false);
   const [customerEmail, setCustomerEmail] = useState(initialCheckoutDraft?.customerEmail || user?.email || '');
@@ -212,6 +203,7 @@ const CheckoutPage = () => {
   const deliveryServiceable = Boolean(serviceability?.pincode === effectivePincode && serviceability.serviceable);
   const partnerCodAvailable = Boolean(deliveryServiceable && serviceability?.codAvailable);
   const canUseCodService = Boolean(partnerCodAvailable && !hasPrasadamItems && codEligibleItems);
+  const selectedPaymentAvailable = wantsCodService ? canUseCodService : cashfreeEnabled;
   const codUnavailableReason = hasPrasadamItems
     ? 'COD is not available for Prasadam products.'
     : !codEligibleItems
@@ -736,7 +728,7 @@ const CheckoutPage = () => {
     setStep(1);
   };
 
-  const startOnlinePayment = async (method: 'payu' | 'cashfree') => {
+  const startCashfreePayment = async () => {
     if (processing || checkoutValidating) return;
     if (!validateContactAndAddress()) return;
     setProcessing(true);
@@ -767,7 +759,7 @@ const CheckoutPage = () => {
         customerEmail: effectiveEmail,
         shippingAddress: cleanShippingAddress,
         billingAddress: cleanBillingAddress,
-        paymentMethod: method === 'payu' ? 'PayU' : 'Cashfree',
+        paymentMethod: 'Cashfree',
         codRequested: false,
         codAmount: 0,
         couponCode: appliedCoupon?.code || undefined,
@@ -796,31 +788,22 @@ const CheckoutPage = () => {
         customer: { name: cleanBillingAddress.fullName, email: effectiveEmail, phone: cleanBillingAddress.mobile },
       };
 
-      if (method === 'cashfree') {
-        await loadCashfree();
-        const result = await createCashfreeOrder(payload);
-        if ('showStatus' in result) {
-          navigate('/payment-status/' + encodeURIComponent(result.statusToken));
-          return;
-        }
-        await launchCashfree(result);
-      } else {
-        const result = await createPayUOrder(payload);
-        if ('completed' in result) {
-          navigate('/payment-status/' + encodeURIComponent(result.statusToken));
-          return;
-        }
-        submitPayUCheckout(result);
+      await loadCashfree();
+      const result = await createCashfreeOrder(payload);
+      if ('showStatus' in result) {
+        navigate('/payment-status/' + encodeURIComponent(result.statusToken));
+        return;
       }
+      await launchCashfree(result);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
-      toast.error(message || (method === 'payu' ? 'Unable to open PayU checkout.' : 'Unable to open Cashfree checkout.'));
+      toast.error(message || 'Unable to open Cashfree checkout.');
       setProcessing(false);
     }
   };
 
   const handlePlaceOrder = async () => {
-    if (processing || checkoutValidating) return;
+    if (processing || checkoutValidating || !selectedPaymentAvailable) return;
     if (!validateContactAndAddress()) return;
     const canDeliver = await verifyDeliveryPincode();
     if (!canDeliver) return;
@@ -905,9 +888,7 @@ const CheckoutPage = () => {
       return;
     }
 
-    if (paymentMethod === 'payu' || (paymentMethod === 'cashfree' && cashfreeEnabled)) {
-      await startOnlinePayment(paymentMethod);
-    }
+    await startCashfreePayment();
   };
 
   const addressFields = [
@@ -931,15 +912,6 @@ const CheckoutPage = () => {
       badge: cashfreeEnabled ? undefined : 'Unavailable',
       brandColor: cashfreeEnabled ? 'text-[#603fc5]' : 'text-muted-foreground',
       disabled: !cashfreeEnabled,
-    },
-    {
-      value: 'payu' as const,
-      title: 'PayU',
-      subtitle: 'UPI, cards, net banking, wallets, and more',
-      logo: PayULogo,
-      pills: ['UPI', 'Cards', 'NetBanking'],
-      brandColor: 'text-[#1d6fbc]',
-      disabled: false,
     },
     ...(!hasPrasadamItems && codEligibleItems ? [{
       value: 'cod' as const,
@@ -1451,7 +1423,7 @@ const CheckoutPage = () => {
                   onClick={step === 0 ? handleContinueToPayment : handlePlaceOrder}
                   disabled={step === 0
                     ? checkingPincode || checkoutValidating || hasCheckoutValidationChanges || hasCheckoutUnavailableItems
-                    : processing || checkoutValidating || !checkoutValidatedCleanly || (!wantsCodService && paymentOptions.length === 0)}
+                    : processing || checkoutValidating || !checkoutValidatedCleanly || !selectedPaymentAvailable}
                   className="mt-4 flex min-h-12 w-full items-center justify-center rounded-xl bg-gold-gradient px-3 py-3 text-center text-sm font-bold leading-tight text-maroon-dark shimmer transition-transform active:scale-[0.97] disabled:opacity-60 sm:px-4"
                 >
                   {step === 0
@@ -1468,9 +1440,11 @@ const CheckoutPage = () => {
                         ? 'Validating cart...'
                         : !checkoutValidatedCleanly
                           ? 'Validate cart before payment'
-                      : wantsCodService
-                        ? `Place COD Order - ${formatPrice(grandTotal)}`
-                        : `Pay Now - ${formatPrice(grandTotal)}`}
+                          : !selectedPaymentAvailable
+                            ? wantsCodService ? 'COD unavailable' : 'Online payment unavailable'
+                            : wantsCodService
+                              ? `Place COD Order - ${formatPrice(grandTotal)}`
+                              : `Pay Now - ${formatPrice(grandTotal)}`}
                 </button>
               </div>
             </div>

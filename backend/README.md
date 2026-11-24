@@ -35,7 +35,7 @@ inferred from HSN. An explicit 0 is a zero rate; blank means not configured.
 Selling prices already include GST, so this feature does not add tax to the
 customer's checkout total or reuse the global packaging percentage as GST.
 
-COD, PayU, and Cashfree checkout snapshot these fields from the database,
+COD and Cashfree checkout snapshot these fields from the database,
 ignoring client-supplied tax values. New product edits affect future orders.
 Existing order invoices retain their saved values; historical missing HSN,
 unit or GST appears as unavailable rather than using today's catalog rates.
@@ -160,10 +160,12 @@ at production as part of build verification.
 
 ## Cashfree hosted checkout
 
-Checkout lists Cashfree first and selects it when available. Customers can also choose PayU.
+Cashfree is the only online payment provider at checkout. Customers can choose
+cash on delivery when eligible.
 
-Set the following on the backend service. Use sandbox credentials with
-`CASHFREE_ENV=sandbox` for staging or local testing.
+Set the following on the production backend service. Use sandbox credentials
+with `CASHFREE_ENV=sandbox` for staging or local testing. For local testing,
+set `NODE_ENV=development` and leave `APP_ENV` unset or set it to `development`.
 
 ```env
 CASHFREE_ENV=production
@@ -179,21 +181,19 @@ the webhook signature and checks the order ID, currency, amount, and captured
 payment with Cashfree.
 
 Historical Razorpay records can reconcile through their existing credentials
-and signed webhook. New orders and retries use the active gateways.
+and signed webhook.
 
 [Cashfree web checkout and domain setup](https://www.cashfree.com/docs/payments/online/web/redirect)
 [Cashfree webhook signature verification](https://www.cashfree.com/docs/payments/online/webhooks/signature-verification)
 
-## PayU hosted checkout
+## Legacy PayU payment verification
 
-When a customer chooses PayU, its hosted payment page collects payment
-details and card or UPI secrets stay on PayU. The backend creates the SHA-512
-request hash, receives PayU's form-post callback, validates its reverse hash,
-then confirms a successful payment against PayU's Verify Payment API before
-marking the order paid.
+PayU order creation and retries return HTTP 410. For payments already started,
+the backend receives PayU's form-post callback, validates its reverse hash,
+and confirms capture with PayU's Verify Payment API before marking the order paid.
 
-Configure these backend environment variables with the merchant credentials
-from PayU:
+Keep these backend environment variables configured while earlier PayU
+transactions require verification.
 
 ```env
 PAYU_KEY=your_merchant_key
@@ -206,13 +206,10 @@ Use `PAYU_ENV=test` for development/staging and `PAYU_ENV=live` for production.
 If left empty, the backend infers live only when both `APP_ENV` and `NODE_ENV`
 are `production`; otherwise it uses test mode. The callback URL must be public
 and reachable by PayU. `BACKEND_URL` can provide the backend origin instead of
-`PAYU_CALLBACK_URL`. Restart/redeploy the backend after setting the credentials.
-Do not expose the merchant salt in the frontend or include it in the hosted
-checkout form.
+`PAYU_CALLBACK_URL`. Keep the merchant salt on the backend.
 
-References: [PayU Hosted Checkout](https://docs.payu.in/docs/prebuilt-checkout-page-integration),
-[PayU request and response hashing](https://docs.payu.in/docs/hashing-request-and-response),
-and [PayU Verify Payment API](https://docs.payu.in/reference/verify_payment_api).
+[PayU response hashing](https://docs.payu.in/docs/hashing-request-and-response)
+[PayU Verify Payment API](https://docs.payu.in/reference/verify_payment_api)
 
 ## Vercel frontend CORS on Render
 

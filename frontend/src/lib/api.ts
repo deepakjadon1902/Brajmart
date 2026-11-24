@@ -150,26 +150,16 @@ type OnlineCheckoutPayload = {
 };
 
 type CheckoutReference = { statusToken: string; orderId: number | string };
-export type PayUCheckoutResponse = CheckoutReference & {
-  actionUrl: string;
-  fields: Record<string, string>;
-};
 export type CashfreeCheckoutSession = {
   mode: 'sandbox' | 'production';
   paymentSessionId: string;
 };
-
-export const createPayUOrder = (payload: OnlineCheckoutPayload) =>
-  getJson<PayUCheckoutResponse | (CheckoutReference & { completed: true })>('/payu/create-order', { method: 'POST', body: payload });
 
 export const createCashfreeOrder = (payload: OnlineCheckoutPayload) =>
   getJson<CheckoutReference & (CashfreeCheckoutSession | { showStatus: true })>('/cashfree/create-order', { method: 'POST', body: payload });
 
 export const resumeCashfreeCheckout = (token: string) =>
   getJson<CashfreeCheckoutSession>('/cashfree/resume', { method: 'POST', body: { token } });
-
-export const retryPayUPayment = (token: string) =>
-  getJson<PayUCheckoutResponse>('/payu/retry', { method: 'POST', body: { token } });
 
 export const fetchPaymentStatus = (token: string) =>
   getJson(`/payments/status/${encodeURIComponent(token)}`, { cache: 'no-store' });

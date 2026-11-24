@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CreditCard, XCircle, Loader2 } from 'lucide-react';
-import { fetchPaymentStatus, resumeCashfreeCheckout, retryPayUPayment, trackOrder } from '@/lib/api';
-import { launchCashfree, submitPayUCheckout } from '@/lib/onlinePayment';
+import { fetchPaymentStatus, resumeCashfreeCheckout, trackOrder } from '@/lib/api';
+import { launchCashfree } from '@/lib/onlinePayment';
 import { clearCheckoutDraft } from '@/lib/checkoutDraft';
 import { useCartStore } from '@/store/cartStore';
 import { formatPrice } from '@/utils/formatPrice';
@@ -54,8 +54,7 @@ const PaymentStatusPage = () => {
   const [trackingId, setTrackingId] = useState<string | null>(null);
   const [estimatedDelivery, setEstimatedDelivery] = useState<string | null>(null);
   const clearCart = useCartStore((state) => state.clearCart);
-  const isCashfreePayment = String(method || '').toLowerCase() === 'cashfree';
-  const isPayUPayment = String(method || '').toLowerCase() === 'payu';
+  const canResumeCashfree = status === 'pending' && canResume && method?.toLowerCase() === 'cashfree';
 
   useEffect(() => {
     let active = true;
@@ -145,15 +144,11 @@ const PaymentStatusPage = () => {
     }
   }, [status, clearCart]);
 
-  const handleRetryPayment = async () => {
-    if (!token || retrying || status === 'paid') return;
+  const handleResumePayment = async () => {
+    if (!token || retrying || !canResumeCashfree) return;
     setRetrying(true);
     try {
-      if (isCashfreePayment) {
-        await launchCashfree(await resumeCashfreeCheckout(token));
-      } else {
-        submitPayUCheckout(await retryPayUPayment(token));
-      }
+      await launchCashfree(await resumeCashfreeCheckout(token));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
       toast.error(message || 'Unable to continue payment. Please try again.');
@@ -198,7 +193,7 @@ const PaymentStatusPage = () => {
                 <Loader2 size={56} className="mx-auto text-saffron animate-spin mb-4" />
                 <h1 className="mb-2 font-cinzel text-[1.65rem] font-bold leading-tight sm:text-2xl">Payment Pending</h1>
                 <p className="text-muted-foreground text-sm">
-                  {canResume
+                  {canResumeCashfree
                     ? 'You can continue the same Cashfree checkout.'
                     : 'We are verifying your payment. This may take a few minutes.'}
                 </p>
@@ -208,9 +203,7 @@ const PaymentStatusPage = () => {
                 <XCircle size={56} className="mx-auto text-red-500 mb-4" />
                 <h1 className="mb-2 font-cinzel text-[1.65rem] font-bold leading-tight sm:text-2xl">Payment Failed</h1>
                 <p className="text-muted-foreground text-sm">
-                  {isPayUPayment
-                    ? 'The payment was not completed. You can retry securely with PayU.'
-                    : 'The payment was not completed. If money was debited, contact support before trying again.'}
+                  The payment was not completed. If money was debited, contact support before trying again.
                 </p>
               </>
             )}
@@ -240,15 +233,15 @@ const PaymentStatusPage = () => {
               <Link to="/track-orders" className="flex min-h-11 items-center justify-center rounded-xl border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted">
                 Track Order
               </Link>
-              {(status === 'failed' && isPayUPayment) || (status === 'pending' && canResume) ? (
+              {canResumeCashfree ? (
                 <button
                   type="button"
-                  onClick={handleRetryPayment}
+                  onClick={handleResumePayment}
                   disabled={retrying}
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gold-gradient px-5 py-2.5 text-sm font-bold text-maroon-dark shimmer disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {retrying ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                  {retrying ? 'Opening checkout...' : isCashfreePayment ? 'Continue with Cashfree' : 'Pay Again with PayU'}
+                  {retrying ? 'Opening checkout...' : 'Continue with Cashfree'}
                 </button>
               ) : (
                 <Link to={status === 'pending' ? '/' : '/checkout'} className="flex min-h-11 items-center justify-center rounded-xl bg-gold-gradient px-5 py-2.5 text-sm font-bold text-maroon-dark shimmer">

@@ -336,28 +336,23 @@ test('checkout blocks payment when backend validation reports cart changes', asy
   await expect(page.getByRole('heading', { name: 'Payment', exact: true })).not.toBeVisible();
 });
 
-test('selecting PayU submits its server-generated form', async ({ page }) => {
+test('a checkout draft saved with PayU opens with Cashfree selected', async ({ page }) => {
   await mockCheckoutApis(page);
-  await page.route('**/api/payu/create-order', route => {
-    expect(route.request().postDataJSON()).toMatchObject({ amount: 268, order: { paymentMethod: 'PayU' } });
-    return route.fulfill({ json: { actionUrl: 'https://test.payu.in/_payment', fields: { txnid: 'payu_mock', hash: 'fixture_hash' }, statusToken: 'payu_mock', orderId: 42 } });
-  });
-  await page.route('https://test.payu.in/_payment', (route) => route.fulfill({ body: 'PayU form received' }));
   await seedCart(page);
   await fillShippingAddress(page);
   await page.getByRole('button', { name: /continue to payment/i }).click();
-  const payu = page.getByRole('radio', { name: /^PayU/ });
-  await payu.click();
-  await expect(payu).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    const key = 'brajmart-checkout-draft:guest';
+    const draft = JSON.parse(localStorage.getItem(key) || '{}');
+    localStorage.setItem(key, JSON.stringify({ ...draft, step: 1, paymentMethod: 'payu' }));
+  });
   await page.reload();
-  await expect(payu).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByRole('radio', { name: /Razorpay/i })).toHaveCount(0);
-  const gatewayRequest = page.waitForRequest('https://test.payu.in/_payment');
-  await page.getByRole('button', { name: /^Pay Now/ }).click();
-  expect((await gatewayRequest).postData()).toBe('txnid=payu_mock&hash=fixture_hash');
+  await expect(page.getByRole('radio', { name: /^Cashfree/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('radio', { name: /^PayU/ })).toHaveCount(0);
 });
 
-test('Cashfree appears first, opens by default, and waits for confirmed payment status', async ({ page }) => {
+test('Cashfree is the only online gateway and waits for confirmed payment status', async ({ page }) => {
   await mockCashfreeSdk(page, true);
   await mockCheckoutApis(page);
   let paid = false;
@@ -372,12 +367,8 @@ test('Cashfree appears first, opens by default, and waits for confirmed payment 
   await seedCart(page);
   await fillShippingAddress(page);
   await page.getByRole('button', { name: /continue to payment/i }).click();
-  const gateways = page.getByRole('radio', { name: /^(Cashfree|PayU)/ });
-  await expect(gateways).toHaveCount(2);
-  await expect(gateways.first()).toHaveAccessibleName(/^Cashfree/);
-  await expect(gateways.first()).toHaveAttribute('aria-checked', 'true');
-  await expect(gateways.last()).toHaveAccessibleName(/^PayU/);
-  await expect(gateways.filter({ hasText: /primary|secondary|optional|recommended|alternative/i })).toHaveCount(0);
+  await expect(page.getByRole('radio', { name: /^Cashfree/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('radio', { name: /^(PayU|Razorpay)/ })).toHaveCount(0);
   await page.getByRole('button', { name: /^Pay Now/ }).click();
   await expect(page).toHaveURL('/payment-status/cf_browser_fixture');
   await expect(page.getByRole('heading', { name: 'Payment Pending' })).toBeVisible();
@@ -388,13 +379,24 @@ test('Cashfree appears first, opens by default, and waits for confirmed payment 
   await expect(page.getByText('Payment verified and order confirmed', { exact: true })).toBeVisible();
 });
 
-test('PayU is selected when Cashfree is unavailable', async ({ page }) => {
+test('checkout disables online payment when Cashfree is unavailable', async ({ page }) => {
   await mockCheckoutApis(page, {}, { cashfreeEnabled: false });
   await seedCart(page);
   await fillShippingAddress(page);
   await page.getByRole('button', { name: /continue to payment/i }).click();
   await expect(page.getByRole('radio', { name: /^Cashfree/ })).toHaveAttribute('aria-disabled', 'true');
-  await expect(page.getByRole('radio', { name: /^PayU/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('radio', { name: /^PayU/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Online payment unavailable' })).toBeDisabled();
+});
+
+test('a failed legacy PayU payment provides order status and a link to checkout', async ({ page }) => {
+  await page.route('**/api/payments/status/payu_browser_fixture', route => route.fulfill({ json: {
+    status: 'failed', method: 'PayU', amount: 268, orderId: 42, items: [],
+  } }));
+  await page.goto('/payment-status/payu_browser_fixture');
+  await expect(page.getByRole('heading', { name: 'Payment Failed' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Back to Checkout' })).toHaveAttribute('href', '/checkout');
+  await expect(page.getByRole('button', { name: /pay again/i })).toHaveCount(0);
 });
 
 test('Cashfree resumes an eligible checkout using the original order token', async ({ page }) => {

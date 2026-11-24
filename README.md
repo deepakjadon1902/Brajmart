@@ -33,15 +33,12 @@ FRONTEND_URL=http://localhost:8080
 BACKEND_URL=http://localhost:5000
 ```
 
-Optional (Payments + Email):
+Optional Cashfree and email settings
 ```
-RAZORPAY_PLATFORM_KEY_ID=your_key_id
-RAZORPAY_PLATFORM_KEY_SECRET=your_key_secret
-RAZORPAY_PLATFORM_WEBHOOK_SECRET=your_webhook_secret
-PAYU_KEY=your_payu_merchant_key
-PAYU_SALT=your_payu_merchant_salt
-PAYU_ENV=test
-PAYU_CALLBACK_URL=https://your-public-api.example.com/api/payu/callback
+NODE_ENV=development
+CASHFREE_ENV=sandbox
+CASHFREE_APP_ID=your_cashfree_app_id
+CASHFREE_SECRET_KEY=your_cashfree_secret_key
 
 SMTP_HOST=your_smtp_host
 SMTP_PORT=587
@@ -165,6 +162,6 @@ npm run dev
 
 ## 8) Notes
 
-- Online checkout lists Cashfree first and PayU next. Configure credentials and callback URLs in the backend environment before accepting payments. Razorpay is temporarily unavailable in checkout.
+- Cashfree handles online checkout. See the backend guide for payment gateway configuration and verification of earlier payments. [Backend payment setup](backend/README.md#cashfree-hosted-checkout)
 - Email notifications will only work if SMTP credentials are correct.
 - DB is required. Backend will not run without a valid database connection.

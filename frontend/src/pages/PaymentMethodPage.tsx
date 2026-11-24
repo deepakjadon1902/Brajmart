@@ -5,7 +5,6 @@ import { CreditCard, Smartphone, Building2, Wallet, Shield } from 'lucide-react'
 
 const methods = [
   { icon: CreditCard, title: 'Cashfree Checkout', desc: 'Pay securely with UPI, cards, or net banking on Cashfree’s hosted payment page.' },
-  { icon: CreditCard, title: 'PayU Hosted Checkout', desc: 'Pay securely with UPI, credit and debit cards, net banking, wallets, and other methods on PayU’s hosted payment page.' },
   { icon: Smartphone, title: 'UPI', desc: 'Pay instantly using Google Pay, PhonePe, Paytm, BHIM, or any UPI app.' },
   { icon: CreditCard, title: 'Credit & Debit Cards', desc: 'We accept Visa, Mastercard, RuPay, and American Express. All transactions are 3D Secure protected.' },
   { icon: Building2, title: 'Net Banking', desc: 'Pay directly from your bank account. All major Indian banks are supported including SBI, HDFC, ICICI, and more.' },
@@ -47,7 +46,7 @@ const PaymentMethodPage = () => (
             <Shield size={32} className="text-gold mx-auto mb-4" />
             <h2 className="font-cinzel text-xl font-bold text-foreground mb-3">100% Secure Payments</h2>
             <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">
-              Cashfree and PayU securely collect payment details on their hosted checkout pages. BrajMart verifies your payment before confirming your order and never stores your card details or UPI PIN.
+              Cashfree securely collects payment details on its hosted checkout page. BrajMart verifies your payment before confirming your order and never stores your card details or UPI PIN.
             </p>
           </div>
         </ScrollReveal>

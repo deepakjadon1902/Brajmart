@@ -453,10 +453,6 @@ const AdminSettings = () => {
             <p className="text-sm font-medium text-white">Cashfree Checkout</p>
             <p className="text-xs text-slate-400">Configure CASHFREE_APP_ID and CASHFREE_SECRET_KEY on the backend.</p>
           </div>
-          <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
-            <p className="text-sm font-medium text-white">PayU Checkout</p>
-            <p className="text-xs text-slate-400">Configure PAYU_KEY and PAYU_SALT on the backend.</p>
-          </div>
           <div className={`flex items-center justify-between rounded-xl border p-4 ${codEnabled ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
             <div>
               <p className="text-sm font-medium text-white">Cash on Delivery</p>

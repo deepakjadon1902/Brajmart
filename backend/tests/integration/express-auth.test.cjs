@@ -123,6 +123,20 @@ test('raw webhook bytes remain unchanged through the typed JSON parser', async (
   assert.equal(writes.length, 0);
 });
 
+test('retired PayU checkout endpoints reject creation and retries before database access', async () => {
+  for (const path of ['create-order', 'retry']) {
+    const response = await fetch(`${origin}/api/payu/${path}`, {
+      method: 'POST', headers: headers(), body: JSON.stringify({ token: 'legacy-payu-attempt' }),
+    });
+    assert.equal(response.status, 410);
+    assert.deepEqual(await response.json(), {
+      code: 'PAYMENT_UNAVAILABLE', message: 'Use Cashfree at checkout for online payments.',
+    });
+  }
+  assert.equal(queries.length, 0);
+  assert.equal(writes.length, 0);
+});
+
 test('CORS failures retain the existing HTTP status and response message', async () => {
   const response = await fetch(`${origin}/api/health`, { headers: { Origin: 'https://untrusted.example.invalid' } });
   assert.equal(response.status, 403);

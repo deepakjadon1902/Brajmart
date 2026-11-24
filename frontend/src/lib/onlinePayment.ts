@@ -1,4 +1,4 @@
-import type { CashfreeCheckoutSession, PayUCheckoutResponse } from './api';
+import type { CashfreeCheckoutSession } from './api';
 
 type CashfreeFactory = (options: { mode: CashfreeCheckoutSession['mode'] }) => {
   checkout: (options: { paymentSessionId: string; redirectTarget: '_self' }) =>
@@ -48,20 +48,4 @@ export const launchCashfree = async (session: CashfreeCheckoutSession) => {
     redirectTarget: '_self',
   });
   if (result?.error) throw new Error(result.error.message || 'Unable to open Cashfree checkout.');
-};
-
-export const submitPayUCheckout = (checkout: PayUCheckoutResponse) => {
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = checkout.actionUrl;
-  form.style.display = 'none';
-  Object.entries(checkout.fields).forEach(([name, value]) => {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  });
-  document.body.appendChild(form);
-  form.submit();
 };

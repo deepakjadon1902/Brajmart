@@ -28,7 +28,7 @@ router.post('/create-order', checkoutLimiter, optionalAuth, createOnlineCheckout
   createToken: () => 'cf_' + crypto.randomUUID(),
   respondToFailure: (res, error) => {
     if (!(error instanceof CashfreeConfigurationError)) return false;
-    res.status(503).json({ code: 'PAYMENT_UNAVAILABLE', message: 'Cashfree checkout is temporarily unavailable. Please try again or choose PayU.' });
+    res.status(503).json({ code: 'PAYMENT_UNAVAILABLE', message: 'Cashfree checkout is temporarily unavailable. Please try again.' });
     return true;
   },
 }));

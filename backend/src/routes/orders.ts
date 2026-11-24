@@ -452,7 +452,7 @@ router.post('/', codOrderLimiter, optionalAuth, async (req: AuthRequest, res) =>
     const wantsCod = /^cod$/i.test(paymentMethod) || /cash\s*on\s*delivery/i.test(paymentMethod);
     if (!wantsCod) {
       return res.status(400).json({
-        message: 'Online orders must be created through PayU or Cashfree checkout.',
+        message: 'Online orders must be created through Cashfree checkout.',
       });
     }
     let codAmount = 0;
